@@ -1,6 +1,6 @@
 # Architecture
 
-Proposed architecture for **freeloop**. Nothing here is built yet; interface sketches are Go-flavoured pseudocode meant to fix names and responsibilities, not to compile. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENTS.md); unsettled points refer to [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+Proposed architecture for **Freeloop**. Nothing here is built yet; interface sketches are Go-flavoured pseudocode meant to fix names and responsibilities, not to compile. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENTS.md); unsettled points refer to [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 ## 1. Stack
 
@@ -32,7 +32,7 @@ Proposed architecture for **freeloop**. Nothing here is built yet; interface ske
 
 ```mermaid
 flowchart LR
-  subgraph App["freeloop.app (one process in MVP)"]
+  subgraph App["Freeloop.app (one process in MVP)"]
     UI["React / TypeScript UI<br/>(WKWebView)"]
     Bridge["Wails bindings + events"]
     subgraph Engine["Engine (Go, transport-agnostic API)"]
@@ -235,7 +235,7 @@ This mirrors Codex's separation of sandbox from approval policy: the environment
 
 One versioned schema (EXT-002), a strict superset of ACP's `session/update` variants so the ACP mapping is one-to-one (OQ-012):
 
-| From ACP | Added by freeloop |
+| From ACP | Added by Freeloop |
 |---|---|
 | `user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`, `plan`, `available_commands_update`, `current_mode_update`, `config_option_update`, `session_info_update`, `usage_update`, `notice`, `compaction_update`, `compaction_summary_chunk` | `turn_started`, `turn_ended{stop_reason}`, `permission_requested`, `permission_decided{actor, scope}`, `session_status`, `git_state`, `model_changed`, `env_health`, `hook_ran` (v1), `error` |
 

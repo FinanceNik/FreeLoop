@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestones for **freeloop**, from a thin vertical slice to v1. Each milestone lists the requirement IDs it delivers (see [REQUIREMENTS.md](REQUIREMENTS.md)), a definition of done, and a size.
+Milestones for **Freeloop**, from a thin vertical slice to v1. Each milestone lists the requirement IDs it delivers (see [REQUIREMENTS.md](REQUIREMENTS.md)), a definition of done, and a size.
 
 ## How sizes are estimated
 
@@ -31,7 +31,7 @@ Not in M0: any model call, any tool, any styling beyond defaults.
 
 ## M1 Thin vertical slice (7 weeks)
 
-Goal: replace one of your daily Claude Code sessions with freeloop for a real task, on a real repo, with your own API key and a local model, with several sessions open at once.
+Goal: replace one of your daily Claude Code sessions with Freeloop for a real task, on a real repo, with your own API key and a local model, with several sessions open at once.
 
 Delivers:
 - Providers: PRV-001 (Anthropic, OpenAI-compatible, Ollama native), PRV-002, PRV-003, PRV-004, PRV-005, PRV-007.

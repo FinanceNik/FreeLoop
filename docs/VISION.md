@@ -1,6 +1,6 @@
 # Vision
 
-Working name: **freeloop**. A free, open-source macOS app for running AI coding agents with your own models, your own harnesses and your own environments, built for people who run many sessions at once.
+**Freeloop** is a free, open-source macOS app for running AI coding agents with your own models, your own harnesses and your own environments, built for people who run many sessions at once.
 
 ## The problem
 
@@ -8,7 +8,7 @@ Coding agents have become a primary way software gets written, and the best ones
 
 The pieces needed to fix this now exist as open protocols. The Agent Client Protocol (ACP) lets a host drive any agent. The Model Context Protocol (MCP) gives agents tools. Agent Skills define reusable instruction folders. `AGENTS.md` carries project rules. What is missing is a desktop app that puts them together for a person who runs many sessions in parallel and wants one place to see what needs attention.
 
-## What freeloop is
+## What Freeloop is
 
 A macOS app in which you:
 
@@ -18,7 +18,7 @@ A macOS app in which you:
 - install and author skills in the Agent Skills format and manage MCP servers once, for every harness;
 - run all your sessions across all your repos from one window with one approval inbox.
 
-Claude Code's workflow is the inspiration. freeloop is not built on it. The built-in harness is the base; Claude Code is one of several external agents you can run from it, using your own subscription through Claude Code's own sign-in, which the app never touches.
+Claude Code's workflow is the inspiration. Freeloop is not built on it. The built-in harness is the base; Claude Code is one of several external agents you can run from it, using your own subscription through Claude Code's own sign-in, which the app never touches.
 
 ## Who it is for
 
@@ -29,10 +29,10 @@ Claude Code's workflow is the inspiration. freeloop is not built on it. The buil
 
 ## Positioning
 
-| Category | Examples | What they do well | Where freeloop differs |
+| Category | Examples | What they do well | Where Freeloop differs |
 |---|---|---|---|
 | Vendor agents with a GUI | Claude Code desktop app, Codex app | Polished, multi-session, cloud and SSH environments | One vendor's models; closed source; features gated on the vendor's account |
-| Open-source agents | OpenCode, Goose, Cline, Aider, Gemini CLI | Bring your own key, local models, most speak ACP | Each is a harness, not a host. In freeloop they are harnesses you switch between, not competitors |
+| Open-source agents | OpenCode, Goose, Cline, Aider, Gemini CLI | Bring your own key, local models, most speak ACP | Each is a harness, not a host. In Freeloop they are harnesses you switch between, not competitors |
 | Parallel-session orchestrators | Conductor, Crystal, Vibe Kanban, Claude Squad | One worktree per task, diff review, run scripts | They force a worktree per task, review per workspace only, offer no cross-session approval inbox, and couple to one or two vendors |
 | ACP hosts | Zed agent panel, JetBrains IDEs | Reference ACP clients, registry install flow | Editors first, one session in focus, no environment model |
 
@@ -40,9 +40,9 @@ Claude Code's workflow is the inspiration. freeloop is not built on it. The buil
 
 Borrow:
 
-- Codex CLI's split between a **sandbox mode** (what is technically possible) and an **approval policy** (when to ask). freeloop maps sandbox onto the environment and policy onto rules, so policy can vary per environment.
+- Codex CLI's split between a **sandbox mode** (what is technically possible) and an **approval policy** (when to ask). Freeloop maps sandbox onto the environment and policy onto rules, so policy can vary per environment.
 - Gemini CLI's **declarative policy engine** that matches on tool kind, MCP server wildcards and paths.
-- OpenCode's **named agents with baked-in permission profiles**, switchable without leaving the session. freeloop's profiles are the same idea with model, tools, skills and MCP servers added.
+- OpenCode's **named agents with baked-in permission profiles**, switchable without leaving the session. Freeloop's profiles are the same idea with model, tools, skills and MCP servers added.
 - Goose's **recipes**: shareable, versioned agent configurations. Profiles are files for the same reason.
 - Conductor's **Checks tab** and archive-after-merge lifecycle for a session's branch.
 - Zed's **ACP registry install flow**: pick an agent, the host fetches the adapter.
@@ -51,14 +51,14 @@ Borrow:
 Avoid:
 
 - Single-vendor model lock and account-gated features.
-- Forcing a worktree per task. Users of every orchestrator complain about setup cost; freeloop makes it an option.
+- Forcing a worktree per task. Users of every orchestrator complain about setup cost; Freeloop makes it an option.
 - Fixing the permission mode when the session starts. Modes and rules change mid-session.
 - A terminal UI's mental model inside a GUI.
 - Extension only through MCP (Goose) with no lightweight skills layer.
 - Assuming feature parity across agents. Capabilities are negotiated and the UI degrades per agent.
 - Depending on any orchestrator product as a base. Several were abandoned or absorbed within a year of launch. Build on protocols instead.
 
-## Where freeloop is genuinely different
+## Where Freeloop is genuinely different
 
 1. **One approval inbox across sessions and repos.** No orchestrator found does this. Every permission request from every harness lands in one queue with inline approve and a jump to context.
 2. **Any model and any harness under one permission model.** The GUI never special-cases a harness. The built-in loop, ACP agents and CLI wrappers render the same, are approved the same and are logged the same.
@@ -94,4 +94,4 @@ Avoid:
 - **M1:** the author uses it for at least one real task a day for a week and prefers it for that task.
 - **MVP:** the author stops using the vendor desktop app for parallel sessions; two weeks without transcript loss or session cross-talk.
 - **v1:** five people other than the author use it for a week and their blocking issues are fixed; builds are signed.
-- **Long run:** a new agent appearing in the ACP registry works in freeloop the same day, with a configuration entry and no code.
+- **Long run:** a new agent appearing in the ACP registry works in Freeloop the same day, with a configuration entry and no code.

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-freeloop (working name) is an open-source macOS desktop app for running AI coding agents with the user's own models, switchable harnesses, Agent Skills, MCP servers and custom environments, built for someone who runs many sessions across many repos at once. Claude Code is the UX inspiration, not the base: the built-in harness is the product, and Claude Code is one external harness among several.
+Freeloop is an open-source macOS desktop app for running AI coding agents with the user's own models, switchable harnesses, Agent Skills, MCP servers and custom environments, built for someone who runs many sessions across many repos at once. Claude Code is the UX inspiration, not the base: the built-in harness is the product, and Claude Code is one external harness among several.
 
 Status: planning is complete and milestone M0 (the foundations skeleton) is in progress, so there is little or no code yet. The documents in `docs/` are the specification. When this file and a document disagree, the document wins; fix this file.
 

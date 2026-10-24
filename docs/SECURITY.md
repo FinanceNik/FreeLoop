@@ -1,6 +1,6 @@
 # Security
 
-Threat model and security policy for **freeloop**. This document satisfies NFR-SEC-003 in [REQUIREMENTS.md](REQUIREMENTS.md) and is referenced by [RISKS.md](RISKS.md). It describes what the app protects, against whom, how, and what it does not protect against. Requirement IDs point to the controls.
+Threat model and security policy for **Freeloop**. This document satisfies NFR-SEC-003 in [REQUIREMENTS.md](REQUIREMENTS.md) and is referenced by [RISKS.md](RISKS.md). It describes what the app protects, against whom, how, and what it does not protect against. Requirement IDs point to the controls.
 
 ## Reporting a vulnerability
 
@@ -57,7 +57,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 | 10 | A process with the user's privileges edits `rules.yaml` | Policy bypass | Config directory is write-protected from tools (SEC-005) and `0600`; no stronger defence against A4 |
 | 11 | Bypass mode on a hostile repo | Everything in rows 1 to 3 at once | Opt-in in settings, persistent banner, resets per session, unavailable in untrusted projects (SEC-001) |
 | 12 | Runaway loop burns API credit | Financial | Max turns and tokens per session (HRN-002); per-provider concurrency cap; cost display (PRV-008) |
-| 13 | A compromised dependency of freeloop itself | Everything | Pinned modules and lockfiles, SBOM, signed and notarized builds (SEC-012); minimal npm surface |
+| 13 | A compromised dependency of Freeloop itself | Everything | Pinned modules and lockfiles, SBOM, signed and notarized builds (SEC-012); minimal npm surface |
 | 14 | The app leaks vendor sign-in tokens | Legal exposure and account compromise | The app never reads, stores or forwards them; vendor binaries own their login (HRN-008) |
 
 ## Design rules that follow

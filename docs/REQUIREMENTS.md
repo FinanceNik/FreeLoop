@@ -1,6 +1,6 @@
 # Requirements
 
-Working name: **freeloop**. Status: planning, no code yet. Companion documents: [VISION.md](VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [RISKS.md](RISKS.md), [SECURITY.md](SECURITY.md), [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+Project: **Freeloop**. Status: planning complete; M0 in progress. Companion documents: [VISION.md](VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [RISKS.md](RISKS.md), [SECURITY.md](SECURITY.md), [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 ## Conventions
 
