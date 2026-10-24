@@ -37,7 +37,7 @@ Delivers:
 - Providers: PRV-001 (Anthropic, OpenAI-compatible, Ollama native), PRV-002, PRV-003, PRV-004, PRV-005, PRV-007.
 - Harness: HRN-001, HRN-002 (built-in loop with the core tools), HRN-009 (plan mode), HRN-010 (instruction files).
 - Environments: ENV-001, ENV-002, ENV-003, ENV-004.
-- Permissions and security: SEC-001, SEC-002 (global and session scopes only), SEC-003, SEC-004, SEC-005, SEC-007, SEC-009, SEC-010.
+- Permissions and security: SEC-001, SEC-002 (global and session scopes only), SEC-003, SEC-004, SEC-005, SEC-007, SEC-009, SEC-010, SEC-013.
 - Sessions: SES-001, SES-002, SES-003 (built-in harness only), SES-004, SES-005, SES-006.
 - GUI: GUI-001, GUI-003, GUI-004 (without slash commands), GUI-006, GUI-007, GUI-011.
 - Settings: SET-001, SET-004.
