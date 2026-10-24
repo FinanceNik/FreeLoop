@@ -1,0 +1,42 @@
+# Open questions
+
+Decisions not yet made, each with options, a recommendation and the milestone by which it must be settled (see [ROADMAP.md](ROADMAP.md)). Closed questions move to the bottom with their outcome.
+
+## Open
+
+- **OQ-001 · Name and trademark · needed by M0.** Is "freeloop" free to use? Check GitHub org and repo names, common package names, domains, and a trademark search in the US and EU for software in class 9/42. Options: keep, or pick a name before the first public release. Recommendation: keep as the working name, run the checks before M2, rename before the first release if there is a conflict; nothing before M2 is hard to rename.
+- **OQ-005 · Claude Code adapter route · needed by M2.** Options: (a) Zed's ACP adapter for Claude Code, which requires Node on the machine; (b) a native Go driver speaking Claude Code's streaming JSON I/O protocol with permission prompts routed through an MCP permission tool. (a) reuses maintained code and fits HRN-005 exactly; (b) removes the Node dependency but couples to a format Anthropic documents as subject to change. Recommendation: (a) first, detect Node at onboarding, keep (b) as a fallback if the adapter lags Claude Code releases.
+- **OQ-006 · How skills reach external harnesses · needed by v1 (SKL-008).** Claude Code discovers skills from its own locations, and the app must not write into `~/.claude`. Options: project-level materialization into the harness's project discovery directory, a per-session config directory passed by environment variable, or no projection. Needs a check of each harness's configuration surface.
+- **OQ-007 · Instruction file precedence · needed by M1.** Decided: `AGENTS.md` first, `CLAUDE.md` as fallback, read-only. Still open: nested instruction files in subdirectories, and whether to read other vendors' files (`GEMINI.md`, `.cursorrules`) when present. Recommendation: nested `AGENTS.md` yes, other vendors' files no.
+- **OQ-008 · Worktree default · needed by v1.** Worktree per session is opt-in at v1 (SES-010). Should it become the default when a second session opens on a repo that already has an active session? Recommendation: prompt the second time, remember the answer per project.
+- **OQ-009 · Code signing and notarization timing · needed by M2.** Requires an Apple Developer account (99 USD per year) and a signing pipeline in CI. Options: sign from the MVP, or ship unsigned MVP builds with right-click-to-open instructions and sign at v1. Recommendation: set up the account during M2 so the MVP is signed; it is the single biggest trust signal for a desktop download.
+- **OQ-010 · Permission rule syntax · needed by M1.** Options: adopt Claude Code's rule syntax verbatim for import fidelity, or define a canonical syntax and map imports onto it. Recommendation: canonical syntax with explicit tool, pattern type and scope fields in YAML, plus an importer that converts Claude Code rules and reports what it could not express.
+- **OQ-011 · Local model tool calling path · needed by M1.** Ollama offers a native chat API with tools and streaming and an OpenAI-compatible endpoint; the compatible endpoint lacks `tool_choice` and documented tool-call IDs, the native API returns calls with an index but no ID, llama.cpp's server needs `--jinja` for tools, LM Studio's streamed tool-call shapes deviate from OpenAI, and only vLLM is near full parity; behaviour also differs per model. Options: native API as the primary path; a prompt-based tool-call parser as fallback for models without native tool support. Recommendation: native API, no parser fallback in M1; mark models that fail a tool-calling probe as unsupported for the built-in harness (PRV-005).
+- **OQ-012 · Event schema ownership · needed by M0.** Options: define an own schema and map ACP onto it, or adopt ACP's session update types as the transcript schema. Recommendation: own schema that is a strict superset of ACP's update types, so the ACP mapping is one-to-one and built-in-only events (usage, git state, permission decisions with scope) have a home.
+- **OQ-013 · Cross-session rate limiting · needed by M2.** Ten sessions on one provider will hit rate limits together. Options: per-provider concurrency cap, token-bucket scheduler, or nothing beyond retries. Recommendation: a per-provider concurrency cap with a visible "queued" state in M2; a scheduler only if needed.
+- **OQ-014 · Secrets inside Docker environments · needed by v1.** The Keychain is not reachable from a container. Options: inject as env vars at `docker exec` time, or mount a tmpfs secrets file. Recommendation: env vars at exec time for the harness process only, never baked into the image or compose file.
+- **OQ-015 · Update mechanism · needed by M2.** Options: GitHub releases plus a Homebrew cask; Sparkle in-app updates; both. Recommendation: GitHub releases and a cask for the MVP, Sparkle at v1 once builds are signed. Update checks stay opt-in (SEC-009).
+- **OQ-016 · Plugin API shape beyond hooks · needed by v1.** Options: shell hooks only (EXT-005); JSON-RPC extension processes; WebAssembly plugins. Recommendation: hooks and ACP/MCP processes through v1; decide on a richer API only when a concrete need appears that those cannot meet.
+- **OQ-017 · Contribution policy · needed before accepting PRs.** Options: DCO sign-off or a CLA. Recommendation: DCO, with `CONTRIBUTING.md` and a code of conduct added at v1 scoping.
+- **OQ-018 · Other vendors' subscription terms · needed by v1 (HRN-007).** Codex CLI with a ChatGPT login and Gemini CLI with a Google login are driven as unmodified binaries, the same pattern as Claude Code. Their terms need the same reading Anthropic's got before presets ship.
+- **OQ-019 · Shell semantics for the built-in `shell` tool · needed by M1.** Login shell (picks up Homebrew, nvm, pyenv paths) versus a non-interactive shell with an explicit PATH. Recommendation: `zsh -lc` by default with a per-environment override, a timeout, and output caps.
+- **OQ-020 · Project identity · needed by M1.** Path-based identity orphans sessions when a repo moves. Recommendation: identify a project by path plus a fingerprint of the first commit hash and remote URL, and offer to relink when a path disappears.
+- **OQ-021 · Minimum macOS version · needed by M0.** Recommendation: macOS 14 for WKWebView features and notification APIs; revisit if a user asks for 13.
+
+## Closed
+
+- **OQ-002 · Wails v3** · closed 2026-10-25. Wails v3 (latest beta, pinned) with a one-day spike in M0; Wails v2.17 is the fallback only if the spike fails.
+- **OQ-003 · Engine process model** · closed 2026-10-25. Engine runs in-process until v1 behind a transport-agnostic API; the daemon split lands with EXT-004.
+- **OQ-004 · Frontend framework** · closed 2026-10-25. React with TypeScript, a headless component library and a virtualized transcript list.
+- Language of the core: Go (not Python); harnesses may be written in any language because they run out of process over ACP. 2026-10-24.
+- GUI: a macOS `.app` built with Wails and a web frontend; macOS only for now, cross-platform abstractions kept. 2026-10-24.
+- Base of the product: the built-in harness, not Claude Code. Claude Code is one external harness. 2026-10-24.
+- Subscriptions: only through unmodified vendor binaries doing their own sign-in; the app never touches tokens; built-in harness uses API keys and local models. 2026-10-24.
+- Multi-session model: sessions across multiple repos first; worktree per session is a v1 option. 2026-10-24.
+- Security defaults: Claude Code style modes plus scoped rules, one approval inbox, Keychain secrets, bypass mode opt-in and flagged. 2026-10-24.
+- License: Apache-2.0. 2026-10-24.
+- Home screen: sidebar of projects and sessions, conversation center, right panel (diff, approvals, info), attention view. 2026-10-24.
+- Environment order: local folder, then Docker/devcontainer, then SSH, then sandboxes. 2026-10-24.
+- Claude Code config reuse: one-way import on demand with provenance; Agent Skills format native; `AGENTS.md` then `CLAUDE.md`. 2026-10-24.
+- First provider and local runtime: Anthropic API (the author will provide a funded API key for M1) plus Ollama, with any OpenAI-compatible endpoint. 2026-10-24, confirmed 2026-10-25.
+- Storage: SQLite for metadata and search, JSONL transcripts on disk, no telemetry, no cloud sync. 2026-10-24.
