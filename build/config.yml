@@ -1,0 +1,40 @@
+# Wails project configuration. After changing `info`, run
+# `wails3 task common:update:build-assets` (it overwrites build assets).
+version: '3'
+
+info:
+  companyName: "The Freeloop Authors"
+  productName: "Freeloop"
+  productIdentifier: "io.github.financenik.freeloop"
+  description: "Run AI coding agents with your own models, harnesses, skills and environments"
+  copyright: "Copyright 2026 The Freeloop Authors. Apache-2.0."
+  comments: ""
+  version: "0.0.1"
+
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  ignore:
+    dir:
+      - .git
+      - node_modules
+      - frontend
+      - bin
+      - docs
+    file:
+      - .DS_Store
+      - .gitignore
+      - .gitkeep
+      - "*_test.go"
+    watched_extension:
+      - "*.go"
+    git_ignore: true
+  executes:
+    - cmd: wails3 build DEV=true
+      type: blocking
+    - cmd: wails3 task common:dev:frontend
+      type: background
+    - cmd: wails3 task run
+      type: primary
+      exit_policy: shutdown

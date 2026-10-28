@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FinanceNik/Freeloop/schemas/events.json",
+  "title": "Freeloop session event",
+  "description": "One line of a session transcript (sessions/<id>/events.jsonl). Schema v0 (EXT-002): a strict superset of ACP session/update (OQ-012). ACP variants keep ACP's type name and payload minus the sessionUpdate discriminator; payload fields are camelCase. Variants without a payload definition below are reserved: their payload is not fixed yet and may be any object.",
+  "type": "object",
+  "required": ["v", "seq", "ts", "sid", "type", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1, "description": "Schema version." },
+    "seq": { "type": "integer", "minimum": 1, "description": "Per-session sequence number, contiguous from 1." },
+    "ts": { "type": "string", "format": "date-time", "description": "UTC time the engine persisted the event." },
+    "sid": { "type": "string", "minLength": 1, "description": "Session ID." },
+    "type": {
+      "enum": [
+        "user_message_chunk",
+        "agent_message_chunk",
+        "agent_thought_chunk",
+        "tool_call",
+        "tool_call_update",
+        "plan",
+        "available_commands_update",
+        "current_mode_update",
+        "config_option_update",
+        "session_info_update",
+        "usage_update",
+        "notice",
+        "compaction_update",
+        "compaction_summary_chunk",
+        "turn_started",
+        "turn_ended",
+        "permission_requested",
+        "permission_decided",
+        "session_status",
+        "git_state",
+        "model_changed",
+        "env_health",
+        "hook_ran",
+        "error"
+      ],
+      "x-acp-types": [
+        "user_message_chunk",
+        "agent_message_chunk",
+        "agent_thought_chunk",
+        "tool_call",
+        "tool_call_update",
+        "plan",
+        "available_commands_update",
+        "current_mode_update",
+        "config_option_update",
+        "session_info_update",
+        "usage_update",
+        "notice",
+        "compaction_update",
+        "compaction_summary_chunk"
+      ]
+    },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "enum": ["user_message_chunk", "agent_message_chunk", "agent_thought_chunk"] } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/messageChunk" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "session_status" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/sessionStatus" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "turn_ended" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/turnEnded" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "error" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/error" } } }
+    }
+  ],
+  "$defs": {
+    "contentBlock": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "description": "ACP content block type. v0 fixes only \"text\"." },
+        "text": { "type": "string" }
+      }
+    },
+    "messageChunk": {
+      "type": "object",
+      "required": ["content"],
+      "properties": { "content": { "$ref": "#/$defs/contentBlock" } }
+    },
+    "sessionStatus": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["idle", "running", "waiting_permission", "waiting_input", "error", "archived"] }
+      }
+    },
+    "turnEnded": {
+      "type": "object",
+      "required": ["stopReason"],
+      "properties": {
+        "stopReason": { "enum": ["end_turn", "max_tokens", "max_turns", "refusal", "cancelled"] }
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "message": { "type": "string" },
+        "code": { "type": "string" }
+      }
+    }
+  }
+}

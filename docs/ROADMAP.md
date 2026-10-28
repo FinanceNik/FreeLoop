@@ -19,7 +19,9 @@ If M1 overruns by more than two weeks, cut from M2 in the order given under "Cut
 
 Goal: a skeleton that proves the stack and fixes the boundaries everything else builds on.
 
-Delivers: project layout, Apache-2.0 license, Wails v3 shell with a React/TypeScript frontend, Go engine as a separate module with an in-process API, event schema v0 (EXT-002), SQLite plus JSONL store (SES-002 skeleton), config loading (SET-001 skeleton), Keychain wrapper behind an interface (NFR-XPLAT-002), CI on a macOS runner (NFR-REL-003), lint rule enforcing ENV-001.
+Status: built 2026-10-28; CI has not yet run on GitHub.
+
+Delivers: project layout, Apache-2.0 license, Wails v3 shell with a React/TypeScript frontend, Go engine as its own package tree (`internal/`, one Go module) with an in-process API and a boundary test keeping Wails out of it, event schema v0 (EXT-002), SQLite plus JSONL store (SES-002 skeleton), config loading (SET-001 skeleton), Keychain wrapper behind an interface (NFR-XPLAT-002), CI on a macOS runner (NFR-REL-003), lint rule enforcing ENV-001.
 
 Definition of done:
 - `make dev` opens a window that lists sessions from SQLite and creates a new empty one.

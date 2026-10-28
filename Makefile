@@ -1,0 +1,57 @@
+# Entry points for humans and CI. The Wails build itself lives in Taskfile.yml.
+
+WAILS_VERSION := v3.0.0
+GOBIN := $(shell go env GOPATH)/bin
+# Exported so the wails3 child processes (Taskfile, dev mode) find wails3 too.
+export PATH := $(GOBIN):$(PATH)
+WAILS := $(GOBIN)/wails3
+# OQ-021: macOS 14 minimum, for cgo code built outside the Taskfile (tests).
+export MACOSX_DEPLOYMENT_TARGET := 14.0
+export CGO_CFLAGS := -O2 -g -mmacosx-version-min=14.0
+export CGO_LDFLAGS := -mmacosx-version-min=14.0
+
+.PHONY: help tools dev build package bindings test test-keychain frontend-test lint fmt clean
+
+help: ## List targets
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
+
+tools: ## Install the pinned wails3 CLI into GOPATH/bin
+	go install github.com/wailsapp/wails/v3/cmd/wails3@$(WAILS_VERSION)
+
+dev: ## Run the app in development mode with live reload
+	$(WAILS) dev -config ./build/config.yml
+
+build: ## Build a production binary into bin/
+	$(WAILS) build
+
+package: ## Build bin/Freeloop.app (ad-hoc signed)
+	$(WAILS) package
+
+test: ## Run Go engine tests (race detector on) and frontend tests
+	go test -race ./internal/...
+	$(MAKE) frontend-test
+
+test-keychain: ## Run the Keychain backend test against the real login keychain
+	FREELOOP_KEYCHAIN_TEST=1 go test -count=1 -run '^TestKeychain$$' ./internal/platform/darwin/
+
+frontend-test: frontend/node_modules
+	cd frontend && npm test
+
+bindings: ## Regenerate the TypeScript bindings for the Go services
+	$(WAILS) generate bindings -clean=true -ts -i -silent ./cmd/freeloop
+
+lint: frontend/node_modules bindings ## gofmt, go vet, architecture boundaries (ENV-001) and TypeScript
+	@test -z "$$(gofmt -l cmd internal frontend/embed.go)" || { gofmt -l cmd internal frontend/embed.go; echo "gofmt needed"; exit 1; }
+	go vet ./internal/...
+	go test -count=1 ./internal/archtest/
+	cd frontend && npm run typecheck
+
+fmt: ## Format Go code
+	gofmt -w cmd internal frontend/embed.go
+
+frontend/node_modules: frontend/package-lock.json
+	cd frontend && npm ci
+	@touch $@
+
+clean: ## Remove build output
+	rm -rf bin frontend/dist .task

@@ -1,0 +1,29 @@
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>CFBundlePackageType</key>
+            <string>APPL</string>
+        <key>CFBundleName</key>
+            <string>Freeloop</string>
+        <key>CFBundleExecutable</key>
+            <string>Freeloop</string>
+        <key>CFBundleIdentifier</key>
+            <string>io.github.financenik.freeloop</string>
+        <key>CFBundleVersion</key>
+            <string>0.0.1</string>
+        <key>CFBundleGetInfoString</key>
+            <string>Freeloop</string>
+        <key>CFBundleShortVersionString</key>
+            <string>0.0.1</string>
+        <key>CFBundleIconFile</key>
+            <string>icons</string>
+        <key>CFBundleIconName</key>
+            <string>appicon</string>
+        <key>LSMinimumSystemVersion</key>
+            <string>14.0.0</string>
+        <key>NSHighResolutionCapable</key>
+            <string>true</string>
+        <key>NSHumanReadableCopyright</key>
+            <string>Copyright 2026 The Freeloop Authors. Apache-2.0.</string>
+    </dict>
+</plist>
