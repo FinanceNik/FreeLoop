@@ -48,6 +48,10 @@ const (
 	EnvHealth           Type = "env_health"
 	HookRan             Type = "hook_ran"
 	Error               Type = "error"
+	// HistoryMessage records a built-in harness context message so a
+	// session continues with its full context after a restart (SES-003).
+	// The UI does not render it.
+	HistoryMessage Type = "history_message"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -60,7 +64,7 @@ var ACPTypes = []Type{
 // FreeloopTypes lists the variants Freeloop adds, in schema order.
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
-	GitState, ModelChanged, EnvHealth, HookRan, Error,
+	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage,
 }
 
 // AllTypes returns every known variant.
@@ -102,6 +106,19 @@ type MessageChunk struct {
 // SessionStatusData is the payload of session_status.
 type SessionStatusData struct {
 	Status string `json:"status"`
+}
+
+// UsageData is the payload of usage_update: one model call's tokens.
+type UsageData struct {
+	InputTokens      int64 `json:"inputTokens"`
+	OutputTokens     int64 `json:"outputTokens"`
+	CacheReadTokens  int64 `json:"cacheReadTokens"`
+	CacheWriteTokens int64 `json:"cacheWriteTokens"`
+}
+
+// CurrentModeData is the payload of current_mode_update.
+type CurrentModeData struct {
+	CurrentModeID string `json:"currentModeId"`
 }
 
 // TurnEndedData is the payload of turn_ended.

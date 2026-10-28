@@ -18,8 +18,8 @@ help: ## List targets
 tools: ## Install the pinned wails3 CLI into GOPATH/bin
 	go install github.com/wailsapp/wails/v3/cmd/wails3@$(WAILS_VERSION)
 
-dev: ## Run the app in development mode with live reload
-	$(WAILS) dev -config ./build/config.yml
+dev: ## Run the app in development mode with live reload (offers the scripted demo provider)
+	FREELOOP_DEV=1 $(WAILS) dev -config ./build/config.yml
 
 build: ## Build a production binary into bin/
 	$(WAILS) build

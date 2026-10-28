@@ -40,6 +40,9 @@ type Options struct {
 	SyncInterval time.Duration
 	// Now is the clock; tests replace it. Default time.Now.
 	Now func() time.Time
+	// Redact, if set, rewrites event data before it is written, to remove
+	// known secret values (SEC-004).
+	Redact func(json.RawMessage) json.RawMessage
 }
 
 // Store is safe for concurrent use.
@@ -48,6 +51,7 @@ type Store struct {
 	dir      string
 	onAppend func(event.Event)
 	now      func() time.Time
+	redact   func(json.RawMessage) json.RawMessage
 
 	mu    sync.Mutex // guards files
 	files map[string]*transcript
@@ -79,6 +83,7 @@ func Open(opts Options) (*Store, error) {
 		dir:      opts.Dir,
 		onAppend: opts.OnAppend,
 		now:      opts.Now,
+		redact:   opts.Redact,
 		files:    map[string]*transcript{},
 		stop:     make(chan struct{}),
 		done:     make(chan struct{}),
@@ -109,23 +114,22 @@ func (s *Store) Close() error {
 	return errors.Join(errs...)
 }
 
-// CreateSession inserts a new session record and creates its transcript.
-func (s *Store) CreateSession(ctx context.Context, title, harnessID string) (session.Session, error) {
+// CreateSession inserts a session record built from tmpl, which supplies
+// the title, harness, project root, provider, model and mode.
+func (s *Store) CreateSession(ctx context.Context, tmpl session.Session) (session.Session, error) {
 	now := s.now().UTC()
-	ses := session.Session{
-		ID:        session.NewID(now),
-		Title:     title,
-		Status:    session.StatusIdle,
-		HarnessID: harnessID,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
+	ses := tmpl
+	ses.ID = session.NewID(now)
+	ses.Status = session.StatusIdle
+	ses.LastSeq = 0
+	ses.CreatedAt, ses.UpdatedAt = now, now
 	if err := os.MkdirAll(s.sessionDir(ses.ID), 0o700); err != nil {
 		return session.Session{}, fmt.Errorf("store: %w", err)
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, title, status, harness_id, last_seq, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)`,
-		ses.ID, ses.Title, ses.Status, ses.HarnessID, now.UnixMilli(), now.UnixMilli())
+		`INSERT INTO sessions (id, title, status, harness_id, project_root, provider_id, model, mode, last_seq, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+		ses.ID, ses.Title, ses.Status, ses.HarnessID, ses.ProjectRoot, ses.ProviderID, ses.Model, ses.Mode, now.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return session.Session{}, fmt.Errorf("store: insert session: %w", err)
 	}
@@ -135,7 +139,7 @@ func (s *Store) CreateSession(ctx context.Context, title, harnessID string) (ses
 // ListSessions returns all sessions, most recently updated first.
 func (s *Store) ListSessions(ctx context.Context) ([]session.Session, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, title, status, harness_id, last_seq, created_at, updated_at FROM sessions ORDER BY updated_at DESC, id DESC`)
+		`SELECT `+sessionColumns+` FROM sessions ORDER BY updated_at DESC, id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("store: list sessions: %w", err)
 	}
@@ -154,7 +158,7 @@ func (s *Store) ListSessions(ctx context.Context) ([]session.Session, error) {
 // GetSession returns one session.
 func (s *Store) GetSession(ctx context.Context, id string) (session.Session, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, title, status, harness_id, last_seq, created_at, updated_at FROM sessions WHERE id = ?`, id)
+		`SELECT `+sessionColumns+` FROM sessions WHERE id = ?`, id)
 	ses, err := scanSession(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return session.Session{}, ErrNotFound
@@ -176,6 +180,9 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 		return event.Event{}, errors.New("store: event data must be a JSON object")
 	}
 	data = compact.Bytes()
+	if s.redact != nil {
+		data = s.redact(data)
+	}
 	t, err := s.transcript(ctx, sid)
 	if err != nil {
 		return event.Event{}, err
@@ -187,21 +194,39 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 	if err := t.write(ev); err != nil {
 		return event.Event{}, err
 	}
-	sets, args := `last_seq = ?, updated_at = ?`, []any{ev.Seq, ev.TS.UnixMilli()}
-	if typ == event.SessionStatus {
-		var st event.SessionStatusData
-		if json.Unmarshal(data, &st) == nil && st.Status != "" {
-			sets += `, status = ?`
-			args = append(args, st.Status)
+	// Streaming chunks skip the index: last_seq is repaired from the
+	// transcript on open, and the UI follows chunks live.
+	if !chunk(typ) {
+		sets, args := `last_seq = ?, updated_at = ?`, []any{ev.Seq, ev.TS.UnixMilli()}
+		var d struct {
+			Status        string `json:"status"`
+			CurrentModeID string `json:"currentModeId"`
+			Model         string `json:"model"`
 		}
+		json.Unmarshal(data, &d)
+		switch {
+		case typ == event.SessionStatus && d.Status != "":
+			sets += `, status = ?`
+			args = append(args, d.Status)
+		case typ == event.CurrentModeUpdate && d.CurrentModeID != "":
+			sets += `, mode = ?`
+			args = append(args, d.CurrentModeID)
+		case typ == event.ModelChanged && d.Model != "":
+			sets += `, model = ?`
+			args = append(args, d.Model)
+		}
+		// The transcript is the source of truth; a failed index update is
+		// repaired from it on the next open, so it does not fail the append.
+		s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE sessions SET `+sets+` WHERE id = ?`, append(args, sid)...)
 	}
-	// The transcript is the source of truth; a failed index update is repaired
-	// from it on the next open, so it does not fail the append.
-	s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE sessions SET `+sets+` WHERE id = ?`, append(args, sid)...)
 	if s.onAppend != nil {
 		s.onAppend(ev)
 	}
 	return ev, nil
+}
+
+func chunk(t event.Type) bool {
+	return t == event.AgentMessageChunk || t == event.AgentThoughtChunk || t == event.UserMessageChunk
 }
 
 // Events returns a session's events with seq greater than afterSeq, in order.
@@ -267,12 +292,14 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
+const sessionColumns = `id, title, status, harness_id, project_root, provider_id, model, mode, last_seq, created_at, updated_at`
+
 type scanner interface{ Scan(...any) error }
 
 func scanSession(r scanner) (session.Session, error) {
 	var ses session.Session
 	var created, updated int64
-	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.LastSeq, &created, &updated); err != nil {
+	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectRoot, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.LastSeq, &created, &updated); err != nil {
 		return session.Session{}, err
 	}
 	ses.CreatedAt = time.UnixMilli(created).UTC()
@@ -291,6 +318,10 @@ var migrations = []string{
 		updated_at INTEGER NOT NULL
 	);
 	CREATE INDEX sessions_updated_at ON sessions (updated_at DESC);`,
+	`ALTER TABLE sessions ADD COLUMN project_root TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN provider_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN model TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'ask';`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

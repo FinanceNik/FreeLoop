@@ -125,6 +125,8 @@ type SessionHandle interface {
 }
 ```
 
+*As built in M1 (`internal/harness`):* sessions receive an `Emit(type, data)` function in their parameters instead of exposing an event channel, so every event goes straight to the store (persist, then publish); cancel is the prompt's context; `SetConfig` waits until a harness needs it. The built-in harness records each context message as a `history_message` event, which is how a session continues with its full context after a restart.
+
 The engine-side `Session` record is what the GUI lists:
 
 ```go
@@ -237,7 +239,7 @@ One versioned schema (EXT-002), a strict superset of ACP's `session/update` vari
 
 | From ACP | Added by Freeloop |
 |---|---|
-| `user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`, `plan`, `available_commands_update`, `current_mode_update`, `config_option_update`, `session_info_update`, `usage_update`, `notice`, `compaction_update`, `compaction_summary_chunk` | `turn_started`, `turn_ended{stop_reason}`, `permission_requested`, `permission_decided{actor, scope}`, `session_status`, `git_state`, `model_changed`, `env_health`, `hook_ran` (v1), `error` |
+| `user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`, `plan`, `available_commands_update`, `current_mode_update`, `config_option_update`, `session_info_update`, `usage_update`, `notice`, `compaction_update`, `compaction_summary_chunk` | `turn_started`, `turn_ended{stopReason}`, `permission_requested`, `permission_decided{actor, scope}`, `session_status`, `git_state`, `model_changed`, `env_health`, `hook_ran` (v1), `error`, `history_message` (built-in harness context, not rendered) |
 
 Transcript line format: `{"v":1,"seq":412,"ts":"2026-10-24T09:12:03.120Z","sid":"…","type":"tool_call","data":{…}}`. `data` is the ACP update object without its `sessionUpdate` discriminator, with ACP's camelCase field names; Freeloop's own payloads use camelCase too. The store writes each event with one write call before publishing it (an app crash loses at most the event being written), fsyncs dirty transcripts every 200 ms and on close, and truncates a torn last line on open. `seq` is contiguous per session, so a UI subscriber that misses events notices the gap and catches up from the store.
 

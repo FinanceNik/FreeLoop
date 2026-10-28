@@ -4,14 +4,20 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"strings"
+	"sync"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 	"github.com/FinanceNik/Freeloop/internal/session"
 	"github.com/FinanceNik/Freeloop/internal/store"
@@ -24,15 +30,28 @@ var ErrNotFound = store.ErrNotFound
 type Options struct {
 	DataDir string
 	Secrets secrets.Store
+	// Home is the user's home directory, for the protected-path policy.
+	// Default os.UserHomeDir().
+	Home string
+	// Dev offers the scripted demo provider.
+	Dev bool
 }
 
 // Engine is safe for concurrent use.
 type Engine struct {
+	dataDir string
+	dev     bool
 	store   *store.Store
 	bus     *bus
 	secrets secrets.Store
+	broker  *permission.Broker
 	cfg     config.Config
 	issues  []config.Issue
+
+	mu        sync.Mutex
+	providers *providerRegistry
+	runtimes  map[string]*runtime
+	known     []string // secret values to redact
 }
 
 // Open loads configuration and opens the store in opts.DataDir. Config
@@ -45,16 +64,45 @@ func Open(opts Options) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := newBus()
-	st, err := store.Open(store.Options{Dir: opts.DataDir, OnAppend: b.publish})
+	if opts.Home == "" {
+		if opts.Home, err = os.UserHomeDir(); err != nil {
+			return nil, err
+		}
+	}
+	e := &Engine{
+		dataDir:  opts.DataDir,
+		dev:      opts.Dev,
+		bus:      newBus(),
+		secrets:  opts.Secrets,
+		cfg:      cfg,
+		issues:   issues,
+		runtimes: map[string]*runtime{},
+	}
+	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: e.bus.publish, Redact: e.redact})
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{store: st, bus: b, secrets: opts.Secrets, cfg: cfg, issues: issues}, nil
+	e.broker = permission.NewBroker(permission.NewPolicy(opts.Home, opts.DataDir), e.emit)
+	if err := e.loadProviders(); err != nil {
+		e.store.Close()
+		return nil, err
+	}
+	e.recover(context.Background())
+	return e, nil
 }
 
-// Close closes every subscription and the store.
+// Close cancels running turns, closes every subscription and the store.
 func (e *Engine) Close() error {
+	e.mu.Lock()
+	running := make([]*runtime, 0, len(e.runtimes))
+	for _, r := range e.runtimes {
+		running = append(running, r)
+	}
+	e.mu.Unlock()
+	// Stopped outside e.mu: a finishing turn still records events.
+	for _, r := range running {
+		r.stop()
+	}
 	e.bus.close()
 	return e.store.Close()
 }
@@ -64,11 +112,54 @@ func (e *Engine) Config() config.Config { return e.cfg }
 
 // ConfigIssues returns the problems found while loading configuration.
 func (e *Engine) ConfigIssues() []config.Issue {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	return append([]config.Issue{}, e.issues...)
 }
 
-// Secrets returns the secret store.
-func (e *Engine) Secrets() secrets.Store { return e.secrets }
+// emit appends an event to a session's transcript. Failures are logged; a
+// harness cannot do anything useful about them.
+func (e *Engine) emit(sid string, typ event.Type, data any) {
+	b, err := json.Marshal(data)
+	if err == nil {
+		_, err = e.store.Append(context.Background(), sid, typ, b)
+	}
+	if err != nil {
+		log.Printf("engine: record %s for %s: %v", typ, sid, err)
+	}
+}
+
+// remember adds a secret value to the redaction list.
+func (e *Engine) remember(secret string) {
+	if len(secret) < 8 {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, k := range e.known {
+		if k == secret {
+			return
+		}
+	}
+	e.known = append(e.known, secret)
+}
+
+// redact replaces known secret values in event data, in raw and in
+// JSON-escaped form.
+func (e *Engine) redact(data json.RawMessage) json.RawMessage {
+	e.mu.Lock()
+	known := e.known
+	e.mu.Unlock()
+	for _, k := range known {
+		esc, _ := json.Marshal(k)
+		for _, form := range [][]byte{[]byte(k), esc[1 : len(esc)-1]} {
+			if bytes.Contains(data, form) {
+				data = bytes.ReplaceAll(data, form, []byte("[REDACTED]"))
+			}
+		}
+	}
+	return data
+}
 
 // ListSessions returns all sessions, most recently updated first.
 func (e *Engine) ListSessions(ctx context.Context) ([]session.Session, error) {
@@ -77,20 +168,43 @@ func (e *Engine) ListSessions(ctx context.Context) ([]session.Session, error) {
 
 // CreateSessionRequest is the input of CreateSession.
 type CreateSessionRequest struct {
-	Title string `json:"title"`
+	Title       string `json:"title"`
+	ProjectRoot string `json:"projectRoot"`
+	ProviderID  string `json:"providerId"`
+	Model       string `json:"model"`
+	Mode        string `json:"mode"`
 }
 
-// DefaultHarness is the harness every session uses until profiles (HRN-003).
-const DefaultHarness = "builtin"
-
-// CreateSession creates an empty session and records its initial status as
-// the first transcript event.
+// CreateSession creates an idle session and records its initial status as
+// the first transcript event. Bypass mode is never a new session's mode
+// (SEC-001).
 func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (session.Session, error) {
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
 		title = "New session"
 	}
-	ses, err := e.store.CreateSession(ctx, title, DefaultHarness)
+	mode := permission.Mode(req.Mode)
+	if !mode.Valid() || mode == permission.ModeBypass {
+		mode = permission.ModeAsk
+	}
+	if req.ProjectRoot == "" {
+		return session.Session{}, errors.New("choose a project folder")
+	}
+	p, err := e.provider(req.ProviderID)
+	if err != nil {
+		return session.Session{}, err
+	}
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = p.cfg.DefaultModel
+	}
+	if model == "" {
+		return session.Session{}, errors.New("choose a model")
+	}
+	ses, err := e.store.CreateSession(ctx, session.Session{
+		Title: title, HarnessID: builtin.ID, ProjectRoot: req.ProjectRoot,
+		ProviderID: req.ProviderID, Model: model, Mode: string(mode),
+	})
 	if err != nil {
 		return session.Session{}, err
 	}
@@ -111,8 +225,8 @@ type AppendEventRequest struct {
 }
 
 // AppendEvent persists an event to a session's transcript and then publishes
-// it to subscribers. Harnesses are the normal producers from M1 on; in M0 the
-// GUI uses it to prove the path from engine to transcript to UI.
+// it to subscribers. Harnesses are the normal producers; this is for tools
+// and tests.
 func (e *Engine) AppendEvent(ctx context.Context, req AppendEventRequest) (event.Event, error) {
 	if req.SessionID == "" {
 		return event.Event{}, errors.New("engine: sessionId is required")
@@ -135,5 +249,5 @@ func (e *Engine) Events(ctx context.Context, sessionID string, afterSeq int64) (
 // that falls behind loses events rather than slowing the engine; it notices
 // the seq gap and catches up with Events.
 func (e *Engine) Subscribe() (<-chan event.Event, func()) {
-	return e.bus.subscribe(1024)
+	return e.bus.subscribe(4096)
 }

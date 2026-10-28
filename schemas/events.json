@@ -36,7 +36,8 @@
         "model_changed",
         "env_health",
         "hook_ran",
-        "error"
+        "error",
+        "history_message"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -71,6 +72,14 @@
       "then": { "properties": { "data": { "$ref": "#/$defs/turnEnded" } } }
     },
     {
+      "if": { "properties": { "type": { "const": "history_message" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/historyMessage" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "usage_update" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/usage" } } }
+    },
+    {
       "if": { "properties": { "type": { "const": "error" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/error" } } }
     }
@@ -100,7 +109,26 @@
       "type": "object",
       "required": ["stopReason"],
       "properties": {
-        "stopReason": { "enum": ["end_turn", "max_tokens", "max_turns", "refusal", "cancelled"] }
+        "stopReason": { "enum": ["end_turn", "max_tokens", "max_turns", "refusal", "cancelled", "error"] }
+      }
+    },
+    "historyMessage": {
+      "type": "object",
+      "description": "Built-in harness context: message number index (0-based) is set to message. Later events with the same index replace earlier ones.",
+      "required": ["index", "message"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "message": { "type": "object", "required": ["role", "parts"] }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "description": "Tokens of one model call.",
+      "properties": {
+        "inputTokens": { "type": "integer" },
+        "outputTokens": { "type": "integer" },
+        "cacheReadTokens": { "type": "integer" },
+        "cacheWriteTokens": { "type": "integer" }
       }
     },
     "error": {

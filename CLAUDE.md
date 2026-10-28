@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Freeloop is an open-source macOS desktop app for running AI coding agents with the user's own models, switchable harnesses, Agent Skills, MCP servers and custom environments, built for someone who runs many sessions across many repos at once. Claude Code is the UX inspiration, not the base: the built-in harness is the product, and Claude Code is one external harness among several.
 
-Status: milestone M0 (the foundations skeleton) is built: Wails shell, engine API, event schema v0, SQLite plus JSONL store, config skeleton, Keychain backend, boundary test, CI workflow. M1 (thin vertical slice) is next. The documents in `docs/` are the specification. When this file and a document disagree, the document wins; fix this file.
+Status: M0 is done. M1 (thin vertical slice) is in progress: slice 1, the agent loop end to end on the Anthropic provider, is built; `docs/ROADMAP.md` lists what it covers and what is next. The documents in `docs/` are the specification. When this file and a document disagree, the document wins; fix this file.
 
 ## Read first
 
@@ -42,14 +42,14 @@ Status: milestone M0 (the foundations skeleton) is built: Wails shell, engine AP
 
 Prerequisites: Go (Homebrew), Node with npm, Xcode command line tools, and `make tools` once to install the pinned `wails3` CLI into `$(go env GOPATH)/bin`.
 
-- `make dev`: run the app with live reload. Set `FREELOOP_HOME=/some/dir` to keep dev data out of `~/Library/Application Support/freeloop`.
+- `make dev`: run the app with live reload. It sets `FREELOOP_DEV=1`, which adds a scripted demo provider so the whole loop can be tried without an API key. Set `FREELOOP_HOME=/some/dir` to keep dev data out of `~/Library/Application Support/freeloop`.
 - `make build` / `make package`: production binary in `bin/` / ad-hoc signed `bin/Freeloop.app`.
 - `make test`: Go tests under `internal/` with the race detector, then frontend tests (`node --test`, no test framework). One Go test: `go test ./internal/<pkg>/ -run '^TestName$'`.
 - `make lint`: gofmt, `go vet`, the architecture boundary test (`internal/archtest`: ENV-001, Wails only in `cmd/freeloop`, macOS code only in `internal/platform/darwin`) and `tsc`.
 - `make test-keychain`: the Keychain backend against the real login keychain (creates and deletes one item under service `freeloop-test`).
 - `make bindings`: regenerate `frontend/bindings` (git-ignored, regenerated on every build) after changing a bound Go service.
 
-Layout notes: one Go module; the Wails entry point is `cmd/freeloop` and `EngineService` there is the only Wails-aware code; `frontend/embed.go` embeds `frontend/dist`, so build the frontend before compiling `cmd/freeloop`; the Wails build tasks are in `Taskfile.yml` and `build/`.
+Layout notes: the engine composes `internal/environment` (files and processes), `internal/permission` (broker and protected-path policy), `internal/provider` (neutral types; `anthropic`, `scripted`), `internal/harness/builtin` (the loop and tools) and `internal/store`; the frontend's `src/transcript.ts` folds events into the conversation view and is unit-tested with `node --test`. Bypass mode needs `permissions.allowBypass: true` in `config.yaml`. One Go module; the Wails entry point is `cmd/freeloop` and `EngineService` there is the only Wails-aware code; `frontend/embed.go` embeds `frontend/dist`, so build the frontend before compiling `cmd/freeloop`; the Wails build tasks are in `Taskfile.yml` and `build/`.
 
 ## Working conventions
 

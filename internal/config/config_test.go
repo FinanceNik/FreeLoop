@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -17,7 +18,7 @@ func write(t *testing.T, content string) string {
 
 func TestMissingFileGivesDefaults(t *testing.T) {
 	cfg, issues, err := Load(t.TempDir())
-	if err != nil || len(issues) != 0 || cfg != Default() {
+	if err != nil || len(issues) != 0 || !reflect.DeepEqual(cfg, Default()) {
 		t.Fatalf("Load = %+v, %v, %v", cfg, issues, err)
 	}
 }
@@ -34,7 +35,7 @@ func TestValidFile(t *testing.T) {
 
 func TestEmptyFileGivesDefaults(t *testing.T) {
 	cfg, issues, err := Load(write(t, ""))
-	if err != nil || len(issues) != 0 || cfg != Default() {
+	if err != nil || len(issues) != 0 || !reflect.DeepEqual(cfg, Default()) {
 		t.Fatalf("Load = %+v, %v, %v", cfg, issues, err)
 	}
 }
@@ -44,7 +45,7 @@ func TestSyntaxErrorIsAnIssueNotACrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(issues) != 1 || cfg != Default() {
+	if len(issues) != 1 || !reflect.DeepEqual(cfg, Default()) {
 		t.Fatalf("cfg = %+v, issues = %v", cfg, issues)
 	}
 	if issues[0].File == "" {

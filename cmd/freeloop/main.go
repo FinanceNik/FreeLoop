@@ -4,6 +4,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -26,17 +27,19 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	eng, err := engine.Open(engine.Options{DataDir: dataDir, Secrets: darwin.Keychain{}})
+	// FREELOOP_DEV=1 (set by `make dev`) offers the scripted demo provider.
+	eng, err := engine.Open(engine.Options{DataDir: dataDir, Secrets: darwin.Keychain{}, Dev: os.Getenv("FREELOOP_DEV") == "1"})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer eng.Close()
 
+	svc := &EngineService{eng: eng}
 	app := application.New(application.Options{
 		Name:        "Freeloop",
 		Description: "Run AI coding agents with your own models, harnesses, skills and environments",
 		Services: []application.Service{
-			application.NewService(&EngineService{eng: eng}),
+			application.NewService(svc),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(frontend.Assets()),
@@ -45,6 +48,8 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+
+	svc.app = app
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:     "Freeloop",

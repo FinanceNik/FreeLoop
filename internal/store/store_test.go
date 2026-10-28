@@ -33,12 +33,12 @@ func TestCreateListAppendRead(t *testing.T) {
 	s := openTest(t, t.TempDir(), nil)
 	defer s.Close()
 
-	a, err := s.CreateSession(ctx, "first", "builtin")
+	a, err := s.CreateSession(ctx, session.Session{Title: "first", HarnessID: "builtin"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(2 * time.Millisecond)
-	b, err := s.CreateSession(ctx, "second", "builtin")
+	b, err := s.CreateSession(ctx, session.Session{Title: "second", HarnessID: "builtin"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestCreateListAppendRead(t *testing.T) {
 	}
 
 	for i, msg := range []string{"one", "two", "three"} {
-		ev, err := s.Append(ctx, a.ID, event.UserMessageChunk, text(msg))
+		ev, err := s.Append(ctx, a.ID, event.Notice, text(msg))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -90,7 +90,7 @@ func TestAppendUpdatesStatus(t *testing.T) {
 	ctx := context.Background()
 	s := openTest(t, t.TempDir(), nil)
 	defer s.Close()
-	a, _ := s.CreateSession(ctx, "x", "builtin")
+	a, _ := s.CreateSession(ctx, session.Session{Title: "x", HarnessID: "builtin"})
 	if _, err := s.Append(ctx, a.ID, event.SessionStatus, json.RawMessage(`{"status":"running"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +100,33 @@ func TestAppendUpdatesStatus(t *testing.T) {
 	}
 }
 
+func TestAppendTracksModeAndRedacts(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(Options{Dir: t.TempDir(), Redact: func(b json.RawMessage) json.RawMessage {
+		return json.RawMessage(strings.ReplaceAll(string(b), "sk-secret", "[REDACTED]"))
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	a, _ := s.CreateSession(ctx, session.Session{Title: "x", ProjectRoot: "/r", Mode: "ask"})
+	s.Append(ctx, a.ID, event.CurrentModeUpdate, json.RawMessage(`{"currentModeId":"plan"}`))
+	s.Append(ctx, a.ID, event.UserMessageChunk, text("my key is sk-secret"))
+	got, _ := s.GetSession(ctx, a.ID)
+	if got.Mode != "plan" || got.ProjectRoot != "/r" {
+		t.Errorf("session = %+v", got)
+	}
+	evs, _ := s.Events(ctx, a.ID, 0)
+	if strings.Contains(string(evs[1].Data), "sk-secret") || !strings.Contains(string(evs[1].Data), "[REDACTED]") {
+		t.Errorf("not redacted: %s", evs[1].Data)
+	}
+}
+
 func TestAppendRejectsBadInput(t *testing.T) {
 	ctx := context.Background()
 	s := openTest(t, t.TempDir(), nil)
 	defer s.Close()
-	a, _ := s.CreateSession(ctx, "x", "builtin")
+	a, _ := s.CreateSession(ctx, session.Session{Title: "x", HarnessID: "builtin"})
 	if _, err := s.Append(ctx, a.ID, "bogus", nil); err == nil {
 		t.Error("unknown type accepted")
 	}
@@ -120,7 +142,7 @@ func TestDataIsStoredOnOneLine(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	s := openTest(t, dir, nil)
-	a, _ := s.CreateSession(ctx, "x", "builtin")
+	a, _ := s.CreateSession(ctx, session.Session{Title: "x", HarnessID: "builtin"})
 	if _, err := s.Append(ctx, a.ID, event.Notice, json.RawMessage("{\n  \"a\": 1\n}")); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +157,7 @@ func TestReopenRecoversSeqAndTruncatesTornTail(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	s := openTest(t, dir, nil)
-	a, _ := s.CreateSession(ctx, "x", "builtin")
+	a, _ := s.CreateSession(ctx, session.Session{Title: "x", HarnessID: "builtin"})
 	for range 2 {
 		if _, err := s.Append(ctx, a.ID, event.Notice, nil); err != nil {
 			t.Fatal(err)
@@ -177,7 +199,7 @@ func TestOnAppendOrderUnderConcurrency(t *testing.T) {
 		mu.Unlock()
 	})
 	defer s.Close()
-	a, _ := s.CreateSession(ctx, "x", "builtin")
+	a, _ := s.CreateSession(ctx, session.Session{Title: "x", HarnessID: "builtin"})
 
 	var wg sync.WaitGroup
 	for range 50 {
@@ -199,7 +221,7 @@ func TestFilePermissions(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	s := openTest(t, dir, nil)
-	a, _ := s.CreateSession(ctx, "x", "builtin")
+	a, _ := s.CreateSession(ctx, session.Session{Title: "x", HarnessID: "builtin"})
 	s.Append(ctx, a.ID, event.Notice, nil)
 	s.Close()
 	fi, err := os.Stat(filepath.Join(dir, "sessions", a.ID, "events.jsonl"))

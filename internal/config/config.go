@@ -42,8 +42,15 @@ func DataDir() (string, error) {
 
 // Config is the content of config.yaml.
 type Config struct {
-	Version int `yaml:"version" json:"version"`
-	UI      UI  `yaml:"ui" json:"ui"`
+	Version     int         `yaml:"version" json:"version"`
+	UI          UI          `yaml:"ui" json:"ui"`
+	Permissions Permissions `yaml:"permissions" json:"permissions"`
+}
+
+// Permissions holds global permission settings.
+type Permissions struct {
+	// AllowBypass makes bypass mode selectable (SEC-001). Off by default.
+	AllowBypass bool `yaml:"allowBypass" json:"allowBypass"`
 }
 
 // UI holds interface settings.

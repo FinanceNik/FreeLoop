@@ -1,21 +1,29 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Events } from "@wailsio/runtime";
-import { EngineService } from "../bindings/github.com/FinanceNik/Freeloop/cmd/freeloop";
-import type { Issue } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
-import { Type as EventType } from "../bindings/github.com/FinanceNik/Freeloop/internal/event/models";
-import type { Session } from "../bindings/github.com/FinanceNik/Freeloop/internal/session/models";
-import { apply, emptyTranscript, summary, type Transcript, type TranscriptEvent } from "./transcript.ts";
+import { EngineService, EVENT_NAME, errorText, type Config, type Issue, type ProviderInfo, type Session } from "./api.ts";
+import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
+import SessionView from "./SessionView.tsx";
+import Providers from "./Providers.tsx";
+import NewSession from "./NewSession.tsx";
 
-// Must match EventName in cmd/freeloop/main.go.
-const EVENT_NAME = "freeloop:event";
+type Screen = { kind: "session"; id: string } | { kind: "new" } | { kind: "providers" } | { kind: "none" };
+
+const STATUS_LABEL: Record<string, string> = {
+  running: "Running",
+  waiting_permission: "Needs you",
+  waiting_input: "Waiting",
+  idle: "Idle",
+  error: "Error",
+};
 
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [config, setConfig] = useState<Config | null>(null);
+  const [screen, setScreen] = useState<Screen>({ kind: "none" });
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [issues, setIssues] = useState<Issue[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
 
   // The reducer state lives in a ref so event callbacks always see the latest
   // transcripts; React state mirrors it for rendering.
@@ -24,11 +32,15 @@ export default function App() {
   // seen meanwhile and needs one more fetch.
   const fetching = useRef<Map<string, boolean>>(new Map());
 
-  const report = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
+  const report = (err: unknown) => setError(errorText(err));
 
   const refreshSessions = () =>
     EngineService.ListSessions()
       .then((list) => setSessions(list ?? []))
+      .catch(report);
+  const refreshProviders = () =>
+    EngineService.ListProviders()
+      .then((list) => setProviders(list ?? []))
       .catch(report);
 
   const ingest = (sid: string, events: readonly TranscriptEvent[]) => {
@@ -63,6 +75,8 @@ export default function App() {
 
   useEffect(() => {
     refreshSessions();
+    refreshProviders();
+    EngineService.Config().then(setConfig).catch(report);
     EngineService.ConfigIssues()
       .then((list) => setIssues(list ?? []))
       .catch(report);
@@ -75,71 +89,59 @@ export default function App() {
           refreshSessions();
           return list;
         }
+        const d = ev.data as Record<string, string>;
         const s = { ...list[i], lastSeq: Math.max(list[i].lastSeq, ev.seq), updatedAt: ev.ts };
-        if (ev.type === EventType.SessionStatus) s.status = (ev.data as { status: Session["status"] }).status;
+        if (ev.type === "session_status" && d.status) s.status = d.status as Session["status"];
+        if (ev.type === "current_mode_update" && d.currentModeId) s.mode = d.currentModeId;
         return [s, ...list.slice(0, i), ...list.slice(i + 1)];
       });
     });
   }, []);
 
-  const select = (sid: string) => {
-    setSelectedId(sid);
+  const openSession = (sid: string) => {
+    setScreen({ kind: "session", id: sid });
     if (!transcriptsRef.current[sid]) catchUp(sid);
   };
 
-  const newSession = () =>
-    EngineService.CreateSession({ title: "" })
-      .then((s) => {
-        setSessions((list) => (list.some((x) => x.id === s.id) ? list : [s, ...list]));
-        select(s.id);
-      })
-      .catch(report);
-
-  const appendTestEvent = (e: FormEvent) => {
-    e.preventDefault();
-    if (!selectedId || !draft.trim()) return;
-    EngineService.AppendEvent({
-      sessionId: selectedId,
-      type: EventType.UserMessageChunk,
-      data: { content: { type: "text", text: draft } },
-    })
-      .then((ev) => {
-        setDraft("");
-        ingest(ev.sid, [ev]);
-      })
-      .catch(report);
-  };
-
-  const selected = sessions.find((s) => s.id === selectedId) ?? null;
-  const events = selectedId ? (transcripts[selectedId]?.events ?? []) : [];
+  const selected = screen.kind === "session" ? (sessions.find((s) => s.id === screen.id) ?? null) : null;
 
   return (
     <div className="app">
       <aside className="sidebar">
         <header>
           <h1>Freeloop</h1>
-          <button onClick={newSession}>New session</button>
+          <button className="primary" onClick={() => setScreen({ kind: "new" })}>
+            New session
+          </button>
         </header>
         <nav aria-label="Sessions">
           <ul>
             {sessions.map((s) => (
               <li key={s.id}>
-                <button aria-current={s.id === selectedId ? "true" : undefined} onClick={() => select(s.id)}>
-                  <span>{s.title}</span>
-                  <small>
-                    {s.status} · {s.lastSeq} events
-                  </small>
+                <button
+                  className="session-row"
+                  aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
+                  onClick={() => openSession(s.id)}
+                >
+                  <span className="session-title">{s.title}</span>
+                  <span className="session-meta">
+                    <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
+                    <span className="muted">{basename(s.projectRoot)}</span>
+                  </span>
                 </button>
               </li>
             ))}
           </ul>
-          {sessions.length === 0 && <p>No sessions yet.</p>}
+          {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
         </nav>
+        <footer>
+          <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
+        </footer>
       </aside>
 
       <main className="main">
         {issues.length > 0 && (
-          <div role="alert">
+          <div role="alert" className="banner warn">
             <strong>Configuration problems; using defaults where needed.</strong>
             <ul>
               {issues.map((i, n) => (
@@ -152,45 +154,44 @@ export default function App() {
           </div>
         )}
         {error && (
-          <div role="alert">
+          <div role="alert" className="banner error">
             {error} <button onClick={() => setError(null)}>Dismiss</button>
           </div>
         )}
 
-        {selected ? (
-          <>
-            <header>
-              <h2>{selected.title}</h2>
-              <p>
-                <code>{selected.id}</code> · {selected.harnessId}
-              </p>
-            </header>
-            <ol className="events">
-              {events.map((ev) => (
-                <li key={ev.seq}>
-                  <code>
-                    #{ev.seq} {ev.type}
-                  </code>{" "}
-                  {summary(ev)}
-                </li>
-              ))}
-            </ol>
-            <form onSubmit={appendTestEvent}>
-              <input
-                aria-label="Message text"
-                placeholder="Text for a test user_message_chunk event"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-              />
-              <button type="submit" disabled={!draft.trim()}>
-                Append event
-              </button>
-            </form>
-          </>
-        ) : (
-          <p>Select a session or create a new one.</p>
+        {screen.kind === "session" && selected && (
+          <SessionView
+            key={selected.id}
+            session={selected}
+            events={transcripts[selected.id]?.events ?? []}
+            provider={providers.find((p) => p.id === selected.providerId)}
+            allowBypass={config?.permissions.allowBypass ?? false}
+            onError={report}
+          />
+        )}
+        {screen.kind === "new" && (
+          <NewSession
+            providers={providers}
+            onManageProviders={() => setScreen({ kind: "providers" })}
+            onCreated={(s) => {
+              setSessions((list) => (list.some((x) => x.id === s.id) ? list : [s, ...list]));
+              openSession(s.id);
+            }}
+            onError={report}
+          />
+        )}
+        {screen.kind === "providers" && <Providers providers={providers} onChanged={refreshProviders} onError={report} />}
+        {screen.kind === "none" && (
+          <div className="empty">
+            <p>Select a session or create a new one.</p>
+          </div>
         )}
       </main>
     </div>
   );
+}
+
+function basename(p: string): string {
+  const parts = p.split("/").filter(Boolean);
+  return parts[parts.length - 1] ?? p;
 }
