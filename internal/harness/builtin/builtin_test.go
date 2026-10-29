@@ -86,7 +86,7 @@ func (f *fixture) answer(option string, stop <-chan struct{}) {
 			default:
 			}
 			for _, r := range f.broker.Pending() {
-				f.broker.Decide(r.ID, option, "")
+				f.broker.Decide(r.ID, option, "", "")
 			}
 			time.Sleep(time.Millisecond)
 		}

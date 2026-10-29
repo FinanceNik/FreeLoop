@@ -1,8 +1,9 @@
 // Package permission is the single chokepoint for side effects (SEC-003).
-// Every tool call from every harness asks the Broker, which applies the fixed
-// path policy, then the session's mode, and queues the rest for the user.
-// Nothing is approved by timeout. Every decision is recorded in the
-// transcript with its actor (SEC-007).
+// Every tool call from every harness asks the Broker, which applies, in
+// order: the fixed path policy, deny rules, the session's mode, allow rules,
+// the default policy for reads, and queues the rest for the user. Deny wins
+// at every scope. Nothing is approved by timeout. Every decision is recorded
+// in the transcript with its actor (SEC-007).
 package permission
 
 import (
@@ -61,6 +62,7 @@ type Option struct {
 // DefaultOptions are offered when a request names none.
 var DefaultOptions = []Option{
 	{ID: "allow_once", Name: "Allow once", Kind: "allow_once"},
+	{ID: "allow_always", Name: "Allow always", Kind: "allow_always"},
 	{ID: "reject_once", Name: "Deny", Kind: "reject_once"},
 }
 
@@ -103,6 +105,7 @@ const (
 	ActorMode          Actor = "mode"
 	ActorProtectedPath Actor = "protected_path"
 	ActorPolicy        Actor = "policy"
+	ActorRule          Actor = "rule"
 )
 
 // Decision is the broker's answer.
@@ -113,6 +116,10 @@ type Decision struct {
 	OptionID   string  `json:"optionId,omitempty"`
 	Actor      Actor   `json:"actor"`
 	Reason     string  `json:"reason,omitempty"`
+	// Rule is the rule that decided, when Actor is rule.
+	Rule *Rule `json:"rule,omitempty"`
+	// Persisted is the rule "Allow always" created.
+	Persisted *Rule `json:"persisted,omitempty"`
 }
 
 // Emitter records an event in a session's transcript.
@@ -122,6 +129,8 @@ type Emitter func(sessionID string, typ event.Type, data any)
 type Broker struct {
 	policy *Policy
 	emit   Emitter
+	rules  RuleSource
+	sink   RuleSink
 
 	mu      sync.Mutex
 	next    int
@@ -130,12 +139,19 @@ type Broker struct {
 
 type pending struct {
 	req    Request
+	pc     Context
 	answer chan Decision
 }
 
 // NewBroker returns a broker that records decisions through emit.
 func NewBroker(policy *Policy, emit Emitter) *Broker {
 	return &Broker{policy: policy, emit: emit, pending: map[string]*pending{}}
+}
+
+// SetRules connects the rules in force and the store for "Allow always".
+// Call it before the first Request.
+func (b *Broker) SetRules(source RuleSource, sink RuleSink) {
+	b.rules, b.sink = source, sink
 }
 
 // Policy returns the fixed path policy.
@@ -155,7 +171,7 @@ func (b *Broker) Request(ctx context.Context, pc Context, req Request) Decision 
 
 	d, settled := b.evaluate(pc, req)
 	if !settled {
-		d = b.ask(ctx, req)
+		d = b.ask(ctx, pc, req)
 	}
 	d.RequestID, d.ToolCallID = req.ID, req.ToolCallID
 	b.emit(req.SessionID, event.PermissionDecided, d)
@@ -170,6 +186,26 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 	}
 	allow := func(a Actor, why string) (Decision, bool) {
 		return Decision{Outcome: Allowed, Actor: a, Reason: why}, true
+	}
+
+	var rules []Rule
+	if b.rules != nil {
+		rules = b.rules.Rules(req.SessionID)
+	}
+	match := func(effect Effect) *Rule {
+		for i := range rules {
+			if rules[i].Effect == effect && rules[i].Matches(req, pc.Root) {
+				return &rules[i]
+			}
+		}
+		return nil
+	}
+	byRule := func(r *Rule) (Decision, bool) {
+		outcome := Allowed
+		if r.Effect == Deny {
+			outcome = Denied
+		}
+		return Decision{Outcome: outcome, Actor: ActorRule, Reason: fmt.Sprintf("%s (%s rule)", r, r.Scope), Rule: r}, true
 	}
 
 	outside := false
@@ -187,6 +223,10 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		}
 	}
 
+	if r := match(Deny); r != nil {
+		return byRule(r)
+	}
+
 	switch pc.Mode {
 	case ModeBypass:
 		return allow(ActorMode, "bypass mode")
@@ -198,10 +238,14 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		default:
 			return deny(ActorMode, "plan mode is read-only until the plan is approved")
 		}
-	case ModeAcceptEdits:
-		if req.Kind.writes() && len(req.Paths) > 0 && !outside {
-			return allow(ActorMode, "accept-edits mode allows edits inside the project")
+	}
+	if req.Kind != KindSwitchMode {
+		if r := match(Allow); r != nil {
+			return byRule(r)
 		}
+	}
+	if pc.Mode == ModeAcceptEdits && req.Kind.writes() && len(req.Paths) > 0 && !outside {
+		return allow(ActorMode, "accept-edits mode allows edits inside the project")
 	}
 
 	if (req.Kind.reads() || req.Kind == KindThink) && !outside {
@@ -210,8 +254,8 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 	return Decision{}, false
 }
 
-func (b *Broker) ask(ctx context.Context, req Request) Decision {
-	p := &pending{req: req, answer: make(chan Decision, 1)}
+func (b *Broker) ask(ctx context.Context, pc Context, req Request) Decision {
+	p := &pending{req: req, pc: pc, answer: make(chan Decision, 1)}
 	b.mu.Lock()
 	b.pending[req.ID] = p
 	b.mu.Unlock()
@@ -236,8 +280,10 @@ func (b *Broker) ask(ctx context.Context, req Request) Decision {
 // ErrUnknownRequest is returned by Decide for a request that is not pending.
 var ErrUnknownRequest = errors.New("permission: no pending request with that ID")
 
-// Decide answers a pending request with one of its options.
-func (b *Broker) Decide(requestID, optionID, reason string) error {
+// Decide answers a pending request with one of its options. For an
+// allow_always option the broker stores a rule for the call in scope
+// (default session) before the call runs.
+func (b *Broker) Decide(requestID, optionID, reason string, scope Scope) error {
 	b.mu.Lock()
 	p, ok := b.pending[requestID]
 	b.mu.Unlock()
@@ -248,12 +294,29 @@ func (b *Broker) Decide(requestID, optionID, reason string) error {
 	if i < 0 {
 		return fmt.Errorf("permission: request %s has no option %q", requestID, optionID)
 	}
-	outcome := Denied
-	if k := p.req.Options[i].Kind; k == "allow_once" || k == "allow_always" {
-		outcome = Allowed
+	d := Decision{Outcome: Denied, OptionID: optionID, Actor: ActorUser, Reason: reason}
+	switch p.req.Options[i].Kind {
+	case "allow_once":
+		d.Outcome = Allowed
+	case "allow_always":
+		d.Outcome = Allowed
+		if scope == "" {
+			scope = ScopeSession
+		}
+		if scope != ScopeSession && scope != ScopeGlobal {
+			return fmt.Errorf("permission: unknown scope %q", scope)
+		}
+		if b.sink == nil {
+			return errors.New("permission: rules cannot be saved")
+		}
+		r := RuleFor(p.req, p.pc.Root, scope)
+		if err := b.sink.AddRule(p.req.SessionID, r); err != nil {
+			return fmt.Errorf("permission: save rule: %w", err)
+		}
+		d.Persisted = &r
 	}
 	select {
-	case p.answer <- Decision{Outcome: outcome, OptionID: optionID, Actor: ActorUser, Reason: reason}:
+	case p.answer <- d:
 	default: // already answered
 	}
 	return nil

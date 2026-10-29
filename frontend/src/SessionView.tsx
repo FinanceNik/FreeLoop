@@ -155,11 +155,13 @@ function ItemView({ item, onError }: { item: Item; onError: (err: unknown) => vo
 function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; onError: (err: unknown) => void }) {
   const waiting = awaitingDecision(item);
   const [reason, setReason] = useState("");
+  const [scope, setScope] = useState("session");
   const decided = item.permission?.decided;
   const shownDecision = decided && decided.actor !== "policy" && !(decided.actor === "mode" && decided.outcome === "allowed");
 
   const decide = (optionId: string) =>
-    EngineService.Decide({ requestId: item.permission!.requestId, optionId, reason }).catch(onError);
+    EngineService.Decide({ requestId: item.permission!.requestId, optionId, reason, scope }).catch(onError);
+  const offersAlways = item.permission?.options.some((o) => o.kind === "allow_always");
 
   const plan = item.tool === "present_plan" ? String((item.input as { plan?: string } | null)?.plan ?? "") : null;
 
@@ -184,6 +186,11 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
         <ContentView key={i} c={c} />
       ))}
       {shownDecision && decided.reason && <p className="muted">{decided.reason}</p>}
+      {decided?.persisted && (
+        <p className="muted">
+          Saved rule: <code>{decided.persisted.command || decided.persisted.path || decided.persisted.tool}</code> ({decided.persisted.scope})
+        </p>
+      )}
       {waiting && (
         <div className="approval" role="group" aria-label="Approve this tool call">
           {item.permission?.command && (
@@ -198,6 +205,12 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
           ))}
           <input placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />
           <div className="approval-buttons">
+            {offersAlways && (
+              <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Allow always applies to">
+                <option value="session">Always: this session</option>
+                <option value="global">Always: everywhere</option>
+              </select>
+            )}
             {item.permission!.options.map((o) => (
               <button key={o.optionId} className={o.kind.startsWith("allow") ? "primary" : "danger"} onClick={() => decide(o.optionId)}>
                 {o.name}

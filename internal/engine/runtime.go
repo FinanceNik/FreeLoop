@@ -76,6 +76,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if err != nil {
 		return nil, err
 	}
+	e.rules.restore(sid, events)
 	hs, err := builtin.Harness{}.NewSession(ctx, harness.Params{
 		SessionID: sid,
 		Env:       env,
@@ -202,11 +203,13 @@ type DecideRequest struct {
 	RequestID string `json:"requestId"`
 	OptionID  string `json:"optionId"`
 	Reason    string `json:"reason"`
+	// Scope for "Allow always": session (default) or global.
+	Scope string `json:"scope"`
 }
 
 // Decide answers a pending permission request.
 func (e *Engine) Decide(req DecideRequest) error {
-	return e.broker.Decide(req.RequestID, req.OptionID, req.Reason)
+	return e.broker.Decide(req.RequestID, req.OptionID, req.Reason, permission.Scope(req.Scope))
 }
 
 // PendingPermissions returns every request waiting for the user, across

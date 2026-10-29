@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +11,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -125,5 +128,84 @@ func TestPresets(t *testing.T) {
 	}
 	if _, err := e.SaveProvider(SaveProviderRequest{Name: "X", Type: "openai_compat", Preset: "custom"}); err == nil {
 		t.Error("custom endpoint without a base URL accepted")
+	}
+}
+
+// GUI-006: "Allow always" for a shell command creates a visible rule that
+// approves the next identical call; session rules survive a restart.
+func TestAllowAlwaysCreatesVisibleRules(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	ch, unsub := e.Subscribe()
+	ses, _ := demoSession(t, e, "demo", "ask")
+	e.Prompt(ctx, ses.ID, "go")
+
+	answer := func(scope string) {
+		req := waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.PermissionRequested })
+		var pr struct{ RequestID string }
+		json.Unmarshal(req.Data, &pr)
+		if err := e.Decide(DecideRequest{RequestID: pr.RequestID, OptionID: "allow_always", Scope: scope}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	answer("session") // write_file freeloop-demo.txt
+	answer("global")  // shell ls -la ... && cat ...
+	waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.TurnEnded })
+
+	rules := e.ListRules(ses.ID)
+	if len(rules) != 2 || rules[0].Scope != "global" || rules[0].Tool != "shell" || rules[1].Scope != "session" || rules[1].Path != "freeloop-demo.txt" {
+		t.Fatalf("rules = %+v", rules)
+	}
+	if len(e.ListRules("")) != 1 {
+		t.Errorf("session rule visible without its session: %+v", e.ListRules(""))
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "rules.yaml"))
+	if !strings.Contains(string(b), "ls -la freeloop-demo.txt") {
+		t.Errorf("rules.yaml = %s", b)
+	}
+
+	// The second run asks nothing: both calls are approved by rules.
+	e.Prompt(ctx, ses.ID, "again")
+	end := waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.TurnEnded || ev.Type == event.PermissionRequested })
+	if end.Type != event.TurnEnded {
+		t.Fatalf("second run asked: %s", end.Data)
+	}
+	unsub()
+	e.Close()
+
+	// After a restart the session rule comes back from the transcript.
+	e = openTest(t, dir)
+	defer e.Close()
+	if _, err := e.runtimeFor(ctx, ses.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rules := e.ListRules(ses.ID); len(rules) != 2 {
+		t.Errorf("rules after restart = %+v", rules)
+	}
+	if err := e.DeleteRule(rules[0]); err != nil {
+		t.Fatal(err)
+	}
+	if rules := e.ListRules(ses.ID); len(rules) != 1 || rules[0].Scope != "session" {
+		t.Errorf("rules after deleting the global one = %+v", rules)
+	}
+}
+
+func TestHandEditedRulesAreReloaded(t *testing.T) {
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	os.WriteFile(filepath.Join(dir, "rules.yaml"), []byte("version: 1\nrules:\n  - {effect: deny, tool: shell, command: \"rm *\"}\n  - {effect: bogus, tool: x}\n"), 0o600)
+	future := time.Now().Add(time.Second)
+	os.Chtimes(filepath.Join(dir, "rules.yaml"), future, future)
+	if rules := e.ListRules(""); len(rules) != 1 || rules[0].Effect != "deny" {
+		t.Errorf("rules = %+v", rules)
+	}
+	found := false
+	for _, i := range e.ConfigIssues() {
+		found = found || strings.Contains(i.Field, "rules[1]")
+	}
+	if !found {
+		t.Errorf("invalid rule not reported: %+v", e.ConfigIssues())
 	}
 }

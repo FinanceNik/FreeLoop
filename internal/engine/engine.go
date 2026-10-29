@@ -45,6 +45,7 @@ type Engine struct {
 	bus     *bus
 	secrets secrets.Store
 	broker  *permission.Broker
+	rules   *ruleStore
 	cfg     config.Config
 	issues  []config.Issue
 
@@ -83,6 +84,12 @@ func Open(opts Options) (*Engine, error) {
 		return nil, err
 	}
 	e.broker = permission.NewBroker(permission.NewPolicy(opts.Home, opts.DataDir), e.emit)
+	e.rules = newRuleStore(opts.DataDir, func(issues []config.Issue) {
+		e.mu.Lock()
+		e.issues = append(e.issues, issues...)
+		e.mu.Unlock()
+	})
+	e.broker.SetRules(e.rules, e.rules)
 	if err := e.loadProviders(); err != nil {
 		e.store.Close()
 		return nil, err

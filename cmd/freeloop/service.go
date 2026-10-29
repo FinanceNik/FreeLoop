@@ -81,6 +81,18 @@ func (s *EngineService) SetToolsOverride(providerID, model string, tools *bool) 
 	return s.eng.SetToolsOverride(providerID, model, tools)
 }
 
+func (s *EngineService) ListRules(sessionID string) []permission.Rule {
+	return s.eng.ListRules(sessionID)
+}
+
+func (s *EngineService) AddRule(r permission.Rule) error {
+	return s.eng.AddRule(r)
+}
+
+func (s *EngineService) DeleteRule(r permission.Rule) error {
+	return s.eng.DeleteRule(r)
+}
+
 func (s *EngineService) Config() config.Config {
 	return s.eng.Config()
 }

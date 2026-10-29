@@ -229,7 +229,7 @@ type PermissionBroker interface {
 }
 ```
 
-Evaluation order in `Request`: protected paths (SEC-005, always deny) → environment constraints (a sandboxed environment may auto-allow execution) → session mode (`plan` denies writes and execution, `accept_edits` allows edits under the project root, `bypass` allows all) → rules (deny wins; among allows the most specific scope wins) → queue for the user. "Allow always" writes a rule into the chosen scope's YAML. Cancelling a turn resolves pending requests as `cancelled`, which the ACP adapter forwards as the protocol requires.
+Evaluation order in `Request`: protected paths (SEC-005, always deny) → deny rules at any scope (they hold even in `bypass`) → environment constraints (a sandboxed environment may auto-allow execution; v1) → session mode (`plan` denies writes and execution, `bypass` allows all) → allow rules → `accept_edits` allows edits under the project root, reads inside the root are allowed → queue for the user. *As built in M1:* scopes are global (`rules.yaml`) and session (rules created by "Allow always", recorded as the `persisted` rule of a `permission_decided` event and rebuilt from the transcript); a shell prefix rule (`git *`) approves only a single plain command, never a chain, pipe, substitution or redirection, while an exact rule matches exactly the line it names and a deny rule matches any command in a line. "Allow always" writes a rule into the chosen scope's YAML. Cancelling a turn resolves pending requests as `cancelled`, which the ACP adapter forwards as the protocol requires.
 
 This mirrors Codex's separation of sandbox from approval policy: the environment says what is *possible*, the policy says when to *ask*.
 

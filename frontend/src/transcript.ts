@@ -72,7 +72,13 @@ export interface PermissionState {
   options: PermissionOption[];
   command?: string;
   paths?: string[];
-  decided?: { outcome: string; actor: string; optionId?: string; reason?: string };
+  decided?: {
+    outcome: string;
+    actor: string;
+    optionId?: string;
+    reason?: string;
+    persisted?: { tool: string; command?: string; path?: string; scope: string };
+  };
 }
 
 export interface ToolContent {
@@ -188,7 +194,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "permission_decided": {
         const item = tools.get(d.toolCallId);
         if (!item) break;
-        const decided = { outcome: d.outcome, actor: d.actor, optionId: d.optionId, reason: d.reason };
+        const decided = { outcome: d.outcome, actor: d.actor, optionId: d.optionId, reason: d.reason, persisted: d.persisted };
         const permission: PermissionState = item.permission
           ? { ...item.permission, decided }
           : { requestId: d.requestId, options: [], decided };

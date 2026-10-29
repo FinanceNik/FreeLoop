@@ -5,8 +5,9 @@ import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from ".
 import SessionView from "./SessionView.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
+import Rules from "./Rules.tsx";
 
-type Screen = { kind: "session"; id: string } | { kind: "new" } | { kind: "providers" } | { kind: "none" };
+type Screen = { kind: "session"; id: string } | { kind: "new" } | { kind: "providers" } | { kind: "rules" } | { kind: "none" };
 
 const STATUS_LABEL: Record<string, string> = {
   running: "Running",
@@ -23,6 +24,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ kind: "none" });
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [issues, setIssues] = useState<Issue[]>([]);
+  // The last session opened, for the rules page's session scope.
+  const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // The reducer state lives in a ref so event callbacks always see the latest
@@ -100,6 +103,7 @@ export default function App() {
 
   const openSession = (sid: string) => {
     setScreen({ kind: "session", id: sid });
+    setLastSessionId(sid);
     if (!transcriptsRef.current[sid]) catchUp(sid);
   };
 
@@ -134,8 +138,9 @@ export default function App() {
           </ul>
           {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
         </nav>
-        <footer>
+        <footer className="row">
           <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
+          <button onClick={() => setScreen({ kind: "rules" })}>Rules</button>
         </footer>
       </aside>
 
@@ -181,6 +186,7 @@ export default function App() {
           />
         )}
         {screen.kind === "providers" && <Providers providers={providers} onChanged={refreshProviders} onError={report} />}
+        {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} onError={report} />}
         {screen.kind === "none" && (
           <div className="empty">
             <p>Select a session or create a new one.</p>

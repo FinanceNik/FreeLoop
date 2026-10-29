@@ -49,7 +49,7 @@ func decide(t *testing.T, b *Broker, pc Context, req Request, option string) Dec
 			if option == "" {
 				t.Fatalf("request %+v was queued, expected it settled", req)
 			}
-			if err := b.Decide(p[0].ID, option, ""); err != nil {
+			if err := b.Decide(p[0].ID, option, "", ""); err != nil {
 				t.Fatal(err)
 			}
 			return <-got
@@ -161,7 +161,7 @@ func TestCancelResolvesPendingAsCancelled(t *testing.T) {
 
 func TestDecideErrors(t *testing.T) {
 	b, _, _, _ := setup(t)
-	if err := b.Decide("nope", "allow_once", ""); !errors.Is(err, ErrUnknownRequest) {
+	if err := b.Decide("nope", "allow_once", "", ""); !errors.Is(err, ErrUnknownRequest) {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -183,5 +183,102 @@ func TestGuard(t *testing.T) {
 	}
 	if err := g.CheckWrite(filepath.Join(root+"-sibling", "x")); !errors.Is(err, environment.ErrProtected) {
 		t.Errorf("CheckWrite sibling dir with root as prefix: %v", err)
+	}
+}
+
+// memRules is a RuleSource and RuleSink for tests.
+type memRules struct {
+	global  []Rule
+	session map[string][]Rule
+}
+
+func (m *memRules) Rules(sid string) []Rule {
+	return append(append([]Rule{}, m.global...), m.session[sid]...)
+}
+
+func (m *memRules) AddRule(sid string, r Rule) error {
+	if r.Scope == ScopeGlobal {
+		m.global = append(m.global, r)
+		return nil
+	}
+	if m.session == nil {
+		m.session = map[string][]Rule{}
+	}
+	m.session[sid] = append(m.session[sid], r)
+	return nil
+}
+
+func TestRulesInEvaluation(t *testing.T) {
+	b, _, _, root := setup(t)
+	rules := &memRules{}
+	b.SetRules(rules, rules)
+	gitStatus := Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "git status"}
+	write := Request{SessionID: "s", Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(root, "a.go")}}
+
+	// No rule: ask.
+	if d := decide(t, b, Context{Mode: ModeAsk, Root: root}, gitStatus, "reject_once"); d.Actor != ActorUser {
+		t.Errorf("without rules: %+v", d)
+	}
+
+	// Allow always (session scope) creates a rule; the next identical call
+	// is approved by it.
+	d := decide(t, b, Context{Mode: ModeAsk, Root: root}, gitStatus, "allow_always")
+	if d.Outcome != Allowed || d.Persisted == nil || d.Persisted.Command != "git status" || d.Persisted.Scope != ScopeSession {
+		t.Fatalf("allow always = %+v", d)
+	}
+	d = decide(t, b, Context{Mode: ModeAsk, Root: root}, gitStatus, "")
+	if d.Outcome != Allowed || d.Actor != ActorRule || d.Rule == nil {
+		t.Errorf("second call = %+v", d)
+	}
+	// The session rule does not leak into another session.
+	other := gitStatus
+	other.SessionID = "other"
+	if d := decide(t, b, Context{Mode: ModeAsk, Root: root}, other, "reject_once"); d.Actor != ActorUser {
+		t.Errorf("session rule applied to another session: %+v", d)
+	}
+
+	// Deny wins over allow, across scopes, and even in bypass mode.
+	rules.global = append(rules.global, Rule{Effect: Deny, Tool: "shell", Command: "git *", Scope: ScopeGlobal})
+	for _, mode := range []Mode{ModeAsk, ModeBypass} {
+		if d := decide(t, b, Context{Mode: mode, Root: root}, gitStatus, ""); d.Outcome != Denied || d.Actor != ActorRule {
+			t.Errorf("%s: deny rule lost to %+v", mode, d)
+		}
+	}
+
+	// An allow rule cannot lift plan mode's read-only rule.
+	rules.global = []Rule{{Effect: Allow, Tool: "write_file", Scope: ScopeGlobal}}
+	if d := decide(t, b, Context{Mode: ModePlan, Root: root}, write, ""); d.Outcome != Denied || d.Actor != ActorMode {
+		t.Errorf("plan mode with an allow rule = %+v", d)
+	}
+	if d := decide(t, b, Context{Mode: ModeAsk, Root: root}, write, ""); d.Outcome != Allowed || d.Actor != ActorRule {
+		t.Errorf("ask mode with an allow rule = %+v", d)
+	}
+	// Nor protected paths.
+	git := write
+	git.Paths = []string{filepath.Join(root, ".git", "config")}
+	if d := decide(t, b, Context{Mode: ModeAsk, Root: root}, git, ""); d.Actor != ActorProtectedPath {
+		t.Errorf("allow rule opened a protected path: %+v", d)
+	}
+}
+
+func TestAllowAlwaysGlobalScope(t *testing.T) {
+	b, _, _, root := setup(t)
+	rules := &memRules{}
+	b.SetRules(rules, rules)
+	got := make(chan Decision, 1)
+	go func() {
+		got <- b.Request(context.Background(), Context{Mode: ModeAsk, Root: root}, Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "make test"})
+	}()
+	for len(b.Pending()) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	if err := b.Decide(b.Pending()[0].ID, "allow_always", "", "planet"); err == nil {
+		t.Error("unknown scope accepted")
+	}
+	if err := b.Decide(b.Pending()[0].ID, "allow_always", "", ScopeGlobal); err != nil {
+		t.Fatal(err)
+	}
+	if d := <-got; d.Persisted == nil || d.Persisted.Scope != ScopeGlobal || len(rules.global) != 1 {
+		t.Errorf("decision = %+v, global rules = %+v", d, rules.global)
 	}
 }
