@@ -1,16 +1,63 @@
 # Freeloop
 
-An open-source macOS app for running AI coding agents with your own models, switchable harnesses, Agent Skills, MCP servers and custom environments. Apache-2.0.
+An open-source macOS app for running AI coding agents with your own models, switchable harnesses, Agent Skills, MCP servers and custom environments, built for running many sessions across many repositories at once. Apache-2.0.
 
-Status: early. Milestone M0 (foundations) is built; see [docs/ROADMAP.md](docs/ROADMAP.md). The specification lives in [docs/](docs/).
+Status: early. Milestone M1 (the thin vertical slice) is built and M2 (the first public release) is in progress; [docs/ROADMAP.md](docs/ROADMAP.md) says what each covers. There is no signed release yet. The specification lives in [docs/](docs/).
+
+## What it does
+
+- **Your models.** The built-in agent runs on providers you add: Anthropic, OpenAI-compatible endpoints (OpenAI, OpenRouter, LM Studio, llama.cpp, vLLM) and Ollama. API keys go to the macOS Keychain, never into files.
+- **Switchable harnesses.** Besides the built-in agent, any agent that speaks the Agent Client Protocol runs as a harness from a preset. Claude Code ships as one: it runs the unmodified Claude Code through its ACP adapter and signs in by itself; Freeloop never sees or stores its login.
+- **Profiles.** A profile sets a session's harness, model, tools, prompt, permission rules, skills, MCP servers and slash commands, as a YAML file.
+- **Skills and MCP.** Agent Skills (`SKILL.md`) load unchanged, from the app's store or a trusted project. MCP servers run over stdio or Streamable HTTP after you approve exactly what they run. Both can be imported from Claude Code.
+- **One permission chokepoint.** Every tool call from every harness is decided by one broker: modes (ask, accept edits, plan, bypass), rules at global, environment, profile, project and session scope where deny always wins, and protected paths that are never touched.
+- **Many sessions.** A sidebar by project, an attention view that answers every waiting approval in one place, notifications and a dock badge, a diff and commit panel per session.
+- **Projects you trust.** A project's `AGENTS.md`, `.freeloop/` settings and git status are used only after you trust it; its own settings can tighten permissions, never loosen them.
+
+## Install
+
+Build from source on macOS 14 or later. You need Go, Node.js with npm and the Xcode command line tools.
+
+```sh
+make tools     # once: install the pinned wails3 CLI
+make package   # build bin/Freeloop.app, ad-hoc signed
+```
+
+Move `bin/Freeloop.app` to Applications. It is not notarized yet, so the first time, right-click it and choose Open.
+
+## First run
+
+1. **Add a provider.** The guide opens on a fresh install: pick a kind (Anthropic, OpenAI, OpenRouter, Ollama…), paste an API key or a local URL, and test it. If you only want Claude Code, skip this: it brings its own model access and needs Node.js and one sign-in with `claude` in a terminal.
+2. **Import from Claude Code (optional).** MCP servers, permission rules and skills are listed with where each goes; nothing is written back to Claude Code's files.
+3. **Choose a project** and decide whether to trust it.
+4. **Start a session** and describe a task. Approvals appear in the conversation and in "Needs attention"; Y, A and N answer them.
+
+## Where things live
+
+Everything is in `~/Library/Application Support/freeloop/`, readable and editable by hand; edits are picked up within a second.
+
+| File | Holds |
+|---|---|
+| `config.yaml` | settings and defaults |
+| `providers.yaml` | providers (keys are Keychain references) |
+| `profiles/*.yaml` | profiles |
+| `environments/*.yaml` | environments: variables, secrets as references, rules |
+| `rules.yaml` | global permission rules |
+| `mcp.yaml` | MCP servers |
+| `presets/harnesses/*.yaml` | external agents |
+| `skills/` | the skill store |
+| `sessions/<id>/events.jsonl` | each session's transcript |
+
+A project can add `.freeloop/rules.yaml` (deny rules) and `.freeloop/profiles/`, read once the project is trusted. Set `FREELOOP_HOME` to use another folder.
+
+Freeloop sends nothing anywhere except to the providers, MCP servers and agents you configure. There is no telemetry. [docs/SECURITY.md](docs/SECURITY.md) describes the threat model and the limits you should know, among them that the local environment is not a sandbox.
 
 ## Develop
 
-Needs macOS 14+, Go, Node with npm, and the Xcode command line tools.
-
 ```sh
-make tools   # install the pinned wails3 CLI
-make dev     # run the app with live reload
-make test    # Go and frontend tests
-make lint    # formatting, vet, architecture boundaries, TypeScript
+make dev       # run with live reload; adds a scripted demo provider
+make test      # Go tests with the race detector, then frontend tests
+make lint      # formatting, vet, architecture boundaries, TypeScript
 ```
+
+Start with [CLAUDE.md](CLAUDE.md) for the layout and the rules the code follows, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
