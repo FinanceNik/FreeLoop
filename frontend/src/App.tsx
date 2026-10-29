@@ -232,6 +232,24 @@ export default function App() {
     if (!transcriptsRef.current[sid]) catchUp(sid);
   };
 
+  // ⌘1 to ⌘9 open the sessions listed first, ⌘0 the attention view
+  // (NFR-A11Y-001).
+  const listedRef = useRef<Session[]>([]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || !/^[0-9]$/.test(e.key)) return;
+      e.preventDefault();
+      if (e.key === "0") {
+        setScreen({ kind: "attention" });
+        return;
+      }
+      const s = listedRef.current[Number(e.key) - 1];
+      if (s) openRef.current(s.id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // The first-run guide (GUI-010) opens once, before the first session.
   useEffect(() => {
     if (config && sessionsLoaded && !config.ui.onboarded && sessions.length === 0 && screen.kind === "none") setScreen({ kind: "onboarding" });
@@ -273,6 +291,7 @@ export default function App() {
     }
     g.sessions.push(s);
   }
+  listedRef.current = groups.flatMap((g) => g.sessions);
 
   // Each waiting request counts, and each session in error or waiting for a
   // reply without a request.
@@ -290,6 +309,8 @@ export default function App() {
         <button
           className={`attention-link ${attentionCount > 0 ? "attention-link-on" : ""}`}
           aria-current={screen.kind === "attention" ? "page" : undefined}
+          aria-keyshortcuts="Meta+0"
+          title="⌘0"
           onClick={() => {
             refreshAttention();
             setScreen({ kind: "attention" });
@@ -338,6 +359,7 @@ export default function App() {
                     <button
                       className="session-row"
                       aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
+                      aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
                       onClick={() => openSession(s.id)}
                     >
                       <span className="session-title">{s.title}</span>

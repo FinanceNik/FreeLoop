@@ -72,6 +72,19 @@ export default function SessionView({ session, events, provider, providers, envi
     EngineService.DeleteSession(session.id).then(onDeleted).catch(onError);
   };
   const view = useMemo(() => buildView(events), [events]);
+
+  // Screen readers hear approvals and turn ends, not every streamed word
+  // (NFR-A11Y-002).
+  const waitingTools = view.items.filter((i) => i.kind === "tool" && awaitingDecision(i));
+  const [announcement, setAnnouncement] = useState("");
+  const heard = useRef({ waiting: waitingTools.length, running: view.running });
+  useEffect(() => {
+    const before = heard.current;
+    const last = waitingTools[waitingTools.length - 1];
+    if (waitingTools.length > before.waiting && last?.kind === "tool") setAnnouncement(`Approval needed: ${last.title}`);
+    else if (before.running && !view.running) setAnnouncement(view.status === "error" ? "The turn stopped with an error" : "Turn finished");
+    heard.current = { waiting: waitingTools.length, running: view.running };
+  }, [waitingTools.length, view.running]);
   const [draft, setDraft] = useState("");
   const [queued, setQueued] = useState(0);
   const bottom = useRef<HTMLDivElement>(null);
@@ -343,7 +356,10 @@ export default function SessionView({ session, events, provider, providers, envi
           </div>
         )}
 
-        <div className="conversation" aria-live="polite">
+        <div className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </div>
+        <div className="conversation" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {view.items.map((item) => (
             <ItemView key={item.key} item={item} onError={onError} />

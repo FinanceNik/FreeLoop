@@ -25,7 +25,8 @@ export function showTool(toolCallId: string) {
   const el = document.getElementById(`tool-${toolCallId}`);
   if (!el) return;
   if (el instanceof HTMLDetailsElement) el.open = true;
-  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
 }
 
 export default function SessionPanel({ session, view, provider, environment, configVersion, onClose, onError }: Props) {

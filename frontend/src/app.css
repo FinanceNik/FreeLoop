@@ -8,7 +8,7 @@
   --border: #e2e2df;
   --text: #1c1c1a;
   --muted: #6b6b66;
-  --accent: #2f6fdf;
+  --accent: #2a64d0;
   --accent-text: #ffffff;
   --ok: #1f7a3f;
   --warn: #9a6200;
@@ -28,6 +28,7 @@
     --text: #ececea;
     --muted: #9c9c96;
     --accent: #5b8ff0;
+    --accent-text: #0f1115;
     --ok: #5cc184;
     --warn: #e0a640;
     --danger: #f0706a;
@@ -45,6 +46,7 @@
     --text: #ececea;
     --muted: #9c9c96;
     --accent: #5b8ff0;
+    --accent-text: #0f1115;
     --ok: #5cc184;
     --warn: #e0a640;
     --danger: #f0706a;
@@ -1297,4 +1299,39 @@ fieldset {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em;
   tab-size: 2;
+}
+
+/* Accessibility (NFR-A11Y-001, NFR-A11Y-002): a visible focus ring for
+   keyboard users, no motion for those who asked for less, and text for
+   screen readers only. Colours meet WCAG AA in both themes. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.session-row:focus-visible,
+.panel-tabs .tab:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
