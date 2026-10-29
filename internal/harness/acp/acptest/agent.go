@@ -17,6 +17,11 @@ import (
 // its tests; see Serve.
 const EnvVar = "FREELOOP_ACP_TEST_AGENT"
 
+// LoadVar, set to 1, makes the agent support session/load: it replays one
+// message (which a client must not record again) and says "loaded: <id>"
+// on the next prompt.
+const LoadVar = "FREELOOP_ACP_TEST_LOAD"
+
 // Serve runs the agent on stdin and stdout until the client disconnects and
 // reports whether it did, so a TestMain can return early.
 func Serve() bool {
@@ -32,13 +37,14 @@ func Serve() bool {
 // agent is a reference ACP agent: it edits notes.txt after asking, and
 // runs a command without asking when the prompt says "terminal".
 type agent struct {
-	conn *sdk.AgentSideConnection
-	mcp  []string
+	conn   *sdk.AgentSideConnection
+	mcp    []string
+	loaded string
 }
 
 func (a *agent) Initialize(context.Context, sdk.InitializeRequest) (sdk.InitializeResponse, error) {
 	return sdk.InitializeResponse{ProtocolVersion: sdk.ProtocolVersionNumber, AuthMethods: []sdk.AuthMethod{},
-		AgentCapabilities: sdk.AgentCapabilities{McpCapabilities: sdk.McpCapabilities{Http: true}}}, nil
+		AgentCapabilities: sdk.AgentCapabilities{LoadSession: os.Getenv(LoadVar) == "1", McpCapabilities: sdk.McpCapabilities{Http: true}}}, nil
 }
 
 func (a *agent) NewSession(_ context.Context, r sdk.NewSessionRequest) (sdk.NewSessionResponse, error) {
@@ -57,6 +63,9 @@ func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResp
 	text := r.Prompt[0].Text.Text
 	say := func(s string) {
 		a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: r.SessionId, Update: sdk.UpdateAgentMessageText(s)})
+	}
+	if a.loaded != "" {
+		say("loaded: " + a.loaded)
 	}
 	say("mcp: " + strings.Join(a.mcp, ","))
 	cwd, _ := os.Getwd()
@@ -116,4 +125,10 @@ func (a *agent) ResumeSession(context.Context, sdk.ResumeSessionRequest) (sdk.Re
 }
 func (a *agent) SetSessionConfigOption(context.Context, sdk.SetSessionConfigOptionRequest) (sdk.SetSessionConfigOptionResponse, error) {
 	return sdk.SetSessionConfigOptionResponse{}, nil
+}
+
+func (a *agent) LoadSession(ctx context.Context, r sdk.LoadSessionRequest) (sdk.LoadSessionResponse, error) {
+	a.loaded = string(r.SessionId)
+	a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: r.SessionId, Update: sdk.UpdateAgentMessageText("replayed history")})
+	return sdk.LoadSessionResponse{}, nil
 }

@@ -62,6 +62,9 @@ type Params struct {
 	// MCPServers are passed to an external agent on session creation, so
 	// it uses the same servers (MCP-004). Secrets are resolved.
 	MCPServers []MCPServerSpec
+	// ExternalID, when set, is the harness-side session to load instead of
+	// starting a new one (SES-003).
+	ExternalID string
 	Emit       Emitter
 }
 
@@ -114,6 +117,12 @@ type SkillContent struct {
 	// lists its other files when the body was loaded.
 	Dir   string
 	Files []string
+}
+
+// Resumable is implemented by sessions with a harness-side ID the engine
+// keeps for loading them after a restart (SES-003).
+type Resumable interface {
+	ExternalID() string
 }
 
 // ModelSetter is implemented by sessions whose model can change between

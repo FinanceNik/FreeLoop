@@ -45,10 +45,13 @@ type Session struct {
 	Model      string `json:"model"`
 	Mode       string `json:"mode"`
 	// ProfileID names the harness profile the session runs with (HRN-003).
-	ProfileID string    `json:"profileId"`
-	LastSeq   int64     `json:"lastSeq"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ProfileID string `json:"profileId"`
+	// ExternalID is the harness's own ID for the session, used to load it
+	// after a restart (SES-003).
+	ExternalID string    `json:"externalId"`
+	LastSeq    int64     `json:"lastSeq"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 // Project is a repository the user works in (ENV-003). It is identified by

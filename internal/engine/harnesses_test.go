@@ -82,3 +82,56 @@ func TestExternalHarnessSession(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// SES-003: after a restart an agent session is loaded again when the agent
+// can, without recording the history it replays; otherwise it starts anew
+// and the transcript says so.
+func TestExternalSessionLoad(t *testing.T) {
+	for _, canLoad := range []bool{true, false} {
+		ctx := context.Background()
+		dir := t.TempDir()
+		exe, _ := os.Executable()
+		os.MkdirAll(filepath.Join(dir, config.PresetsDir), 0o700)
+		load := "0"
+		if canLoad {
+			load = "1"
+		}
+		os.WriteFile(filepath.Join(dir, config.PresetsDir, "ref.yaml"),
+			[]byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n  "+acptest.LoadVar+": \""+load+"\"\n"), 0o600)
+		root := t.TempDir()
+		os.WriteFile(filepath.Join(root, "notes.txt"), []byte("hello"), 0o644)
+
+		e := openTest(t, dir)
+		ch, cancel := e.Subscribe()
+		ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "ref", Mode: "accept_edits"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.Prompt(ctx, ses.ID, "first")
+		waitIdle(t, ch, ses.ID)
+		cancel()
+		if got, _ := e.store.GetSession(ctx, ses.ID); got.ExternalID != "s1" {
+			t.Fatalf("external ID = %q", got.ExternalID)
+		}
+		e.Close()
+
+		e = openTest(t, dir)
+		ch, cancel = e.Subscribe()
+		e.Prompt(ctx, ses.ID, "second")
+		waitIdle(t, ch, ses.ID)
+		cancel()
+		evs, _ := e.Events(ctx, ses.ID, 0)
+		var all strings.Builder
+		for _, ev := range evs {
+			all.WriteString(string(ev.Type) + " " + string(ev.Data) + "\n")
+		}
+		text := all.String()
+		switch {
+		case canLoad && (!strings.Contains(text, "loaded: s1") || strings.Contains(text, "replayed history")):
+			t.Errorf("load: transcript =\n%s", text)
+		case !canLoad && !strings.Contains(text, "started a new session"):
+			t.Errorf("no load: transcript lacks the notice:\n%s", text)
+		}
+		e.Close()
+	}
+}

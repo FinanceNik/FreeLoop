@@ -498,6 +498,8 @@ function ItemBody({ item, onError }: { item: Item; onError: (err: unknown) => vo
       return <div className="turn-end">Mode changed to {MODES.find((m) => m.id === item.mode)?.name ?? item.mode}</div>;
     case "model":
       return <div className="turn-end">Model changed to {item.model}</div>;
+    case "notice":
+      return <div className="turn-end turn-end-warn">{item.message}</div>;
   }
 }
 

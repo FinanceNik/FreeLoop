@@ -53,6 +53,9 @@ type session struct {
 
 	mu   sync.Mutex
 	mode permission.Mode
+	// loading drops the history an agent replays on session/load: the
+	// transcript has it already.
+	loading bool
 	// approved holds what the user or a rule just allowed for a permission
 	// request, so the agent's own fs/terminal request for the same thing
 	// does not ask twice.
@@ -110,6 +113,12 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 		return fail("initialize", err)
 	}
 	s.caps = init.AgentCapabilities
+	if p.ExternalID != "" {
+		if s.load(ctx, p.ExternalID) {
+			s.applyMode(ctx)
+			return s, nil
+		}
+	}
 	ns, err := s.conn.NewSession(ctx, sdk.NewSessionRequest{Cwd: s.env.Root(), McpServers: s.mcpServers()})
 	if err != nil {
 		if len(init.AuthMethods) > 0 {
@@ -121,6 +130,32 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 	s.applyMode(ctx)
 	return s, nil
 }
+
+// load continues the agent's session id (SES-003) and reports whether it
+// could; the agent then knows the conversation so far. When it cannot, the
+// session starts anew and the transcript says so.
+func (s *session) load(ctx context.Context, id string) bool {
+	why := "it cannot load earlier sessions"
+	if s.caps.LoadSession {
+		s.mu.Lock()
+		s.loading = true
+		s.mu.Unlock()
+		_, err := s.conn.LoadSession(ctx, sdk.LoadSessionRequest{SessionId: sdk.SessionId(id), Cwd: s.env.Root(), McpServers: s.mcpServers()})
+		s.mu.Lock()
+		s.loading = false
+		s.mu.Unlock()
+		if err == nil {
+			s.id = sdk.SessionId(id)
+			return true
+		}
+		why = err.Error()
+	}
+	s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("%s started a new session: %s. It does not remember the conversation above.", s.preset.Name, why)})
+	return false
+}
+
+// ExternalID is the agent's session ID.
+func (s *session) ExternalID() string { return string(s.id) }
 
 // mcpServers lists the session's servers in ACP's form: stdio always, HTTP
 // when the agent supports it (MCP-004).
@@ -269,6 +304,12 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 // shape than the per-turn usage_update the app records, and variants newer
 // than the schema are left out.
 func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) error {
+	s.mu.Lock()
+	loading := s.loading
+	s.mu.Unlock()
+	if loading {
+		return nil
+	}
 	b, err := json.Marshal(n.Update)
 	if err != nil {
 		return nil

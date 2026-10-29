@@ -161,10 +161,16 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		hs, err = builtin.Harness{}.NewSession(ctx, params)
 	} else {
 		params.MCPServers = e.agentServers(prof)
+		params.ExternalID = ses.ExternalID
 		hs, err = acp.Harness{Preset: preset}.NewSession(ctx, params)
 	}
 	if err != nil {
 		return nil, err
+	}
+	if rs, ok := hs.(harness.Resumable); ok && rs.ExternalID() != ses.ExternalID {
+		if err := e.store.SetExternalID(ctx, sid, rs.ExternalID()); err != nil {
+			log.Printf("engine: record the external session of %s: %v", sid, err)
+		}
 	}
 
 	e.mu.Lock()

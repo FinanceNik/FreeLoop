@@ -113,7 +113,8 @@ export type Item =
   | { kind: "turn_end"; key: string; rev: number; stopReason: string; ts: string }
   | { kind: "error"; key: string; rev: number; message: string }
   | { kind: "mode"; key: string; rev: number; mode: string }
-  | { kind: "model"; key: string; rev: number; model: string; providerId: string };
+  | { kind: "model"; key: string; rev: number; model: string; providerId: string }
+  | { kind: "notice"; key: string; rev: number; message: string };
 
 export interface Usage {
   inputTokens: number;
@@ -251,6 +252,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "current_mode_update":
         mode = d.currentModeId ?? mode;
         items.push({ kind: "mode", key, rev, mode: d.currentModeId });
+        break;
+      case "notice":
+        items.push({ kind: "notice", key, rev, message: d.message ?? "" });
         break;
       case "model_changed":
         items.push({ kind: "model", key, rev, model: d.model ?? "", providerId: d.providerId ?? "" });

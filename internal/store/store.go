@@ -306,7 +306,7 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
-const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, last_seq, created_at, updated_at`
+const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, last_seq, created_at, updated_at`
 
 type scanner interface{ Scan(...any) error }
 
@@ -314,7 +314,7 @@ func scanSession(r scanner) (session.Session, error) {
 	var ses session.Session
 	var created, updated int64
 	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectID, &ses.ProjectRoot, &ses.EnvironmentID,
-		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.LastSeq, &created, &updated); err != nil {
+		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.LastSeq, &created, &updated); err != nil {
 		return session.Session{}, err
 	}
 	ses.CreatedAt = time.UnixMilli(created).UTC()
@@ -355,6 +355,7 @@ var migrations = []string{
 	`ALTER TABLE projects ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0;`,
 	`ALTER TABLE projects ADD COLUMN muted INTEGER NOT NULL DEFAULT 0;`,
 	`ALTER TABLE projects ADD COLUMN disabled_skills TEXT NOT NULL DEFAULT '';`,
+	`ALTER TABLE sessions ADD COLUMN external_id TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.
@@ -405,4 +406,11 @@ func (s *Store) DeleteSession(ctx context.Context, sid string) error {
 		return fmt.Errorf("store: remove transcript: %w", err)
 	}
 	return nil
+}
+
+// SetExternalID records the harness-side ID of a session, for loading it
+// again after a restart (SES-003).
+func (s *Store) SetExternalID(ctx context.Context, sid, externalID string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET external_id = ? WHERE id = ?`, externalID, sid)
+	return err
 }

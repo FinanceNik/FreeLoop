@@ -140,6 +140,12 @@ type TurnEndedData struct {
 	StopReason string `json:"stopReason"`
 }
 
+// NoticeData is the payload of notice: something the user should know
+// that is not an error.
+type NoticeData struct {
+	Message string `json:"message"`
+}
+
 // ModelChangedData is the payload of model_changed (PRV-006).
 type ModelChangedData struct {
 	ProviderID string `json:"providerId"`
