@@ -49,6 +49,7 @@ const STATUS_LABEL: Record<string, string> = {
   running: "Running",
   waiting_permission: "Needs you",
   waiting_input: "Waiting",
+  queued: "Queued",
   idle: "Idle",
   error: "Error",
 };

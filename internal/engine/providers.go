@@ -31,7 +31,13 @@ type providerRegistry struct {
 type configuredProvider struct {
 	cfg config.Provider
 	p   provider.Provider
+	// slots holds one token per model call allowed at once; nil means no
+	// cap (OQ-013).
+	slots chan struct{}
 }
+
+// DefaultMaxConcurrent is a provider's cap on simultaneous model calls.
+const DefaultMaxConcurrent = 4
 
 // ProviderInfo is a provider as the UI sees it; it never carries the key.
 type ProviderInfo struct {
@@ -164,7 +170,11 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 	default:
 		return nil, fmt.Errorf("provider %s: type %q is not supported", cfg.Name, cfg.Type)
 	}
-	cp := &configuredProvider{cfg: cfg, p: p}
+	n := cfg.MaxConcurrent
+	if n <= 0 {
+		n = DefaultMaxConcurrent
+	}
+	cp := &configuredProvider{cfg: cfg, p: p, slots: make(chan struct{}, n)}
 	e.mu.Lock()
 	e.providers.built[id] = cp
 	e.mu.Unlock()
@@ -227,7 +237,7 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 	cfg := config.Provider{ID: req.ID, Name: req.Name, Type: req.Type, Preset: req.Preset,
 		BaseURL: strings.TrimSpace(req.BaseURL), DefaultModel: strings.TrimSpace(req.DefaultModel)}
 	if i >= 0 {
-		cfg.APIKey, cfg.Headers, cfg.Models = cfgs[i].APIKey, cfgs[i].Headers, cfgs[i].Models
+		cfg.APIKey, cfg.Headers, cfg.Models, cfg.MaxConcurrent = cfgs[i].APIKey, cfgs[i].Headers, cfgs[i].Models, cfgs[i].MaxConcurrent
 	}
 	if key := strings.TrimSpace(req.APIKey); key != "" {
 		ref := secrets.Ref{Service: "freeloop", Account: "providers/" + req.ID}

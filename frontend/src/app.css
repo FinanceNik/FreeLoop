@@ -1284,3 +1284,8 @@ fieldset {
   flex: 1;
   min-width: 8em;
 }
+
+.badge-queued {
+  color: var(--muted);
+  border-style: dashed;
+}

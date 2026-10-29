@@ -348,7 +348,9 @@ export default function SessionView({ session, events, provider, providers, envi
           {view.items.map((item) => (
             <ItemView key={item.key} item={item} onError={onError} />
           ))}
-          {view.running && <p className="muted working">Working…</p>}
+          {view.running && (
+            <p className="muted working">{view.status === "queued" ? "Waiting for a free slot on the provider…" : "Working…"}</p>
+          )}
           <div ref={bottom} />
         </div>
 

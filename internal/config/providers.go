@@ -27,6 +27,9 @@ type Provider struct {
 	Headers      map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
 	// Preset names the OpenAI-compatible endpoint preset.
 	Preset string `yaml:"preset,omitempty" json:"preset,omitempty"`
+	// MaxConcurrent caps how many model calls run on the provider at once
+	// across sessions; the rest wait, shown as queued (OQ-013). Default 4.
+	MaxConcurrent int `yaml:"maxConcurrent,omitempty" json:"maxConcurrent"`
 	// Models holds per-model settings the user chose.
 	Models map[string]ModelSettings `yaml:"models,omitempty" json:"models,omitempty"`
 }

@@ -130,7 +130,7 @@ func (e *Engine) SetModel(ctx context.Context, sid, providerID, model string) er
 	e.mu.Unlock()
 	if ok {
 		if ms, ok := r.hs.(harness.ModelSetter); ok {
-			ms.SetModel(p.p, model)
+			ms.SetModel(e.limit(p, sid), model)
 		}
 	}
 	e.emit(sid, event.ModelChanged, event.ModelChangedData{ProviderID: providerID, Model: model})

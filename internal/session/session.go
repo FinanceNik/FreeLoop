@@ -18,8 +18,11 @@ const (
 	StatusRunning           Status = "running"
 	StatusWaitingPermission Status = "waiting_permission"
 	StatusWaitingInput      Status = "waiting_input"
-	StatusError             Status = "error"
-	StatusArchived          Status = "archived"
+	// StatusQueued: the session waits for a free slot on its provider
+	// (OQ-013).
+	StatusQueued   Status = "queued"
+	StatusError    Status = "error"
+	StatusArchived Status = "archived"
 )
 
 // Session is the persisted record of one session. Fields from the architecture

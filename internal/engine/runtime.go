@@ -157,7 +157,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	}
 	var hs harness.Session
 	if p != nil {
-		params.Provider = p.p
+		params.Provider = e.limit(p, sid)
 		hs, err = builtin.Harness{}.NewSession(ctx, params)
 	} else {
 		params.MCPServers = e.agentServers(prof)
@@ -337,7 +337,7 @@ func (e *Engine) recover(ctx context.Context) {
 		return
 	}
 	for _, ses := range list {
-		if ses.Status != session.StatusRunning && ses.Status != session.StatusWaitingPermission {
+		if ses.Status != session.StatusRunning && ses.Status != session.StatusWaitingPermission && ses.Status != session.StatusQueued {
 			continue
 		}
 		events, err := e.store.Events(ctx, ses.ID, 0)
