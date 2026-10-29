@@ -45,10 +45,14 @@ func (s *ruleStore) reloadLocked(force bool) {
 		return
 	}
 	rules, issues, err := config.LoadRules(s.dir)
-	if len(issues) > 0 && s.report != nil {
-		s.report(issues)
-	}
 	s.mod = mod
+	// Every reload reports its issues, none included, so fixed problems
+	// clear (SET-001).
+	defer func() {
+		if s.report != nil {
+			s.report(issues)
+		}
+	}()
 	switch {
 	case errors.Is(err, config.ErrRulesInvalid):
 		// Keep the valid rules, and the last good ones if nothing parsed.
@@ -58,9 +62,7 @@ func (s *ruleStore) reloadLocked(force bool) {
 		s.broken = fmt.Errorf("%s has errors; fix the file (see the problems listed in the app) before rules change: %w", config.RulesFileName, err)
 	case err != nil:
 		s.broken = err
-		if s.report != nil {
-			s.report([]config.Issue{{File: config.RulesFileName, Message: err.Error()}})
-		}
+		issues = append(issues, config.Issue{File: config.RulesFileName, Message: err.Error()})
 	default:
 		s.global, s.broken = rules, nil
 	}
@@ -104,6 +106,13 @@ func (s *ruleStore) AddRule(sid string, r permission.Rule) error {
 
 func sameRule(a, b permission.Rule) bool {
 	return a.Effect == b.Effect && a.Tool == b.Tool && a.Command == b.Command && a.Path == b.Path && a.Literal == b.Literal
+}
+
+// reload rereads rules.yaml if it changed on disk.
+func (s *ruleStore) reload() {
+	s.mu.Lock()
+	s.reloadLocked(false)
+	s.mu.Unlock()
 }
 
 // forget drops a deleted session's rules.

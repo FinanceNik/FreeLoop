@@ -4,6 +4,7 @@ import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optio
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Session } from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
 import { Markdown } from "./Markdown.tsx";
+import SessionPanel from "./SessionPanel.tsx";
 
 interface Props {
   session: Session;
@@ -11,6 +12,7 @@ interface Props {
   provider?: ProviderInfo;
   environment?: EnvironmentInfo;
   allowBypass: boolean;
+  configVersion: number;
   onError: (err: unknown) => void;
   onDeleted: () => void;
 }
@@ -24,7 +26,31 @@ const STOP_LABEL: Record<string, string> = {
   error: "Stopped by an error",
 };
 
-export default function SessionView({ session, events, provider, environment, allowBypass, onError, onDeleted }: Props) {
+// The right panel's open state is a per-viewer convenience; storage may be
+// unavailable, so every access is guarded. Without a stored choice the panel
+// starts open only where it fits beside the conversation.
+const PANEL_KEY = "freeloop.panelOpen";
+function panelOpenInitially(): boolean {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(PANEL_KEY);
+  } catch {
+    // no stored choice
+  }
+  return stored === null ? window.innerWidth > 1000 : stored === "1";
+}
+
+export default function SessionView({ session, events, provider, environment, allowBypass, configVersion, onError, onDeleted }: Props) {
+  const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
+  const togglePanel = () =>
+    setPanelOpen((open) => {
+      try {
+        localStorage.setItem(PANEL_KEY, open ? "0" : "1");
+      } catch {
+        // not remembered
+      }
+      return !open;
+    });
   const [renaming, setRenaming] = useState<string | null>(null);
   const rename = () => {
     if (renaming === null) return;
@@ -140,127 +166,143 @@ export default function SessionView({ session, events, provider, environment, al
   const total = view.usage.inputTokens + view.usage.cacheReadTokens + view.usage.cacheWriteTokens;
 
   return (
-    <section className="session">
-      <header className="session-header">
-        <div>
-          {renaming === null ? (
-            <h2 onDoubleClick={() => setRenaming(session.title)} title="Double-click to rename">
-              {session.title}
-            </h2>
-          ) : (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                rename();
-              }}
-            >
-              <input autoFocus aria-label="Session title" value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
-            </form>
-          )}
-          <p className="muted">
-            <code>{session.projectRoot}</code>
-            {view.git?.repo && (
-              <span title={`HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}`}>
-                {" "}
-                · {view.git.branch || "detached"}
-                {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : view.git.dirty < 0 ? " · changes not checked (repo has content filters)" : " · clean"}
-              </span>
+    <div className="session-layout">
+      <section className="session">
+        <header className="session-header">
+          <div>
+            {renaming === null ? (
+              <h2 onDoubleClick={() => setRenaming(session.title)} title="Double-click to rename">
+                {session.title}
+              </h2>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  rename();
+                }}
+              >
+                <input autoFocus aria-label="Session title" value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
+              </form>
             )}
-            {" "}· env {environment?.name ?? session.environmentId ?? "Local"}
-          </p>
+            <p className="muted">
+              <code>{session.projectRoot}</code>
+              {view.git?.repo && (
+                <span title={`HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}`}>
+                  {" "}
+                  · {view.git.branch || "detached"}
+                  {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : view.git.dirty < 0 ? " · changes not checked (repo has content filters)" : " · clean"}
+                </span>
+              )}
+              {" "}· env {environment?.name ?? session.environmentId ?? "Local"}
+            </p>
+          </div>
+          <div className="session-controls">
+            <div className="row">
+              <button onClick={() => setRenaming(session.title)}>Rename</button>
+              <button onClick={archive}>{archived ? "Unarchive" : "Archive"}</button>
+              <button className="danger" onClick={remove}>
+                Delete
+              </button>
+              <button onClick={togglePanel} aria-pressed={panelOpen} title="Show or hide the right panel">
+                Panel
+              </button>
+            </div>
+            <span className="muted" title="Provider and model">
+              {provider?.name ?? session.providerId} · {session.model}
+            </span>
+            <label>
+              Mode{" "}
+              <select value={mode} onChange={(e) => setMode(e.target.value)}>
+                {MODES.filter((m) => m.id !== "bypass" || allowBypass || mode === "bypass").map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="muted" title="Input (including cache reads and writes) / output tokens">
+              {total.toLocaleString()} in · {view.usage.outputTokens.toLocaleString()} out
+            </span>
+          </div>
+        </header>
+        {mode === "bypass" && (
+          <div className="banner error" role="status">
+            Bypass mode: tool calls run without asking. Protected paths are still refused.
+          </div>
+        )}
+
+        <div className="conversation" aria-live="polite">
+          {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
+          {view.items.map((item) => (
+            <ItemView key={item.key} item={item} onError={onError} />
+          ))}
+          {view.running && <p className="muted working">Working…</p>}
+          <div ref={bottom} />
         </div>
-        <div className="session-controls">
-          <div className="row">
-            <button onClick={() => setRenaming(session.title)}>Rename</button>
-            <button onClick={archive}>{archived ? "Unarchive" : "Archive"}</button>
-            <button className="danger" onClick={remove}>
-              Delete
+
+        <div className="composer">
+          {mention && (
+            <ul className="mention-picker" role="listbox" aria-label="Files">
+              {files === null && <li className="muted">Listing files…</li>}
+              {files !== null && matches.length === 0 && <li className="muted">No matching files</li>}
+              {matches.map((f, i) => (
+                <li
+                  key={f}
+                  role="option"
+                  aria-selected={i === pick}
+                  className={i === pick ? "picked" : ""}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    choose(f);
+                  }}
+                  onMouseEnter={() => setPick(i)}
+                >
+                  <span>{f.slice(f.lastIndexOf("/") + 1)}</span> <span className="muted">{f}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <textarea
+            ref={input}
+            aria-label="Message"
+            aria-autocomplete="list"
+            placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file."}
+            value={draft}
+            rows={3}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (dismissed !== null && !e.target.value.slice(dismissed).startsWith("@")) setDismissed(null);
+              syncMention(e.target);
+            }}
+            onSelect={(e) => syncMention(e.currentTarget)}
+            onBlur={() => setMention(null)}
+            onKeyDown={onKeyDown}
+          />
+          <div className="composer-actions">
+            {queued > 0 && <span className="muted">{queued} queued</span>}
+            {view.running && (
+              <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger">
+                Stop
+              </button>
+            )}
+            <button className="primary" onClick={send} disabled={!draft.trim()}>
+              {view.running ? "Queue" : "Send"}
             </button>
           </div>
-          <span className="muted" title="Provider and model">
-            {provider?.name ?? session.providerId} · {session.model}
-          </span>
-          <label>
-            Mode{" "}
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              {MODES.filter((m) => m.id !== "bypass" || allowBypass || mode === "bypass").map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="muted" title="Input (including cache reads and writes) / output tokens">
-            {total.toLocaleString()} in · {view.usage.outputTokens.toLocaleString()} out
-          </span>
         </div>
-      </header>
-      {mode === "bypass" && (
-        <div className="banner error" role="status">
-          Bypass mode: tool calls run without asking. Protected paths are still refused.
-        </div>
-      )}
-
-      <div className="conversation" aria-live="polite">
-        {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
-        {view.items.map((item) => (
-          <ItemView key={item.key} item={item} onError={onError} />
-        ))}
-        {view.running && <p className="muted working">Working…</p>}
-        <div ref={bottom} />
-      </div>
-
-      <div className="composer">
-        {mention && (
-          <ul className="mention-picker" role="listbox" aria-label="Files">
-            {files === null && <li className="muted">Listing files…</li>}
-            {files !== null && matches.length === 0 && <li className="muted">No matching files</li>}
-            {matches.map((f, i) => (
-              <li
-                key={f}
-                role="option"
-                aria-selected={i === pick}
-                className={i === pick ? "picked" : ""}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  choose(f);
-                }}
-                onMouseEnter={() => setPick(i)}
-              >
-                <span>{f.slice(f.lastIndexOf("/") + 1)}</span> <span className="muted">{f}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <textarea
-          ref={input}
-          aria-label="Message"
-          aria-autocomplete="list"
-          placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file."}
-          value={draft}
-          rows={3}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            if (dismissed !== null && !e.target.value.slice(dismissed).startsWith("@")) setDismissed(null);
-            syncMention(e.target);
-          }}
-          onSelect={(e) => syncMention(e.currentTarget)}
-          onBlur={() => setMention(null)}
-          onKeyDown={onKeyDown}
+      </section>
+      {panelOpen && (
+        <SessionPanel
+          session={session}
+          view={view}
+          provider={provider}
+          environment={environment}
+          configVersion={configVersion}
+          onClose={togglePanel}
+          onError={onError}
         />
-        <div className="composer-actions">
-          {queued > 0 && <span className="muted">{queued} queued</span>}
-          {view.running && (
-            <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger">
-              Stop
-            </button>
-          )}
-          <button className="primary" onClick={send} disabled={!draft.trim()}>
-            {view.running ? "Queue" : "Send"}
-          </button>
-        </div>
-      </div>
-    </section>
+      )}
+    </div>
   );
 }
 
@@ -351,7 +393,11 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
   const plan = item.tool === "present_plan" ? String((item.input as { plan?: string } | null)?.plan ?? "") : null;
 
   return (
-    <details className={`tool tool-${item.status} ${waiting ? "tool-waiting" : ""}`} open={waiting || plan !== null || undefined}>
+    <details
+      id={`tool-${item.toolCallId}`}
+      className={`tool tool-${item.status} ${waiting ? "tool-waiting" : ""}`}
+      open={waiting || plan !== null || undefined}
+    >
       <summary>
         <span className={`dot dot-${item.status}`} aria-hidden="true" />
         <span className="tool-title">{item.title}</span>

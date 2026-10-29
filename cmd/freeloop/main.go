@@ -18,8 +18,13 @@ import (
 // EventName is the Wails event every persisted session event is emitted on.
 const EventName = "freeloop:event"
 
+// ConfigEventName is emitted after config files edited on disk were
+// reloaded (SET-001).
+const ConfigEventName = "freeloop:config"
+
 func init() {
 	application.RegisterEvent[event.Event](EventName)
+	application.RegisterEvent[engine.ConfigChange](ConfigEventName)
 }
 
 func main() {
@@ -28,7 +33,17 @@ func main() {
 		log.Fatal(err)
 	}
 	// FREELOOP_DEV=1 (set by `make dev`) offers the scripted demo provider.
-	eng, err := engine.Open(engine.Options{DataDir: dataDir, Secrets: darwin.Keychain{}, Dev: os.Getenv("FREELOOP_DEV") == "1"})
+	// Reloads can happen before the app exists; they wait here.
+	configChanges := make(chan engine.ConfigChange, 16)
+	eng, err := engine.Open(engine.Options{
+		DataDir: dataDir, Secrets: darwin.Keychain{}, Dev: os.Getenv("FREELOOP_DEV") == "1",
+		OnConfigChange: func(c engine.ConfigChange) {
+			select {
+			case configChanges <- c:
+			default: // the UI refreshes everything on any change; one is enough
+			}
+		},
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,6 +81,11 @@ func main() {
 	go func() {
 		for ev := range events {
 			app.Event.Emit(EventName, ev)
+		}
+	}()
+	go func() {
+		for c := range configChanges {
+			app.Event.Emit(ConfigEventName, c)
 		}
 	}()
 

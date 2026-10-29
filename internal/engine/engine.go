@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -35,6 +36,17 @@ type Options struct {
 	Home string
 	// Dev offers the scripted demo provider.
 	Dev bool
+	// WatchInterval is how often the config files are checked for hand
+	// edits (SET-001). Zero means one second; negative turns watching off.
+	WatchInterval time.Duration
+	// OnConfigChange is called after files changed on disk were reloaded.
+	OnConfigChange func(ConfigChange)
+}
+
+// ConfigChange lists the config files that were reloaded, relative to the
+// data directory.
+type ConfigChange struct {
+	Files []string `json:"files"`
 }
 
 // Engine is safe for concurrent use.
@@ -47,7 +59,14 @@ type Engine struct {
 	broker  *permission.Broker
 	rules   *ruleStore
 	cfg     config.Config
-	issues  []config.Issue
+	// issues are the current problems per source file group, so a reload
+	// replaces its own and leaves the others.
+	issues   map[string][]config.Issue
+	onChange func(ConfigChange)
+	// quit stops the config watcher; watching is separate from bg, which
+	// deleting a session waits for.
+	quit     chan struct{}
+	watching sync.WaitGroup
 
 	// bg tracks background work (git refreshes) that Close waits for.
 	bg sync.WaitGroup
@@ -81,7 +100,9 @@ func Open(opts Options) (*Engine, error) {
 		bus:      newBus(),
 		secrets:  opts.Secrets,
 		cfg:      cfg,
-		issues:   issues,
+		issues:   map[string][]config.Issue{issueConfig: issues},
+		onChange: opts.OnConfigChange,
+		quit:     make(chan struct{}),
 		runtimes: map[string]*runtime{},
 		streams:  map[string]*streamBuf{},
 	}
@@ -90,11 +111,7 @@ func Open(opts Options) (*Engine, error) {
 		return nil, err
 	}
 	e.broker = permission.NewBroker(permission.NewPolicy(opts.Home, opts.DataDir), e.emit)
-	e.rules = newRuleStore(opts.DataDir, func(issues []config.Issue) {
-		e.mu.Lock()
-		e.issues = append(e.issues, issues...)
-		e.mu.Unlock()
-	})
+	e.rules = newRuleStore(opts.DataDir, func(issues []config.Issue) { e.setIssues(issueRules, issues) })
 	e.broker.SetRules(e.rules, e.rules)
 	e.loadEnvironments()
 	if err := e.loadProviders(); err != nil {
@@ -103,6 +120,14 @@ func Open(opts Options) (*Engine, error) {
 	}
 	e.rememberStoredSecrets()
 	e.recover(context.Background())
+	if opts.WatchInterval >= 0 {
+		interval := opts.WatchInterval
+		if interval == 0 {
+			interval = time.Second
+		}
+		e.watching.Add(1)
+		go e.watch(interval)
+	}
 	return e, nil
 }
 
@@ -118,6 +143,8 @@ func (e *Engine) Close() error {
 	for _, r := range running {
 		r.stop()
 	}
+	close(e.quit)
+	e.watching.Wait()
 	e.bg.Wait()
 	e.bus.close()
 	return e.store.Close()
@@ -147,7 +174,28 @@ func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
 func (e *Engine) ConfigIssues() []config.Issue {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return append([]config.Issue{}, e.issues...)
+	out := []config.Issue{}
+	for _, k := range issueOrder {
+		out = append(out, e.issues[k]...)
+	}
+	return out
+}
+
+// Issue groups, one per kind of config file.
+const (
+	issueConfig       = "config"
+	issueProviders    = "providers"
+	issueEnvironments = "environments"
+	issueRules        = "rules"
+	issueCapabilities = "capabilities"
+)
+
+var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issueRules, issueCapabilities}
+
+func (e *Engine) setIssues(group string, issues []config.Issue) {
+	e.mu.Lock()
+	e.issues[group] = issues
+	e.mu.Unlock()
 }
 
 // streamBuf holds back the tail of a session's streamed text while it could

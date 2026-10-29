@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import {
+  CONFIG_EVENT_NAME,
   EngineService,
   EVENT_NAME,
   errorText,
@@ -48,6 +49,8 @@ export default function App() {
   // The last session opened, for the rules page's session scope.
   const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped when config files change on disk, so pages refetch (SET-001).
+  const [configVersion, setConfigVersion] = useState(0);
   // Sidebar filters (SES-004).
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -118,15 +121,35 @@ export default function App() {
     root.style.setProperty("--font-size", `${config.ui.fontSize || 14}px`);
   }, [config?.ui.theme, config?.ui.fontSize]);
 
+  // A config object only replaces the current one when it differs, so an
+  // unrelated reload does not reset a half-edited settings form.
+  const refreshConfig = () => {
+    EngineService.Config()
+      .then((c) => setConfig((old) => (old && JSON.stringify(old) === JSON.stringify(c) ? old : c)))
+      .catch(report);
+    EngineService.ConfigIssues()
+      .then((list) => setIssues(list ?? []))
+      .catch(report);
+  };
+
+  // Files edited by hand are reloaded by the engine (SET-001).
+  useEffect(
+    () =>
+      Events.On(CONFIG_EVENT_NAME, () => {
+        refreshConfig();
+        refreshProviders();
+        refreshEnvironments();
+        setConfigVersion((v) => v + 1);
+      }),
+    [],
+  );
+
   useEffect(() => {
     refreshSessions();
     refreshProviders();
     refreshProjects();
     refreshEnvironments();
-    EngineService.Config().then(setConfig).catch(report);
-    EngineService.ConfigIssues()
-      .then((list) => setIssues(list ?? []))
-      .catch(report);
+    refreshConfig();
 
     return Events.On(EVENT_NAME, ({ data: ev }) => {
       ingest(ev.sid, [ev]);
@@ -281,6 +304,7 @@ export default function App() {
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
             environment={environments.find((x) => x.id === (selected.environmentId || "local"))}
+            configVersion={configVersion}
             allowBypass={config?.permissions.allowBypass ?? false}
             onError={report}
             onDeleted={() => {
@@ -309,7 +333,7 @@ export default function App() {
           <Settings config={config} providers={providers} environments={environments} onSaved={setConfig} onError={report} />
         )}
         {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
-        {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} onError={report} />}
+        {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}
         {screen.kind === "none" && (
           <div className="empty">
             <p>Select a session or create a new one.</p>

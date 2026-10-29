@@ -288,7 +288,7 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
 
 Project level, read after trust (SEC-006): `.freeloop/{profiles/,skills/,mcp.yaml,rules.yaml,environment.yaml}` plus `AGENTS.md` and `CLAUDE.md` read-only.
 
-Secret references look like `keychain://freeloop/providers/anthropic` and are resolved only at spawn or request time (ENV-004). Config files are validated against JSON Schemas in `schemas/` and hot-reloaded with a file watcher.
+Secret references look like `keychain://freeloop/providers/anthropic` and are resolved only at spawn or request time (ENV-004). Config files are validated against JSON Schemas in `schemas/` and hot-reloaded with a file watcher. *As built in M1:* the watcher polls the size and modification time of `config.yaml`, `providers.yaml`, `rules.yaml` and `environments/*.yaml` every second instead of using file-system notifications, which needs no dependency and meets SET-001's two seconds; a changed file is reloaded, its problems replace that file's earlier ones in `ConfigIssues`, and the UI is told on the `freeloop:config` Wails event. Running sessions keep the provider and environment they started with; permission checks see new rules at once.
 
 ## 10. GUI to engine
 

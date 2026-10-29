@@ -93,7 +93,7 @@ func (e *Engine) loadProviders() error {
 		return err
 	}
 	e.mu.Lock()
-	e.issues = append(e.issues, issues...)
+	e.issues[issueProviders] = issues
 	e.providers = &providerRegistry{configs: cfgs, built: map[string]*configuredProvider{}, probes: config.LoadProbes(e.dataDir)}
 	e.mu.Unlock()
 	return nil
@@ -349,9 +349,9 @@ func (e *Engine) saveProbe(providerID, model string, tools bool) {
 	snapshot := e.providers.probes
 	e.mu.Unlock()
 	if err := config.SaveProbes(e.dataDir, snapshot); err != nil {
-		e.mu.Lock()
-		e.issues = append(e.issues, config.Issue{File: config.CapabilitiesFileName, Message: err.Error()})
-		e.mu.Unlock()
+		e.setIssues(issueCapabilities, []config.Issue{{File: config.CapabilitiesFileName, Message: err.Error()}})
+	} else {
+		e.setIssues(issueCapabilities, nil)
 	}
 }
 

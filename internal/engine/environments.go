@@ -54,7 +54,7 @@ func (e *Engine) loadEnvironments() {
 	}
 	e.mu.Lock()
 	e.envs = envs
-	e.issues = append(e.issues, issues...)
+	e.issues[issueEnvironments] = issues
 	e.mu.Unlock()
 }
 

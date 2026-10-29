@@ -295,3 +295,45 @@ export function lineDiff(oldText: string, newText: string, context = 2): DiffLin
   for (let i = endA; i < Math.min(a.length, endA + context); i++) out.push({ sign: " ", text: a[i] });
   return out;
 }
+
+// ---- Right panel (GUI-001) ----
+
+export type ToolItem = Extract<Item, { kind: "tool" }>;
+
+export interface FileChange {
+  path: string;
+  edits: number;
+  // The tool call of the latest edit, to jump to its card.
+  lastToolCallId: string;
+}
+
+export interface PanelData {
+  pending: ToolItem[];
+  decided: ToolItem[];
+  changes: FileChange[];
+  turns: number;
+}
+
+// panelData collects what the right panel shows: approvals waiting and
+// decided (mode approvals left out as noise), and the files the agent's
+// finished edits touched, from the diffs in the transcript.
+export function panelData(view: SessionView): PanelData {
+  const pending: ToolItem[] = [];
+  const decided: ToolItem[] = [];
+  const changes = new Map<string, FileChange>();
+  let turns = 0;
+  for (const item of view.items) {
+    if (item.kind === "turn_end") turns++;
+    if (item.kind !== "tool") continue;
+    if (awaitingDecision(item)) pending.push(item);
+    const d = item.permission?.decided;
+    if (d && !(d.actor === "mode" && d.outcome === "allowed")) decided.push(item);
+    if (item.status !== "completed") continue;
+    for (const c of item.content) {
+      if (c.type !== "diff" || !c.path) continue;
+      const prev = changes.get(c.path);
+      changes.set(c.path, { path: c.path, edits: (prev?.edits ?? 0) + 1, lastToolCallId: item.toolCallId });
+    }
+  }
+  return { pending, decided: decided.reverse(), changes: [...changes.values()].sort((a, b) => a.path.localeCompare(b.path)), turns };
+}

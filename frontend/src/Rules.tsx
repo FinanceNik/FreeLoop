@@ -4,6 +4,8 @@ import { EngineService, type Rule, type Session } from "./api.ts";
 interface Props {
   // The session whose session-scoped rules to show, if any.
   session: Session | null;
+  // Changes when config files were reloaded from disk.
+  version: number;
   onError: (err: unknown) => void;
 }
 
@@ -15,7 +17,7 @@ function describe(r: Rule): string {
   return `${r.tool}: any call`;
 }
 
-export default function Rules({ session, onError }: Props) {
+export default function Rules({ session, version, onError }: Props) {
   const [rules, setRules] = useState<Rule[]>([]);
   const [form, setForm] = useState({ effect: "allow", tool: "shell", pattern: "" });
 
@@ -26,7 +28,7 @@ export default function Rules({ session, onError }: Props) {
 
   useEffect(() => {
     load();
-  }, [session?.id]);
+  }, [session?.id, version]);
 
   const add = (e: FormEvent) => {
     e.preventDefault();

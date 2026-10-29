@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { apply, awaitingDecision, buildView, emptyTranscript, lineDiff, summary, type TranscriptEvent } from "./transcript.ts";
+import { apply, awaitingDecision, buildView, emptyTranscript, lineDiff, panelData, summary, type TranscriptEvent } from "./transcript.ts";
 
 const ev = (seq: number, data: unknown = {}): TranscriptEvent => ({
   v: 1,
@@ -110,4 +110,24 @@ test("buildView attaches mentioned files to the user message", () => {
   assert.equal(v.items.length, 1);
   assert.deepEqual(v.items[0].kind === "user" && v.items[0].files, ["a.go"]);
   assert.equal(v.items[0].rev, 2);
+});
+
+test("panelData lists approvals and finished edits", () => {
+  const v = buildView([
+    at(1, "tool_call", { toolCallId: "c1", title: "Write a.go", kind: "edit", status: "pending" }),
+    at(2, "permission_requested", { requestId: "r1", toolCallId: "c1", options: [{ optionId: "allow_once" }] }),
+    at(3, "permission_decided", { requestId: "r1", toolCallId: "c1", outcome: "allowed", actor: "user" }),
+    at(4, "tool_call_update", { toolCallId: "c1", status: "completed", content: [{ type: "diff", path: "a.go", oldText: "", newText: "x" }] }),
+    at(5, "tool_call", { toolCallId: "c2", title: "Edit a.go", kind: "edit", status: "pending" }),
+    at(6, "permission_decided", { requestId: "r2", toolCallId: "c2", outcome: "allowed", actor: "mode" }),
+    at(7, "tool_call_update", { toolCallId: "c2", status: "completed", content: [{ type: "diff", path: "a.go", oldText: "x", newText: "y" }] }),
+    at(8, "tool_call", { toolCallId: "c3", title: "Write b.go", kind: "edit", status: "pending", content: [{ type: "diff", path: "b.go", newText: "z" }] }),
+    at(9, "permission_requested", { requestId: "r3", toolCallId: "c3", options: [{ optionId: "allow_once" }] }),
+    at(10, "turn_ended", { stopReason: "end_turn" }),
+  ]);
+  const p = panelData(v);
+  assert.deepEqual(p.pending.map((t) => t.toolCallId), ["c3"]);
+  assert.deepEqual(p.decided.map((t) => t.toolCallId), ["c1"]);
+  assert.deepEqual(p.changes, [{ path: "a.go", edits: 2, lastToolCallId: "c2" }]);
+  assert.equal(p.turns, 1);
 });

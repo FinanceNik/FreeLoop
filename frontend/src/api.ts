@@ -6,8 +6,9 @@ export type { Rule } from "../bindings/github.com/FinanceNik/Freeloop/internal/p
 export type { ModelCaps, ModelInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/provider/models";
 export type { Project, Session } from "../bindings/github.com/FinanceNik/Freeloop/internal/session/models";
 
-// Must match EventName in cmd/freeloop/main.go.
+// Must match EventName and ConfigEventName in cmd/freeloop/main.go.
 export const EVENT_NAME = "freeloop:event";
+export const CONFIG_EVENT_NAME = "freeloop:config";
 
 export const MODES = [
   { id: "ask", name: "Ask" },

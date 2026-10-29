@@ -747,3 +747,134 @@ fieldset {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Right panel (GUI-001) */
+.session-layout {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.session-layout > .session {
+  min-width: 0;
+}
+
+.panel {
+  width: 320px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-side);
+}
+
+.panel-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-tabs .tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  padding: 6px 10px;
+  color: var(--muted);
+}
+
+.panel-tabs .tab-on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.panel-close {
+  margin-left: auto;
+  border: none;
+  background: none;
+  font-size: 1.2em;
+  line-height: 1;
+  padding: 4px 8px;
+  color: var(--muted);
+}
+
+.panel-tabs .badge {
+  margin-left: 6px;
+}
+
+.panel-body {
+  overflow-y: auto;
+  padding: 4px 12px 16px;
+}
+
+.panel-body h3 {
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+
+.panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-list button.link {
+  text-align: left;
+}
+
+.panel-list code {
+  word-break: break-all;
+}
+
+.panel-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: var(--bg-card);
+}
+
+.panel-info {
+  margin: 8px 0 0;
+}
+
+.panel-info > div {
+  display: grid;
+  grid-template-columns: 9em 1fr;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.panel-info dt {
+  color: var(--muted);
+}
+
+.panel-info dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* On narrow windows the panel floats over the conversation. */
+@media (max-width: 1000px) {
+  .panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 85%);
+    box-shadow: -6px 0 20px rgba(0, 0, 0, 0.15);
+    z-index: 5;
+  }
+}
