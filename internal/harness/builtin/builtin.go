@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -93,6 +94,37 @@ type session struct {
 	mu      sync.Mutex
 	mode    permission.Mode
 	history []provider.Message
+	// nested are AGENTS.md files below the root, as paths relative to it,
+	// found when a tool call touched their folder (HRN-010).
+	nested []string
+}
+
+// maxNested caps how many nested instruction files join the prompt.
+const maxNested = 20
+
+// discover records AGENTS.md files in the folders a tool call touched, from
+// the touched folder up to (not including) the project root.
+func (s *session) discover(paths []string, isDir bool) {
+	root := s.env.Root()
+	for _, p := range paths {
+		dir := p
+		if !isDir {
+			dir = filepath.Dir(p)
+		}
+		for {
+			rel, err := filepath.Rel(root, dir)
+			if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				break
+			}
+			file := filepath.ToSlash(filepath.Join(rel, "AGENTS.md"))
+			if !slices.Contains(s.nested, file) && len(s.nested) < maxNested && s.env.Contains(file) {
+				if fi, err := s.env.FS().Stat(file); err == nil && !fi.IsDir {
+					s.nested = append(s.nested, file)
+				}
+			}
+			dir = filepath.Dir(dir)
+		}
+	}
 }
 
 func (s *session) Mode() permission.Mode {
@@ -282,6 +314,7 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 		return fail(prepErr.Error(), "failed")
 	}
 
+	s.discover(prepared.paths, kind == permission.KindSearch || c.ToolName == "list_dir")
 	d := s.p.Broker.Request(ctx, permission.Context{Mode: mode, Root: s.env.Root()}, permission.Request{
 		SessionID: s.p.SessionID, ToolCallID: c.ToolCallID, Tool: c.ToolName, Kind: kind,
 		Title: title, Input: c.Input, Paths: prepared.paths, Command: prepared.command, Options: prepared.options,
@@ -358,6 +391,14 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 		}
 		fmt.Fprintf(&sb, "\n# Project instructions (%s)\n\nThe project's own instructions for agents. Follow them unless they conflict with the user's request or with safety.\n\n<project_instructions file=%q>\n%s\n</project_instructions>\n", name, name, strings.TrimSpace(string(b)))
 		break
+	}
+	for _, file := range s.nested {
+		b, err := s.env.FS().ReadFile(file)
+		if err != nil || !s.env.Contains(file) {
+			continue
+		}
+		dir := strings.TrimSuffix(file, "/AGENTS.md")
+		fmt.Fprintf(&sb, "\n# Instructions for %s/\n\nThese apply to work inside %s/ and take precedence over the project-wide instructions there.\n\n<project_instructions file=%q>\n%s\n</project_instructions>\n", dir, dir, file, strings.TrimSpace(string(b)))
 	}
 	return sb.String()
 }

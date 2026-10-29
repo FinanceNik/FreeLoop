@@ -330,3 +330,34 @@ func TestInstructionFileLinkedOutsideIsNotRead(t *testing.T) {
 		t.Error("an AGENTS.md linked outside the project went into the system prompt")
 	}
 }
+
+// HRN-010: a nested AGENTS.md joins the prompt once a file under its folder
+// is touched, and not before.
+func TestNestedAgentsFiles(t *testing.T) {
+	f := setup(t, permission.ModeAsk,
+		scripted.Step{Calls: []scripted.Call{{Name: "read_file", Input: map[string]any{"path": "web/src/app.ts"}}}},
+		scripted.Step{Text: "done"},
+	)
+	os.WriteFile(filepath.Join(f.root, "AGENTS.md"), []byte("Root rule."), 0o644)
+	os.MkdirAll(filepath.Join(f.root, "web", "src"), 0o755)
+	os.MkdirAll(filepath.Join(f.root, "api"), 0o755)
+	os.WriteFile(filepath.Join(f.root, "web", "AGENTS.md"), []byte("Use pnpm in web."), 0o644)
+	os.WriteFile(filepath.Join(f.root, "api", "AGENTS.md"), []byte("API rule."), 0o644)
+	os.WriteFile(filepath.Join(f.root, "web", "src", "app.ts"), []byte("x"), 0o644)
+	if _, err := f.sess.Prompt(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+	reqs := f.prov.Requests()
+	if strings.Contains(reqs[0].System, "Use pnpm in web.") {
+		t.Error("nested file loaded before anything under it was touched")
+	}
+	if !strings.Contains(reqs[1].System, "Use pnpm in web.") || !strings.Contains(reqs[1].System, "Instructions for web/") {
+		t.Errorf("nested file missing after reading web/src/app.ts:\n%s", reqs[1].System)
+	}
+	if strings.Contains(reqs[1].System, "API rule.") {
+		t.Error("an unrelated nested file was loaded")
+	}
+	if !strings.Contains(reqs[1].System, "Root rule.") {
+		t.Error("root AGENTS.md missing")
+	}
+}

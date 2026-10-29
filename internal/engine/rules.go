@@ -106,6 +106,13 @@ func sameRule(a, b permission.Rule) bool {
 	return a.Effect == b.Effect && a.Tool == b.Tool && a.Command == b.Command && a.Path == b.Path && a.Literal == b.Literal
 }
 
+// forget drops a deleted session's rules.
+func (s *ruleStore) forget(sid string) {
+	s.mu.Lock()
+	delete(s.session, sid)
+	s.mu.Unlock()
+}
+
 // restore rebuilds a session's rules from its transcript.
 func (s *ruleStore) restore(sid string, events []event.Event) {
 	var rules []permission.Rule

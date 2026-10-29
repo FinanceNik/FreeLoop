@@ -262,3 +262,27 @@ func TestProjectsAndRelink(t *testing.T) {
 		t.Errorf("old root still found: %v", err)
 	}
 }
+
+func TestRenameAndDelete(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	s := openTest(t, dir, nil)
+	defer s.Close()
+	a, _ := s.CreateSession(ctx, session.Session{Title: "New session"})
+	s.Append(ctx, a.ID, event.SessionInfoUpdate, json.RawMessage(`{"title":"Fix the login bug"}`))
+	if got, _ := s.GetSession(ctx, a.ID); got.Title != "Fix the login bug" {
+		t.Errorf("title = %q", got.Title)
+	}
+	if err := s.DeleteSession(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sessions", a.ID)); !os.IsNotExist(err) {
+		t.Errorf("transcript folder still there: %v", err)
+	}
+	if _, err := s.GetSession(ctx, a.ID); err != ErrNotFound {
+		t.Errorf("row still there: %v", err)
+	}
+	if err := s.DeleteSession(ctx, a.ID); err != ErrNotFound {
+		t.Errorf("second delete: %v", err)
+	}
+}

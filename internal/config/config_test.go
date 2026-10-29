@@ -81,3 +81,23 @@ func TestDataDirHonoursEnv(t *testing.T) {
 		t.Errorf("DataDir did not create %s", dir)
 	}
 }
+
+func TestSaveAndFontSize(t *testing.T) {
+	dir := t.TempDir()
+	c := Default()
+	c.UI.FontSize, c.Defaults.ProviderID, c.Permissions.AllowBypass = 16, "anthropic", true
+	if err := Save(dir, c); err != nil {
+		t.Fatal(err)
+	}
+	got, issues, err := Load(dir)
+	if err != nil || len(issues) != 0 || !reflect.DeepEqual(got, c) {
+		t.Fatalf("Load = %+v, %v, %v", got, issues, err)
+	}
+	c.UI.FontSize = 40
+	if err := Save(dir, c); err == nil {
+		t.Error("font size 40 saved")
+	}
+	if _, issues, _ := Load(write(t, "version: 1\nui:\n  theme: dark\n  fontSize: 3\n")); len(issues) != 1 {
+		t.Errorf("issues = %v", issues)
+	}
+}

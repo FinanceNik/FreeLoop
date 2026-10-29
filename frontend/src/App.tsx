@@ -17,6 +17,7 @@ import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
 import Environments from "./Environments.tsx";
+import Settings from "./Settings.tsx";
 
 type Screen =
   | { kind: "session"; id: string }
@@ -24,6 +25,7 @@ type Screen =
   | { kind: "providers" }
   | { kind: "rules" }
   | { kind: "environments" }
+  | { kind: "settings" }
   | { kind: "none" };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -46,6 +48,10 @@ export default function App() {
   // The last session opened, for the rules page's session scope.
   const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Sidebar filters (SES-004).
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
 
   // The reducer state lives in a ref so event callbacks always see the latest
   // transcripts; React state mirrors it for rendering.
@@ -103,6 +109,15 @@ export default function App() {
       });
   };
 
+  // Appearance (GUI-011): theme and font size from config.yaml.
+  useEffect(() => {
+    if (!config) return;
+    const root = document.documentElement;
+    if (config.ui.theme === "system") delete root.dataset.theme;
+    else root.dataset.theme = config.ui.theme;
+    root.style.setProperty("--font-size", `${config.ui.fontSize || 14}px`);
+  }, [config?.ui.theme, config?.ui.fontSize]);
+
   useEffect(() => {
     refreshSessions();
     refreshProviders();
@@ -127,6 +142,7 @@ export default function App() {
         if (ev.type === "session_status" && d.status) s.status = d.status as Session["status"];
         if (ev.type === "current_mode_update" && d.currentModeId) s.mode = d.currentModeId;
         if (ev.type === "git_state") s.branch = d.branch ?? "";
+        if (ev.type === "session_info_update" && d.title) s.title = d.title;
         return [s, ...list.slice(0, i), ...list.slice(i + 1)];
       });
     });
@@ -152,7 +168,14 @@ export default function App() {
   // Sessions grouped under their projects (GUI-001); sessions from before
   // projects existed are grouped by folder.
   const groups: { key: string; name: string; project?: ProjectInfo; sessions: Session[] }[] = [];
-  for (const s of sessions) {
+  const q = query.trim().toLowerCase();
+  const visible = sessions.filter(
+    (s) =>
+      (showArchived ? s.status === "archived" : s.status !== "archived") &&
+      (!statusFilter || s.status === statusFilter) &&
+      (!q || s.title.toLowerCase().includes(q) || s.projectRoot.toLowerCase().includes(q) || (s.branch ?? "").toLowerCase().includes(q)),
+  );
+  for (const s of visible) {
     const project = projects.find((p) => p.id === s.projectId);
     const key = project?.id ?? s.projectRoot;
     let g = groups.find((x) => x.key === key);
@@ -172,6 +195,21 @@ export default function App() {
             New session
           </button>
         </header>
+        <div className="filters">
+          <input type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <div className="row">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+              <option value="">Any status</option>
+              <option value="waiting_permission">Needs you</option>
+              <option value="running">Running</option>
+              <option value="idle">Idle</option>
+              <option value="error">Error</option>
+            </select>
+            <label className="row muted">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Archived
+            </label>
+          </div>
+        </div>
         <nav aria-label="Projects and sessions">
           {groups.map((g) => (
             <section key={g.key} className="project-group">
@@ -206,11 +244,13 @@ export default function App() {
             </section>
           ))}
           {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
+          {sessions.length > 0 && visible.length === 0 && <p className="muted">No sessions match.</p>}
         </nav>
         <footer className="row">
           <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
           <button onClick={() => setScreen({ kind: "environments" })}>Environments</button>
           <button onClick={() => setScreen({ kind: "rules" })}>Rules</button>
+          <button onClick={() => setScreen({ kind: "settings" })}>Settings</button>
         </footer>
       </aside>
 
@@ -243,6 +283,10 @@ export default function App() {
             environment={environments.find((x) => x.id === (selected.environmentId || "local"))}
             allowBypass={config?.permissions.allowBypass ?? false}
             onError={report}
+            onDeleted={() => {
+              setScreen({ kind: "none" });
+              refreshSessions();
+            }}
           />
         )}
         {screen.kind === "new" && (
@@ -250,6 +294,7 @@ export default function App() {
             providers={providers}
             projects={projects}
             environments={environments}
+            defaults={config?.defaults}
             onManageProviders={() => setScreen({ kind: "providers" })}
             onCreated={(s) => {
               setSessions((list) => (list.some((x) => x.id === s.id) ? list : [s, ...list]));
@@ -259,6 +304,9 @@ export default function App() {
           />
         )}
         {screen.kind === "providers" && <Providers providers={providers} onChanged={refreshProviders} onError={report} />}
+        {screen.kind === "settings" && config && (
+          <Settings config={config} providers={providers} environments={environments} onSaved={setConfig} onError={report} />
+        )}
         {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
         {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} onError={report} />}
         {screen.kind === "none" && (

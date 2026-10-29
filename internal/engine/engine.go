@@ -124,7 +124,24 @@ func (e *Engine) Close() error {
 }
 
 // Config returns the loaded configuration.
-func (e *Engine) Config() config.Config { return e.cfg }
+func (e *Engine) Config() config.Config {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.cfg
+}
+
+// SaveSettings replaces config.yaml (SET-004, GUI-011). Turning bypass mode
+// off also takes any session out of it on its next mode change.
+func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
+	c.Version = 1
+	if err := config.Save(e.dataDir, c); err != nil {
+		return config.Config{}, err
+	}
+	e.mu.Lock()
+	e.cfg = c
+	e.mu.Unlock()
+	return c, nil
+}
 
 // ConfigIssues returns the problems found while loading configuration.
 func (e *Engine) ConfigIssues() []config.Issue {
@@ -293,7 +310,7 @@ type CreateSessionRequest struct {
 func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (session.Session, error) {
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
-		title = "New session"
+		title = defaultTitle
 	}
 	if req.ProjectRoot == "" {
 		return session.Session{}, errors.New("choose a project folder")

@@ -1,7 +1,7 @@
 :root {
   color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  font-size: 14px;
+  font-size: var(--font-size, 14px);
   --bg: #ffffff;
   --bg-side: #f5f5f4;
   --bg-card: #fafaf9;
@@ -17,8 +17,10 @@
   --del: rgba(180, 35, 24, 0.12);
 }
 
+/* Dark follows the system unless the user chose light; data-theme="dark"
+   forces it (GUI-011). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1b1b1a;
     --bg-side: #222221;
     --bg-card: #262625;
@@ -32,6 +34,26 @@
     --add: rgba(92, 193, 132, 0.16);
     --del: rgba(240, 112, 106, 0.16);
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+    --bg: #1b1b1a;
+    --bg-side: #222221;
+    --bg-card: #262625;
+    --border: #3a3a38;
+    --text: #ececea;
+    --muted: #9c9c96;
+    --accent: #5b8ff0;
+    --ok: #5cc184;
+    --warn: #e0a640;
+    --danger: #f0706a;
+    --add: rgba(92, 193, 132, 0.16);
+    --del: rgba(240, 112, 106, 0.16);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 html,
@@ -323,6 +345,106 @@ pre {
   line-height: 1.5;
 }
 
+.msg-agent {
+  white-space: normal;
+}
+
+/* Long transcripts: WebKit skips layout and paint of items off screen. */
+.conversation > *:not(:nth-last-child(-n + 3)) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 60px;
+}
+
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md-table,
+.md-code {
+  margin: 0 0 8px;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 12px 0 6px;
+}
+
+.md ul,
+.md ol {
+  padding-left: 22px;
+}
+
+.md code {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.md blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+  color: var(--muted);
+}
+
+.md a {
+  color: var(--accent);
+}
+
+.md-table {
+  overflow-x: auto;
+}
+
+.md table {
+  border-collapse: collapse;
+}
+
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  text-align: left;
+}
+
+.md-code {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.md-code-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 4px 2px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.md-code-bar button {
+  font-size: 11px;
+  padding: 1px 8px;
+}
+
+.md-code pre {
+  margin: 0;
+  padding: 8px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.md-code code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
 .msg-user {
   align-self: flex-end;
   max-width: 80%;
@@ -529,4 +651,25 @@ fieldset {
 
 .sidebar footer {
   flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+
+.filters input[type="search"] {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.session-header h2 {
+  cursor: text;
+}
+
+.form label.row {
+  flex-direction: row;
+  align-items: center;
 }

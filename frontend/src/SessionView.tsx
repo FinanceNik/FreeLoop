@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Session } from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
+import { Markdown } from "./Markdown.tsx";
 
 interface Props {
   session: Session;
@@ -9,6 +10,7 @@ interface Props {
   environment?: EnvironmentInfo;
   allowBypass: boolean;
   onError: (err: unknown) => void;
+  onDeleted: () => void;
 }
 
 const STOP_LABEL: Record<string, string> = {
@@ -20,7 +22,20 @@ const STOP_LABEL: Record<string, string> = {
   error: "Stopped by an error",
 };
 
-export default function SessionView({ session, events, provider, environment, allowBypass, onError }: Props) {
+export default function SessionView({ session, events, provider, environment, allowBypass, onError, onDeleted }: Props) {
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const rename = () => {
+    if (renaming === null) return;
+    EngineService.RenameSession(session.id, renaming)
+      .then(() => setRenaming(null))
+      .catch(onError);
+  };
+  const archived = session.status === "archived";
+  const archive = () => EngineService.ArchiveSession(session.id, !archived).catch(onError);
+  const remove = () => {
+    if (!confirm(`Delete "${session.title}"? Its transcript is removed from disk. This cannot be undone.`)) return;
+    EngineService.DeleteSession(session.id).then(onDeleted).catch(onError);
+  };
   const view = useMemo(() => buildView(events), [events]);
   const [draft, setDraft] = useState("");
   const [queued, setQueued] = useState(0);
@@ -61,7 +76,20 @@ export default function SessionView({ session, events, provider, environment, al
     <section className="session">
       <header className="session-header">
         <div>
-          <h2>{session.title}</h2>
+          {renaming === null ? (
+            <h2 onDoubleClick={() => setRenaming(session.title)} title="Double-click to rename">
+              {session.title}
+            </h2>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                rename();
+              }}
+            >
+              <input autoFocus aria-label="Session title" value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
+            </form>
+          )}
           <p className="muted">
             <code>{session.projectRoot}</code>
             {view.git?.repo && (
@@ -75,6 +103,13 @@ export default function SessionView({ session, events, provider, environment, al
           </p>
         </div>
         <div className="session-controls">
+          <div className="row">
+            <button onClick={() => setRenaming(session.title)}>Rename</button>
+            <button onClick={archive}>{archived ? "Unarchive" : "Archive"}</button>
+            <button className="danger" onClick={remove}>
+              Delete
+            </button>
+          </div>
           <span className="muted" title="Provider and model">
             {provider?.name ?? session.providerId} · {session.model}
           </span>
@@ -133,12 +168,24 @@ export default function SessionView({ session, events, provider, environment, al
   );
 }
 
-function ItemView({ item, onError }: { item: Item; onError: (err: unknown) => void }) {
+// ItemView re-renders only when its item changed (see Item.rev).
+const ItemView = memo(
+  function ItemView({ item, onError }: { item: Item; onError: (err: unknown) => void }) {
+    return <ItemBody item={item} onError={onError} />;
+  },
+  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev,
+);
+
+function ItemBody({ item, onError }: { item: Item; onError: (err: unknown) => void }) {
   switch (item.kind) {
     case "user":
       return <div className="msg msg-user">{item.text}</div>;
     case "agent":
-      return <div className="msg msg-agent">{item.text}</div>;
+      return (
+        <div className="msg msg-agent">
+          <Markdown text={item.text} />
+        </div>
+      );
     case "thought":
       return (
         <details className="thought">

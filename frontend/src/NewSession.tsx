@@ -10,11 +10,13 @@ import {
   type ProviderInfo,
   type Session,
 } from "./api.ts";
+import type { Defaults } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
 
 interface Props {
   providers: ProviderInfo[];
   projects: ProjectInfo[];
   environments: EnvironmentInfo[];
+  defaults?: Defaults;
   onCreated: (s: Session) => void;
   onManageProviders: () => void;
   onError: (err: unknown) => void;
@@ -27,12 +29,14 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, onCreated, onManageProviders, onError }: Props) {
+export default function NewSession({ providers, projects, environments, defaults, onCreated, onManageProviders, onError }: Props) {
+  // SET-004: the configured defaults, else the first provider.
+  const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers[0];
   const [root, setRoot] = useState("");
-  const [environmentId, setEnvironmentId] = useState("");
+  const [environmentId, setEnvironmentId] = useState(defaults?.environmentId ?? "");
   const [mode, setMode] = useState("");
-  const [providerId, setProviderId] = useState(providers[0]?.id ?? "");
-  const [model, setModel] = useState(providers[0]?.defaultModel ?? "");
+  const [providerId, setProviderId] = useState(initial?.id ?? "");
+  const [model, setModel] = useState((initial && initial.id === defaults?.providerId && defaults?.model) || initial?.defaultModel || "");
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -83,7 +87,7 @@ export default function NewSession({ providers, projects, environments, onCreate
   // A known project preselects its default environment.
   const project = projects.find((p) => p.root === root);
   useEffect(() => {
-    if (project) setEnvironmentId(project.defaultEnvironmentId || "local");
+    if (project) setEnvironmentId(project.defaultEnvironmentId || defaults?.environmentId || "local");
   }, [project?.id]);
   const env = environments.find((e) => e.id === (environmentId || "local"));
 

@@ -1,0 +1,95 @@
+package engine
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/session"
+)
+
+// defaultTitle is what CreateSession names a session without a title; the
+// first prompt replaces it (SES-004).
+const defaultTitle = "New session"
+
+// titleFrom derives a session title from its first message: the first line,
+// whitespace collapsed, cut at a word boundary near 60 characters.
+func titleFrom(text string) string {
+	line := ""
+	for _, l := range strings.Split(text, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			line = strings.Join(strings.Fields(l), " ")
+			break
+		}
+	}
+	const max = 60
+	if utf8.RuneCountInString(line) <= max {
+		return line
+	}
+	r := []rune(line)[:max]
+	cut := string(r)
+	if i := strings.LastIndex(cut, " "); i > max/2 {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " ,.;:") + "…"
+}
+
+// RenameSession sets a session's title.
+func (e *Engine) RenameSession(ctx context.Context, sid, title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return errors.New("a title cannot be empty")
+	}
+	if _, err := e.store.GetSession(ctx, sid); err != nil {
+		return err
+	}
+	e.emit(sid, event.SessionInfoUpdate, map[string]string{"title": title})
+	return nil
+}
+
+// stopRuntime cancels a session's turn and queue, waits for it, and forgets
+// the live session.
+func (e *Engine) stopRuntime(sid string) {
+	e.mu.Lock()
+	r, ok := e.runtimes[sid]
+	delete(e.runtimes, sid)
+	e.mu.Unlock()
+	if ok {
+		r.stop()
+	}
+}
+
+// ArchiveSession hides a session from the default list (SES-005), stopping
+// its turn first; archived false brings it back.
+func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) error {
+	ses, err := e.store.GetSession(ctx, sid)
+	if err != nil {
+		return err
+	}
+	status := session.StatusIdle
+	if archived {
+		e.stopRuntime(sid)
+		status = session.StatusArchived
+	} else if ses.Status != session.StatusArchived {
+		return nil
+	}
+	e.emit(sid, event.SessionStatus, event.SessionStatusData{Status: string(status)})
+	return nil
+}
+
+// DeleteSession stops a session and removes its transcript and database
+// rows (SES-005). The UI confirms first.
+func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
+	if _, err := e.store.GetSession(ctx, sid); err != nil {
+		return err
+	}
+	e.stopRuntime(sid)
+	e.bg.Wait() // a git refresh must not recreate the transcript
+	e.mu.Lock()
+	delete(e.streams, sid)
+	e.mu.Unlock()
+	e.rules.forget(sid)
+	return e.store.DeleteSession(ctx, sid)
+}

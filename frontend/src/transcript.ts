@@ -91,13 +91,16 @@ export interface ToolContent {
   output?: string;
 }
 
+// Every item carries rev, the seq of the last event that changed it, so the
+// view can skip re-rendering items that did not change.
 export type Item =
-  | { kind: "user"; key: string; text: string; ts: string }
-  | { kind: "agent"; key: string; text: string }
-  | { kind: "thought"; key: string; text: string }
+  | { kind: "user"; key: string; rev: number; text: string; ts: string }
+  | { kind: "agent"; key: string; rev: number; text: string }
+  | { kind: "thought"; key: string; rev: number; text: string }
   | {
       kind: "tool";
       key: string;
+      rev: number;
       toolCallId: string;
       tool: string;
       title: string;
@@ -107,9 +110,9 @@ export type Item =
       content: ToolContent[];
       permission?: PermissionState;
     }
-  | { kind: "turn_end"; key: string; stopReason: string; ts: string }
-  | { kind: "error"; key: string; message: string }
-  | { kind: "mode"; key: string; mode: string };
+  | { kind: "turn_end"; key: string; rev: number; stopReason: string; ts: string }
+  | { kind: "error"; key: string; rev: number; message: string }
+  | { kind: "mode"; key: string; rev: number; mode: string };
 
 export interface Usage {
   inputTokens: number;
@@ -151,9 +154,10 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   for (const ev of events) {
     const d = (ev.data ?? {}) as Data;
     const key = String(ev.seq);
+    const rev = ev.seq;
     switch (ev.type) {
       case "user_message_chunk":
-        items.push({ kind: "user", key, text: d.content?.text ?? "", ts: ev.ts });
+        items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts });
         break;
       case "agent_message_chunk":
       case "agent_thought_chunk": {
@@ -161,9 +165,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         const prev = last();
         const text = d.content?.text ?? "";
         if (prev && prev.kind === kind) {
-          items[items.length - 1] = { ...prev, text: prev.text + text };
+          items[items.length - 1] = { ...prev, rev, text: prev.text + text };
         } else {
-          items.push({ kind, key, text });
+          items.push({ kind, key, rev, text });
         }
         break;
       }
@@ -171,6 +175,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         const item = {
           kind: "tool" as const,
           key,
+          rev,
           toolCallId: d.toolCallId,
           tool: d.tool ?? "",
           title: d.title ?? d.tool ?? "Tool call",
@@ -186,7 +191,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "tool_call_update": {
         const item = tools.get(d.toolCallId);
         if (!item) break;
-        const next = { ...item, status: d.status ?? item.status, content: d.content ?? item.content };
+        const next = { ...item, rev, status: d.status ?? item.status, content: d.content ?? item.content };
         replaceTool(items, tools, next);
         break;
       }
@@ -198,7 +203,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           command: d.command,
           paths: d.paths ?? undefined,
         };
-        if (item) replaceTool(items, tools, { ...item, permission });
+        if (item) replaceTool(items, tools, { ...item, rev, permission });
         break;
       }
       case "permission_decided": {
@@ -208,7 +213,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         const permission: PermissionState = item.permission
           ? { ...item.permission, decided }
           : { requestId: d.requestId, options: [], decided };
-        replaceTool(items, tools, { ...item, permission });
+        replaceTool(items, tools, { ...item, rev, permission });
         break;
       }
       case "turn_started":
@@ -216,7 +221,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "turn_ended":
         running = false;
-        items.push({ kind: "turn_end", key, stopReason: d.stopReason ?? "", ts: ev.ts });
+        items.push({ kind: "turn_end", key, rev, stopReason: d.stopReason ?? "", ts: ev.ts });
         break;
       case "usage_update":
         usage.inputTokens += d.inputTokens ?? 0;
@@ -226,7 +231,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "current_mode_update":
         mode = d.currentModeId ?? mode;
-        items.push({ kind: "mode", key, mode: d.currentModeId });
+        items.push({ kind: "mode", key, rev, mode: d.currentModeId });
         break;
       case "session_status":
         status = d.status ?? status;
@@ -235,7 +240,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         git = { repo: !!d.repo, branch: d.branch ?? "", head: d.head ?? "", dirty: d.dirty ?? 0, baseCommit: d.baseCommit ?? "" };
         break;
       case "error":
-        items.push({ kind: "error", key, message: d.message ?? "Unknown error" });
+        items.push({ kind: "error", key, rev, message: d.message ?? "Unknown error" });
         break;
     }
   }

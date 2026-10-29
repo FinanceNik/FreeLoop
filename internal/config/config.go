@@ -45,6 +45,14 @@ type Config struct {
 	Version     int         `yaml:"version" json:"version"`
 	UI          UI          `yaml:"ui" json:"ui"`
 	Permissions Permissions `yaml:"permissions" json:"permissions"`
+	Defaults    Defaults    `yaml:"defaults,omitempty" json:"defaults"`
+}
+
+// Defaults preselect the new-session form (SET-004).
+type Defaults struct {
+	ProviderID    string `yaml:"providerId,omitempty" json:"providerId"`
+	Model         string `yaml:"model,omitempty" json:"model"`
+	EnvironmentID string `yaml:"environmentId,omitempty" json:"environmentId"`
 }
 
 // Permissions holds global permission settings.
@@ -55,13 +63,48 @@ type Permissions struct {
 
 // UI holds interface settings.
 type UI struct {
-	// Theme is "system", "light" or "dark".
+	// Theme is "system", "light" or "dark" (GUI-011).
 	Theme string `yaml:"theme" json:"theme"`
+	// FontSize is the base font size in points, 11 to 20.
+	FontSize int `yaml:"fontSize,omitempty" json:"fontSize"`
 }
 
 // Default returns the configuration used when config.yaml is missing.
 func Default() Config {
-	return Config{Version: 1, UI: UI{Theme: "system"}}
+	return Config{Version: 1, UI: UI{Theme: "system", FontSize: 14}}
+}
+
+// Validate fixes invalid fields to their defaults and reports each.
+func (c *Config) Validate() []Issue {
+	var issues []Issue
+	def := Default()
+	if c.Version != 1 {
+		issues = append(issues, Issue{Field: "version", Message: fmt.Sprintf("unsupported version %d; this build reads version 1", c.Version)})
+		c.Version = def.Version
+	}
+	if !slices.Contains([]string{"system", "light", "dark"}, c.UI.Theme) {
+		issues = append(issues, Issue{Field: "ui.theme", Message: fmt.Sprintf("%q is not one of system, light, dark", c.UI.Theme)})
+		c.UI.Theme = def.UI.Theme
+	}
+	if c.UI.FontSize == 0 {
+		c.UI.FontSize = def.UI.FontSize
+	} else if c.UI.FontSize < 11 || c.UI.FontSize > 20 {
+		issues = append(issues, Issue{Field: "ui.fontSize", Message: fmt.Sprintf("%d is outside 11 to 20", c.UI.FontSize)})
+		c.UI.FontSize = def.UI.FontSize
+	}
+	return issues
+}
+
+// Save writes config.yaml.
+func Save(dir string, c Config) error {
+	if issues := c.Validate(); len(issues) > 0 {
+		return fmt.Errorf("config: %s: %s", issues[0].Field, issues[0].Message)
+	}
+	b, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(dir, FileName), b)
 }
 
 // Issue is a problem found in a config file. Issues are shown in the UI; the
@@ -99,15 +142,6 @@ func parse(b []byte) (Config, []Issue) {
 	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 		return Default(), []Issue{{Message: err.Error()}}
 	}
-	var issues []Issue
-	def := Default()
-	if cfg.Version != 1 {
-		issues = append(issues, Issue{Field: "version", Message: fmt.Sprintf("unsupported version %d; this build reads version 1", cfg.Version)})
-		cfg.Version = def.Version
-	}
-	if !slices.Contains([]string{"system", "light", "dark"}, cfg.UI.Theme) {
-		issues = append(issues, Issue{Field: "ui.theme", Message: fmt.Sprintf("%q is not one of system, light, dark", cfg.UI.Theme)})
-		cfg.UI.Theme = def.UI.Theme
-	}
+	issues := cfg.Validate()
 	return cfg, issues
 }

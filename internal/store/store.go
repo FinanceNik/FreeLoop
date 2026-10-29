@@ -204,6 +204,7 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 			CurrentModeID string `json:"currentModeId"`
 			Model         string `json:"model"`
 			Branch        string `json:"branch"`
+			Title         string `json:"title"`
 		}
 		json.Unmarshal(data, &d)
 		switch {
@@ -219,6 +220,9 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 		case typ == event.GitState:
 			sets += `, branch = ?`
 			args = append(args, d.Branch)
+		case typ == event.SessionInfoUpdate && d.Title != "":
+			sets += `, title = ?`
+			args = append(args, d.Title)
 		}
 		// The transcript is the source of truth; a failed index update is
 		// repaired from it on the next open, so it does not fail the append.
@@ -368,6 +372,27 @@ func migrate(db *sql.DB) error {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// DeleteSession removes a session's transcript folder and its database row
+// (SES-005).
+func (s *Store) DeleteSession(ctx context.Context, sid string) error {
+	if _, err := s.GetSession(ctx, sid); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if t, ok := s.files[sid]; ok {
+		t.close()
+		delete(s.files, sid)
+	}
+	s.mu.Unlock()
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ?`, sid); err != nil {
+		return fmt.Errorf("store: delete session: %w", err)
+	}
+	if err := os.RemoveAll(s.sessionDir(sid)); err != nil {
+		return fmt.Errorf("store: remove transcript: %w", err)
 	}
 	return nil
 }

@@ -177,6 +177,11 @@ func (e *Engine) Prompt(ctx context.Context, sid, text string) (PromptResult, er
 		e.emit(sid, event.Error, event.ErrorData{Message: err.Error()})
 		return PromptResult{}, err
 	}
+	if ses, err := e.store.GetSession(ctx, sid); err == nil && ses.Title == defaultTitle {
+		if t := titleFrom(text); t != "" {
+			e.emit(sid, event.SessionInfoUpdate, map[string]string{"title": t})
+		}
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.busy {
@@ -238,7 +243,7 @@ func (e *Engine) SetMode(ctx context.Context, sid, mode string) error {
 	if !m.Valid() {
 		return fmt.Errorf("unknown mode %q", mode)
 	}
-	if m == permission.ModeBypass && !e.cfg.Permissions.AllowBypass {
+	if m == permission.ModeBypass && !e.Config().Permissions.AllowBypass {
 		return errors.New("bypass mode is off; set permissions.allowBypass: true in config.yaml to allow it")
 	}
 	e.mu.Lock()

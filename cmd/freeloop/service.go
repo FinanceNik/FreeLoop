@@ -121,6 +121,22 @@ func (s *EngineService) DeleteEnvironment(id string) error {
 	return s.eng.DeleteEnvironment(id)
 }
 
+func (s *EngineService) SaveSettings(c config.Config) (config.Config, error) {
+	return s.eng.SaveSettings(c)
+}
+
+func (s *EngineService) RenameSession(ctx context.Context, sessionID, title string) error {
+	return s.eng.RenameSession(ctx, sessionID, title)
+}
+
+func (s *EngineService) ArchiveSession(ctx context.Context, sessionID string, archived bool) error {
+	return s.eng.ArchiveSession(ctx, sessionID, archived)
+}
+
+func (s *EngineService) DeleteSession(ctx context.Context, sessionID string) error {
+	return s.eng.DeleteSession(ctx, sessionID)
+}
+
 func (s *EngineService) Config() config.Config {
 	return s.eng.Config()
 }
