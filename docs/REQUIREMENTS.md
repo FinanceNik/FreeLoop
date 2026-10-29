@@ -118,6 +118,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **SES-011** · v1 · **Pull request creation.** Through the GitHub CLI with an AI-drafted, editable description. *Accept:* the PR URL appears in the session after creation.
 - **SES-012** · later · **Scheduled and recurring sessions.**
 - **SES-013** · later · **Tags and saved filters.**
+- **SES-014** · v1 · **Checkpoints and rewind.** Before a turn changes files, the session's working tree is snapshotted; any user message offers "rewind to here", which restores the files to that point and continues the conversation from it, the later turns kept in the transcript as rewound. *Accept:* after rewinding past an edit, the file is back to its earlier content and the next turn's model context ends at the chosen message.
 
 ### Permissions and security (SEC)
 

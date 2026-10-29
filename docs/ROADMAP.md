@@ -94,7 +94,7 @@ Delivers:
 - Providers: PRV-008, PRV-009, PRV-010, PRV-011, PRV-012.
 - Skills: SKL-006, SKL-007, SKL-008.
 - MCP: MCP-006, MCP-007, MCP-008.
-- Sessions: SES-007, SES-008, SES-009, SES-010, SES-011.
+- Sessions: SES-007, SES-008, SES-009, SES-010, SES-011, SES-014.
 - GUI: GUI-012, GUI-013, GUI-014, GUI-015.
 - Permissions: SEC-011, SEC-012.
 - Settings: SET-005.
@@ -107,6 +107,20 @@ Definition of done:
 - Gemini CLI, Codex CLI, Goose and OpenCode each pass the HRN-005 scenario from their presets.
 - Signed and notarized builds; Homebrew cask; a VoiceOver pass with no blocking issues.
 - At least five people other than the author have used it for a week and their blocking issues are fixed.
+
+### Feature order (planned 2026-10-29)
+
+With M2's buildable work done, the v1 features come in this order, chosen for what most limits running many sessions on your own models; each is a slice with its own commit, tests and docs.
+
+1. **Worktree per session (SES-010, OQ-008).** A session can get its own git worktree and branch, so two sessions on one repository never edit the same checkout; its Diff panel shows its own changes; merge back into the main checkout from the panel; the worktree is removed on archive when it holds no uncommitted work. The new-session form asks when another session already works in the project and remembers the answer per project.
+2. **Context compaction (HRN-013).** A context meter; at 80 % of the model's window the built-in harness summarises older turns into one message, records the compaction in the transcript and continues; a manual compact command.
+3. **Docker and devcontainer environment (ENV-005, ENV-006, ENV-007, OQ-014).** An environment kind that runs every command, file access and external agent inside a container built from `.devcontainer/devcontainer.json` or an image, the repository bind-mounted, with setup and health checks.
+4. **Checkpoints and rewind (SES-014).** A snapshot of the working tree before each turn that changes files; "rewind to here" on a user message restores the files and the context.
+5. **Search across sessions (SES-007).** An SQLite full-text index over transcripts, searched from the sidebar.
+6. **Cost estimates (PRV-008).** A price table per model, cost per turn, session and day.
+7. **Command palette (GUI-014).** ⌘K for sessions, profiles, pages, actions and slash commands.
+8. **Hooks (EXT-005).** Scripts on session start, before and after tool calls and on permission requests, JSON on stdin, an exit-code contract that can block a call.
+9. **MCP resources and prompts (MCP-007).** Attach a server's resource to a message; run its prompts as slash commands with a form for their arguments.
 
 ## Later (unscheduled)
 
