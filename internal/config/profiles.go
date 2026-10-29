@@ -104,8 +104,8 @@ func (p Profile) Validate() error {
 		return fieldErr("id", "%q must be lowercase letters, digits and dashes", p.ID)
 	case strings.TrimSpace(p.Name) == "":
 		return fieldErr("name", "a name is required")
-	case p.Harness != "" && p.Harness != "builtin":
-		return fieldErr("harness", "%q is not available yet; use builtin", p.Harness)
+	case p.Harness != "" && !idPattern.MatchString(p.Harness):
+		return fieldErr("harness", "%q must be builtin or the ID of a harness preset", p.Harness)
 	case p.Mode != "" && (!permission.Mode(p.Mode).Valid() || p.Mode == string(permission.ModeBypass)):
 		return fieldErr("mode", "%q must be ask, accept_edits or plan", p.Mode)
 	case p.Effort != "" && !slices.Contains(efforts, p.Effort):

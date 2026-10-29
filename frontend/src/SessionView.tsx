@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
 import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
-import { EngineService, MODES, type EnvironmentInfo, type ProjectInfo, type ProviderInfo, type Session } from "./api.ts";
+import { EngineService, MODES, type EnvironmentInfo, type HarnessInfo, type ProjectInfo, type ProviderInfo, type Session } from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel from "./SessionPanel.tsx";
@@ -12,6 +12,7 @@ interface Props {
   events: TranscriptEvent[];
   provider?: ProviderInfo;
   environment?: EnvironmentInfo;
+  harness?: HarnessInfo;
   project?: ProjectInfo;
   onProjectsChanged: () => void;
   allowBypass: boolean;
@@ -43,7 +44,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, provider, environment, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
+export default function SessionView({ session, events, provider, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -266,7 +267,7 @@ export default function SessionView({ session, events, provider, environment, pr
               </button>
             </div>
             <span className="muted" title="Provider and model">
-              {provider?.name ?? session.providerId} · {session.model}
+              {session.providerId ? `${provider?.name ?? session.providerId} · ${session.model}` : (harness?.name ?? session.harnessId)}
             </span>
             <label>
               Mode{" "}

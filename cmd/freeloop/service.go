@@ -183,6 +183,12 @@ func (s *EngineService) ApplyClaudeImport(ctx context.Context, keys []string) (i
 	return s.eng.ApplyClaudeImport(ctx, keys)
 }
 
+// ListHarnesses lists the built-in harness and the ACP agent presets
+// (HRN-004, HRN-005).
+func (s *EngineService) ListHarnesses() []engine.HarnessInfo {
+	return s.eng.ListHarnesses()
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

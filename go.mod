@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.84.0
+	github.com/coder/acp-go-sdk v0.13.5
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/wailsapp/wails/v3 v3.0.0
 	go.yaml.in/yaml/v3 v3.0.5

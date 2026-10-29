@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
-import { EngineService, MODES, type Command, type Profile, type ProviderInfo } from "./api.ts";
+import { EngineService, MODES, type Command, type HarnessInfo, type Profile, type ProviderInfo } from "./api.ts";
 
 // Profiles (HRN-003): one YAML file each in profiles/. The form covers the
 // common fields and slash commands; rules are edited in the file.
 
 interface Props {
   profiles: Profile[];
+  harnesses: HarnessInfo[];
   providers: ProviderInfo[];
   onChanged: () => void;
   onError: (err: unknown) => void;
@@ -36,7 +37,7 @@ function blank(): Profile {
   };
 }
 
-export default function Profiles({ profiles, providers, onChanged, onError }: Props) {
+export default function Profiles({ profiles, harnesses, providers, onChanged, onError }: Props) {
   const [form, setForm] = useState<Profile | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -88,7 +89,17 @@ export default function Profiles({ profiles, providers, onChanged, onError }: Pr
             Description
             <input value={form.description} onChange={(e) => set("description", e.target.value)} />
           </label>
-          <div className="row wrap">
+          <label>
+            Harness
+            <select value={form.harness || "builtin"} onChange={(e) => set("harness", e.target.value)}>
+              {harnesses.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="row wrap" hidden={!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider ?? true)}>
             <label>
               Provider
               <select value={form.provider} onChange={(e) => set("provider", e.target.value)}>

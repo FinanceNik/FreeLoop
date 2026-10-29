@@ -58,8 +58,22 @@ type Params struct {
 	Skills SkillSource
 	// MCP are the session's MCP tools (MCP-003), asked at every model call
 	// so servers that start or stop are picked up; nil means none.
-	MCP  MCPSource
-	Emit Emitter
+	MCP MCPSource
+	// MCPServers are passed to an external agent on session creation, so
+	// it uses the same servers (MCP-004). Secrets are resolved.
+	MCPServers []MCPServerSpec
+	Emit       Emitter
+}
+
+// MCPServerSpec is an MCP server as an external agent receives it.
+type MCPServerSpec struct {
+	Name      string
+	Transport string // stdio | http
+	Command   string
+	Args      []string
+	Env       map[string]string
+	URL       string
+	Headers   map[string]string
 }
 
 // MCPSource lists a session's MCP tools and calls them.
@@ -150,4 +164,6 @@ type Session interface {
 	Mode() permission.Mode
 	// SetMode takes effect on the next tool call (GUI-007).
 	SetMode(m permission.Mode)
+	// Close ends the session and any process it runs.
+	Close() error
 }

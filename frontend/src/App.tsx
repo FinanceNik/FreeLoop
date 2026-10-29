@@ -9,6 +9,7 @@ import {
   type AttentionItem,
   type Config,
   type EnvironmentInfo,
+  type HarnessInfo,
   type Issue,
   type Profile,
   type ProjectInfo,
@@ -59,6 +60,7 @@ export default function App() {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [environments, setEnvironments] = useState<EnvironmentInfo[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [harnesses, setHarnesses] = useState<HarnessInfo[]>([]);
   const [config, setConfig] = useState<Config | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "none" });
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
@@ -113,10 +115,14 @@ export default function App() {
       refreshAttention();
     }, 100);
   };
-  const refreshProfiles = () =>
-    EngineService.ListProfiles()
+  const refreshProfiles = () => {
+    EngineService.ListHarnesses()
+      .then((list) => setHarnesses(list ?? []))
+      .catch(report);
+    return EngineService.ListProfiles()
       .then((list) => setProfiles(list ?? []))
       .catch(report);
+  };
   const refreshProviders = () =>
     EngineService.ListProviders()
       .then((list) => setProviders(list ?? []))
@@ -382,6 +388,7 @@ export default function App() {
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
             environment={environments.find((x) => x.id === (selected.environmentId || "local"))}
+            harness={harnesses.find((h) => h.id === selected.harnessId)}
             project={projects.find((p) => p.id === selected.projectId)}
             onProjectsChanged={refreshProjects}
             configVersion={configVersion}
@@ -400,6 +407,7 @@ export default function App() {
             projects={projects}
             environments={environments}
             profiles={profiles}
+            harnesses={harnesses}
             defaults={config?.defaults}
             initialRoot={screen.root}
             onManageProviders={() => setScreen({ kind: "providers" })}
@@ -450,6 +458,7 @@ export default function App() {
         {screen.kind === "profiles" && (
           <Profiles
             profiles={profiles}
+            harnesses={harnesses}
             providers={providers}
             onChanged={() => {
               refreshProfiles();

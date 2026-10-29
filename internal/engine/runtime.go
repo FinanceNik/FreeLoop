@@ -9,9 +9,11 @@ import (
 	"log"
 	"sync"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
+	"github.com/FinanceNik/Freeloop/internal/harness/acp"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
@@ -49,6 +51,9 @@ func (r *runtime) stop() {
 	if done != nil {
 		<-done
 	}
+	if r.hs != nil {
+		r.hs.Close()
+	}
 }
 
 // runtimeFor returns the live session for sid, starting it on first use:
@@ -65,14 +70,16 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	if ses.HarnessID != builtin.ID {
-		return nil, fmt.Errorf("session %s uses harness %q, which this build cannot run", sid, ses.HarnessID)
-	}
-	p, err := e.provider(ses.ProviderID)
-	if err != nil {
-		return nil, err
-	}
-	if err := e.requireTools(ctx, ses.ProviderID, ses.Model); err != nil {
+	var preset config.HarnessPreset
+	var p *configuredProvider
+	if ses.HarnessID == builtin.ID {
+		if p, err = e.provider(ses.ProviderID); err != nil {
+			return nil, err
+		}
+		if err := e.requireTools(ctx, ses.ProviderID, ses.Model); err != nil {
+			return nil, err
+		}
+	} else if preset, err = e.preset(ses.HarnessID); err != nil {
 		return nil, err
 	}
 	envID := ses.EnvironmentID
@@ -124,11 +131,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		// The profile's commands changed since the session last ran.
 		e.emit(sid, event.AvailableCommandsUpdate, advertised)
 	}
-	hs, err := builtin.Harness{}.NewSession(ctx, harness.Params{
+	params := harness.Params{
 		SessionID:      sid,
 		Env:            env,
 		Broker:         e.broker,
-		Provider:       p.p,
 		Model:          ses.Model,
 		Effort:         effort,
 		Mode:           permission.Mode(ses.Mode),
@@ -148,7 +154,15 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 				e.bg.Go(func() { e.refreshGit(r) })
 			}
 		},
-	})
+	}
+	var hs harness.Session
+	if p != nil {
+		params.Provider = p.p
+		hs, err = builtin.Harness{}.NewSession(ctx, params)
+	} else {
+		params.MCPServers = e.agentServers(prof)
+		hs, err = acp.Harness{Preset: preset}.NewSession(ctx, params)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +170,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if existing, ok := e.runtimes[sid]; ok { // another caller won the race
+		hs.Close()
 		return existing, nil
 	}
 	r.hs = hs

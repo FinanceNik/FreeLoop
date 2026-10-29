@@ -155,6 +155,9 @@ func (s *session) SetMode(m permission.Mode) {
 	}
 }
 
+// Close has nothing to release: the built-in harness runs in-process.
+func (s *session) Close() error { return nil }
+
 // commit sets history message i and records it so a restart can rebuild the
 // context.
 func (s *session) commit(i int, m provider.Message) {

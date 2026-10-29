@@ -4,6 +4,7 @@ import {
   MODES,
   errorText,
   type EnvironmentInfo,
+  type HarnessInfo,
   type ModelCaps,
   type ModelInfo,
   type Profile,
@@ -20,6 +21,7 @@ interface Props {
   projects: ProjectInfo[];
   environments: EnvironmentInfo[];
   profiles: Profile[];
+  harnesses: HarnessInfo[];
   defaults?: Defaults;
   // A folder chosen beforehand, by the first-run guide (GUI-010).
   initialRoot?: string;
@@ -37,7 +39,7 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, profiles, defaults, initialRoot, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
+export default function NewSession({ providers, projects, environments, profiles, harnesses, defaults, initialRoot, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers.find((p) => !p.builtin) ?? providers[0];
   const [root, setRoot] = useState(initialRoot ?? "");
@@ -125,6 +127,8 @@ export default function NewSession({ providers, projects, environments, profiles
   const projectProfiles = settings?.profiles ?? [];
   const allProfiles = [...profiles, ...projectProfiles];
   const profile = allProfiles.find((p) => p.id === profileId);
+  const harness = harnesses.find((h) => h.id === (profile?.harness || "builtin"));
+  const usesProvider = !harness || harness.usesProvider;
   const env = environments.find((e) => e.id === (environmentId || "local"));
 
   // Favorites and hidden models (PRV-003).
@@ -176,7 +180,7 @@ export default function NewSession({ providers, projects, environments, profiles
   const create = (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId, model: model.trim(), mode })
+    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode })
       .then(async (s) => {
         if (makeDefault && s.projectId) await EngineService.SetProjectProfile(s.projectId, profileId).catch(onError);
         onCreated(s);
@@ -260,25 +264,21 @@ export default function NewSession({ providers, projects, environments, profiles
         <label>
           Profile
           <select value={profileId} onChange={(e) => pickProfile(e.target.value)}>
-            <optgroup label="Built-in harness">
-              {profiles
-                .filter((p) => p.harness === "builtin")
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {project && project.defaultProfileId === p.id ? " (project default)" : ""}
-                  </option>
-                ))}
-            </optgroup>
-            {projectProfiles.length > 0 && (
-              <optgroup label="Built-in harness · this project's .freeloop/">
-                {projectProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {project && project.defaultProfileId === p.id ? " (project default)" : ""}
-                  </option>
-                ))}
-              </optgroup>
+            {harnesses.flatMap((h) =>
+              [false, true].map((fromProject) => {
+                const list = (fromProject ? projectProfiles : profiles).filter((p) => (p.harness || "builtin") === h.id);
+                if (list.length === 0) return null;
+                return (
+                  <optgroup key={h.id + fromProject} label={fromProject ? `${h.name} · this project's .freeloop/` : h.name}>
+                    {list.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                        {project && project.defaultProfileId === p.id ? " (project default)" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              }),
             )}
           </select>
           {profile?.description && <span className="muted">{profile.description}</span>}
@@ -288,6 +288,13 @@ export default function NewSession({ providers, projects, environments, profiles
             </span>
           )}
         </label>
+        {harness && !harness.usesProvider && (
+          <p className="muted harness-note">
+            {harness.name} brings its own model access and sign-in; Freeloop passes it no credentials.{harness.notes ? ` ${harness.notes}` : ""}
+          </p>
+        )}
+        {(!harness || harness.usesProvider) && (
+          <>
         <label>
           Provider
           <select value={providerId} onChange={(e) => pickProvider(e.target.value)}>
@@ -386,6 +393,8 @@ export default function NewSession({ providers, projects, environments, profiles
             </span>
           )}
         </div>
+          </>
+        )}
 
         <label>
           Environment
@@ -416,7 +425,7 @@ export default function NewSession({ providers, projects, environments, profiles
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="New session" />
         </label>
         <div className="row">
-          <button type="submit" className="primary" disabled={busy || !root || !model.trim() || (blocked && caps?.source !== "unknown")}>
+          <button type="submit" className="primary" disabled={busy || !root || (usesProvider && (!model.trim() || (blocked && caps?.source !== "unknown")))}>
             {busy ? "Starting…" : "Start session"}
           </button>
         </div>

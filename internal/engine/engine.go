@@ -87,6 +87,7 @@ type Engine struct {
 	profiles []config.Profile
 	// mcpServers are mcp.yaml's servers; mcp runs them.
 	mcpServers []config.MCPServer
+	presets    []config.HarnessPreset
 	mcp        *mcp.Manager
 	providers  *providerRegistry
 	runtimes   map[string]*runtime
@@ -131,6 +132,7 @@ func Open(opts Options) (*Engine, error) {
 	e.rules.scopedRules = e.scopedRules
 	e.broker.SetRules(e.rules, e.rules)
 	e.loadEnvironments()
+	e.loadPresets()
 	e.loadProfiles()
 	// MCP servers run in a local environment at the user's home: they are
 	// the app's, not one project's.
@@ -223,9 +225,10 @@ const (
 	issueCapabilities = "capabilities"
 	issueProfiles     = "profiles"
 	issueMCP          = "mcp"
+	issuePresets      = "presets"
 )
 
-var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issueProfiles, issueMCP, issueRules, issueCapabilities}
+var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issuePresets, issueProfiles, issueMCP, issueRules, issueCapabilities}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()
@@ -433,12 +436,6 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if err != nil {
 		return session.Session{}, err
 	}
-	if req.ProviderID == "" {
-		req.ProviderID = prof.Provider
-	}
-	if req.ProviderID == "" {
-		return session.Session{}, errors.New("choose a provider")
-	}
 	mode := permission.Mode(req.Mode)
 	if mode == "" {
 		mode = permission.Mode(prof.Mode)
@@ -449,22 +446,37 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if !mode.Valid() || mode == permission.ModeBypass {
 		mode = permission.ModeAsk
 	}
-	p, err := e.provider(req.ProviderID)
-	if err != nil {
-		return session.Session{}, err
-	}
-	model := strings.TrimSpace(req.Model)
-	if model == "" {
-		model = prof.Model
-	}
-	if model == "" {
-		model = p.cfg.DefaultModel
-	}
-	if model == "" {
-		return session.Session{}, errors.New("choose a model")
-	}
-	if err := e.requireTools(ctx, req.ProviderID, model); err != nil {
-		return session.Session{}, err
+	harnessID, model := builtin.ID, ""
+	if prof.Harness != "" && prof.Harness != builtin.ID {
+		// An external agent brings its own model access (HRN-005).
+		if _, err := e.preset(prof.Harness); err != nil {
+			return session.Session{}, err
+		}
+		harnessID, req.ProviderID = prof.Harness, ""
+	} else {
+		if req.ProviderID == "" {
+			req.ProviderID = prof.Provider
+		}
+		if req.ProviderID == "" {
+			return session.Session{}, errors.New("choose a provider")
+		}
+		p, err := e.provider(req.ProviderID)
+		if err != nil {
+			return session.Session{}, err
+		}
+		model = strings.TrimSpace(req.Model)
+		if model == "" {
+			model = prof.Model
+		}
+		if model == "" {
+			model = p.cfg.DefaultModel
+		}
+		if model == "" {
+			return session.Session{}, errors.New("choose a model")
+		}
+		if err := e.requireTools(ctx, req.ProviderID, model); err != nil {
+			return session.Session{}, err
+		}
 	}
 	// The base commit is recorded now so the session's changes stay
 	// visible after unrelated commits (SES-006).
@@ -474,7 +486,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	}
 	git.BaseCommit = git.Head
 	ses, err := e.store.CreateSession(ctx, session.Session{
-		Title: title, HarnessID: builtin.ID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
+		Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
 		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
 	})
 	if err != nil {

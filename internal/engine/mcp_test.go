@@ -11,6 +11,7 @@ import (
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness/acp/acptest"
 	"github.com/FinanceNik/Freeloop/internal/mcp"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider"
@@ -24,6 +25,9 @@ type echoIn struct {
 // The engine's test binary doubles as a stdio MCP server whose echo tool
 // repeats its text and the TOKEN secret.
 func TestMain(m *testing.M) {
+	if acptest.Serve() {
+		return
+	}
 	if os.Getenv("FREELOOP_MCP_TEST_SERVER") == "1" {
 		s := sdk.NewServer(&sdk.Implementation{Name: "test", Version: "1"}, nil)
 		sdk.AddTool(s, &sdk.Tool{Name: "echo", Description: "Echo text."},

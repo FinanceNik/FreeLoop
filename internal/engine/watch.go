@@ -68,6 +68,9 @@ func (e *Engine) reload(changed []string) {
 			envs = true
 		case strings.HasPrefix(f, config.ProfilesDir+string(filepath.Separator)):
 			profiles = true
+		case strings.HasPrefix(f, config.PresetsDir+string(filepath.Separator)):
+			e.loadPresets()
+			profiles = true
 		default:
 			log.Printf("engine: no reload for %s", f)
 		}

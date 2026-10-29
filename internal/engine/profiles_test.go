@@ -50,7 +50,7 @@ func TestProfilesRunSideBySide(t *testing.T) {
 	if _, err := e.SaveProfile(config.Profile{ID: "bad", Name: "Bad", Tools: []string{"teleport"}}); err == nil {
 		t.Error("saved a profile with an unknown tool")
 	}
-	if got := len(e.ListProfiles()); got != 3 { // default, reader, writer
+	if got := len(e.ListProfiles()); got != 4 { // default, reader, writer and the Claude Code preset's
 		t.Fatalf("profiles = %d", got)
 	}
 

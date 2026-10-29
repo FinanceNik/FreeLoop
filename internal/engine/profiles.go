@@ -24,6 +24,7 @@ func (e *Engine) loadProfiles() {
 	if !slices.ContainsFunc(list, func(p config.Profile) bool { return p.ID == config.DefaultProfileID }) {
 		list = append([]config.Profile{config.BuiltinDefaultProfile()}, list...)
 	}
+	list = append(list, e.presetProfiles(list)...)
 	e.mu.Lock()
 	e.profiles = list
 	e.issues[issueProfiles] = issues
