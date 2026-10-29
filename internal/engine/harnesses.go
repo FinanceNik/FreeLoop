@@ -1,10 +1,16 @@
 package engine
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
 	"slices"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 )
@@ -23,6 +29,9 @@ type HarnessInfo struct {
 	// UsesProvider is set for harnesses that run on one of the app's
 	// providers; an external agent brings its own model access.
 	UsesProvider bool `json:"usesProvider"`
+	// Missing says why the agent cannot start here, such as its command
+	// not being on the login PATH (Node.js for npx); empty when it can.
+	Missing string `json:"missing,omitempty"`
 }
 
 func (e *Engine) loadPresets() {
@@ -48,11 +57,63 @@ func (e *Engine) preset(id string) (config.HarnessPreset, error) {
 func (e *Engine) ListHarnesses() []HarnessInfo {
 	out := []HarnessInfo{{ID: builtin.ID, Name: "Built-in", Kind: "builtin", Description: "Freeloop's own agent loop on your providers.", UsesProvider: true}}
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	for _, p := range e.presets {
-		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes})
+	presets := slices.Clone(e.presets)
+	e.mu.Unlock()
+	for _, p := range presets {
+		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: e.missingCommand(p.Command)})
 	}
 	return out
+}
+
+// commandCache remembers for a minute whether commands exist, since
+// asking the login shell takes a moment.
+type commandCache struct {
+	mu   sync.Mutex
+	seen map[string]commandSeen
+}
+
+type commandSeen struct {
+	missing string
+	at      time.Time
+}
+
+// missingCommand checks that cmd starts from the user's login shell, as an
+// agent does, and says what to install when it does not.
+func (e *Engine) missingCommand(cmd string) string {
+	e.commands.mu.Lock()
+	if c, ok := e.commands.seen[cmd]; ok && time.Since(c.at) < time.Minute {
+		e.commands.mu.Unlock()
+		return c.missing
+	}
+	e.commands.mu.Unlock()
+	missing := ""
+	env, err := e.localEnv(e.home, nil)
+	if err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		res, err := env.Exec(ctx, environment.ExecSpec{Command: "command -v " + shellQuote(cmd), Timeout: 10 * time.Second})
+		cancel()
+		if err != nil || res.ExitCode != 0 {
+			missing = fmt.Sprintf("%s is not on your login PATH", cmd)
+			switch filepath.Base(cmd) {
+			case "npx", "node", "npm":
+				missing += "; install Node.js (for example with Homebrew: brew install node)"
+			case "uvx", "uv":
+				missing += "; install uv (brew install uv)"
+			}
+		}
+	}
+	e.commands.mu.Lock()
+	if e.commands.seen == nil {
+		e.commands.seen = map[string]commandSeen{}
+	}
+	e.commands.seen[cmd] = commandSeen{missing: missing, at: time.Now()}
+	e.commands.mu.Unlock()
+	return missing
+}
+
+// shellQuote quotes s for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // presetProfiles are the profiles the presets bring, except where a

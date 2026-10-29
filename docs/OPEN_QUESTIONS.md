@@ -20,7 +20,7 @@ Decisions not yet made, each with options, a recommendation and the milestone by
 
 - **OQ-013 · Cross-session rate limiting** · closed 2026-10-29. A per-provider concurrency cap: at most `maxConcurrent` model calls (default 4, set per provider in `providers.yaml`) run on one provider across all sessions; a session waiting for a slot shows as queued. No token-bucket scheduler unless the cap proves too coarse.
 
-- **OQ-005 · Claude Code adapter route** · closed 2026-10-29. (a): the ACP adapter, now published as `@agentclientprotocol/claude-agent-acp` (formerly Zed's `@zed-industries/claude-code-acp`), run with `npx` and pinned in the built-in preset; it needs Node. (b), a native driver for Claude Code's streaming JSON, stays the fallback if the adapter lags. Detecting Node at onboarding is still to do.
+- **OQ-005 · Claude Code adapter route** · closed 2026-10-29. (a): the ACP adapter, now published as `@agentclientprotocol/claude-agent-acp` (formerly Zed's `@zed-industries/claude-code-acp`), run with `npx` and pinned in the built-in preset; it needs Node. (b), a native driver for Claude Code's streaming JSON, stays the fallback if the adapter lags. Node is detected at onboarding and in the new-session form (2026-10-29).
 
 - **OQ-007 · Instruction file precedence** · closed 2026-10-28. `AGENTS.md` first, `CLAUDE.md` as fallback, both read-only. Nested `AGENTS.md` files are read when the agent touches files under their directory; other vendors' files (`GEMINI.md`, `.cursorrules`) are not read.
 - **OQ-010 · Permission rule syntax** · closed 2026-10-28. Freeloop's own canonical YAML syntax with explicit tool, pattern type and scope fields, plus an importer that converts Claude Code rules and reports what it could not express.

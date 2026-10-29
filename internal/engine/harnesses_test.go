@@ -135,3 +135,18 @@ func TestExternalSessionLoad(t *testing.T) {
 		e.Close()
 	}
 }
+
+// A preset whose command is not installed says what to install.
+func TestMissingAgentCommand(t *testing.T) {
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	if m := e.missingCommand("definitely-not-a-command-freeloop"); !strings.Contains(m, "not on your login PATH") {
+		t.Errorf("missing = %q", m)
+	}
+	if m := e.missingCommand("sh"); m != "" {
+		t.Errorf("sh is reported missing: %q", m)
+	}
+	if m := e.missingCommand("it's"); !strings.Contains(m, "it's") {
+		t.Errorf("quoting = %q", m)
+	}
+}

@@ -82,6 +82,7 @@ type Engine struct {
 	// the skills found per project.
 	projects   projectCache
 	skillCache skillCache
+	commands   commandCache
 
 	envs     []config.Environment
 	profiles []config.Profile

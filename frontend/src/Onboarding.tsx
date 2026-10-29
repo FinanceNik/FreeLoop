@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EngineService, type Config, type ProviderInfo } from "./api.ts";
+import { EngineService, type Config, type HarnessInfo, type ProviderInfo } from "./api.ts";
 import Providers from "./Providers.tsx";
 import ClaudeImport from "./ClaudeImport.tsx";
 
@@ -11,6 +11,7 @@ import ClaudeImport from "./ClaudeImport.tsx";
 interface Props {
   config: Config;
   providers: ProviderInfo[];
+  harnesses: HarnessInfo[];
   onProvidersChanged: () => void;
   onProjectsChanged: () => void;
   // Called with the chosen folder ("" when skipped); the app then opens the
@@ -22,12 +23,12 @@ interface Props {
 
 type Step = "provider" | "import" | "project";
 
-export default function Onboarding({ config, providers, onProvidersChanged, onProjectsChanged, onDone, onSaved, onError }: Props) {
+export default function Onboarding({ config, providers, harnesses, onProvidersChanged, onProjectsChanged, onDone, onSaved, onError }: Props) {
   const [step, setStep] = useState<Step>("provider");
   const [root, setRoot] = useState("");
   const [trust, setTrust] = useState(false);
   const [busy, setBusy] = useState(false);
-  const ready = providers.some((p) => !p.builtin);
+  const ready = providers.some((p) => !p.builtin) || harnesses.some((h) => h.kind === "acp" && !h.missing);
 
   // Finishing or skipping is remembered, so the guide shows once.
   const finish = (folder: string) => {
@@ -72,6 +73,22 @@ export default function Onboarding({ config, providers, onProvidersChanged, onPr
             Studio. Keys go to the macOS Keychain. Add one and test it.
           </p>
           <Providers providers={providers} onChanged={onProvidersChanged} onError={onError} />
+          {harnesses.some((h) => h.kind === "acp") && (
+            <div className="card">
+              <strong>Agents that bring their own model access</strong>
+              <ul className="agent-status">
+                {harnesses
+                  .filter((h) => h.kind === "acp")
+                  .map((h) => (
+                    <li key={h.id}>
+                      {h.name}: {h.missing ? <span className="error-text">{h.missing}</span> : <span className="ok">ready to start</span>}
+                      {h.notes && <div className="muted">{h.notes}</div>}
+                    </li>
+                  ))}
+              </ul>
+              <p className="muted">They need no provider here; you can skip adding one and continue with the guide.</p>
+            </div>
+          )}
           <div className="row onboarding-nav">
             <button className="primary" disabled={!ready} onClick={() => setStep("import")}>
               Next

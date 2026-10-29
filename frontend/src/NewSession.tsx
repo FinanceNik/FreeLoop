@@ -288,6 +288,11 @@ export default function NewSession({ providers, projects, environments, profiles
             </span>
           )}
         </label>
+        {harness?.missing && (
+          <p className="error-text" role="alert">
+            {harness.name} cannot start: {harness.missing}.
+          </p>
+        )}
         {harness && !harness.usesProvider && (
           <p className="muted harness-note">
             {harness.name} brings its own model access and sign-in; Freeloop passes it no credentials.{harness.notes ? ` ${harness.notes}` : ""}
@@ -425,7 +430,7 @@ export default function NewSession({ providers, projects, environments, profiles
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="New session" />
         </label>
         <div className="row">
-          <button type="submit" className="primary" disabled={busy || !root || (usesProvider && (!model.trim() || (blocked && caps?.source !== "unknown")))}>
+          <button type="submit" className="primary" disabled={busy || !root || !!harness?.missing || (usesProvider && (!model.trim() || (blocked && caps?.source !== "unknown")))}>
             {busy ? "Starting…" : "Start session"}
           </button>
         </div>

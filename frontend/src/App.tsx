@@ -444,6 +444,7 @@ export default function App() {
           <Onboarding
             config={config}
             providers={providers}
+            harnesses={harnesses}
             onProvidersChanged={refreshProviders}
             onProjectsChanged={refreshProjects}
             onSaved={setConfig}
