@@ -203,6 +203,7 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 			Status        string `json:"status"`
 			CurrentModeID string `json:"currentModeId"`
 			Model         string `json:"model"`
+			ProviderID    string `json:"providerId"`
 			Branch        string `json:"branch"`
 			Title         string `json:"title"`
 		}
@@ -217,6 +218,10 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 		case typ == event.ModelChanged && d.Model != "":
 			sets += `, model = ?`
 			args = append(args, d.Model)
+			if d.ProviderID != "" {
+				sets += `, provider_id = ?`
+				args = append(args, d.ProviderID)
+			}
 		case typ == event.GitState:
 			sets += `, branch = ?`
 			args = append(args, d.Branch)

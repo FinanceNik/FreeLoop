@@ -140,6 +140,12 @@ type TurnEndedData struct {
 	StopReason string `json:"stopReason"`
 }
 
+// ModelChangedData is the payload of model_changed (PRV-006).
+type ModelChangedData struct {
+	ProviderID string `json:"providerId"`
+	Model      string `json:"model"`
+}
+
 // AvailableCommandsData is the payload of available_commands_update: the
 // slash commands the session's harness offers, as in ACP.
 type AvailableCommandsData struct {

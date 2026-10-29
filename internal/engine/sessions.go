@@ -7,6 +7,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness"
+	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
@@ -92,4 +94,45 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 	e.mu.Unlock()
 	e.rules.forget(sid)
 	return e.store.DeleteSession(ctx, sid)
+}
+
+// SetModel switches a built-in session to another model, on the same or
+// another provider (PRV-006). The next turn uses it; a running turn
+// finishes with the old one at its next model call boundary. The
+// transcript records the switch.
+func (e *Engine) SetModel(ctx context.Context, sid, providerID, model string) error {
+	ses, err := e.store.GetSession(ctx, sid)
+	if err != nil {
+		return err
+	}
+	if ses.HarnessID != builtin.ID {
+		return errors.New("only built-in sessions can switch models; an external agent chooses its own")
+	}
+	model = strings.TrimSpace(model)
+	if providerID == "" {
+		providerID = ses.ProviderID
+	}
+	if model == "" {
+		return errors.New("choose a model")
+	}
+	if providerID == ses.ProviderID && model == ses.Model {
+		return nil
+	}
+	p, err := e.provider(providerID)
+	if err != nil {
+		return err
+	}
+	if err := e.requireTools(ctx, providerID, model); err != nil {
+		return err
+	}
+	e.mu.Lock()
+	r, ok := e.runtimes[sid]
+	e.mu.Unlock()
+	if ok {
+		if ms, ok := r.hs.(harness.ModelSetter); ok {
+			ms.SetModel(p.p, model)
+		}
+	}
+	e.emit(sid, event.ModelChanged, event.ModelChangedData{ProviderID: providerID, Model: model})
+	return nil
 }

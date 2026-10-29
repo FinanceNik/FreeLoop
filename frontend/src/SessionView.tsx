@@ -11,6 +11,7 @@ interface Props {
   session: Session;
   events: TranscriptEvent[];
   provider?: ProviderInfo;
+  providers: ProviderInfo[];
   environment?: EnvironmentInfo;
   harness?: HarnessInfo;
   project?: ProjectInfo;
@@ -44,7 +45,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, provider, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
+export default function SessionView({ session, events, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -56,6 +57,8 @@ export default function SessionView({ session, events, provider, environment, ha
       return !open;
     });
   const [renaming, setRenaming] = useState<string | null>(null);
+  // The model switch form (PRV-006).
+  const [switching, setSwitching] = useState<{ providerId: string; model: string } | null>(null);
   const rename = () => {
     if (renaming === null) return;
     EngineService.RenameSession(session.id, renaming)
@@ -268,6 +271,12 @@ export default function SessionView({ session, events, provider, environment, ha
             </div>
             <span className="muted" title="Provider and model">
               {session.providerId ? `${provider?.name ?? session.providerId} · ${session.model}` : (harness?.name ?? session.harnessId)}
+              {session.providerId && (
+                <button className="link" onClick={() => setSwitching(switching ? null : { providerId: session.providerId, model: session.model })}>
+                  {" "}
+                  Switch…
+                </button>
+              )}
             </span>
             <label>
               Mode{" "}
@@ -284,6 +293,33 @@ export default function SessionView({ session, events, provider, environment, ha
             </span>
           </div>
         </header>
+        {switching && (
+          <form
+            className="banner row model-switch"
+            onSubmit={(e) => {
+              e.preventDefault();
+              EngineService.SetModel(session.id, switching.providerId, switching.model)
+                .then(() => setSwitching(null))
+                .catch(onError);
+            }}
+          >
+            <span>Next turn uses</span>
+            <select value={switching.providerId} onChange={(e) => setSwitching({ providerId: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? "" })} aria-label="Provider">
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <input value={switching.model} onChange={(e) => setSwitching({ ...switching, model: e.target.value })} aria-label="Model" placeholder="Model ID" />
+            <button type="submit" className="primary" disabled={!switching.model.trim()}>
+              Switch
+            </button>
+            <button type="button" onClick={() => setSwitching(null)}>
+              Cancel
+            </button>
+          </form>
+        )}
         {project && !project.trusted && !project.missing && (
           <div className="banner warn row" role="status">
             <span>
@@ -458,6 +494,8 @@ function ItemBody({ item, onError }: { item: Item; onError: (err: unknown) => vo
       return <div className="banner error">{item.message}</div>;
     case "mode":
       return <div className="turn-end">Mode changed to {MODES.find((m) => m.id === item.mode)?.name ?? item.mode}</div>;
+    case "model":
+      return <div className="turn-end">Model changed to {item.model}</div>;
   }
 }
 

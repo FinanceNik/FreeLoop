@@ -1273,3 +1273,14 @@ fieldset {
 .badge.import-invalid {
   color: var(--muted);
 }
+
+/* Model switch (PRV-006) */
+.model-switch {
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.model-switch input {
+  flex: 1;
+  min-width: 8em;
+}

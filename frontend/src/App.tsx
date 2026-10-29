@@ -215,6 +215,10 @@ export default function App() {
         if (ev.type === "session_status" && d.status) s.status = d.status as Session["status"];
         if (ev.type === "current_mode_update" && d.currentModeId) s.mode = d.currentModeId;
         if (ev.type === "git_state") s.branch = d.branch ?? "";
+        if (ev.type === "model_changed" && d.model) {
+          s.model = d.model;
+          s.providerId = d.providerId || s.providerId;
+        }
         if (ev.type === "session_info_update" && d.title) s.title = d.title;
         return [s, ...list.slice(0, i), ...list.slice(i + 1)];
       });
@@ -387,6 +391,7 @@ export default function App() {
             session={selected}
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
+            providers={providers}
             environment={environments.find((x) => x.id === (selected.environmentId || "local"))}
             harness={harnesses.find((h) => h.id === selected.harnessId)}
             project={projects.find((p) => p.id === selected.projectId)}

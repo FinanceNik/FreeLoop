@@ -116,6 +116,12 @@ type SkillContent struct {
 	Files []string
 }
 
+// ModelSetter is implemented by sessions whose model can change between
+// turns (PRV-006): the built-in harness's.
+type ModelSetter interface {
+	SetModel(p provider.Provider, model string)
+}
+
 // Command is a slash command that sends a prepared prompt; text after the
 // name is appended to it.
 type Command struct {

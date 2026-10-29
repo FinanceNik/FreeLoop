@@ -189,6 +189,11 @@ func (s *EngineService) ListHarnesses() []engine.HarnessInfo {
 	return s.eng.ListHarnesses()
 }
 
+// SetModel switches a built-in session's model (PRV-006).
+func (s *EngineService) SetModel(ctx context.Context, sessionID, providerID, model string) error {
+	return s.eng.SetModel(ctx, sessionID, providerID, model)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

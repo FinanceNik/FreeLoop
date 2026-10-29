@@ -199,7 +199,7 @@ func TestCancelWhileWaitingForApproval(t *testing.T) {
 
 	// The next prompt continues the same context.
 	f.prov = scripted.New("p", scripted.Step{Text: "fine"})
-	f.sess.(*session).p.Provider = f.prov
+	f.sess.(*session).SetModel(f.prov, "scripted")
 	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "never mind"}); err != nil {
 		t.Fatal(err)
 	}

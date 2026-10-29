@@ -62,7 +62,7 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 			offered = append(offered, t)
 		}
 	}
-	s := &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered}
+	s := &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered, prov: p.Provider, model: p.Model}
 	s.repair()
 	return s, nil
 }
@@ -106,6 +106,10 @@ type session struct {
 	mu      sync.Mutex
 	mode    permission.Mode
 	history []provider.Message
+	// prov and model answer the next model call; SetModel changes them
+	// (PRV-006).
+	prov  provider.Provider
+	model string
 	// nested are AGENTS.md files below the root, as paths relative to it,
 	// found when a tool call touched their folder (HRN-010).
 	nested []string
@@ -153,6 +157,20 @@ func (s *session) SetMode(m permission.Mode) {
 	if changed {
 		s.p.Emit(event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: string(m)})
 	}
+}
+
+func (s *session) current() (provider.Provider, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.prov, s.model
+}
+
+// SetModel makes the next model call use prov and model (PRV-006); the
+// history carries over, since it is in the provider-neutral form.
+func (s *session) SetModel(prov provider.Provider, model string) {
+	s.mu.Lock()
+	s.prov, s.model = prov, model
+	s.mu.Unlock()
 }
 
 // Close has nothing to release: the built-in harness runs in-process.
@@ -241,14 +259,15 @@ func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
 			return harness.StopCancelled, nil
 		}
 		mode := s.Mode()
+		prov, model := s.current()
 		req := provider.ChatRequest{
-			Model:    s.p.Model,
+			Model:    model,
 			System:   s.systemPrompt(mode),
 			Messages: s.history,
 			Tools:    s.toolSpecs(mode),
 			Effort:   s.p.Effort,
 		}
-		msg, stop, err := s.call(ctx, req)
+		msg, stop, err := s.call(ctx, prov, req)
 		if ctx.Err() != nil {
 			return harness.StopCancelled, nil
 		}
@@ -281,8 +300,8 @@ func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
 }
 
 // call streams one model response, emitting deltas as they arrive.
-func (s *session) call(ctx context.Context, req provider.ChatRequest) (*provider.Message, provider.StopReason, error) {
-	ch, err := s.p.Provider.Stream(ctx, req)
+func (s *session) call(ctx context.Context, prov provider.Provider, req provider.ChatRequest) (*provider.Message, provider.StopReason, error) {
+	ch, err := prov.Stream(ctx, req)
 	if err != nil {
 		return nil, "", err
 	}
