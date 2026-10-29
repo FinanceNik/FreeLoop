@@ -27,6 +27,7 @@ import Profiles from "./Profiles.tsx";
 import Onboarding from "./Onboarding.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
+import ClaudeImport from "./ClaudeImport.tsx";
 
 type Screen =
   | { kind: "session"; id: string }
@@ -40,6 +41,7 @@ type Screen =
   | { kind: "profiles" }
   | { kind: "skills" }
   | { kind: "mcp" }
+  | { kind: "import" }
   | { kind: "none" };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -419,6 +421,7 @@ export default function App() {
             profiles={profiles}
             projects={projects}
             onProjectsChanged={refreshProjects}
+            onImport={() => setScreen({ kind: "import" })}
             onSaved={setConfig} onError={report} />
         )}
         {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
@@ -434,7 +437,13 @@ export default function App() {
             onError={report}
           />
         )}
-        {screen.kind === "mcp" && <MCP configVersion={configVersion} onError={report} />}
+        {screen.kind === "mcp" && <MCP configVersion={configVersion} onImport={() => setScreen({ kind: "import" })} onError={report} />}
+        {screen.kind === "import" && (
+          <section className="page">
+            <h2>Import from Claude Code</h2>
+            <ClaudeImport onError={report} />
+          </section>
+        )}
         {screen.kind === "skills" && (
           <Skills projects={projects} configVersion={configVersion} onConfigChanged={refreshConfig} onProjectsChanged={refreshProjects} onError={report} />
         )}

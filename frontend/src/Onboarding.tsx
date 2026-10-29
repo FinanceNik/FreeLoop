@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EngineService, type Config, type ProviderInfo } from "./api.ts";
 import Providers from "./Providers.tsx";
+import ClaudeImport from "./ClaudeImport.tsx";
 
 // Onboarding is the first-run guide (GUI-010): add and test a provider,
 // choose a first project and decide whether to trust it, then start a
@@ -19,7 +20,7 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-type Step = "provider" | "project";
+type Step = "provider" | "import" | "project";
 
 export default function Onboarding({ config, providers, onProvidersChanged, onProjectsChanged, onDone, onSaved, onError }: Props) {
   const [step, setStep] = useState<Step>("provider");
@@ -59,6 +60,7 @@ export default function Onboarding({ config, providers, onProvidersChanged, onPr
       <h2>Welcome to Freeloop</h2>
       <ol className="steps" aria-label="Setup steps">
         <li className={step === "provider" ? "step-on" : "step-done"}>Add a model provider</li>
+        <li className={step === "import" ? "step-on" : step === "project" ? "step-done" : ""}>Import from Claude Code (optional)</li>
         <li className={step === "project" ? "step-on" : ""}>Choose a project</li>
         <li>Start a session</li>
       </ol>
@@ -71,13 +73,26 @@ export default function Onboarding({ config, providers, onProvidersChanged, onPr
           </p>
           <Providers providers={providers} onChanged={onProvidersChanged} onError={onError} />
           <div className="row onboarding-nav">
-            <button className="primary" disabled={!ready} onClick={() => setStep("project")}>
-              Next: choose a project
+            <button className="primary" disabled={!ready} onClick={() => setStep("import")}>
+              Next
             </button>
             {!ready && <span className="muted">Add a provider to continue.</span>}
             <button className="link" onClick={() => finish("")} disabled={busy}>
               Skip the guide
             </button>
+          </div>
+        </>
+      )}
+
+      {step === "import" && (
+        <>
+          <p>If you use Claude Code, you can bring its MCP servers, permission rules and skills along. This only reads its files.</p>
+          <ClaudeImport onError={onError} />
+          <div className="row onboarding-nav">
+            <button className="primary" onClick={() => setStep("project")}>
+              Next: choose a project
+            </button>
+            <button onClick={() => setStep("provider")}>Back</button>
           </div>
         </>
       )}
@@ -106,7 +121,7 @@ export default function Onboarding({ config, providers, onProvidersChanged, onPr
             <button className="primary" disabled={!root.trim() || busy} onClick={() => finish(root.trim())}>
               Next: start a session
             </button>
-            <button onClick={() => setStep("provider")}>Back</button>
+            <button onClick={() => setStep("import")}>Back</button>
             <button className="link" onClick={() => finish("")} disabled={busy}>
               Skip the guide
             </button>

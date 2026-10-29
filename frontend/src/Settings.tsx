@@ -8,11 +8,12 @@ interface Props {
   profiles: Profile[];
   projects: ProjectInfo[];
   onProjectsChanged: () => void;
+  onImport: () => void;
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
 }
 
-export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onSaved, onError }: Props) {
+export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
   useEffect(() => setForm(config), [config]);
@@ -125,6 +126,11 @@ export default function Settings({ config, providers, environments, profiles, pr
           />
           Allow bypass mode to be chosen for a session
         </label>
+
+        <h3>Claude Code</h3>
+        <p className="muted">
+          Copy MCP servers, permission rules and skills from Claude Code. <button type="button" className="link" onClick={onImport}>Import from Claude Code…</button>
+        </p>
 
         <h3>Notifications</h3>
         <p className="muted">Shown while Freeloop is in the background; clicking one opens its session.</p>

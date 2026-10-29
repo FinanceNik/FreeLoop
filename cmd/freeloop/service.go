@@ -173,6 +173,16 @@ func (s *EngineService) StopMCPServer(id string) {
 	s.eng.StopMCPServer(id)
 }
 
+// PreviewClaudeImport and ApplyClaudeImport import MCP servers and
+// permission rules from Claude Code (MCP-002, SET-003).
+func (s *EngineService) PreviewClaudeImport(ctx context.Context) (engine.ClaudeImport, error) {
+	return s.eng.PreviewClaudeImport(ctx)
+}
+
+func (s *EngineService) ApplyClaudeImport(ctx context.Context, keys []string) (int, error) {
+	return s.eng.ApplyClaudeImport(ctx, keys)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

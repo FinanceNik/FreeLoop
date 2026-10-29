@@ -7,6 +7,7 @@ import { EngineService, type MCPServer, type MCPServerInfo } from "./api.ts";
 
 interface Props {
   configVersion: number;
+  onImport: () => void;
   onError: (err: unknown) => void;
 }
 
@@ -65,7 +66,7 @@ function commandLine(s: MCPServer): string {
   return [s.command, ...(s.args ?? [])].map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(" ");
 }
 
-export default function MCP({ configVersion, onError }: Props) {
+export default function MCP({ configVersion, onImport, onError }: Props) {
   const [servers, setServers] = useState<MCPServerInfo[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -301,9 +302,12 @@ export default function MCP({ configVersion, onError }: Props) {
           </li>
         ))}
       </ul>
-      <button className="primary" onClick={() => setForm(toForm())}>
-        Add a server
-      </button>
+      <div className="row">
+        <button className="primary" onClick={() => setForm(toForm())}>
+          Add a server
+        </button>
+        <button onClick={onImport}>Import from Claude Code…</button>
+      </div>
     </section>
   );
 }
