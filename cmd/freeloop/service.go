@@ -53,6 +53,15 @@ func (s *EngineService) PendingPermissions() []permission.Request {
 	return s.eng.PendingPermissions()
 }
 
+// Attention lists the sessions that need the user (GUI-002).
+func (s *EngineService) Attention(ctx context.Context) ([]engine.AttentionItem, error) {
+	return s.eng.Attention(ctx)
+}
+
+func (s *EngineService) DismissError(ctx context.Context, sessionID string) error {
+	return s.eng.DismissError(ctx, sessionID)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

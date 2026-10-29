@@ -175,6 +175,7 @@ func (e *Engine) Prompt(ctx context.Context, sid, text string) (PromptResult, er
 	r, err := e.runtimeFor(ctx, sid)
 	if err != nil {
 		e.emit(sid, event.Error, event.ErrorData{Message: err.Error()})
+		e.emit(sid, event.SessionStatus, event.SessionStatusData{Status: string(session.StatusError)})
 		return PromptResult{}, err
 	}
 	if ses, err := e.store.GetSession(ctx, sid); err == nil && ses.Title == defaultTitle {

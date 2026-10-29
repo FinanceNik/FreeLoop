@@ -878,3 +878,75 @@ fieldset {
     z-index: 5;
   }
 }
+
+/* Attention view (GUI-002) */
+.attention-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 12px 8px;
+  text-align: left;
+}
+
+.attention-link[aria-current="page"] {
+  border-color: var(--accent);
+}
+
+.attention-link-on {
+  font-weight: 600;
+}
+
+.attention-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.attention-status-waiting_permission {
+  border-color: var(--warn);
+}
+
+.attention-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.attention-error p {
+  margin: 0;
+}
+
+.attention-status-error {
+  border-color: var(--danger);
+}
+
+.attention-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.attention-head h3 {
+  margin: 2px 0 0;
+  font-size: 1em;
+}
+
+.attention-project {
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.attention-request {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.attention-command {
+  word-break: break-all;
+}

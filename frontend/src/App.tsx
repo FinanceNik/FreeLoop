@@ -5,6 +5,7 @@ import {
   EngineService,
   EVENT_NAME,
   errorText,
+  type AttentionItem,
   type Config,
   type EnvironmentInfo,
   type Issue,
@@ -19,6 +20,7 @@ import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
 import Environments from "./Environments.tsx";
 import Settings from "./Settings.tsx";
+import Attention from "./Attention.tsx";
 
 type Screen =
   | { kind: "session"; id: string }
@@ -27,6 +29,7 @@ type Screen =
   | { kind: "rules" }
   | { kind: "environments" }
   | { kind: "settings" }
+  | { kind: "attention" }
   | { kind: "none" };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -55,6 +58,8 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  // Sessions that need the user (GUI-002).
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
 
   // The reducer state lives in a ref so event callbacks always see the latest
   // transcripts; React state mirrors it for rendering.
@@ -77,6 +82,20 @@ export default function App() {
     EngineService.ListEnvironments()
       .then((list) => setEnvironments(list ?? []))
       .catch(report);
+  const refreshAttention = () =>
+    EngineService.Attention()
+      .then((list) => setAttention(list ?? []))
+      .catch(report);
+  // Events that change what needs attention arrive in bursts; one refresh
+  // per burst is enough.
+  const attentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleAttention = () => {
+    if (attentionTimer.current) return;
+    attentionTimer.current = setTimeout(() => {
+      attentionTimer.current = null;
+      refreshAttention();
+    }, 100);
+  };
   const refreshProviders = () =>
     EngineService.ListProviders()
       .then((list) => setProviders(list ?? []))
@@ -150,9 +169,11 @@ export default function App() {
     refreshProjects();
     refreshEnvironments();
     refreshConfig();
+    refreshAttention();
 
     return Events.On(EVENT_NAME, ({ data: ev }) => {
       ingest(ev.sid, [ev]);
+      if (ev.type === "permission_requested" || ev.type === "permission_decided" || ev.type === "session_status") scheduleAttention();
       setSessions((list) => {
         const i = list.findIndex((s) => s.id === ev.sid);
         if (i < 0) {
@@ -209,6 +230,10 @@ export default function App() {
     g.sessions.push(s);
   }
 
+  // Each waiting request counts, and each session in error or waiting for a
+  // reply without a request.
+  const attentionCount = attention.reduce((n, it) => n + Math.max(it.requests?.length ?? 0, 1), 0);
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -218,6 +243,17 @@ export default function App() {
             New session
           </button>
         </header>
+        <button
+          className={`attention-link ${attentionCount > 0 ? "attention-link-on" : ""}`}
+          aria-current={screen.kind === "attention" ? "page" : undefined}
+          onClick={() => {
+            refreshAttention();
+            setScreen({ kind: "attention" });
+          }}
+        >
+          Needs attention
+          {attentionCount > 0 && <span className="badge badge-waiting_permission">{attentionCount}</span>}
+        </button>
         <div className="filters">
           <input type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
           <div className="row">
@@ -334,6 +370,7 @@ export default function App() {
         )}
         {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
         {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}
+        {screen.kind === "attention" && <Attention items={attention} onOpen={openSession} onChanged={refreshAttention} onError={report} />}
         {screen.kind === "none" && (
           <div className="empty">
             <p>Select a session or create a new one.</p>

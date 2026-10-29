@@ -60,6 +60,8 @@ Not in M1: profiles (one hard-coded default profile), external harnesses, skills
 
 Goal: the first public release. It must hold the five pillars at a minimum credible level: any model, switchable harnesses, skills and MCP, a configurable local environment, and all of it open source.
 
+Status (2026-10-29): M2 slice 1 added the attention view (GUI-002): a sidebar entry with a count opens a list of every session waiting for approval, waiting for input or in error, across projects, oldest request first, with Allow once, Allow always (this session) and Deny on each request, the error message and a Dismiss button for a failed session, and a jump to each session. A failed turn now leaves its session in the `error` status until the next prompt or a dismiss.
+
 Delivers:
 - Harness: HRN-003 (profiles), HRN-004, HRN-005 (generic ACP client), HRN-006 (Claude Code harness), HRN-008.
 - Providers: PRV-006.

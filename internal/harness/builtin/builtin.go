@@ -182,7 +182,13 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		s.p.Emit(event.Error, event.ErrorData{Message: err.Error()})
 	}
 	s.p.Emit(event.TurnEnded, event.TurnEndedData{StopReason: string(stop)})
-	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "idle"})
+	// A failed turn leaves the session in error until the next prompt, so
+	// the attention view lists it (GUI-002).
+	status := "idle"
+	if err != nil {
+		status = "error"
+	}
+	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: status})
 	return stop, err
 }
 

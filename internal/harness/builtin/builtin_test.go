@@ -386,3 +386,20 @@ func TestPromptEmbedsResources(t *testing.T) {
 		t.Errorf("user parts = %+v", parts)
 	}
 }
+
+// A failed turn leaves the session in error, so the attention view lists it
+// (GUI-002); the next prompt starts it running again.
+func TestFailedTurnSetsErrorStatus(t *testing.T) {
+	f := setup(t, permission.ModeAsk, scripted.Step{Calls: []scripted.Call{{Name: "list_dir", Input: make(chan int)}}})
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "go"}); err == nil {
+		t.Fatal("prompt succeeded")
+	}
+	evs := f.log.all()
+	last := evs[len(evs)-1]
+	if last.Type != event.SessionStatus || !strings.Contains(string(last.Data), `"error"`) {
+		t.Errorf("last event = %s %s, want session_status error", last.Type, last.Data)
+	}
+	if f.log.count(event.Error) != 1 {
+		t.Errorf("error events = %d", f.log.count(event.Error))
+	}
+}
