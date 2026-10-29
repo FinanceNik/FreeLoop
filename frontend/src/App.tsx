@@ -24,10 +24,12 @@ import Environments from "./Environments.tsx";
 import Settings from "./Settings.tsx";
 import Attention from "./Attention.tsx";
 import Profiles from "./Profiles.tsx";
+import Onboarding from "./Onboarding.tsx";
 
 type Screen =
   | { kind: "session"; id: string }
-  | { kind: "new" }
+  | { kind: "new"; root?: string }
+  | { kind: "onboarding" }
   | { kind: "providers" }
   | { kind: "rules" }
   | { kind: "environments" }
@@ -46,6 +48,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [environments, setEnvironments] = useState<EnvironmentInfo[]>([]);
@@ -77,7 +80,10 @@ export default function App() {
 
   const refreshSessions = () =>
     EngineService.ListSessions()
-      .then((list) => setSessions(list ?? []))
+      .then((list) => {
+        setSessions(list ?? []);
+        setSessionsLoaded(true);
+      })
       .catch(report);
   const refreshProjects = () =>
     EngineService.ListProjects()
@@ -208,6 +214,11 @@ export default function App() {
     setLastSessionId(sid);
     if (!transcriptsRef.current[sid]) catchUp(sid);
   };
+
+  // The first-run guide (GUI-010) opens once, before the first session.
+  useEffect(() => {
+    if (config && sessionsLoaded && !config.ui.onboarded && sessions.length === 0 && screen.kind === "none") setScreen({ kind: "onboarding" });
+  }, [config, sessionsLoaded]);
 
   // A clicked notification opens its session (GUI-008).
   const openRef = useRef(openSession);
@@ -376,11 +387,13 @@ export default function App() {
         )}
         {screen.kind === "new" && (
           <NewSession
+            key={screen.root ?? ""}
             providers={providers}
             projects={projects}
             environments={environments}
             profiles={profiles}
             defaults={config?.defaults}
+            initialRoot={screen.root}
             onManageProviders={() => setScreen({ kind: "providers" })}
             onProvidersChanged={refreshProviders}
             onProjectsChanged={refreshProjects}
@@ -404,6 +417,17 @@ export default function App() {
         )}
         {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
         {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}
+        {screen.kind === "onboarding" && config && (
+          <Onboarding
+            config={config}
+            providers={providers}
+            onProvidersChanged={refreshProviders}
+            onProjectsChanged={refreshProjects}
+            onSaved={setConfig}
+            onDone={(root) => setScreen({ kind: "new", root })}
+            onError={report}
+          />
+        )}
         {screen.kind === "profiles" && (
           <Profiles
             profiles={profiles}
@@ -419,6 +443,9 @@ export default function App() {
         {screen.kind === "none" && (
           <div className="empty">
             <p>Select a session or create a new one.</p>
+            <button className="link" onClick={() => setScreen({ kind: "onboarding" })}>
+              Open the setup guide
+            </button>
           </div>
         )}
       </main>

@@ -21,6 +21,8 @@ interface Props {
   environments: EnvironmentInfo[];
   profiles: Profile[];
   defaults?: Defaults;
+  // A folder chosen beforehand, by the first-run guide (GUI-010).
+  initialRoot?: string;
   onCreated: (s: Session) => void;
   onProjectsChanged: () => void;
   onManageProviders: () => void;
@@ -35,10 +37,10 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, profiles, defaults, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
+export default function NewSession({ providers, projects, environments, profiles, defaults, initialRoot, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
-  const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers[0];
-  const [root, setRoot] = useState("");
+  const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers.find((p) => !p.builtin) ?? providers[0];
+  const [root, setRoot] = useState(initialRoot ?? "");
   const [environmentId, setEnvironmentId] = useState(defaults?.environmentId ?? "");
   const [mode, setMode] = useState("");
   const [profileId, setProfileId] = useState(defaults?.profileId || "default");

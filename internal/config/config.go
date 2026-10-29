@@ -80,6 +80,9 @@ type UI struct {
 	Theme string `yaml:"theme" json:"theme"`
 	// FontSize is the base font size in points, 11 to 20.
 	FontSize int `yaml:"fontSize,omitempty" json:"fontSize"`
+	// Onboarded is set once the first-run guide was finished or skipped
+	// (GUI-010).
+	Onboarded bool `yaml:"onboarded,omitempty" json:"onboarded"`
 }
 
 // Default returns the configuration used when config.yaml is missing.

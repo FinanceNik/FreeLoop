@@ -1132,3 +1132,31 @@ fieldset {
   justify-content: space-between;
   gap: 12px;
 }
+
+/* First-run guide (GUI-010) */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  padding-left: 0;
+  list-style-position: inside;
+  color: var(--muted);
+}
+
+.steps .step-on {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.steps .step-done {
+  color: var(--ok);
+}
+
+.onboarding .page {
+  padding: 0;
+}
+
+.onboarding-nav {
+  margin-top: 12px;
+  align-items: center;
+}
