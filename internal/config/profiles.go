@@ -229,7 +229,7 @@ func ParseProfile(id string, b []byte, tools []string) (Profile, *Issue) {
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
 	if err := dec.Decode(&p); err != nil && !errors.Is(err, io.EOF) {
-		return p, &Issue{Line: yamlErrorLine(err), Message: err.Error()}
+		return p, &Issue{Line: yamlErrorLine(err), Message: yamlMessage(err)}
 	}
 	p.ID = id
 	if p.Harness == "" {
@@ -258,6 +258,19 @@ func ParseProfile(id string, b []byte, tools []string) (Profile, *Issue) {
 }
 
 var lineInError = regexp.MustCompile(`line (\d+)`)
+
+var unknownField = regexp.MustCompile(`field (\S+) not found in type \S+`)
+
+// yamlMessage turns a decoder error into a sentence for the user: the
+// first problem, without the decoder's wrapping and Go type names.
+func yamlMessage(err error) string {
+	msg := strings.TrimPrefix(err.Error(), "yaml: ")
+	msg = strings.TrimPrefix(msg, "unmarshal errors:\n")
+	msg = strings.TrimSpace(strings.Split(msg, "\n")[0])
+	msg = lineInError.ReplaceAllString(msg, "")
+	msg = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(msg), ":"))
+	return unknownField.ReplaceAllString(msg, `unknown field "$1"`)
+}
 
 // yamlErrorLine finds the first line number in a YAML error.
 func yamlErrorLine(err error) int {
@@ -323,4 +336,32 @@ func DeleteProfile(dir, id string) error {
 		return nil
 	}
 	return err
+}
+
+// ReadProfileFile returns profiles/<id>.yaml as written, comments included;
+// "" when the profile has no file.
+func ReadProfileFile(dir, id string) (string, error) {
+	if !idPattern.MatchString(id) {
+		return "", fmt.Errorf("bad profile id %q", id)
+	}
+	b, err := os.ReadFile(filepath.Join(profilesDir(dir), id+".yaml"))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	return string(b), err
+}
+
+// WriteProfileFile replaces profiles/<id>.yaml with text as written, once
+// ParseProfile accepts it, so a hand-written file keeps its comments.
+func WriteProfileFile(dir, id, text string, tools []string) error {
+	if _, issue := ParseProfile(id, []byte(text), tools); issue != nil {
+		if issue.Line > 0 {
+			return fmt.Errorf("line %d: %s", issue.Line, issue.Message)
+		}
+		return errors.New(issue.Message)
+	}
+	if err := os.MkdirAll(profilesDir(dir), 0o700); err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	return writeAtomic(filepath.Join(profilesDir(dir), id+".yaml"), []byte(text))
 }

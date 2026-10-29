@@ -149,3 +149,34 @@ func TestProfileSlashCommands(t *testing.T) {
 		t.Error("the transcript lost what the user typed")
 	}
 }
+
+// GUI-009: the YAML editor reports problems with their line and saves a
+// valid file as written, comments included.
+func TestProfileYAMLEditor(t *testing.T) {
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	bad := "name: Quick\nmode: plan\ntools:\n  - read_file\n  - nope\n"
+	issues := e.CheckProfileYAML("quick", bad)
+	if len(issues) != 1 || issues[0].Line != 5 || issues[0].Field != "tools[1]" {
+		t.Fatalf("issues = %+v", issues)
+	}
+	if err := e.SaveProfileYAML("quick", bad); err == nil || !strings.Contains(err.Error(), "line 5") {
+		t.Errorf("saving an invalid file = %v", err)
+	}
+	good := "# A quick profile.\nname: Quick\nmode: plan # read only\n"
+	if len(e.CheckProfileYAML("quick", good)) != 0 {
+		t.Fatal("a valid file has problems")
+	}
+	if err := e.SaveProfileYAML("quick", good); err != nil {
+		t.Fatal(err)
+	}
+	if text, _ := e.ProfileYAML("quick"); text != good {
+		t.Errorf("file = %q", text)
+	}
+	if p, err := e.profile("quick"); err != nil || p.Mode != "plan" {
+		t.Errorf("profile = %+v, %v", p, err)
+	}
+	if text, _ := e.ProfileYAML("default"); !strings.Contains(text, "name: Default") {
+		t.Errorf("default as YAML = %q", text)
+	}
+}

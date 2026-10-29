@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { EngineService, MODES, type Command, type HarnessInfo, type Profile, type ProviderInfo } from "./api.ts";
+import { useEffect, useState, type FormEvent } from "react";
+import { EngineService, MODES, type Command, type HarnessInfo, type Issue, type Profile, type ProviderInfo } from "./api.ts";
 
 // Profiles (HRN-003): one YAML file each in profiles/. The form covers the
 // common fields and slash commands; rules are edited in the file.
@@ -41,6 +41,24 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
   const [form, setForm] = useState<Profile | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The YAML editor (GUI-009): the file as written, checked as you type.
+  const [yamlEdit, setYamlEdit] = useState<{ id: string; text: string } | null>(null);
+  const [yamlIssues, setYamlIssues] = useState<Issue[]>([]);
+  useEffect(() => {
+    if (!yamlEdit) return;
+    const t = setTimeout(
+      () =>
+        EngineService.CheckProfileYAML(yamlEdit.id, yamlEdit.text)
+          .then((l) => setYamlIssues(l ?? []))
+          .catch(onError),
+      250,
+    );
+    return () => clearTimeout(t);
+  }, [yamlEdit?.text]);
+  const openYAML = (id: string) =>
+    EngineService.ProfileYAML(id)
+      .then((text) => setYamlEdit({ id, text }))
+      .catch(onError);
 
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -67,6 +85,56 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
       "commands",
       (form?.commands ?? []).map((x, n) => (n === i ? { ...x, ...c } : x)),
     );
+
+  if (yamlEdit) {
+    return (
+      <section className="page">
+        <h2>
+          <code>profiles/{yamlEdit.id}.yaml</code>
+        </h2>
+        <textarea
+          className="yaml-editor"
+          spellCheck={false}
+          rows={24}
+          value={yamlEdit.text}
+          onChange={(e) => setYamlEdit({ ...yamlEdit, text: e.target.value })}
+          aria-label="Profile YAML"
+        />
+        {yamlIssues.length > 0 ? (
+          <ul className="error-text">
+            {yamlIssues.map((i, n) => (
+              <li key={n}>
+                {i.line ? `Line ${i.line}: ` : ""}
+                {i.field ? `${i.field}: ` : ""}
+                {i.message}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="ok">Valid.</p>
+        )}
+        <div className="row">
+          <button
+            className="primary"
+            disabled={busy || yamlIssues.length > 0}
+            onClick={() => {
+              setBusy(true);
+              EngineService.SaveProfileYAML(yamlEdit.id, yamlEdit.text)
+                .then(() => {
+                  setYamlEdit(null);
+                  onChanged();
+                })
+                .catch(onError)
+                .finally(() => setBusy(false));
+            }}
+          >
+            Save
+          </button>
+          <button onClick={() => setYamlEdit(null)}>Cancel</button>
+        </div>
+      </section>
+    );
+  }
 
   if (form) {
     const tools = form.tools ?? [];
@@ -284,6 +352,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
               >
                 Edit
               </button>
+              {!p.id.startsWith("project:") && <button onClick={() => openYAML(p.id)}>YAML</button>}
               {p.source && <button onClick={() => remove(p)}>{p.id === "default" ? "Reset" : "Delete"}</button>}
             </div>
           </li>

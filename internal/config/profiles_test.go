@@ -82,3 +82,10 @@ func TestSaveProfileRoundTrip(t *testing.T) {
 		t.Errorf("after delete: %+v", list)
 	}
 }
+
+func TestYAMLMessage(t *testing.T) {
+	_, is := ParseProfile("x", []byte("name: X\nmodle: y\n"), nil)
+	if is == nil || is.Line != 2 || is.Message != `unknown field "modle"` {
+		t.Errorf("issue = %+v", is)
+	}
+}

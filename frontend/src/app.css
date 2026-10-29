@@ -1289,3 +1289,12 @@ fieldset {
   color: var(--muted);
   border-style: dashed;
 }
+
+/* Profile YAML editor (GUI-009) */
+.yaml-editor {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  tab-size: 2;
+}

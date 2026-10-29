@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
@@ -117,4 +119,37 @@ func commandsOf(p config.Profile) ([]harness.Command, event.AvailableCommandsDat
 		data.AvailableCommands = append(data.AvailableCommands, event.AvailableCommand{Name: c.Name, Description: c.Description})
 	}
 	return cmds, data
+}
+
+// ProfileYAML returns a profile's file as written, or the profile in YAML
+// when it has no file yet (the built-in default, a preset's profile).
+func (e *Engine) ProfileYAML(id string) (string, error) {
+	text, err := config.ReadProfileFile(e.dataDir, id)
+	if err != nil || text != "" {
+		return text, err
+	}
+	p, err := e.profile(id)
+	if err != nil {
+		return "", err
+	}
+	b, err := yaml.Marshal(p)
+	return string(b), err
+}
+
+// CheckProfileYAML reports the problems in text as a profile file; none
+// means it can be saved (GUI-009).
+func (e *Engine) CheckProfileYAML(id, text string) []config.Issue {
+	if _, issue := config.ParseProfile(id, []byte(text), builtin.ToolNames()); issue != nil {
+		return []config.Issue{*issue}
+	}
+	return []config.Issue{}
+}
+
+// SaveProfileYAML writes text as profiles/<id>.yaml once it is valid.
+func (e *Engine) SaveProfileYAML(id, text string) error {
+	if err := config.WriteProfileFile(e.dataDir, id, text, builtin.ToolNames()); err != nil {
+		return err
+	}
+	e.loadProfiles()
+	return nil
 }

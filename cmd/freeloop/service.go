@@ -194,6 +194,20 @@ func (s *EngineService) SetModel(ctx context.Context, sessionID, providerID, mod
 	return s.eng.SetModel(ctx, sessionID, providerID, model)
 }
 
+// ProfileYAML, CheckProfileYAML and SaveProfileYAML back the profile YAML
+// editor (GUI-009).
+func (s *EngineService) ProfileYAML(id string) (string, error) {
+	return s.eng.ProfileYAML(id)
+}
+
+func (s *EngineService) CheckProfileYAML(id, text string) []config.Issue {
+	return s.eng.CheckProfileYAML(id, text)
+}
+
+func (s *EngineService) SaveProfileYAML(id, text string) error {
+	return s.eng.SaveProfileYAML(id, text)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }
