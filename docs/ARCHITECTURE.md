@@ -160,6 +160,8 @@ type Environment interface {
 }
 ```
 
+*As built in M1:* an environment's settings (variables, secret references, disabled tools, default mode) live in `environments/<id>.yaml` and are separate from where it runs: a local environment runs in the session's project folder, so one environment can serve several projects and sessions (ENV-003). A project is a row in SQLite with its root and a git fingerprint (first commit, origin URL) for relinking after a move (OQ-020). Secrets are read from the Keychain when a session's environment starts and passed as variables; every value is added to the transcript redaction list. The app's own git queries (`git status --porcelain=v2 --branch` after each finished tool call and turn) run through `Environment.Exec` with argv, outside the permission broker, because they are the app's reads rather than a harness's side effects.
+
 The local implementation is thin wrappers over the OS. The Docker implementation (v1) runs `docker exec -i` for `Exec`, `docker cp` or `exec cat`/`tee` for `FS`, and reuses `.devcontainer/devcontainer.json` through the devcontainer CLI when present. Because ACP is stdio, an external harness runs *inside* an environment by spawning it through `Environment.Exec` with stdio pipes; the same path later covers `ssh`. MCP server commands passed to such a harness must be paths valid inside the environment.
 
 ### 4.4 Skill

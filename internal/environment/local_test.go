@@ -187,3 +187,11 @@ func TestSymlinksDoNotEscapeTheGuard(t *testing.T) {
 		t.Errorf("write through symlink: err = %v", err)
 	}
 }
+
+func TestExecArgv(t *testing.T) {
+	l := newTest(t, nil)
+	res, err := l.Exec(context.Background(), ExecSpec{Argv: []string{"printf", "%s|%s", "a b", "$HOME"}})
+	if err != nil || res.Output != "a b|$HOME" {
+		t.Errorf("argv exec = %q, %v; arguments must not pass through a shell", res.Output, err)
+	}
+}

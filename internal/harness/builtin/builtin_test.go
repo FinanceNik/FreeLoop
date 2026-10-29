@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -265,6 +266,27 @@ func TestProtectedPathRefusedInBypass(t *testing.T) {
 	}
 	r := f.prov.Requests()[1].Messages[2].Parts[0]
 	if !r.IsError || !strings.Contains(r.Text, "protected_path") {
+		t.Errorf("result = %+v", r)
+	}
+}
+
+func TestDisabledToolsAreNotOffered(t *testing.T) {
+	f := setup(t, permission.ModeBypass,
+		scripted.Step{Calls: []scripted.Call{{Name: "shell", Input: map[string]any{"command": "echo hi"}}}},
+		scripted.Step{Text: "ok"},
+	)
+	f.sess.(*session).p.DisabledTools = []string{"shell"}
+	s := f.sess.(*session)
+	s.tools = slices.DeleteFunc(s.tools, func(t *tool) bool { return t.spec.Name == "shell" })
+	if _, err := f.sess.Prompt(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range f.prov.Requests()[0].Tools {
+		if tool.Name == "shell" {
+			t.Error("disabled tool offered")
+		}
+	}
+	if r := f.prov.Requests()[1].Messages[2].Parts[0]; !r.IsError || !strings.Contains(r.Text, "turned off") {
 		t.Errorf("result = %+v", r)
 	}
 }

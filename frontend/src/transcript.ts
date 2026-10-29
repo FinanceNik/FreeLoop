@@ -118,9 +118,18 @@ export interface Usage {
   cacheWriteTokens: number;
 }
 
+export interface GitState {
+  repo: boolean;
+  branch: string;
+  head: string;
+  dirty: number;
+  baseCommit: string;
+}
+
 export interface SessionView {
   items: Item[];
   usage: Usage;
+  git: GitState | null;
   mode: string | null;
   status: string | null;
   running: boolean;
@@ -136,6 +145,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   let mode: string | null = null;
   let status: string | null = null;
   let running = false;
+  let git: GitState | null = null;
 
   const last = () => items[items.length - 1];
   for (const ev of events) {
@@ -221,12 +231,15 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "session_status":
         status = d.status ?? status;
         break;
+      case "git_state":
+        git = { repo: !!d.repo, branch: d.branch ?? "", head: d.head ?? "", dirty: d.dirty ?? 0, baseCommit: d.baseCommit ?? "" };
+        break;
       case "error":
         items.push({ kind: "error", key, message: d.message ?? "Unknown error" });
         break;
     }
   }
-  return { items, usage, mode, status, running };
+  return { items, usage, git, mode, status, running };
 }
 
 function replaceTool(

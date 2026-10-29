@@ -35,7 +35,10 @@ type Params struct {
 	Mode      permission.Mode
 	// History restores a built-in session's context after a restart.
 	History []provider.Message
-	Emit    Emitter
+	// DisabledTools are not offered to the model (the environment's tool
+	// list, ENV-002).
+	DisabledTools []string
+	Emit          Emitter
 }
 
 // Harness creates sessions.

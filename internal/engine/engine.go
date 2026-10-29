@@ -49,7 +49,11 @@ type Engine struct {
 	cfg     config.Config
 	issues  []config.Issue
 
+	// bg tracks background work (git refreshes) that Close waits for.
+	bg sync.WaitGroup
+
 	mu        sync.Mutex
+	envs      []config.Environment
 	providers *providerRegistry
 	runtimes  map[string]*runtime
 	known     []string // secret values to redact
@@ -90,6 +94,7 @@ func Open(opts Options) (*Engine, error) {
 		e.mu.Unlock()
 	})
 	e.broker.SetRules(e.rules, e.rules)
+	e.loadEnvironments()
 	if err := e.loadProviders(); err != nil {
 		e.store.Close()
 		return nil, err
@@ -110,6 +115,7 @@ func (e *Engine) Close() error {
 	for _, r := range running {
 		r.stop()
 	}
+	e.bg.Wait()
 	e.bus.close()
 	return e.store.Close()
 }
@@ -177,9 +183,11 @@ func (e *Engine) ListSessions(ctx context.Context) ([]session.Session, error) {
 type CreateSessionRequest struct {
 	Title       string `json:"title"`
 	ProjectRoot string `json:"projectRoot"`
-	ProviderID  string `json:"providerId"`
-	Model       string `json:"model"`
-	Mode        string `json:"mode"`
+	// EnvironmentID defaults to the project's default environment.
+	EnvironmentID string `json:"environmentId"`
+	ProviderID    string `json:"providerId"`
+	Model         string `json:"model"`
+	Mode          string `json:"mode"`
 }
 
 // CreateSession creates an idle session and records its initial status as
@@ -190,12 +198,30 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if title == "" {
 		title = "New session"
 	}
-	mode := permission.Mode(req.Mode)
-	if !mode.Valid() || mode == permission.ModeBypass {
-		mode = permission.ModeAsk
-	}
 	if req.ProjectRoot == "" {
 		return session.Session{}, errors.New("choose a project folder")
+	}
+	project, err := e.AddProject(ctx, req.ProjectRoot)
+	if err != nil {
+		return session.Session{}, err
+	}
+	envID := req.EnvironmentID
+	if envID == "" {
+		envID = project.DefaultEnvironmentID
+	}
+	if envID == "" {
+		envID = DefaultEnvironmentID
+	}
+	envCfg, err := e.environment(envID)
+	if err != nil {
+		return session.Session{}, err
+	}
+	mode := permission.Mode(req.Mode)
+	if mode == "" {
+		mode = permission.Mode(envCfg.DefaultMode)
+	}
+	if !mode.Valid() || mode == permission.ModeBypass {
+		mode = permission.ModeAsk
 	}
 	p, err := e.provider(req.ProviderID)
 	if err != nil {
@@ -211,9 +237,16 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if err := e.requireTools(ctx, req.ProviderID, model); err != nil {
 		return session.Session{}, err
 	}
+	// The base commit is recorded now so the session's changes stay
+	// visible after unrelated commits (SES-006).
+	var git event.GitStateData
+	if env, err := e.localEnv(project.Root, nil); err == nil {
+		git = gitState(ctx, env)
+	}
+	git.BaseCommit = git.Head
 	ses, err := e.store.CreateSession(ctx, session.Session{
-		Title: title, HarnessID: builtin.ID, ProjectRoot: req.ProjectRoot,
-		ProviderID: req.ProviderID, Model: model, Mode: string(mode),
+		Title: title, HarnessID: builtin.ID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
+		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode),
 	})
 	if err != nil {
 		return session.Session{}, err
@@ -222,6 +255,12 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	ev, err := e.store.Append(ctx, ses.ID, event.SessionStatus, data)
 	if err != nil {
 		return session.Session{}, err
+	}
+	if git.Repo {
+		data, _ = json.Marshal(git)
+		if ev, err = e.store.Append(ctx, ses.ID, event.GitState, data); err != nil {
+			return session.Session{}, err
+		}
 	}
 	ses.LastSeq, ses.UpdatedAt = ev.Seq, ev.TS
 	return ses, nil

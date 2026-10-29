@@ -20,7 +20,14 @@ import (
 // running, if any. Prompts sent while one runs wait in a queue and start at
 // the next turn boundary (GUI-004).
 type runtime struct {
-	hs harness.Session
+	hs  harness.Session
+	sid string
+	env environment.Environment
+
+	// Git state, refreshed after tool calls and turns (SES-006).
+	gitMu   sync.Mutex
+	base    string
+	lastGit event.GitStateData
 
 	mu     sync.Mutex
 	busy   bool
@@ -66,9 +73,22 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if err := e.requireTools(ctx, ses.ProviderID, ses.Model); err != nil {
 		return nil, err
 	}
-	env, err := environment.NewLocal(environment.LocalOptions{
-		ID: "local", Root: ses.ProjectRoot, Guard: e.broker.Policy().Guard(ses.ProjectRoot),
-	})
+	envID := ses.EnvironmentID
+	if envID == "" {
+		envID = DefaultEnvironmentID
+	}
+	envCfg, err := e.environment(envID)
+	if err != nil {
+		return nil, err
+	}
+	vars, err := e.resolveEnv(envCfg)
+	if err != nil {
+		return nil, err
+	}
+	if !environment.IsDir(ses.ProjectRoot) {
+		return nil, fmt.Errorf("the project folder %s is missing; relink the project", ses.ProjectRoot)
+	}
+	env, err := e.localEnv(ses.ProjectRoot, vars)
 	if err != nil {
 		return nil, err
 	}
@@ -77,16 +97,28 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
+	r := &runtime{env: env, base: ses.BaseCommit, sid: sid}
+	for _, ev := range events {
+		if ev.Type == event.GitState {
+			json.Unmarshal(ev.Data, &r.lastGit)
+		}
+	}
 	hs, err := builtin.Harness{}.NewSession(ctx, harness.Params{
-		SessionID: sid,
-		Env:       env,
-		Broker:    e.broker,
-		Provider:  p.p,
-		Model:     ses.Model,
-		Effort:    "high",
-		Mode:      permission.Mode(ses.Mode),
-		History:   builtin.Restore(events),
-		Emit:      func(typ event.Type, data any) { e.emit(sid, typ, data) },
+		SessionID:     sid,
+		Env:           env,
+		Broker:        e.broker,
+		Provider:      p.p,
+		Model:         ses.Model,
+		Effort:        "high",
+		Mode:          permission.Mode(ses.Mode),
+		History:       builtin.Restore(events),
+		DisabledTools: envCfg.DisabledTools,
+		Emit: func(typ event.Type, data any) {
+			e.emit(sid, typ, data)
+			if changesFiles(typ, data) {
+				e.bg.Go(func() { e.refreshGit(r) })
+			}
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -94,12 +126,39 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if r, ok := e.runtimes[sid]; ok { // another caller won the race
-		return r, nil
+	if existing, ok := e.runtimes[sid]; ok { // another caller won the race
+		return existing, nil
 	}
-	r := &runtime{hs: hs}
+	r.hs = hs
+	e.bg.Go(func() { e.refreshGit(r) })
 	e.runtimes[sid] = r
 	return r, nil
+}
+
+// changesFiles reports events after which the checkout may have changed: a
+// finished tool call or a finished turn.
+func changesFiles(typ event.Type, data any) bool {
+	if typ == event.TurnEnded {
+		return true
+	}
+	if typ != event.ToolCallUpdate {
+		return false
+	}
+	m, ok := data.(map[string]any)
+	return ok && m["status"] == "completed"
+}
+
+// refreshGit records the session's git state when it changed.
+func (e *Engine) refreshGit(r *runtime) {
+	r.gitMu.Lock()
+	defer r.gitMu.Unlock()
+	st := gitState(context.Background(), r.env)
+	st.BaseCommit = r.base
+	if st == r.lastGit || (!st.Repo && !r.lastGit.Repo) {
+		return
+	}
+	r.lastGit = st
+	e.emit(r.sid, event.GitState, st)
 }
 
 // PromptResult says whether the prompt started or waits for the current one.

@@ -1,8 +1,20 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, MODES, errorText, type ModelCaps, type ModelInfo, type ProviderInfo, type Session } from "./api.ts";
+import {
+  EngineService,
+  MODES,
+  errorText,
+  type EnvironmentInfo,
+  type ModelCaps,
+  type ModelInfo,
+  type ProjectInfo,
+  type ProviderInfo,
+  type Session,
+} from "./api.ts";
 
 interface Props {
   providers: ProviderInfo[];
+  projects: ProjectInfo[];
+  environments: EnvironmentInfo[];
   onCreated: (s: Session) => void;
   onManageProviders: () => void;
   onError: (err: unknown) => void;
@@ -15,11 +27,12 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, onCreated, onManageProviders, onError }: Props) {
+export default function NewSession({ providers, projects, environments, onCreated, onManageProviders, onError }: Props) {
   const [root, setRoot] = useState("");
+  const [environmentId, setEnvironmentId] = useState("");
+  const [mode, setMode] = useState("");
   const [providerId, setProviderId] = useState(providers[0]?.id ?? "");
   const [model, setModel] = useState(providers[0]?.defaultModel ?? "");
-  const [mode, setMode] = useState("ask");
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -67,6 +80,13 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
     return () => clearTimeout(t);
   }, [providerId, model]);
 
+  // A known project preselects its default environment.
+  const project = projects.find((p) => p.root === root);
+  useEffect(() => {
+    if (project) setEnvironmentId(project.defaultEnvironmentId || "local");
+  }, [project?.id]);
+  const env = environments.find((e) => e.id === (environmentId || "local"));
+
   const pickProvider = (id: string) => {
     setProviderId(id);
     setModel(providers.find((p) => p.id === id)?.defaultModel ?? "");
@@ -85,7 +105,7 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
   const create = (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    EngineService.CreateSession({ title, projectRoot: root, providerId, model: model.trim(), mode })
+    EngineService.CreateSession({ title, projectRoot: root, environmentId, providerId, model: model.trim(), mode })
       .then(onCreated)
       .catch(onError)
       .finally(() => setBusy(false));
@@ -109,6 +129,21 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
     <section className="page">
       <h2>New session</h2>
       <form className="card form" onSubmit={create}>
+        {projects.length > 0 && (
+          <label>
+            Project
+            <select value={project?.root ?? ""} onChange={(e) => setRoot(e.target.value)}>
+              <option value="">Another folder…</option>
+              {projects
+                .filter((p) => !p.missing)
+                .map((p) => (
+                  <option key={p.id} value={p.root}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        )}
         <label>
           Project folder
           <div className="row">
@@ -179,8 +214,20 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
         </div>
 
         <label>
+          Environment
+          <select value={environmentId || "local"} onChange={(e) => setEnvironmentId(e.target.value)}>
+            {environments.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+                {(e.secretNames ?? []).length > 0 ? ` (${(e.secretNames ?? []).length} secrets)` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Permission mode
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="">From the environment ({MODES.find((m) => m.id === (env?.defaultMode || "ask"))?.name})</option>
             {MODES.filter((m) => m.id !== "bypass").map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}

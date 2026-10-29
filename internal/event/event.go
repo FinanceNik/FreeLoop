@@ -116,6 +116,15 @@ type UsageData struct {
 	CacheWriteTokens int64 `json:"cacheWriteTokens"`
 }
 
+// GitStateData is the payload of git_state (SES-006).
+type GitStateData struct {
+	Repo       bool   `json:"repo"`
+	Branch     string `json:"branch"`
+	Head       string `json:"head"`
+	Dirty      int    `json:"dirty"`
+	BaseCommit string `json:"baseCommit"`
+}
+
 // CurrentModeData is the payload of current_mode_update.
 type CurrentModeData struct {
 	CurrentModeID string `json:"currentModeId"`

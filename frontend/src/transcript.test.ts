@@ -92,3 +92,12 @@ test("lineDiff trims common lines to context", () => {
   assert.deepEqual(d.map((l) => l.sign + l.text), [" c", "-d", "+X", " e"]);
   assert.deepEqual(lineDiff("", "new\n").map((l) => l.sign + l.text), ["+new"]);
 });
+
+test("buildView keeps the latest git state", () => {
+  const v = buildView([
+    at(1, "git_state", { repo: true, branch: "main", head: "a", dirty: 0, baseCommit: "a" }),
+    at(2, "git_state", { repo: true, branch: "main", head: "a", dirty: 3, baseCommit: "a" }),
+  ]);
+  assert.equal(v.git?.dirty, 3);
+  assert.equal(buildView([]).git, null);
+});

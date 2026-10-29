@@ -127,9 +127,10 @@ func (s *Store) CreateSession(ctx context.Context, tmpl session.Session) (sessio
 		return session.Session{}, fmt.Errorf("store: %w", err)
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, title, status, harness_id, project_root, provider_id, model, mode, last_seq, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-		ses.ID, ses.Title, ses.Status, ses.HarnessID, ses.ProjectRoot, ses.ProviderID, ses.Model, ses.Mode, now.UnixMilli(), now.UnixMilli())
+		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, last_seq, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+		ses.ID, ses.Title, ses.Status, ses.HarnessID, ses.ProjectID, ses.ProjectRoot, ses.EnvironmentID, ses.BaseCommit, ses.Branch,
+		ses.ProviderID, ses.Model, ses.Mode, now.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return session.Session{}, fmt.Errorf("store: insert session: %w", err)
 	}
@@ -202,6 +203,7 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 			Status        string `json:"status"`
 			CurrentModeID string `json:"currentModeId"`
 			Model         string `json:"model"`
+			Branch        string `json:"branch"`
 		}
 		json.Unmarshal(data, &d)
 		switch {
@@ -214,6 +216,9 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 		case typ == event.ModelChanged && d.Model != "":
 			sets += `, model = ?`
 			args = append(args, d.Model)
+		case typ == event.GitState:
+			sets += `, branch = ?`
+			args = append(args, d.Branch)
 		}
 		// The transcript is the source of truth; a failed index update is
 		// repaired from it on the next open, so it does not fail the append.
@@ -292,14 +297,15 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
-const sessionColumns = `id, title, status, harness_id, project_root, provider_id, model, mode, last_seq, created_at, updated_at`
+const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, last_seq, created_at, updated_at`
 
 type scanner interface{ Scan(...any) error }
 
 func scanSession(r scanner) (session.Session, error) {
 	var ses session.Session
 	var created, updated int64
-	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectRoot, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.LastSeq, &created, &updated); err != nil {
+	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectID, &ses.ProjectRoot, &ses.EnvironmentID,
+		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.LastSeq, &created, &updated); err != nil {
 		return session.Session{}, err
 	}
 	ses.CreatedAt = time.UnixMilli(created).UTC()
@@ -322,6 +328,19 @@ var migrations = []string{
 	ALTER TABLE sessions ADD COLUMN provider_id TEXT NOT NULL DEFAULT '';
 	ALTER TABLE sessions ADD COLUMN model TEXT NOT NULL DEFAULT '';
 	ALTER TABLE sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'ask';`,
+	`CREATE TABLE projects (
+		id           TEXT PRIMARY KEY,
+		name         TEXT NOT NULL,
+		root         TEXT NOT NULL UNIQUE,
+		first_commit TEXT NOT NULL DEFAULT '',
+		remote       TEXT NOT NULL DEFAULT '',
+		default_env  TEXT NOT NULL DEFAULT '',
+		created_at   INTEGER NOT NULL
+	);
+	ALTER TABLE sessions ADD COLUMN project_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN environment_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN base_commit TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN branch TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

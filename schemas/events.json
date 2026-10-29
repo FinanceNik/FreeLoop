@@ -76,6 +76,10 @@
       "then": { "properties": { "data": { "$ref": "#/$defs/historyMessage" } } }
     },
     {
+      "if": { "properties": { "type": { "const": "git_state" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/gitState" } } }
+    },
+    {
       "if": { "properties": { "type": { "const": "usage_update" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/usage" } } }
     },
@@ -119,6 +123,18 @@
       "properties": {
         "index": { "type": "integer", "minimum": 0 },
         "message": { "type": "object", "required": ["role", "parts"] }
+      }
+    },
+    "gitState": {
+      "type": "object",
+      "description": "The session's checkout: branch (empty when detached), HEAD, number of changed or untracked files, and the commit the session started at.",
+      "required": ["repo"],
+      "properties": {
+        "repo": { "type": "boolean" },
+        "branch": { "type": "string" },
+        "head": { "type": "string" },
+        "dirty": { "type": "integer", "minimum": 0 },
+        "baseCommit": { "type": "string" }
       }
     },
     "usage": {

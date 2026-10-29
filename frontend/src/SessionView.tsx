@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { EngineService, MODES, type ProviderInfo, type Session } from "./api.ts";
+import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Session } from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
 
 interface Props {
   session: Session;
   events: TranscriptEvent[];
   provider?: ProviderInfo;
+  environment?: EnvironmentInfo;
   allowBypass: boolean;
   onError: (err: unknown) => void;
 }
@@ -19,7 +20,7 @@ const STOP_LABEL: Record<string, string> = {
   error: "Stopped by an error",
 };
 
-export default function SessionView({ session, events, provider, allowBypass, onError }: Props) {
+export default function SessionView({ session, events, provider, environment, allowBypass, onError }: Props) {
   const view = useMemo(() => buildView(events), [events]);
   const [draft, setDraft] = useState("");
   const [queued, setQueued] = useState(0);
@@ -63,6 +64,14 @@ export default function SessionView({ session, events, provider, allowBypass, on
           <h2>{session.title}</h2>
           <p className="muted">
             <code>{session.projectRoot}</code>
+            {view.git?.repo && (
+              <span title={`HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}`}>
+                {" "}
+                · {view.git.branch || "detached"}
+                {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : " · clean"}
+              </span>
+            )}
+            {" "}· env {environment?.name ?? session.environmentId ?? "Local"}
           </p>
         </div>
         <div className="session-controls">

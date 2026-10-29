@@ -110,8 +110,13 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	args := append(append([]string{}, l.shell[1:]...), spec.Command)
-	cmd := exec.Command(l.shell[0], args...)
+	var cmd *exec.Cmd
+	if len(spec.Argv) > 0 {
+		cmd = exec.Command(spec.Argv[0], spec.Argv[1:]...)
+	} else {
+		args := append(append([]string{}, l.shell[1:]...), spec.Command)
+		cmd = exec.Command(l.shell[0], args...)
+	}
 	cmd.Dir = cwd
 	cmd.Env = os.Environ()
 	for k, v := range l.env {
@@ -126,7 +131,7 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
-		return ExecResult{}, fmt.Errorf("environment: start %s: %w", l.shell[0], err)
+		return ExecResult{}, fmt.Errorf("environment: start %s: %w", cmd.Path, err)
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()

@@ -232,3 +232,33 @@ func TestFilePermissions(t *testing.T) {
 		t.Errorf("transcript mode = %v, want 0600", fi.Mode().Perm())
 	}
 }
+
+func TestProjectsAndRelink(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t, t.TempDir(), nil)
+	defer s.Close()
+	p, err := s.CreateProject(ctx, session.Project{Name: "repo", Root: "/old/repo", FirstCommit: "abc", DefaultEnvironmentID: "local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateProject(ctx, session.Project{Name: "dup", Root: "/old/repo"}); err == nil {
+		t.Error("two projects with one root")
+	}
+	ses, _ := s.CreateSession(ctx, session.Session{Title: "x", ProjectID: p.ID, ProjectRoot: p.Root, EnvironmentID: "local", BaseCommit: "abc"})
+	s.Append(ctx, ses.ID, event.GitState, json.RawMessage(`{"branch":"main","head":"abc"}`))
+
+	p.Root = "/new/repo"
+	if err := s.UpdateProject(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetSession(ctx, ses.ID)
+	if got.ProjectRoot != "/new/repo" || got.Branch != "main" || got.BaseCommit != "abc" || got.EnvironmentID != "local" {
+		t.Errorf("session after relink = %+v", got)
+	}
+	if found, err := s.ProjectByRoot(ctx, "/new/repo"); err != nil || found.ID != p.ID {
+		t.Errorf("ProjectByRoot = %+v, %v", found, err)
+	}
+	if _, err := s.ProjectByRoot(ctx, "/old/repo"); err != ErrProjectNotFound {
+		t.Errorf("old root still found: %v", err)
+	}
+}

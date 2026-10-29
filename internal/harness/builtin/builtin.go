@@ -43,7 +43,13 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 	if !mode.Valid() {
 		mode = permission.ModeAsk
 	}
-	return &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: tools()}, nil
+	var offered []*tool
+	for _, t := range tools() {
+		if !slices.Contains(p.DisabledTools, t.spec.Name) {
+			offered = append(offered, t)
+		}
+	}
+	return &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered}, nil
 }
 
 type session struct {
@@ -216,9 +222,12 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 	}
 	var prepared *call
 	var prepErr error
-	if t == nil {
+	switch {
+	case t == nil && slices.Contains(s.p.DisabledTools, c.ToolName):
+		prepErr = fmt.Errorf("the %s tool is turned off in this environment", c.ToolName)
+	case t == nil:
 		prepErr = fmt.Errorf("unknown tool %q", c.ToolName)
-	} else {
+	default:
 		prepared, prepErr = t.prepare(s, c.Input)
 	}
 	title := c.ToolName

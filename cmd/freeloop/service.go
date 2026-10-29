@@ -93,6 +93,34 @@ func (s *EngineService) DeleteRule(r permission.Rule) error {
 	return s.eng.DeleteRule(r)
 }
 
+func (s *EngineService) ListProjects(ctx context.Context) ([]engine.ProjectInfo, error) {
+	return s.eng.ListProjects(ctx)
+}
+
+func (s *EngineService) AddProject(ctx context.Context, root string) (session.Project, error) {
+	return s.eng.AddProject(ctx, root)
+}
+
+func (s *EngineService) RelinkProject(ctx context.Context, id, root string) (session.Project, error) {
+	return s.eng.RelinkProject(ctx, id, root)
+}
+
+func (s *EngineService) SetProjectEnvironment(ctx context.Context, projectID, envID string) error {
+	return s.eng.SetProjectEnvironment(ctx, projectID, envID)
+}
+
+func (s *EngineService) ListEnvironments() []engine.EnvironmentInfo {
+	return s.eng.ListEnvironments()
+}
+
+func (s *EngineService) SaveEnvironment(req engine.SaveEnvironmentRequest) (engine.EnvironmentInfo, error) {
+	return s.eng.SaveEnvironment(req)
+}
+
+func (s *EngineService) DeleteEnvironment(id string) error {
+	return s.eng.DeleteEnvironment(id)
+}
+
 func (s *EngineService) Config() config.Config {
 	return s.eng.Config()
 }

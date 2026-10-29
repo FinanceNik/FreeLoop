@@ -8,6 +8,7 @@ package environment
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -35,6 +36,9 @@ type Environment interface {
 // ExecSpec describes one shell command.
 type ExecSpec struct {
 	Command string
+	// Argv, when set, runs a program directly instead of Command through the
+	// shell; the app uses it for its own git queries.
+	Argv []string
 	// Cwd defaults to Root.
 	Cwd string
 	// Env adds variables to the environment's own.
@@ -100,6 +104,24 @@ type Guard interface {
 
 // ErrProtected wraps a Guard refusal.
 var ErrProtected = errors.New("protected path")
+
+// IsDir reports whether path is an existing directory on this machine.
+func IsDir(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
+}
+
+// Canonical returns path absolute, clean and with symlinks resolved when it
+// exists, the form project roots are stored in.
+func Canonical(path string) string {
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	return filepath.Clean(path)
+}
 
 // Spellings returns the clean form of p and, when it differs, its
 // symlink-free form, so a path check holds whichever one a caller resolves
