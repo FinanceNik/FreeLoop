@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
@@ -100,6 +102,11 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 		return err
 	}
 	e.stopRuntime(sid)
+	if envCfg, err := e.environment(cmp.Or(ses.EnvironmentID, DefaultEnvironmentID)); err == nil && envCfg.Kind == string(environment.KindDocker) {
+		if err := environment.RemoveContainer(ctx, containerName(sid)); err != nil {
+			log.Printf("engine: remove the container of deleted session %s: %v", sid, err)
+		}
+	}
 	if ses.Worktree != "" {
 		// Uncommitted work keeps the worktree; the branch always stays.
 		if ok, err := e.removeWorktree(ctx, ses); !ok {

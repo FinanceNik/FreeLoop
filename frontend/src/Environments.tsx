@@ -18,6 +18,12 @@ interface Form {
   added: { name: string; value: string }[];
   disabled: string[];
   defaultMode: string;
+  // Docker (ENV-005).
+  kind: string;
+  image: string;
+  devcontainer: boolean;
+  setup: string;
+  health: string;
 }
 
 function toForm(e?: EnvironmentInfo): Form {
@@ -32,6 +38,11 @@ function toForm(e?: EnvironmentInfo): Form {
     added: [],
     disabled: e?.disabledTools ?? [],
     defaultMode: e?.defaultMode ?? "",
+    kind: e?.kind ?? "local",
+    image: e?.image ?? "",
+    devcontainer: e?.devcontainer ?? false,
+    setup: e?.setup ?? "",
+    health: e?.health ?? "",
   };
 }
 
@@ -72,6 +83,11 @@ export default function Environments({ environments, onChanged, onError }: Props
       removeSecrets: form.remove,
       disabledTools: form.disabled,
       defaultMode: form.defaultMode,
+      kind: form.kind,
+      image: form.image,
+      devcontainer: form.devcontainer,
+      setup: form.setup,
+      health: form.health,
     })
       .then(() => {
         setForm(null);
@@ -105,6 +121,7 @@ export default function Environments({ environments, onChanged, onError }: Props
               <div className="muted">
                 {Object.keys(env.env ?? {}).length} variables · {(env.secretNames ?? []).length} secrets
                 {(env.secretNames ?? []).length > 0 && ` (${(env.secretNames ?? []).join(", ")})`}
+                {env.kind === "docker" && ` · Docker: ${env.devcontainer ? "the project's devcontainer.json" : env.image}`}
                 {(env.disabledTools ?? []).length > 0 && ` · tools off: ${(env.disabledTools ?? []).join(", ")}`}
                 {(env.rules ?? []).length > 0 &&
                   ` · rules: ${(env.rules ?? []).map((r) => `${r.effect} ${r.tool}${r.command ? `(${r.command})` : r.path ? `(${r.path})` : ""}`).join(", ")} (edit environments/${env.id}.yaml)`}
@@ -181,6 +198,40 @@ export default function Environments({ environments, onChanged, onError }: Props
               ))}
             </div>
           </fieldset>
+          <label>
+            Runs
+            <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+              <option value="local">On this Mac, in the project folder</option>
+              <option value="docker">In a Docker container per session</option>
+            </select>
+          </label>
+          {form.kind === "docker" && (
+            <fieldset>
+              <legend>Container</legend>
+              <p className="muted">
+                Each session gets its own container with its folder shared at the same path. Commands and external agents run inside it, so they see the
+                project and the image, not the rest of your files. Needs Docker Desktop, or Colima and the docker CLI.
+              </p>
+              <label className="row">
+                <input type="checkbox" checked={form.devcontainer} onChange={(e) => setForm({ ...form, devcontainer: e.target.checked })} /> Use the
+                project's .devcontainer/devcontainer.json
+              </label>
+              {!form.devcontainer && (
+                <label>
+                  Image
+                  <input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="node:22-bookworm" required />
+                </label>
+              )}
+              <label>
+                Setup command <span className="muted">(once, after the container is created{form.devcontainer ? "; defaults to postCreateCommand" : ""})</span>
+                <input value={form.setup} onChange={(e) => setForm({ ...form, setup: e.target.value })} placeholder="npm ci" />
+              </label>
+              <label>
+                Health check <span className="muted">(before every session start; a failure blocks the session)</span>
+                <input value={form.health} onChange={(e) => setForm({ ...form, health: e.target.value })} placeholder="node --version" />
+              </label>
+            </fieldset>
+          )}
           <label>
             New sessions start in
             <select value={form.defaultMode} onChange={(e) => setForm({ ...form, defaultMode: e.target.value })}>

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
@@ -27,6 +28,9 @@ type runtime struct {
 	sid       string
 	projectID string
 	env       environment.Environment
+	// host is the session's folder on this Mac, where the app's own git
+	// commands run even when env is a container.
+	host *environment.Local
 
 	// Git state, refreshed after tool calls and turns (SES-006).
 	gitMu   sync.Mutex
@@ -53,6 +57,13 @@ func (r *runtime) stop() {
 	}
 	if r.hs != nil {
 		r.hs.Close()
+	}
+	// A session's container stops with it and starts again on its next
+	// prompt.
+	if d, ok := r.env.(*environment.Docker); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		d.Stop(ctx)
+		cancel()
 	}
 }
 
@@ -107,16 +118,22 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if !environment.IsDir(ses.WorkRoot()) {
 		return nil, missingRoot(ses)
 	}
-	env, err := e.localEnv(ses.WorkRoot(), vars)
+	host, err := e.localEnv(ses.WorkRoot(), vars)
 	if err != nil {
 		return nil, err
+	}
+	var env environment.Environment = host
+	if envCfg.Kind == string(environment.KindDocker) {
+		if env, err = e.dockerEnv(ctx, ses, project, envCfg, vars, host); err != nil {
+			return nil, err
+		}
 	}
 	events, err := e.store.Events(ctx, sid, 0)
 	if err != nil {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
-	r := &runtime{env: env, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID}
+	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID}
 	lastCommands := []byte(`{"availableCommands":[]}`)
 	for _, ev := range events {
 		switch ev.Type {
@@ -205,7 +222,7 @@ func changesFiles(typ event.Type, data any) bool {
 func (e *Engine) refreshGit(r *runtime) {
 	r.gitMu.Lock()
 	defer r.gitMu.Unlock()
-	st := gitState(context.Background(), r.env, e.trusted(r.projectID))
+	st := gitState(context.Background(), r.host, e.trusted(r.projectID))
 	st.BaseCommit = r.base
 	if st == r.lastGit || (!st.Repo && !r.lastGit.Repo) {
 		return

@@ -84,7 +84,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 
 ## Limitations the user should know
 
-- The local environment is **not a sandbox**. In `bypass` mode an agent can do anything the user can. Use a Docker environment (v1) for repositories you do not trust.
+- The local environment is **not a sandbox**. In `bypass` mode an agent can do anything the user can. Use a Docker environment for repositories you do not trust: its commands and external agents run in a container that sees the project folder and the image, not the rest of your files. The container still has network access and runs as the image's user (often root), and it can change anything in the project folder, which is shared with the host.
 - **Unknown secrets are not redacted.** Redaction works on values the app knows (stored secrets). A password typed into a prompt is sent to the provider and stored in the transcript.
 - **Approval fatigue is real.** Rules exist to make trusted operations quiet so that prompts stay meaningful. Review rules periodically; the settings UI lists every rule with its source.
 - **Transcripts are plaintext** on disk, protected only by file permissions.

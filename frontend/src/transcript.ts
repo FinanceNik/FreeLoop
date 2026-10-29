@@ -114,7 +114,7 @@ export type Item =
   | { kind: "error"; key: string; rev: number; message: string }
   | { kind: "mode"; key: string; rev: number; mode: string }
   | { kind: "model"; key: string; rev: number; model: string; providerId: string }
-  | { kind: "notice"; key: string; rev: number; message: string }
+  | { kind: "notice"; key: string; rev: number; message: string; warn: boolean }
   | { kind: "compaction"; key: string; rev: number; reason: string; before: number; after: number; summary: string };
 
 export interface Usage {
@@ -262,6 +262,15 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         mode = d.currentModeId ?? mode;
         items.push({ kind: "mode", key, rev, mode: d.currentModeId });
         break;
+      case "env_health":
+        items.push({
+          kind: "notice",
+          key,
+          rev,
+          message: d.status === "healthy" ? `Environment ready${d.detail ? `: ${d.detail}` : ""}.` : `Environment unhealthy: ${d.detail ?? ""}`,
+          warn: d.status !== "healthy",
+        });
+        break;
       case "compaction_update":
         if (d.status === "completed") {
           items.push({ kind: "compaction", key, rev, reason: d.reason ?? "", before: d.contextTokens ?? 0, after: d.afterTokens ?? 0, summary: d.summary ?? "" });
@@ -269,7 +278,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         }
         break;
       case "notice":
-        items.push({ kind: "notice", key, rev, message: d.message ?? "" });
+        items.push({ kind: "notice", key, rev, message: d.message ?? "", warn: true });
         break;
       case "model_changed":
         items.push({ kind: "model", key, rev, model: d.model ?? "", providerId: d.providerId ?? "" });

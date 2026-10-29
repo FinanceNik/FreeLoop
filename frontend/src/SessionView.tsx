@@ -524,7 +524,7 @@ function ItemBody({ item, onError }: { item: Item; onError: (err: unknown) => vo
     case "model":
       return <div className="turn-end">Model changed to {item.model}</div>;
     case "notice":
-      return <div className="turn-end turn-end-warn">{item.message}</div>;
+      return <div className={item.warn ? "turn-end turn-end-warn" : "turn-end"}>{item.message}</div>;
     case "compaction":
       return (
         <details className="compaction">

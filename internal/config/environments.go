@@ -19,9 +19,10 @@ import (
 // EnvironmentsDir holds one YAML file per environment (ENV-002).
 const EnvironmentsDir = "environments"
 
-// Environment is one environment's settings. In M1 every environment is
-// local: it runs on this Mac in the session's project folder, and several
-// projects and sessions can share it.
+// Environment is one environment's settings. A local one runs on this Mac
+// in the session's project folder; a docker one runs each session in its
+// own container with the project bind-mounted (ENV-005). Several projects
+// and sessions can share an environment.
 type Environment struct {
 	ID   string `yaml:"-" json:"id"` // the file name without .yaml
 	Name string `yaml:"name" json:"name"`
@@ -38,6 +39,14 @@ type Environment struct {
 	// Rules apply to every session in the environment, between the global
 	// and the profile rules (SEC-002).
 	Rules []permission.Rule `yaml:"rules,omitempty" json:"rules"`
+	// Docker: the image to run, or Devcontainer to take image or Dockerfile
+	// and setup from the project's .devcontainer/devcontainer.json; Setup
+	// runs once after a container is created and Health before every
+	// session start (ENV-005, ENV-007).
+	Image        string `yaml:"image,omitempty" json:"image"`
+	Devcontainer bool   `yaml:"devcontainer,omitempty" json:"devcontainer"`
+	Setup        string `yaml:"setup,omitempty" json:"setup"`
+	Health       string `yaml:"health,omitempty" json:"health"`
 }
 
 var varName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -49,8 +58,10 @@ func (e Environment) Validate() error {
 		return fmt.Errorf("id %q must be lowercase letters, digits and dashes", e.ID)
 	case strings.TrimSpace(e.Name) == "":
 		return errors.New("name is required")
-	case e.Kind != "local":
-		return fmt.Errorf("kind %q is not supported yet; use local", e.Kind)
+	case e.Kind != "local" && e.Kind != "docker":
+		return fmt.Errorf("kind %q must be local or docker", e.Kind)
+	case e.Kind == "docker" && strings.TrimSpace(e.Image) == "" && !e.Devcontainer:
+		return errors.New("a docker environment needs an image, or devcontainer: true")
 	case e.DefaultMode != "" && (!permission.Mode(e.DefaultMode).Valid() || e.DefaultMode == string(permission.ModeBypass)):
 		return fmt.Errorf("defaultMode %q must be ask, accept_edits or plan", e.DefaultMode)
 	}

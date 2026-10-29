@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -32,6 +33,13 @@ type EnvironmentInfo struct {
 	DefaultMode   string            `json:"defaultMode"`
 	// Rules come from the environment's file (SEC-002); edit them there.
 	Rules []permission.Rule `json:"rules"`
+	// Docker settings (ENV-005).
+	Image        string `json:"image"`
+	Devcontainer bool   `json:"devcontainer"`
+	Setup        string `json:"setup"`
+	Health       string `json:"health"`
+	// Missing says why a docker environment cannot run here.
+	Missing string `json:"missing,omitempty"`
 }
 
 func envInfo(c config.Environment) EnvironmentInfo {
@@ -48,7 +56,14 @@ func envInfo(c config.Environment) EnvironmentInfo {
 	if rules == nil {
 		rules = []permission.Rule{}
 	}
-	return EnvironmentInfo{ID: c.ID, Name: c.Name, Kind: c.Kind, Env: env, SecretNames: names, DisabledTools: tools, DefaultMode: c.DefaultMode, Rules: rules}
+	info := EnvironmentInfo{ID: c.ID, Name: c.Name, Kind: c.Kind, Env: env, SecretNames: names, DisabledTools: tools, DefaultMode: c.DefaultMode, Rules: rules,
+		Image: c.Image, Devcontainer: c.Devcontainer, Setup: c.Setup, Health: c.Health}
+	if c.Kind == string(environment.KindDocker) {
+		if _, err := environment.FindDocker(); err != nil {
+			info.Missing = err.Error()
+		}
+	}
+	return info
 }
 
 func (e *Engine) loadEnvironments() {
@@ -97,6 +112,12 @@ type SaveEnvironmentRequest struct {
 	RemoveSecrets []string          `json:"removeSecrets"`
 	DisabledTools []string          `json:"disabledTools"`
 	DefaultMode   string            `json:"defaultMode"`
+	// Docker settings (ENV-005); Kind is local or docker.
+	Kind         string `json:"kind"`
+	Image        string `json:"image"`
+	Devcontainer bool   `json:"devcontainer"`
+	Setup        string `json:"setup"`
+	Health       string `json:"health"`
 }
 
 func secretRef(envID, name string) secrets.Ref {
@@ -133,7 +154,15 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 	}
 
 	// Rules are edited in the file; the form keeps them.
-	next := config.Environment{ID: cur.ID, Name: req.Name, Kind: cur.Kind, DefaultMode: req.DefaultMode, Secrets: map[string]string{}, Rules: cur.Rules}
+	kind := cur.Kind
+	if req.Kind != "" {
+		kind = req.Kind
+	}
+	next := config.Environment{ID: cur.ID, Name: req.Name, Kind: kind, DefaultMode: req.DefaultMode, Secrets: map[string]string{}, Rules: cur.Rules}
+	if kind == string(environment.KindDocker) {
+		next.Image, next.Devcontainer = strings.TrimSpace(req.Image), req.Devcontainer
+		next.Setup, next.Health = strings.TrimSpace(req.Setup), strings.TrimSpace(req.Health)
+	}
 	if len(req.Env) > 0 {
 		next.Env = map[string]string{}
 		for k, v := range req.Env {

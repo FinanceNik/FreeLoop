@@ -94,7 +94,7 @@ func (e *Engine) sessionGit(ctx context.Context, sid string) (environment.Enviro
 	r, ok := e.runtimes[sid]
 	e.mu.Unlock()
 	if ok {
-		return r.env, ses, nil
+		return r.host, ses, nil
 	}
 	if !environment.IsDir(ses.WorkRoot()) {
 		return nil, ses, missingRoot(ses)
