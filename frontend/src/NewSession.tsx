@@ -6,6 +6,7 @@ import {
   type EnvironmentInfo,
   type ModelCaps,
   type ModelInfo,
+  type Profile,
   type ProjectInfo,
   type ProviderInfo,
   type Session,
@@ -17,6 +18,7 @@ interface Props {
   providers: ProviderInfo[];
   projects: ProjectInfo[];
   environments: EnvironmentInfo[];
+  profiles: Profile[];
   defaults?: Defaults;
   onCreated: (s: Session) => void;
   onManageProviders: () => void;
@@ -31,12 +33,14 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, defaults, onCreated, onManageProviders, onProvidersChanged, onError }: Props) {
+export default function NewSession({ providers, projects, environments, profiles, defaults, onCreated, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers[0];
   const [root, setRoot] = useState("");
   const [environmentId, setEnvironmentId] = useState(defaults?.environmentId ?? "");
   const [mode, setMode] = useState("");
+  const [profileId, setProfileId] = useState(defaults?.profileId || "default");
+  const [makeDefault, setMakeDefault] = useState(false);
   const [providerId, setProviderId] = useState(initial?.id ?? "");
   const [model, setModel] = useState((initial && initial.id === defaults?.providerId && defaults?.model) || initial?.defaultModel || "");
   const [title, setTitle] = useState("");
@@ -89,8 +93,12 @@ export default function NewSession({ providers, projects, environments, defaults
   // A known project preselects its default environment.
   const project = projects.find((p) => p.root === root);
   useEffect(() => {
-    if (project) setEnvironmentId(project.defaultEnvironmentId || defaults?.environmentId || "local");
+    if (!project) return;
+    setEnvironmentId(project.defaultEnvironmentId || defaults?.environmentId || "local");
+    pickProfile(project.defaultProfileId || defaults?.profileId || "default");
+    setMakeDefault(false);
   }, [project?.id]);
+  const profile = profiles.find((p) => p.id === profileId);
   const env = environments.find((e) => e.id === (environmentId || "local"));
 
   // Favorites and hidden models (PRV-003).
@@ -114,6 +122,21 @@ export default function NewSession({ providers, projects, environments, defaults
     setModel(providers.find((p) => p.id === id)?.defaultModel ?? "");
   };
 
+  // A profile (HRN-003) brings its provider and model; the fields stay
+  // editable.
+  const pickProfile = (id: string) => {
+    setProfileId(id);
+    const p = profiles.find((x) => x.id === id);
+    if (!p) return;
+    const prov = providers.find((x) => x.id === p.provider);
+    if (prov) {
+      setProviderId(prov.id);
+      setModel(p.model || prov.defaultModel);
+    } else if (p.model) {
+      setModel(p.model);
+    }
+  };
+
   const override = (tools: boolean | null) =>
     EngineService.SetToolsOverride(providerId, model.trim(), tools)
       .then(() => loadCaps(false))
@@ -127,8 +150,11 @@ export default function NewSession({ providers, projects, environments, defaults
   const create = (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    EngineService.CreateSession({ title, projectRoot: root, environmentId, providerId, model: model.trim(), mode })
-      .then(onCreated)
+    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId, model: model.trim(), mode })
+      .then(async (s) => {
+        if (makeDefault && s.projectId) await EngineService.SetProjectProfile(s.projectId, profileId).catch(onError);
+        onCreated(s);
+      })
       .catch(onError)
       .finally(() => setBusy(false));
   };
@@ -174,6 +200,27 @@ export default function NewSession({ providers, projects, environments, defaults
               Choose…
             </button>
           </div>
+        </label>
+        <label>
+          Profile
+          <select value={profileId} onChange={(e) => pickProfile(e.target.value)}>
+            <optgroup label="Built-in harness">
+              {profiles
+                .filter((p) => p.harness === "builtin")
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {project && project.defaultProfileId === p.id ? " (project default)" : ""}
+                  </option>
+                ))}
+            </optgroup>
+          </select>
+          {profile?.description && <span className="muted">{profile.description}</span>}
+          {project && (project.defaultProfileId || "default") !== profileId && (
+            <span className="row muted">
+              <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} /> Make it {project.name}'s default
+            </span>
+          )}
         </label>
         <label>
           Provider
@@ -288,7 +335,9 @@ export default function NewSession({ providers, projects, environments, defaults
         <label>
           Permission mode
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="">From the environment ({MODES.find((m) => m.id === (env?.defaultMode || "ask"))?.name})</option>
+            <option value="">
+              {profile?.mode ? "From the profile" : "From the environment"} ({MODES.find((m) => m.id === (profile?.mode || env?.defaultMode || "ask"))?.name})
+            </option>
             {MODES.filter((m) => m.id !== "bypass").map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}

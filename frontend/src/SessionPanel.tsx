@@ -163,6 +163,7 @@ function Info({ session, view, turns, provider, environment, configVersion, onEr
   const rows: [string, ReactNode][] = [
     ["Status", view.status ?? session.status],
     ["Harness", session.harnessId],
+    ["Profile", session.profileId || "default"],
     ["Provider", provider?.name ?? session.providerId],
     ["Model", <code>{session.model}</code>],
     ["Mode", MODES.find((m) => m.id === mode)?.name ?? mode],

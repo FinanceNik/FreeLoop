@@ -53,6 +53,8 @@ type Defaults struct {
 	ProviderID    string `yaml:"providerId,omitempty" json:"providerId"`
 	Model         string `yaml:"model,omitempty" json:"model"`
 	EnvironmentID string `yaml:"environmentId,omitempty" json:"environmentId"`
+	// ProfileID is used when the project has no default profile.
+	ProfileID string `yaml:"profileId,omitempty" json:"profileId"`
 }
 
 // Permissions holds global permission settings.
@@ -110,8 +112,10 @@ func Save(dir string, c Config) error {
 // Issue is a problem found in a config file. Issues are shown in the UI; the
 // app keeps running on defaults.
 type Issue struct {
-	File    string `json:"file"`
-	Field   string `json:"field,omitempty"`
+	File  string `json:"file"`
+	Field string `json:"field,omitempty"`
+	// Line is the line in File the problem is on, when known.
+	Line    int    `json:"line,omitempty"`
 	Message string `json:"message"`
 }
 

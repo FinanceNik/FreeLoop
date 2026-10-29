@@ -36,14 +36,16 @@ type Session struct {
 	EnvironmentID string `json:"environmentId"`
 	// BaseCommit is HEAD when the session started, for the diff panel;
 	// Branch is the latest branch seen (SES-006).
-	BaseCommit string    `json:"baseCommit"`
-	Branch     string    `json:"branch"`
-	ProviderID string    `json:"providerId"`
-	Model      string    `json:"model"`
-	Mode       string    `json:"mode"`
-	LastSeq    int64     `json:"lastSeq"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	BaseCommit string `json:"baseCommit"`
+	Branch     string `json:"branch"`
+	ProviderID string `json:"providerId"`
+	Model      string `json:"model"`
+	Mode       string `json:"mode"`
+	// ProfileID names the harness profile the session runs with (HRN-003).
+	ProfileID string    `json:"profileId"`
+	LastSeq   int64     `json:"lastSeq"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Project is a repository the user works in (ENV-003). It is identified by
@@ -56,8 +58,10 @@ type Project struct {
 	FirstCommit string `json:"firstCommit"`
 	Remote      string `json:"remote"`
 	// DefaultEnvironmentID is preselected for new sessions.
-	DefaultEnvironmentID string    `json:"defaultEnvironmentId"`
-	CreatedAt            time.Time `json:"createdAt"`
+	DefaultEnvironmentID string `json:"defaultEnvironmentId"`
+	// DefaultProfileID is preselected for new sessions (HRN-004).
+	DefaultProfileID string    `json:"defaultProfileId"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 var idEncoding = base32.NewEncoding("0123456789abcdefghjkmnpqrstvwxyz").WithPadding(base32.NoPadding)

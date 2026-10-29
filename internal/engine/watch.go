@@ -44,7 +44,7 @@ func (e *Engine) watch(interval time.Duration) {
 // the provider and environment they started with; new sessions and the next
 // permission check see the new settings.
 func (e *Engine) reload(changed []string) {
-	envs := false
+	envs, profiles := false, false
 	for _, f := range changed {
 		switch {
 		case f == config.FileName:
@@ -64,11 +64,16 @@ func (e *Engine) reload(changed []string) {
 			e.rules.reload()
 		case strings.HasPrefix(f, config.EnvironmentsDir+string(filepath.Separator)):
 			envs = true
+		case strings.HasPrefix(f, config.ProfilesDir+string(filepath.Separator)):
+			profiles = true
 		default:
 			log.Printf("engine: no reload for %s", f)
 		}
 	}
 	if envs {
 		e.loadEnvironments()
+	}
+	if profiles {
+		e.loadProfiles()
 	}
 }

@@ -38,7 +38,15 @@ type Params struct {
 	// DisabledTools are not offered to the model (the environment's tool
 	// list, ENV-002).
 	DisabledTools []string
-	Emit          Emitter
+	// Profile settings (HRN-003): text added to the system prompt, the only
+	// tools offered when set, a cap on model calls per prompt (the
+	// harness's own when 0), and whether project instruction files are
+	// left out.
+	SystemPrompt   string
+	Tools          []string
+	MaxTurns       int
+	NoInstructions bool
+	Emit           Emitter
 }
 
 // Harness creates sessions.

@@ -28,6 +28,8 @@ type Scope string
 const (
 	ScopeGlobal  Scope = "global"
 	ScopeSession Scope = "session"
+	// ScopeProfile rules come from a harness profile (HRN-003).
+	ScopeProfile Scope = "profile"
 )
 
 // Rule is Freeloop's canonical rule (OQ-010): a tool, and optionally a

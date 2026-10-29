@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -401,5 +402,39 @@ func TestFailedTurnSetsErrorStatus(t *testing.T) {
 	}
 	if f.log.count(event.Error) != 1 {
 		t.Errorf("error events = %d", f.log.count(event.Error))
+	}
+}
+
+// HRN-003: a profile's tool list and turn cap hold even when the model
+// calls a tool it was not offered.
+func TestProfileToolsAndTurnCap(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+	env, _ := environment.NewLocal(environment.LocalOptions{ID: "local", Root: root, Guard: policy.Guard(root), Shell: []string{"sh", "-c"}})
+	l := &log{}
+	prov := scripted.New("p",
+		scripted.Step{Calls: []scripted.Call{{Name: "write_file", Input: map[string]any{"path": "x.txt", "content": "x"}}}},
+		scripted.Step{Calls: []scripted.Call{{Name: "list_dir", Input: map[string]any{"path": "."}}}},
+		scripted.Step{Text: "done"},
+	)
+	broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { l.emit(typ, data) })
+	s, err := Harness{}.NewSession(context.Background(), harness.Params{
+		SessionID: "s", Env: env, Broker: broker, Provider: prov, Model: "scripted", Mode: permission.ModeAcceptEdits,
+		Tools: []string{"list_dir"}, MaxTurns: 2, Emit: l.emit,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reason, err := s.Prompt(context.Background(), harness.Prompt{Text: "go"})
+	if err != nil || reason != harness.StopMaxTurns {
+		t.Fatalf("Prompt = %s, %v; want max_turns", reason, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "x.txt")); err == nil {
+		t.Error("a tool outside the profile ran")
+	}
+	if !strings.Contains(fmt.Sprint(prov.Requests()[1].Messages), "not part of this session's profile") {
+		t.Error("the model was not told the tool is outside the profile")
 	}
 }

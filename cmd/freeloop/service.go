@@ -88,6 +88,24 @@ func (s *EngineService) SuggestCommitMessage(ctx context.Context, sessionID stri
 	return s.eng.SuggestCommitMessage(ctx, sessionID)
 }
 
+// ListProfiles, SaveProfile, DeleteProfile and SetProjectProfile manage
+// harness profiles (HRN-003, HRN-004).
+func (s *EngineService) ListProfiles() []config.Profile {
+	return s.eng.ListProfiles()
+}
+
+func (s *EngineService) SaveProfile(p config.Profile) (config.Profile, error) {
+	return s.eng.SaveProfile(p)
+}
+
+func (s *EngineService) DeleteProfile(id string) error {
+	return s.eng.DeleteProfile(id)
+}
+
+func (s *EngineService) SetProjectProfile(ctx context.Context, projectID, profileID string) error {
+	return s.eng.SetProjectProfile(ctx, projectID, profileID)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

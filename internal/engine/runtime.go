@@ -81,6 +81,14 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if err != nil {
 		return nil, err
 	}
+	prof, err := e.profile(ses.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	effort := prof.Effort
+	if effort == "" {
+		effort = "high"
+	}
 	vars, err := e.resolveEnv(envCfg)
 	if err != nil {
 		return nil, err
@@ -104,15 +112,19 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		}
 	}
 	hs, err := builtin.Harness{}.NewSession(ctx, harness.Params{
-		SessionID:     sid,
-		Env:           env,
-		Broker:        e.broker,
-		Provider:      p.p,
-		Model:         ses.Model,
-		Effort:        "high",
-		Mode:          permission.Mode(ses.Mode),
-		History:       builtin.Restore(events),
-		DisabledTools: envCfg.DisabledTools,
+		SessionID:      sid,
+		Env:            env,
+		Broker:         e.broker,
+		Provider:       p.p,
+		Model:          ses.Model,
+		Effort:         effort,
+		Mode:           permission.Mode(ses.Mode),
+		History:        builtin.Restore(events),
+		DisabledTools:  envCfg.DisabledTools,
+		SystemPrompt:   prof.SystemPrompt,
+		Tools:          prof.Tools,
+		MaxTurns:       prof.MaxTurns,
+		NoInstructions: prof.Instructions == "none",
 		Emit: func(typ event.Type, data any) {
 			e.emit(sid, typ, data)
 			if changesFiles(typ, data) {

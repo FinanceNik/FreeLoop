@@ -9,6 +9,7 @@ import {
   type Config,
   type EnvironmentInfo,
   type Issue,
+  type Profile,
   type ProjectInfo,
   type ProviderInfo,
   type Session,
@@ -21,6 +22,7 @@ import Rules from "./Rules.tsx";
 import Environments from "./Environments.tsx";
 import Settings from "./Settings.tsx";
 import Attention from "./Attention.tsx";
+import Profiles from "./Profiles.tsx";
 
 type Screen =
   | { kind: "session"; id: string }
@@ -30,6 +32,7 @@ type Screen =
   | { kind: "environments" }
   | { kind: "settings" }
   | { kind: "attention" }
+  | { kind: "profiles" }
   | { kind: "none" };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -45,6 +48,7 @@ export default function App() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [environments, setEnvironments] = useState<EnvironmentInfo[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [config, setConfig] = useState<Config | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "none" });
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
@@ -96,6 +100,10 @@ export default function App() {
       refreshAttention();
     }, 100);
   };
+  const refreshProfiles = () =>
+    EngineService.ListProfiles()
+      .then((list) => setProfiles(list ?? []))
+      .catch(report);
   const refreshProviders = () =>
     EngineService.ListProviders()
       .then((list) => setProviders(list ?? []))
@@ -158,6 +166,7 @@ export default function App() {
         refreshConfig();
         refreshProviders();
         refreshEnvironments();
+        refreshProfiles();
         setConfigVersion((v) => v + 1);
       }),
     [],
@@ -170,6 +179,7 @@ export default function App() {
     refreshEnvironments();
     refreshConfig();
     refreshAttention();
+    refreshProfiles();
 
     return Events.On(EVENT_NAME, ({ data: ev }) => {
       ingest(ev.sid, [ev]);
@@ -307,6 +317,7 @@ export default function App() {
         </nav>
         <footer className="row">
           <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
+          <button onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
           <button onClick={() => setScreen({ kind: "environments" })}>Environments</button>
           <button onClick={() => setScreen({ kind: "rules" })}>Rules</button>
           <button onClick={() => setScreen({ kind: "settings" })}>Settings</button>
@@ -321,6 +332,7 @@ export default function App() {
               {issues.map((i, n) => (
                 <li key={n}>
                   {i.file}
+                  {i.line ? `:${i.line}` : ""}
                   {i.field ? ` (${i.field})` : ""}: {i.message}
                 </li>
               ))}
@@ -354,6 +366,7 @@ export default function App() {
             providers={providers}
             projects={projects}
             environments={environments}
+            profiles={profiles}
             defaults={config?.defaults}
             onManageProviders={() => setScreen({ kind: "providers" })}
             onProvidersChanged={refreshProviders}
@@ -366,10 +379,21 @@ export default function App() {
         )}
         {screen.kind === "providers" && <Providers providers={providers} onChanged={refreshProviders} onError={report} />}
         {screen.kind === "settings" && config && (
-          <Settings config={config} providers={providers} environments={environments} onSaved={setConfig} onError={report} />
+          <Settings config={config} providers={providers} environments={environments} profiles={profiles} onSaved={setConfig} onError={report} />
         )}
         {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
         {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}
+        {screen.kind === "profiles" && (
+          <Profiles
+            profiles={profiles}
+            providers={providers}
+            onChanged={() => {
+              refreshProfiles();
+              refreshConfig();
+            }}
+            onError={report}
+          />
+        )}
         {screen.kind === "attention" && <Attention items={attention} onOpen={openSession} onChanged={refreshAttention} onError={report} />}
         {screen.kind === "none" && (
           <div className="empty">

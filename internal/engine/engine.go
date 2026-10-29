@@ -73,6 +73,7 @@ type Engine struct {
 
 	mu        sync.Mutex
 	envs      []config.Environment
+	profiles  []config.Profile
 	providers *providerRegistry
 	runtimes  map[string]*runtime
 	streams   map[string]*streamBuf
@@ -112,8 +113,10 @@ func Open(opts Options) (*Engine, error) {
 	}
 	e.broker = permission.NewBroker(permission.NewPolicy(opts.Home, opts.DataDir), e.emit)
 	e.rules = newRuleStore(opts.DataDir, func(issues []config.Issue) { e.setIssues(issueRules, issues) })
+	e.rules.profileRules = e.profileRules
 	e.broker.SetRules(e.rules, e.rules)
 	e.loadEnvironments()
+	e.loadProfiles()
 	if err := e.loadProviders(); err != nil {
 		e.store.Close()
 		return nil, err
@@ -188,9 +191,10 @@ const (
 	issueEnvironments = "environments"
 	issueRules        = "rules"
 	issueCapabilities = "capabilities"
+	issueProfiles     = "profiles"
 )
 
-var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issueRules, issueCapabilities}
+var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issueProfiles, issueRules, issueCapabilities}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()
@@ -347,9 +351,13 @@ type CreateSessionRequest struct {
 	ProjectRoot string `json:"projectRoot"`
 	// EnvironmentID defaults to the project's default environment.
 	EnvironmentID string `json:"environmentId"`
-	ProviderID    string `json:"providerId"`
-	Model         string `json:"model"`
-	Mode          string `json:"mode"`
+	// ProfileID defaults to the project's default profile, then to the
+	// default profile; the profile fills in provider, model and mode when
+	// they are empty (HRN-003, HRN-004).
+	ProfileID  string `json:"profileId"`
+	ProviderID string `json:"providerId"`
+	Model      string `json:"model"`
+	Mode       string `json:"mode"`
 }
 
 // CreateSession creates an idle session and records its initial status as
@@ -378,7 +386,27 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if err != nil {
 		return session.Session{}, err
 	}
+	profileID := req.ProfileID
+	if profileID == "" {
+		profileID = project.DefaultProfileID
+	}
+	if profileID == "" {
+		profileID = e.Config().Defaults.ProfileID
+	}
+	prof, err := e.profile(profileID)
+	if err != nil {
+		return session.Session{}, err
+	}
+	if req.ProviderID == "" {
+		req.ProviderID = prof.Provider
+	}
+	if req.ProviderID == "" {
+		return session.Session{}, errors.New("choose a provider")
+	}
 	mode := permission.Mode(req.Mode)
+	if mode == "" {
+		mode = permission.Mode(prof.Mode)
+	}
 	if mode == "" {
 		mode = permission.Mode(envCfg.DefaultMode)
 	}
@@ -390,6 +418,9 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 		return session.Session{}, err
 	}
 	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = prof.Model
+	}
 	if model == "" {
 		model = p.cfg.DefaultModel
 	}
@@ -408,7 +439,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	git.BaseCommit = git.Head
 	ses, err := e.store.CreateSession(ctx, session.Session{
 		Title: title, HarnessID: builtin.ID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
-		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode),
+		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
 	})
 	if err != nil {
 		return session.Session{}, err

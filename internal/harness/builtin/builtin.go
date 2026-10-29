@@ -46,7 +46,9 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 	}
 	var offered []*tool
 	for _, t := range tools() {
-		if !slices.Contains(p.DisabledTools, t.spec.Name) {
+		// present_plan belongs to plan mode, not to a profile's tool set.
+		allowed := len(p.Tools) == 0 || slices.Contains(p.Tools, t.spec.Name) || t.kind == permission.KindSwitchMode
+		if allowed && !slices.Contains(p.DisabledTools, t.spec.Name) {
 			offered = append(offered, t)
 		}
 	}
@@ -193,7 +195,11 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 }
 
 func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
-	for range MaxTurns {
+	limit := s.p.MaxTurns
+	if limit <= 0 {
+		limit = MaxTurns
+	}
+	for range limit {
 		if ctx.Err() != nil {
 			return harness.StopCancelled, nil
 		}
@@ -301,6 +307,8 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 	switch {
 	case t == nil && slices.Contains(s.p.DisabledTools, c.ToolName):
 		prepErr = fmt.Errorf("the %s tool is turned off in this environment", c.ToolName)
+	case t == nil && len(s.p.Tools) > 0 && slices.Contains(ToolNames(), c.ToolName):
+		prepErr = fmt.Errorf("the %s tool is not part of this session's profile", c.ToolName)
 	case t == nil:
 		prepErr = fmt.Errorf("unknown tool %q", c.ToolName)
 	default:
@@ -391,6 +399,12 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 	case permission.ModeBypass:
 		sb.WriteString("\n# Mode: bypass\n\nTool calls run without asking the user. Be careful with destructive commands.\n")
 	}
+	if s.p.SystemPrompt != "" {
+		fmt.Fprintf(&sb, "\n# Profile instructions\n\n%s\n", strings.TrimSpace(s.p.SystemPrompt))
+	}
+	if s.p.NoInstructions {
+		return sb.String()
+	}
 	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
 		// A link that leads out of the project is not followed silently.
 		if !s.env.Contains(name) {
@@ -429,6 +443,15 @@ const basePrompt = `You are the built-in coding agent of Freeloop, working in th
 - Some tool calls need the user's approval. If a call is denied, do not repeat it; pick another approach or ask the user.
 - Never read or write credentials, keys or files outside the project unless the user asks you to.
 `
+
+// ToolNames lists the built-in tools, for validating profiles.
+func ToolNames() []string {
+	var out []string
+	for _, t := range tools() {
+		out = append(out, t.spec.Name)
+	}
+	return out
+}
 
 // Restore rebuilds history from a session's history_message events.
 func Restore(events []event.Event) []provider.Message {

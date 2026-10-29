@@ -1,15 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, type Config, type EnvironmentInfo, type ProviderInfo } from "./api.ts";
+import { EngineService, type Config, type EnvironmentInfo, type Profile, type ProviderInfo } from "./api.ts";
 
 interface Props {
   config: Config;
   providers: ProviderInfo[];
   environments: EnvironmentInfo[];
+  profiles: Profile[];
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
 }
 
-export default function Settings({ config, providers, environments, onSaved, onError }: Props) {
+export default function Settings({ config, providers, environments, profiles, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
   useEffect(() => setForm(config), [config]);
@@ -92,6 +93,19 @@ export default function Settings({ config, providers, environments, onSaved, onE
             <option value="">Local</option>
             {environments
               .filter((x) => x.id !== "local")
+              .map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
+          Profile <span className="muted">(for projects without their own)</span>
+          <select value={form.defaults.profileId} onChange={(e) => setForm({ ...form, defaults: { ...form.defaults, profileId: e.target.value } })}>
+            <option value="">Default</option>
+            {profiles
+              .filter((x) => x.id !== "default")
               .map((x) => (
                 <option key={x.id} value={x.id}>
                   {x.name}

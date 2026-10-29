@@ -25,6 +25,9 @@ type ruleStore struct {
 	global  []permission.Rule
 	mod     time.Time
 	session map[string][]permission.Rule
+	// profileRules returns the rules of a session's profile; called
+	// without mu held.
+	profileRules func(sid string) []permission.Rule
 	// broken is set while rules.yaml has errors: the broker fails closed and
 	// the file is not rewritten, so no hand-written rule is lost.
 	broken error
@@ -68,11 +71,18 @@ func (s *ruleStore) reloadLocked(force bool) {
 	}
 }
 
+// Rules returns the rules in force for sid: global, then its profile's,
+// then its own.
 func (s *ruleStore) Rules(sid string) ([]permission.Rule, error) {
+	var profile []permission.Rule
+	if sid != "" && s.profileRules != nil {
+		profile = s.profileRules(sid)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reloadLocked(false)
-	return append(slices.Clone(s.global), s.session[sid]...), s.broken
+	out := append(slices.Clone(s.global), profile...)
+	return append(out, s.session[sid]...), s.broken
 }
 
 func (s *ruleStore) AddRule(sid string, r permission.Rule) error {
