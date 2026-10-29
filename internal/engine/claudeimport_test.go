@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -42,12 +43,18 @@ func TestClaudeImport(t *testing.T) {
 	os.WriteFile(filepath.Join(home, ".claude.json"), []byte(claudeJSON), 0o600)
 	os.MkdirAll(filepath.Join(home, ".claude"), 0o700)
 	os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(settings), 0o600)
+	trusted, untrusted := t.TempDir(), t.TempDir()
+	for _, root := range []string{trusted, untrusted} {
+		os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(`{"mcpServers": {"sentry": {"type": "http", "url": "https://mcp.sentry.dev/mcp"}}}`), 0o644)
+	}
+	e.SetProjectTrust(ctx, trusted, true)
+	e.AddProject(ctx, untrusted)
 
 	p, err := e.PreviewClaudeImport(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Sources) != 2 || len(p.Missing) != 0 {
+	if len(p.Sources) != 3 || len(p.Missing) != 0 || !slices.Contains(p.Sources, filepath.Join(environment.Canonical(trusted), ".mcp.json")) {
 		t.Fatalf("sources = %v, missing = %v", p.Sources, p.Missing)
 	}
 	by := map[string]ImportItem{}
@@ -60,6 +67,9 @@ func TestClaudeImport(t *testing.T) {
 	}
 	if by["linear"].Status != "new" || !slices.Equal(by["linear"].Secrets, []string{"Authorization"}) {
 		t.Errorf("linear = %+v", by["linear"])
+	}
+	if by["sentry"].Status != "new" || by["sentry"].server.Server.Enabled {
+		t.Errorf("project server = %+v", by["sentry"])
 	}
 	if by["old"].Status != "unsupported" || by["db"].Status != "new" {
 		t.Errorf("old = %+v, db = %+v", by["old"], by["db"])
@@ -84,7 +94,7 @@ func TestClaudeImport(t *testing.T) {
 		keys = append(keys, it.Key)
 	}
 	n, err := e.ApplyClaudeImport(ctx, keys)
-	if err != nil || n != 9 { // 3 servers, 6 rules
+	if err != nil || n != 10 { // 4 servers, 6 rules
 		t.Fatalf("applied %d, %v", n, err)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, config.MCPFileName))

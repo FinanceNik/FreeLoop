@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 )
 
@@ -121,6 +122,40 @@ func (e *Engine) PreviewClaudeImport(ctx context.Context) (ClaudeImport, error) 
 		}
 	} else {
 		out.Missing = append(out.Missing, path)
+	}
+
+	// A trusted project's .mcp.json (SEC-006: untrusted ones are not read).
+	if projects, err := e.store.ListProjects(ctx); err == nil {
+		for _, proj := range projects {
+			if !proj.Trusted || !environment.IsDir(proj.Root) {
+				continue
+			}
+			env, err := e.localEnv(proj.Root, nil)
+			if err != nil {
+				continue
+			}
+			b, err := env.FS().ReadFile(".mcp.json")
+			if err != nil {
+				continue
+			}
+			var pj struct {
+				MCPServers map[string]claudeServer `json:"mcpServers"`
+			}
+			path := filepath.Join(proj.Root, ".mcp.json")
+			if err := json.Unmarshal(b, &pj); err != nil {
+				out.Items = append(out.Items, ImportItem{Key: "mcp:" + path, Kind: "mcp", Label: path, Status: "unsupported", Destination: "none", Note: err.Error(), Source: path, Secrets: []string{}})
+				continue
+			}
+			out.Sources = append(out.Sources, path)
+			for _, name := range slices.Sorted(maps.Keys(pj.MCPServers)) {
+				it := e.mcpItem(name, pj.MCPServers[name], path)
+				it.Note = strings.TrimSpace(it.Note + " From the project " + proj.Name + "; here it is a server like any other, off until a profile or you turn it on.")
+				if it.server != nil {
+					it.server.Server.Enabled = false
+				}
+				out.Items = append(out.Items, it)
+			}
+		}
 	}
 
 	var settings struct {
