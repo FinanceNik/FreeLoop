@@ -29,6 +29,8 @@ type Environment interface {
 	// Resolve turns a path relative to Root (or absolute) into a clean
 	// absolute path. It does not check policy.
 	Resolve(path string) string
+	// Contains reports whether path resolves to a location inside Root.
+	Contains(path string) bool
 	Exec(ctx context.Context, spec ExecSpec) (ExecResult, error)
 	FS() FileSystem
 }
@@ -126,10 +128,14 @@ func Canonical(path string) string {
 // Spellings returns the clean form of p and, when it differs, its
 // symlink-free form, so a path check holds whichever one a caller resolves
 // to (on macOS /var is a link to /private/var, for example).
+//
+// The existing part of p is resolved, so a protected directory that does
+// not exist yet (a ~/.ssh created after the app started) is still covered
+// under its resolved spelling.
 func Spellings(p string) []string {
 	p = filepath.Clean(p)
 	out := []string{p}
-	if real, err := filepath.EvalSymlinks(p); err == nil && real != p {
+	if real := realTarget(p); real != p {
 		out = append(out, real)
 	}
 	return out

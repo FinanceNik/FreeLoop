@@ -290,3 +290,43 @@ func TestDisabledToolsAreNotOffered(t *testing.T) {
 		t.Errorf("result = %+v", r)
 	}
 }
+
+// Review finding: a crash during a tool call left a tool_use without a
+// result, which the API rejects on every later prompt.
+func TestRestoredHistoryWithUnansweredCallIsRepaired(t *testing.T) {
+	f := setup(t, permission.ModeAsk, scripted.Step{Text: "ok"})
+	s := f.sess.(*session)
+	history := []provider.Message{
+		{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: "run it"}}},
+		{Role: provider.RoleAssistant, Parts: []provider.Part{{Type: provider.PartToolUse, ToolCallID: "c1", ToolName: "shell", Input: json.RawMessage(`{"command":"make"}`)}}},
+	}
+	p := s.p
+	p.History = history
+	sess, err := Harness{}.NewSession(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sess.Prompt(context.Background(), "continue"); err != nil {
+		t.Fatal(err)
+	}
+	msgs := f.prov.Requests()[0].Messages
+	if len(msgs) != 3 || msgs[2].Parts[0].Type != provider.PartToolResult || msgs[2].Parts[0].ToolCallID != "c1" {
+		t.Fatalf("history sent = %+v", msgs)
+	}
+	if msgs[2].Parts[len(msgs[2].Parts)-1].Text != "continue" {
+		t.Errorf("the new prompt was not appended after the repair: %+v", msgs[2])
+	}
+}
+
+func TestInstructionFileLinkedOutsideIsNotRead(t *testing.T) {
+	f := setup(t, permission.ModeAsk, scripted.Step{Text: "ok"})
+	outside := filepath.Join(t.TempDir(), "notes.md")
+	os.WriteFile(outside, []byte("PRIVATE NOTES"), 0o600)
+	os.Symlink(outside, filepath.Join(f.root, "AGENTS.md"))
+	if _, err := f.sess.Prompt(context.Background(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(f.prov.Requests()[0].System, "PRIVATE NOTES") {
+		t.Error("an AGENTS.md linked outside the project went into the system prompt")
+	}
+}

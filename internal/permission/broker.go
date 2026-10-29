@@ -189,8 +189,9 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 	}
 
 	var rules []Rule
+	var rulesErr error
 	if b.rules != nil {
-		rules = b.rules.Rules(req.SessionID)
+		rules, rulesErr = b.rules.Rules(req.SessionID)
 	}
 	match := func(effect Effect) *Rule {
 		for i := range rules {
@@ -225,6 +226,14 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 
 	if r := match(Deny); r != nil {
 		return byRule(r)
+	}
+	// Rules that cannot be read may include deny rules: fail closed and
+	// ask for everything except reads inside the project.
+	if rulesErr != nil {
+		if (req.Kind.reads() || req.Kind == KindThink) && !outside {
+			return allow(ActorPolicy, "reads inside the project are allowed")
+		}
+		return Decision{}, false
 	}
 
 	switch pc.Mode {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -207,5 +208,39 @@ func TestHandEditedRulesAreReloaded(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("invalid rule not reported: %+v", e.ConfigIssues())
+	}
+}
+
+// Review finding: a malformed rules.yaml dropped every rule and the next
+// "Allow always" rewrote the file with only the new rule.
+func TestBrokenRulesFileFailsClosedAndIsNotOverwritten(t *testing.T) {
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	good := "version: 1\nrules:\n  - {effect: deny, tool: shell, command: \"rm *\"}\n"
+	os.WriteFile(filepath.Join(dir, "rules.yaml"), []byte(good), 0o600)
+	bump := func() {
+		future := time.Now().Add(time.Duration(len(e.ConfigIssues())+1) * time.Second)
+		os.Chtimes(filepath.Join(dir, "rules.yaml"), future, future)
+	}
+	bump()
+	if rules := e.ListRules(""); len(rules) != 1 {
+		t.Fatalf("rules = %+v", rules)
+	}
+
+	broken := good + "  - {effect: deny, tool: shell, comand: typo}\n"
+	os.WriteFile(filepath.Join(dir, "rules.yaml"), []byte(broken), 0o600)
+	bump()
+	if rules := e.ListRules(""); len(rules) != 1 || rules[0].Command != "rm *" {
+		t.Errorf("last good rules not kept: %+v", rules)
+	}
+	if err := e.AddRule(permission.Rule{Effect: permission.Allow, Tool: "shell", Command: "ls"}); err == nil {
+		t.Error("a rule was added while rules.yaml has errors")
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "rules.yaml")); string(b) != broken {
+		t.Errorf("rules.yaml was rewritten:\n%s", b)
+	}
+	if _, err := e.rules.Rules(""); err == nil {
+		t.Error("the broker is not told that rules are broken")
 	}
 }

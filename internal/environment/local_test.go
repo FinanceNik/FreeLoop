@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -193,5 +194,69 @@ func TestExecArgv(t *testing.T) {
 	res, err := l.Exec(context.Background(), ExecSpec{Argv: []string{"printf", "%s|%s", "a b", "$HOME"}})
 	if err != nil || res.Output != "a b|$HOME" {
 		t.Errorf("argv exec = %q, %v; arguments must not pass through a shell", res.Output, err)
+	}
+}
+
+// Review finding: Resolve returned the link path, so the broker judged a
+// symlink inside the project as an inside read.
+func TestResolveFollowsSymlinks(t *testing.T) {
+	outside, _ := filepath.EvalSymlinks(t.TempDir())
+	os.WriteFile(filepath.Join(outside, "notes.txt"), []byte("private"), 0o600)
+	l := newTest(t, nil)
+	os.Symlink(filepath.Join(outside, "notes.txt"), filepath.Join(l.Root(), "n.txt"))
+	os.Symlink(outside, filepath.Join(l.Root(), "up"))
+	if got := l.Resolve("n.txt"); got != filepath.Join(outside, "notes.txt") {
+		t.Errorf("Resolve(n.txt) = %s", got)
+	}
+	if got := l.Resolve("up/new/file.go"); got != filepath.Join(outside, "new", "file.go") {
+		t.Errorf("Resolve through a linked dir = %s", got)
+	}
+	if l.Contains("n.txt") || l.Contains("up/x") {
+		t.Error("Contains is true for a link that leads outside")
+	}
+	if !l.Contains("src/a.go") || !l.Contains(strings.ToUpper(l.Root())+"/A") {
+		t.Error("Contains is false for paths inside the root")
+	}
+}
+
+func TestReadRefusesDevicesAndHugeFiles(t *testing.T) {
+	l := newTest(t, nil)
+	os.Symlink("/dev/zero", filepath.Join(l.Root(), "zero"))
+	if _, err := l.FS().ReadFile("zero"); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Errorf("read of /dev/zero: %v", err)
+	}
+	big := filepath.Join(l.Root(), "big.bin")
+	f, _ := os.Create(big)
+	f.Truncate(MaxReadBytes + 1)
+	f.Close()
+	if _, err := l.FS().ReadFile("big.bin"); err == nil || !strings.Contains(err.Error(), "not read") {
+		t.Errorf("read of an oversized file: %v", err)
+	}
+}
+
+// Review finding: a descendant that leaves the process group kept the pipe
+// open and Exec ignored its timeout and cancel.
+func TestExecDoesNotHangOnEscapedDescendant(t *testing.T) {
+	if _, err := exec.LookPath("perl"); err != nil {
+		t.Skip("perl not installed")
+	}
+	l := newTest(t, nil)
+	start := time.Now()
+	_, err := l.Exec(context.Background(), ExecSpec{Command: `perl -e 'fork and exit; setsid; sleep 20' & echo hi`, Timeout: time.Second})
+	if d := time.Since(start); d > 6*time.Second {
+		t.Fatalf("Exec returned after %v (err %v)", d, err)
+	}
+}
+
+func TestCommandsGetAMinimalEnvironment(t *testing.T) {
+	t.Setenv("FREELOOP_TEST_LEAK", "leaked")
+	l := newTest(t, nil)
+	l.env = map[string]string{"CONFIGURED": "yes"}
+	res, err := l.Exec(context.Background(), ExecSpec{Command: `echo "${FREELOOP_TEST_LEAK:-none} $CONFIGURED $PATH"`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(res.Output, "none yes /") {
+		t.Errorf("output = %q; the app's own variables must not leak", res.Output)
 	}
 }

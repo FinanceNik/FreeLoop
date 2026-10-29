@@ -6,12 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -72,6 +74,9 @@ func (l *Local) Kind() Kind     { return KindLocal }
 func (l *Local) Root() string   { return l.root }
 func (l *Local) FS() FileSystem { return l.fs }
 
+// Resolve returns where p really is: absolute, clean, and with symlinks in
+// its existing part resolved, so the permission broker judges the file a
+// call lands on and not the link that points there.
 func (l *Local) Resolve(p string) string {
 	if strings.HasPrefix(p, "~/") || p == "~" {
 		if home, err := os.UserHomeDir(); err == nil {
@@ -81,7 +86,14 @@ func (l *Local) Resolve(p string) string {
 	if !filepath.IsAbs(p) {
 		p = filepath.Join(l.root, p)
 	}
-	return filepath.Clean(p)
+	return realTarget(filepath.Clean(p))
+}
+
+// Contains reports whether p resolves to a location inside Root. Like the
+// permission policy it ignores case.
+func (l *Local) Contains(p string) bool {
+	r, root := strings.ToLower(l.Resolve(p)), strings.ToLower(l.root)
+	return r == root || strings.HasPrefix(r, root+string(filepath.Separator))
 }
 
 // rel returns p relative to Root when it is inside Root, else p.
@@ -118,7 +130,7 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		cmd = exec.Command(l.shell[0], args...)
 	}
 	cmd.Dir = cwd
-	cmd.Env = os.Environ()
+	cmd.Env = baseEnv()
 	for k, v := range l.env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -128,6 +140,9 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 	out := &capped{limit: limit}
 	cmd.Stdout, cmd.Stderr = out, out
 	setProcessGroup(cmd)
+	// A descendant that leaves the process group can keep the output pipe
+	// open forever; stop waiting for it shortly after the command exits.
+	cmd.WaitDelay = waitDelay
 
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
@@ -158,6 +173,25 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		return res, ctx.Err() // cancelled by the caller
 	}
 	return res, nil
+}
+
+// waitDelay bounds how long Exec waits for output after the command exits.
+var waitDelay = 2 * time.Second
+
+// baseVars are the parts of the app's own environment a command inherits;
+// everything else, such as keys the app was started with, stays out.
+// Configured variables and secrets come on top (ENV-002, ENV-004).
+var baseVars = []string{"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "TERM", "TZ", "SSH_AUTH_SOCK"}
+
+func baseEnv() []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		k, _, _ := strings.Cut(kv, "=")
+		if slices.Contains(baseVars, k) || strings.HasPrefix(k, "LC_") {
+			env = append(env, kv)
+		}
+	}
+	return env
 }
 
 // capped keeps the first limit bytes written to it.
@@ -222,12 +256,34 @@ func realTarget(abs string) string {
 	}
 }
 
+// MaxReadBytes caps what ReadFile returns.
+const MaxReadBytes = 10 << 20
+
 func (f *localFS) ReadFile(p string) ([]byte, error) {
 	abs, err := f.read(p)
 	if err != nil {
 		return nil, err
 	}
-	return os.ReadFile(abs)
+	fi, err := os.Stat(abs)
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", p)
+	}
+	if fi.Size() > MaxReadBytes {
+		return nil, fmt.Errorf("%s is %d MB; files over %d MB are not read", p, fi.Size()>>20, MaxReadBytes>>20)
+	}
+	file, err := os.Open(abs)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	b, err := io.ReadAll(io.LimitReader(file, MaxReadBytes+1))
+	if err == nil && len(b) > MaxReadBytes {
+		return nil, fmt.Errorf("%s grew past %d MB while reading", p, MaxReadBytes>>20)
+	}
+	return b, err
 }
 
 func (f *localFS) WriteFile(p string, data []byte) error {
@@ -245,6 +301,9 @@ func (f *localFS) WriteFile(p string, data []byte) error {
 	}
 	mode := os.FileMode(0o644)
 	if fi, err := os.Stat(abs); err == nil {
+		if !fi.Mode().IsRegular() {
+			return fmt.Errorf("%s is not a regular file", p)
+		}
 		mode = fi.Mode().Perm()
 	}
 	return os.WriteFile(abs, data, mode)

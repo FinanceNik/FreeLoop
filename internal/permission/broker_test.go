@@ -3,6 +3,7 @@ package permission
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -190,10 +191,11 @@ func TestGuard(t *testing.T) {
 type memRules struct {
 	global  []Rule
 	session map[string][]Rule
+	err     error
 }
 
-func (m *memRules) Rules(sid string) []Rule {
-	return append(append([]Rule{}, m.global...), m.session[sid]...)
+func (m *memRules) Rules(sid string) ([]Rule, error) {
+	return append(append([]Rule{}, m.global...), m.session[sid]...), m.err
 }
 
 func (m *memRules) AddRule(sid string, r Rule) error {
@@ -280,5 +282,69 @@ func TestAllowAlwaysGlobalScope(t *testing.T) {
 	}
 	if d := <-got; d.Persisted == nil || d.Persisted.Scope != ScopeGlobal || len(rules.global) != 1 {
 		t.Errorf("decision = %+v, global rules = %+v", d, rules.global)
+	}
+}
+
+// Review finding: protected paths were compared case-sensitively, but APFS
+// opens .GIT as .git and ~/.SSH as ~/.ssh.
+func TestProtectedPathsIgnoreCase(t *testing.T) {
+	b, _, home, root := setup(t)
+	for _, req := range []Request{
+		{Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(root, ".GIT", "hooks", "pre-commit")}},
+		{Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(root, ".Git", "config")}},
+		{Tool: "read_file", Kind: KindRead, Paths: []string{filepath.Join(home, ".SSH", "id_ed25519")}},
+		{Tool: "read_file", Kind: KindRead, Paths: []string{filepath.Join(home, "library", "keychains", "login.keychain-db")}},
+	} {
+		for _, mode := range []Mode{ModeAcceptEdits, ModeBypass} {
+			if d := decide(t, b, Context{Mode: mode, Root: root}, req, ""); d.Actor != ActorProtectedPath {
+				t.Errorf("%s %v: %s by %s", mode, req.Paths, d.Outcome, d.Actor)
+			}
+		}
+	}
+	g := NewPolicy(home, filepath.Join(home, "appdata")).Guard(root)
+	if err := g.CheckWrite(filepath.Join(root, ".GIT", "config")); err == nil {
+		t.Error("guard allowed a write to .GIT/config")
+	}
+}
+
+// Review finding: unreadable rules (which may hold deny rules) must not let
+// modes or allow rules auto-approve.
+func TestUnreadableRulesFailClosed(t *testing.T) {
+	b, _, _, root := setup(t)
+	rules := &memRules{global: []Rule{{Effect: Allow, Tool: "shell", Scope: ScopeGlobal}}, err: errors.New("rules.yaml: bad YAML")}
+	b.SetRules(rules, rules)
+	write := Request{SessionID: "s", Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(root, "a.go")}}
+	shell := Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "ls"}
+	read := Request{SessionID: "s", Tool: "read_file", Kind: KindRead, Paths: []string{filepath.Join(root, "a.go")}}
+	for _, mode := range []Mode{ModeAcceptEdits, ModeBypass} {
+		if d := decide(t, b, Context{Mode: mode, Root: root}, write, "allow_once"); d.Actor != ActorUser {
+			t.Errorf("%s write with broken rules decided by %s", mode, d.Actor)
+		}
+		if d := decide(t, b, Context{Mode: mode, Root: root}, shell, "allow_once"); d.Actor != ActorUser {
+			t.Errorf("%s shell with broken rules decided by %s", mode, d.Actor)
+		}
+	}
+	if d := decide(t, b, Context{Mode: ModeAsk, Root: root}, read, ""); d.Outcome != Allowed {
+		t.Errorf("read inside the root = %+v", d)
+	}
+}
+
+// Recheck finding: the policy only resolved protected directories that
+// existed when it was built.
+func TestProtectedDirectoryCreatedLaterIsCovered(t *testing.T) {
+	home := t.TempDir() // under /var, a link to /private/var on macOS
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	policy := NewPolicy(home, filepath.Join(home, "appdata"))
+	os.MkdirAll(filepath.Join(home, ".ssh"), 0o700)
+	os.WriteFile(filepath.Join(home, ".ssh", "id"), []byte("SECRET"), 0o600)
+	env, err := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{filepath.Join(home, ".ssh", "id"), filepath.Join(home, ".SSH", "id")} {
+		if b, err := env.FS().ReadFile(p); err == nil {
+			t.Errorf("read %s through the guard: %q", p, b)
+		}
 	}
 }

@@ -68,7 +68,7 @@ export default function SessionView({ session, events, provider, environment, al
               <span title={`HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}`}>
                 {" "}
                 · {view.git.branch || "detached"}
-                {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : " · clean"}
+                {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : view.git.dirty < 0 ? " · changes not checked (repo has content filters)" : " · clean"}
               </span>
             )}
             {" "}· env {environment?.name ?? session.environmentId ?? "Local"}

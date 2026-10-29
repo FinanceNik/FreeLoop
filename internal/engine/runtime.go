@@ -185,22 +185,22 @@ func (e *Engine) Prompt(ctx context.Context, sid, text string) (PromptResult, er
 	}
 	r.busy = true
 	r.done = make(chan struct{})
-	go e.run(r, text)
+	ctx, cancel := context.WithCancel(context.Background())
+	r.cancel = cancel
+	go e.run(r, text, ctx)
 	return PromptResult{}, nil
 }
 
-func (e *Engine) run(r *runtime, text string) {
+// run works through a prompt and then the queue. Each prompt's cancel
+// function is installed under r.mu together with taking the prompt, so a
+// Cancel can never fall between the two.
+func (e *Engine) run(r *runtime, text string, ctx context.Context) {
 	for {
-		ctx, cancel := context.WithCancel(context.Background())
-		r.mu.Lock()
-		r.cancel = cancel
-		r.mu.Unlock()
 		if _, err := r.hs.Prompt(ctx, text); err != nil {
 			log.Printf("engine: prompt: %v", err)
 		}
-		cancel()
-
 		r.mu.Lock()
+		r.cancel()
 		r.cancel = nil
 		if len(r.queue) == 0 {
 			r.busy = false
@@ -209,6 +209,7 @@ func (e *Engine) run(r *runtime, text string) {
 			return
 		}
 		text, r.queue = r.queue[0], r.queue[1:]
+		ctx, r.cancel = context.WithCancel(context.Background())
 		r.mu.Unlock()
 	}
 }

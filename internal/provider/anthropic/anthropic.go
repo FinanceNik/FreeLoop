@@ -169,8 +169,8 @@ func toParams(msgs []provider.Message) []sdk.MessageParam {
 				}
 			case provider.PartToolUse:
 				input := json.RawMessage(part.Input)
-				if len(input) == 0 {
-					input = json.RawMessage(`{}`)
+				if !json.Valid(input) {
+					input = json.RawMessage(`{}`) // a cut-off call must not break every later request
 				}
 				blocks = append(blocks, sdk.NewToolUseBlock(part.ToolCallID, input, part.ToolName))
 			case provider.PartToolResult:

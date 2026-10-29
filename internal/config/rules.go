@@ -22,8 +22,13 @@ type rulesFile struct {
 	Rules   []permission.Rule `yaml:"rules"`
 }
 
-// LoadRules reads rules.yaml from dir. Invalid rules are skipped and
-// reported; a missing file has no rules.
+// ErrRulesInvalid is returned with the valid rules when rules.yaml has
+// errors, so callers can fail closed and refuse to overwrite the file.
+var ErrRulesInvalid = errors.New("rules.yaml has errors")
+
+// LoadRules reads rules.yaml from dir. A missing file has no rules. When the
+// file cannot be parsed or holds invalid rules, the valid rules come back
+// together with the issues and ErrRulesInvalid.
 func LoadRules(dir string) ([]permission.Rule, []Issue, error) {
 	path := filepath.Join(dir, RulesFileName)
 	b, err := os.ReadFile(path)
@@ -37,7 +42,7 @@ func LoadRules(dir string) ([]permission.Rule, []Issue, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
 	if err := dec.Decode(&f); err != nil && !errors.Is(err, io.EOF) {
-		return nil, []Issue{{File: path, Message: err.Error()}}, nil
+		return nil, []Issue{{File: path, Message: err.Error()}}, ErrRulesInvalid
 	}
 	var out []permission.Rule
 	var issues []Issue
@@ -49,7 +54,10 @@ func LoadRules(dir string) ([]permission.Rule, []Issue, error) {
 		r.Scope, r.Source = permission.ScopeGlobal, path
 		out = append(out, r)
 	}
-	return out, issues, nil
+	if len(issues) > 0 {
+		return out, issues, ErrRulesInvalid
+	}
+	return out, nil, nil
 }
 
 // SaveRules replaces rules.yaml.

@@ -56,6 +56,7 @@ type Engine struct {
 	envs      []config.Environment
 	providers *providerRegistry
 	runtimes  map[string]*runtime
+	streams   map[string]*streamBuf
 	known     []string // secret values to redact
 }
 
@@ -82,6 +83,7 @@ func Open(opts Options) (*Engine, error) {
 		cfg:      cfg,
 		issues:   issues,
 		runtimes: map[string]*runtime{},
+		streams:  map[string]*streamBuf{},
 	}
 	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: e.bus.publish, Redact: e.redact})
 	if err != nil {
@@ -99,6 +101,7 @@ func Open(opts Options) (*Engine, error) {
 		e.store.Close()
 		return nil, err
 	}
+	e.rememberStoredSecrets()
 	e.recover(context.Background())
 	return e, nil
 }
@@ -130,15 +133,109 @@ func (e *Engine) ConfigIssues() []config.Issue {
 	return append([]config.Issue{}, e.issues...)
 }
 
-// emit appends an event to a session's transcript. Failures are logged; a
-// harness cannot do anything useful about them.
+// streamBuf holds back the tail of a session's streamed text while it could
+// be the start of a known secret, so redaction sees a secret whole even when
+// the model streams it across several chunks.
+type streamBuf struct {
+	mu   sync.Mutex
+	typ  event.Type
+	text string
+}
+
+func (e *Engine) streamFor(sid string) *streamBuf {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	b, ok := e.streams[sid]
+	if !ok {
+		b = &streamBuf{}
+		e.streams[sid] = b
+	}
+	return b
+}
+
+// heldBack returns how many trailing bytes of text could begin a known
+// secret.
+func (e *Engine) heldBack(text string) int {
+	e.mu.Lock()
+	known := e.known
+	e.mu.Unlock()
+	hold := 0
+	for _, k := range known {
+		for l := min(len(k)-1, len(text)); l > hold; l-- {
+			if strings.HasSuffix(text, k[:l]) {
+				hold = l
+				break
+			}
+		}
+	}
+	return hold
+}
+
+// emit appends an event to a session's transcript. Streamed agent text goes
+// through the session's stream buffer; any other event first flushes it, so
+// order is kept. Failures are logged; a harness cannot do anything useful
+// about them.
 func (e *Engine) emit(sid string, typ event.Type, data any) {
+	b := e.streamFor(sid)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	flush := func() {
+		if b.text != "" {
+			e.write(sid, b.typ, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: b.text}})
+		}
+		b.typ, b.text = "", ""
+	}
+	if mc, ok := data.(event.MessageChunk); ok && (typ == event.AgentMessageChunk || typ == event.AgentThoughtChunk) {
+		if b.typ != typ {
+			flush()
+		}
+		text := b.text + mc.Content.Text
+		hold := e.heldBack(text)
+		b.typ, b.text = typ, text[len(text)-hold:]
+		if out := text[:len(text)-hold]; out != "" {
+			e.write(sid, typ, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: out}})
+		}
+		return
+	}
+	flush()
+	e.write(sid, typ, data)
+}
+
+func (e *Engine) write(sid string, typ event.Type, data any) {
 	b, err := json.Marshal(data)
 	if err == nil {
 		_, err = e.store.Append(context.Background(), sid, typ, b)
 	}
 	if err != nil {
 		log.Printf("engine: record %s for %s: %v", typ, sid, err)
+	}
+}
+
+// rememberStoredSecrets adds every secret the app stores (provider keys,
+// environment secrets) to the redaction list, so a key pasted into any
+// session is redacted even before its provider or environment is used.
+func (e *Engine) rememberStoredSecrets() {
+	e.mu.Lock()
+	var refs []string
+	for _, c := range e.providers.configs {
+		if c.APIKey != "" {
+			refs = append(refs, c.APIKey)
+		}
+	}
+	for _, env := range e.envs {
+		for _, ref := range env.Secrets {
+			refs = append(refs, ref)
+		}
+	}
+	e.mu.Unlock()
+	for _, s := range refs {
+		ref, err := secrets.ParseRef(s)
+		if err != nil {
+			continue
+		}
+		if v, err := e.secrets.Get(ref); err == nil {
+			e.remember(v)
+		}
 	}
 }
 

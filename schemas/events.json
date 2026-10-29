@@ -133,7 +133,7 @@
         "repo": { "type": "boolean" },
         "branch": { "type": "string" },
         "head": { "type": "string" },
-        "dirty": { "type": "integer", "minimum": 0 },
+        "dirty": { "type": "integer", "minimum": -1, "description": "-1 when not checked, because the repository configures content filters git status could run." },
         "baseCommit": { "type": "string" }
       }
     },

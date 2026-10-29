@@ -89,7 +89,13 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 - **Approval fatigue is real.** Rules exist to make trusted operations quiet so that prompts stay meaningful. Review rules periodically; the settings UI lists every rule with its source.
 - **Transcripts are plaintext** on disk, protected only by file permissions.
 - **MCP servers run with the user's privileges** in the local environment. Prefer servers you can read, pin their versions, and give remote servers the least access their OAuth scopes allow.
-- **Provider trust.** Everything in a session's context goes to the configured provider. Local models keep it on the machine; cloud providers' data handling is governed by their terms.
+- **Provider trust.** Everything in a session's context goes to the configured provider. Local models keep it on the machine; cloud providers' data handling is governed by their terms. That includes a secret a command prints: environment secrets are redacted from the transcript, not from the model's context.
+- **Path rules cover file tools, not the shell.** Protected paths, the read-outside-root prompt and path rules apply to `read_file`, `write_file`, `edit_file`, `list_dir`, `glob` and `grep`. An approved shell command runs with the user's privileges and can read or write anywhere, including protected locations; a sandbox for shell commands (ENV-009) is what will close this. Shell deny rules see through common wrappers (variable assignments, `env`, `command`, `exec`, subshells, `sh -c '…'`), but a shell can always spell a command another way, so treat them as a guard against mistakes.
+- **Git runs in a project before it is trusted.** The app reads branch and changed-file count with `git status`. It turns off `core.fsmonitor` and hooks and skips the scan when the repository configures content filters, but a repository's own configuration is untrusted input until projects are trusted explicitly (SEC-006, M2).
+
+### Hardening review, 2026-10-29
+
+An independent review of M1 slices 1 to 4 found and reproduced these, all fixed with regression tests: protected paths compared case-sensitively on a case-insensitive file system (`.GIT`, `~/.SSH`); `glob`/`grep` and reads following symlinks past the broker; unbounded reads of non-regular files; "Allow always" saving literal input as a pattern (`rm -rf *`, a file named `**`); `Exec` hanging on a descendant that left the process group; a malformed `rules.yaml` silently dropping deny rules and being overwritten; a crash leaving an unanswered tool call that broke the session; an invalid tool input breaking every later Anthropic request; secrets streamed across chunks escaping redaction; stored keys not redacted until used; `core.fsmonitor` and content filters running through the app's git calls; commands inheriting the app's whole environment; exact rules collapsing newlines; a cancel race in the prompt queue.
 
 ## Review cadence
 

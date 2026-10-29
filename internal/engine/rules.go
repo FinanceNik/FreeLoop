@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -24,6 +25,9 @@ type ruleStore struct {
 	global  []permission.Rule
 	mod     time.Time
 	session map[string][]permission.Rule
+	// broken is set while rules.yaml has errors: the broker fails closed and
+	// the file is not rewritten, so no hand-written rule is lost.
+	broken error
 }
 
 func newRuleStore(dir string, report func([]config.Issue)) *ruleStore {
@@ -41,20 +45,32 @@ func (s *ruleStore) reloadLocked(force bool) {
 		return
 	}
 	rules, issues, err := config.LoadRules(s.dir)
-	if err != nil {
-		issues = append(issues, config.Issue{File: config.RulesFileName, Message: err.Error()})
-	}
 	if len(issues) > 0 && s.report != nil {
 		s.report(issues)
 	}
-	s.global, s.mod = rules, mod
+	s.mod = mod
+	switch {
+	case errors.Is(err, config.ErrRulesInvalid):
+		// Keep the valid rules, and the last good ones if nothing parsed.
+		if rules != nil {
+			s.global = rules
+		}
+		s.broken = fmt.Errorf("%s has errors; fix the file (see the problems listed in the app) before rules change: %w", config.RulesFileName, err)
+	case err != nil:
+		s.broken = err
+		if s.report != nil {
+			s.report([]config.Issue{{File: config.RulesFileName, Message: err.Error()}})
+		}
+	default:
+		s.global, s.broken = rules, nil
+	}
 }
 
-func (s *ruleStore) Rules(sid string) []permission.Rule {
+func (s *ruleStore) Rules(sid string) ([]permission.Rule, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reloadLocked(false)
-	return append(slices.Clone(s.global), s.session[sid]...)
+	return append(slices.Clone(s.global), s.session[sid]...), s.broken
 }
 
 func (s *ruleStore) AddRule(sid string, r permission.Rule) error {
@@ -70,6 +86,9 @@ func (s *ruleStore) AddRule(sid string, r permission.Rule) error {
 		return nil
 	case permission.ScopeGlobal:
 		s.reloadLocked(false)
+		if s.broken != nil {
+			return s.broken
+		}
 		if slices.ContainsFunc(s.global, func(g permission.Rule) bool { return sameRule(g, r) }) {
 			return nil
 		}
@@ -84,7 +103,7 @@ func (s *ruleStore) AddRule(sid string, r permission.Rule) error {
 }
 
 func sameRule(a, b permission.Rule) bool {
-	return a.Effect == b.Effect && a.Tool == b.Tool && a.Command == b.Command && a.Path == b.Path
+	return a.Effect == b.Effect && a.Tool == b.Tool && a.Command == b.Command && a.Path == b.Path && a.Literal == b.Literal
 }
 
 // restore rebuilds a session's rules from its transcript.
@@ -110,7 +129,7 @@ func (s *ruleStore) restore(sid string, events []event.Event) {
 // ListRules returns the rules in force for a session, global first; with
 // an empty session ID, only the global rules.
 func (e *Engine) ListRules(sessionID string) []permission.Rule {
-	rules := e.rules.Rules(sessionID)
+	rules, _ := e.rules.Rules(sessionID)
 	if rules == nil {
 		rules = []permission.Rule{}
 	}
@@ -130,6 +149,9 @@ func (e *Engine) DeleteRule(r permission.Rule) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reloadLocked(false)
+	if s.broken != nil {
+		return s.broken
+	}
 	i := slices.IndexFunc(s.global, func(g permission.Rule) bool { return sameRule(g, r) })
 	if i < 0 {
 		return errors.New("no such global rule")

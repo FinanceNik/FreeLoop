@@ -49,7 +49,40 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 			offered = append(offered, t)
 		}
 	}
-	return &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered}, nil
+	s := &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered}
+	s.repair()
+	return s, nil
+}
+
+// repair answers tool calls a crash left without results: the API rejects
+// a history in which a tool_use has no tool_result.
+func (s *session) repair() {
+	n := len(s.history)
+	if n == 0 || s.history[n-1].Role != provider.RoleAssistant {
+		return
+	}
+	var results []provider.Part
+	for _, c := range s.history[n-1].ToolCalls() {
+		results = append(results, provider.Part{Type: provider.PartToolResult, ToolCallID: c.ToolCallID, IsError: true,
+			Text: "The app stopped before this tool call finished; it may or may not have run. Check before repeating it."})
+	}
+	if len(results) > 0 {
+		s.commit(n, provider.Message{Role: provider.RoleUser, Parts: results})
+	}
+}
+
+// sanitize replaces tool inputs that are not valid JSON, such as a call cut
+// off at max_tokens, so the history can always be sent again. The call
+// itself still fails validation with the original input.
+func sanitize(m provider.Message) provider.Message {
+	parts := slices.Clone(m.Parts)
+	for i, p := range parts {
+		if p.Type == provider.PartToolUse && !json.Valid(p.Input) {
+			parts[i].Input = json.RawMessage(`{}`)
+		}
+	}
+	m.Parts = parts
+	return m
 }
 
 type session struct {
@@ -136,7 +169,7 @@ func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
 		if err != nil {
 			return harness.StopError, err
 		}
-		s.commit(len(s.history), *msg)
+		s.commit(len(s.history), sanitize(*msg))
 
 		calls := msg.ToolCalls()
 		if len(calls) == 0 {
@@ -315,6 +348,10 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 		sb.WriteString("\n# Mode: bypass\n\nTool calls run without asking the user. Be careful with destructive commands.\n")
 	}
 	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+		// A link that leads out of the project is not followed silently.
+		if !s.env.Contains(name) {
+			continue
+		}
 		b, err := s.env.FS().ReadFile(name)
 		if err != nil {
 			continue

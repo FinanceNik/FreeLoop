@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,8 +30,8 @@ func TestRulesRoundTrip(t *testing.T) {
 func TestInvalidRulesAreReported(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, RulesFileName), []byte("version: 1\nrules:\n  - {effect: allow, tool: shell, command: ls}\n  - {effect: perhaps, tool: shell}\n"), 0o600)
-	out, issues, _ := LoadRules(dir)
-	if len(out) != 1 || len(issues) != 1 || issues[0].Field != "rules[1]" {
+	out, issues, err := LoadRules(dir)
+	if len(out) != 1 || len(issues) != 1 || issues[0].Field != "rules[1]" || !errors.Is(err, ErrRulesInvalid) {
 		t.Errorf("out = %+v issues = %+v", out, issues)
 	}
 }

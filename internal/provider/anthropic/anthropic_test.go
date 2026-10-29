@@ -172,3 +172,17 @@ func joinTypes(ts []provider.EventType) string {
 	}
 	return strings.Join(s, ",")
 }
+
+// Review finding: one invalid tool input in history made every later
+// request fail to marshal.
+func TestInvalidToolInputInHistoryIsSanitized(t *testing.T) {
+	p := New(Options{APIKey: "k"})
+	params := p.params(provider.ChatRequest{Model: "claude-opus-5-5", Messages: []provider.Message{
+		{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: "hi"}}},
+		{Role: provider.RoleAssistant, Parts: []provider.Part{{Type: provider.PartToolUse, ToolCallID: "t", ToolName: "write_file", Input: json.RawMessage(`{"path":"a","content":"unterminated`)}}},
+		{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartToolResult, ToolCallID: "t", Text: "invalid", IsError: true}}},
+	}})
+	if _, err := json.Marshal(params); err != nil {
+		t.Fatalf("request cannot be built: %v", err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -38,13 +39,23 @@ const (
 //     matches "git" and anything starting with "git ".
 //   - path (file tools): a glob with ** for any depth, relative to the
 //     project root, or absolute.
+//   - literal: the command or path is matched as written, never as a
+//     pattern. "Allow always" sets it, so approving `rm -rf *` or a file
+//     named `**` approves exactly that and nothing more.
 //
 // A rule with neither command nor path matches every call of its tools.
+//
+// Shell deny rules see through common wrappers (variable assignments, env,
+// command, exec, a leading backslash, subshells, sh -c '...'), but a shell
+// can always spell a command another way; until shell commands run in a
+// sandbox, deny rules for shell are a guard against mistakes, not against a
+// determined agent.
 type Rule struct {
 	Effect  Effect `yaml:"effect" json:"effect"`
 	Tool    string `yaml:"tool" json:"tool"`
 	Command string `yaml:"command,omitempty" json:"command,omitempty"`
 	Path    string `yaml:"path,omitempty" json:"path,omitempty"`
+	Literal bool   `yaml:"literal,omitempty" json:"literal,omitempty"`
 	// Scope and Source are filled in by whoever loads the rule.
 	Scope  Scope  `yaml:"-" json:"scope"`
 	Source string `yaml:"-" json:"source"`
@@ -69,11 +80,15 @@ func (r Rule) Validate() error {
 // String renders a rule the way the UI and decisions show it.
 func (r Rule) String() string {
 	s := string(r.Effect) + " " + r.Tool
+	q := ""
+	if r.Literal {
+		q = "="
+	}
 	switch {
 	case r.Command != "":
-		s += fmt.Sprintf("(%s)", r.Command)
+		s += fmt.Sprintf("(%s%s)", q, r.Command)
 	case r.Path != "":
-		s += fmt.Sprintf("(%s)", r.Path)
+		s += fmt.Sprintf("(%s%s)", q, r.Path)
 	}
 	return s
 }
@@ -86,6 +101,55 @@ var shellOperators = []string{"&&", "||", ";", "|", "&", "\n"}
 var risky = []string{"$(", "`", ">", "<"}
 
 func normalize(cmd string) string { return strings.Join(strings.Fields(cmd), " ") }
+
+var blanks = regexp.MustCompile(`[ \t]+`)
+
+// exactForm collapses runs of spaces and tabs but keeps newlines, which the
+// shell treats as command separators.
+func exactForm(cmd string) string { return strings.TrimSpace(blanks.ReplaceAllString(cmd, " ")) }
+
+// wrappers run the command that follows them.
+var wrappers = []string{"env", "command", "exec", "nohup", "time", "builtin", "nice", "sudo", "doas"}
+
+var shellC = regexp.MustCompile(`^(?:\S*/)?(?:sh|bash|zsh|dash|ksh)\s+-[a-z]*c[a-z]*\s+(.*)$`)
+
+// simpleCommands returns the commands a line runs, unwrapped for matching
+// deny rules: each segment between operators, without enclosing
+// parentheses, braces or quotes, leading assignments, wrapper commands, a
+// leading backslash or a path on the program; sh -c strings are unwrapped
+// recursively.
+func simpleCommands(cmd string, depth int) []string {
+	var out []string
+	for _, seg := range segments(cmd) {
+		seg = strings.Trim(seg, "(){} \t'\"")
+		fields := strings.Fields(seg)
+		for len(fields) > 0 {
+			f := fields[0]
+			switch {
+			case strings.Contains(f, "=") && !strings.HasPrefix(f, "="):
+				fields = fields[1:] // VAR=value
+			case slices.Contains(wrappers, strings.TrimPrefix(f, "\\")):
+				fields = fields[1:]
+				for len(fields) > 0 && strings.HasPrefix(fields[0], "-") {
+					fields = fields[1:] // wrapper options such as env -i
+				}
+			default:
+				goto done
+			}
+		}
+	done:
+		if len(fields) == 0 {
+			continue
+		}
+		fields[0] = filepath.Base(strings.TrimPrefix(fields[0], "\\"))
+		simple := strings.Join(fields, " ")
+		out = append(out, simple)
+		if m := shellC.FindStringSubmatch(simple); m != nil && depth < 3 {
+			out = append(out, simpleCommands(strings.Trim(m[1], "'\""), depth+1)...)
+		}
+	}
+	return out
+}
 
 // segments splits a command line at shell operators.
 func segments(cmd string) []string {
@@ -117,17 +181,20 @@ func commandMatches(pattern, cmd string) bool {
 	return cmd == pattern
 }
 
-// matchCommand: a deny rule matches if any command in the line matches. An
-// exact allow rule matches exactly the line it names, operators included,
-// since that is what the user approved; a prefix allow rule matches only a
-// single plain command.
+// matchCommand: a deny rule matches if any command the line runs matches.
+// An exact or literal allow rule matches exactly the line it names, as
+// written, operators included, since that is what the user approved; a
+// prefix allow rule matches only a single plain command.
 func (r Rule) matchCommand(cmd string) bool {
 	if r.Effect == Deny {
-		return slices.ContainsFunc(segments(cmd), func(s string) bool { return commandMatches(r.Command, s) })
+		if r.Literal {
+			return exactForm(cmd) == exactForm(r.Command)
+		}
+		return slices.ContainsFunc(simpleCommands(cmd, 0), func(s string) bool { return commandMatches(r.Command, s) })
 	}
 	pattern := normalize(r.Command)
-	if pattern != "*" && !strings.HasSuffix(pattern, " *") {
-		return normalize(cmd) == pattern
+	if r.Literal || (pattern != "*" && !strings.HasSuffix(pattern, " *")) {
+		return exactForm(cmd) == exactForm(r.Command)
 	}
 	segs := segments(cmd)
 	if len(segs) != 1 || slices.ContainsFunc(risky, func(m string) bool { return strings.Contains(cmd, m) }) {
@@ -138,6 +205,17 @@ func (r Rule) matchCommand(cmd string) bool {
 
 func (r Rule) matchPath(root, p string) bool {
 	pattern := r.Path
+	if r.Literal {
+		if filepath.IsAbs(pattern) {
+			return strings.EqualFold(filepath.Clean(pattern), p)
+		}
+		for _, rt := range canonical(root) {
+			if strings.EqualFold(filepath.Join(rt, filepath.FromSlash(pattern)), p) {
+				return true
+			}
+		}
+		return false
+	}
 	if filepath.IsAbs(pattern) {
 		return environment.MatchGlob(strings.TrimPrefix(filepath.ToSlash(pattern), "/"), strings.TrimPrefix(filepath.ToSlash(p), "/"))
 	}
@@ -177,15 +255,15 @@ func (r Rule) Matches(req Request, root string) bool {
 	return true
 }
 
-// RuleFor is the rule "Allow always" creates for req: the exact command, or
-// the exact path (relative to root when inside it), or the tool alone.
+// RuleFor is the rule "Allow always" creates for req: the literal command,
+// or the literal path (relative to root when inside it), or the tool alone.
 func RuleFor(req Request, root string, scope Scope) Rule {
 	r := Rule{Effect: Allow, Tool: req.Tool, Scope: scope}
 	switch {
 	case req.Command != "":
-		r.Command = normalize(req.Command)
+		r.Command, r.Literal = exactForm(req.Command), true
 	case len(req.Paths) == 1:
-		r.Path = req.Paths[0]
+		r.Path, r.Literal = req.Paths[0], true
 		for _, rt := range canonical(root) {
 			if rel, err := filepath.Rel(rt, req.Paths[0]); err == nil && !strings.HasPrefix(rel, "..") {
 				r.Path = filepath.ToSlash(rel)
@@ -197,9 +275,10 @@ func RuleFor(req Request, root string, scope Scope) Rule {
 }
 
 // RuleSource supplies the rules in force for a session, every scope
-// together.
+// together. An error means some rules could not be read; the broker then
+// fails closed.
 type RuleSource interface {
-	Rules(sessionID string) []Rule
+	Rules(sessionID string) ([]Rule, error)
 }
 
 // RuleSink stores a rule created by "Allow always".

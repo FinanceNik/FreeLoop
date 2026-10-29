@@ -44,7 +44,11 @@ func NewPolicy(home, appDataDir string) *Policy {
 // canonical returns the spellings of p that checks must cover.
 func canonical(p string) []string { return environment.Spellings(p) }
 
+// within reports whether p is dir or inside it. It ignores case: macOS
+// volumes are case-insensitive by default, so ~/.SSH is ~/.ssh and .GIT is
+// .git. On a case-sensitive volume this errs towards refusing.
 func within(p, dir string) bool {
+	p, dir = strings.ToLower(p), strings.ToLower(dir)
 	return p == dir || strings.HasPrefix(p, dir+string(filepath.Separator))
 }
 

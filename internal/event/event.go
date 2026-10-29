@@ -118,9 +118,10 @@ type UsageData struct {
 
 // GitStateData is the payload of git_state (SES-006).
 type GitStateData struct {
-	Repo       bool   `json:"repo"`
-	Branch     string `json:"branch"`
-	Head       string `json:"head"`
+	Repo   bool   `json:"repo"`
+	Branch string `json:"branch"`
+	Head   string `json:"head"`
+	// Dirty is the number of changed files, -1 when it was not checked.
 	Dirty      int    `json:"dirty"`
 	BaseCommit string `json:"baseCommit"`
 }
