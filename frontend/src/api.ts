@@ -1,16 +1,18 @@
 // One import point for the generated bindings.
 export { EngineService } from "../bindings/github.com/FinanceNik/Freeloop/cmd/freeloop";
 export type { Command, Config, Issue, Profile } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
-export type { AttentionItem, ChangedFile, Changes, EnvironmentInfo, FileDiff, PresetInfo, ProjectInfo, ProjectSettings, ProviderInfo, SkillInfo, SkillList } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
+export type { AttentionItem, ChangedFile, Changes, EnvironmentInfo, FileDiff, PresetInfo, ProjectInfo, ProjectSettings, ProviderInfo, SkillCandidate, SkillInfo, SkillList } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
 export type { Request as PermissionRequest, Rule } from "../bindings/github.com/FinanceNik/Freeloop/internal/permission/models";
 export type { ModelCaps, ModelInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/provider/models";
 export type { Project, Session } from "../bindings/github.com/FinanceNik/Freeloop/internal/session/models";
 
-// Must match EventName, ConfigEventName and OpenSessionEventName in
+// Must match EventName, ConfigEventName, OpenSessionEventName and
+// FilesDroppedEventName in
 // cmd/freeloop/main.go.
 export const EVENT_NAME = "freeloop:event";
 export const CONFIG_EVENT_NAME = "freeloop:config";
 export const OPEN_SESSION_EVENT_NAME = "freeloop:open-session";
+export const FILES_DROPPED_EVENT_NAME = "freeloop:files-dropped";
 
 export const MODES = [
   { id: "ask", name: "Ask" },

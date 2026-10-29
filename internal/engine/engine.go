@@ -54,6 +54,7 @@ type ConfigChange struct {
 // Engine is safe for concurrent use.
 type Engine struct {
 	dataDir string
+	home    string
 	dev     bool
 	store   *store.Store
 	bus     *bus
@@ -106,6 +107,7 @@ func Open(opts Options) (*Engine, error) {
 	}
 	e := &Engine{
 		dataDir:  opts.DataDir,
+		home:     opts.Home,
 		dev:      opts.Dev,
 		bus:      newBus(),
 		secrets:  opts.Secrets,

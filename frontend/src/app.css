@@ -1172,3 +1172,38 @@ fieldset {
 .skill code {
   word-break: break-all;
 }
+
+.skill-install {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-style: dashed;
+}
+
+.skill-candidate {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skill-changes {
+  margin: 0;
+  font-size: 0.85em;
+}
+
+.badge.skill-new,
+.badge.skill-changed {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.badge.skill-invalid {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.skill-install form input {
+  flex: 1;
+}

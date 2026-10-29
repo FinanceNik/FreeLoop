@@ -130,6 +130,24 @@ func (s *EngineService) SetSkillEnabled(ctx context.Context, name, projectID str
 	return s.eng.SetSkillEnabled(ctx, name, projectID, enabled)
 }
 
+// PreviewSkills, InstallSkills, RemoveSkill and ClaudeSkillsDir import and
+// install skills into the app's store (SKL-003, SKL-005).
+func (s *EngineService) PreviewSkills(ctx context.Context, src string) ([]engine.SkillCandidate, error) {
+	return s.eng.PreviewSkills(ctx, src)
+}
+
+func (s *EngineService) InstallSkills(ctx context.Context, src string, names []string) ([]string, error) {
+	return s.eng.InstallSkills(ctx, src, names)
+}
+
+func (s *EngineService) RemoveSkill(name string) error {
+	return s.eng.RemoveSkill(name)
+}
+
+func (s *EngineService) ClaudeSkillsDir() string {
+	return s.eng.ClaudeSkillsDir()
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

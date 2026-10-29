@@ -26,7 +26,7 @@ import (
 // project, or left out of the session's profile.
 
 // SkillsDir is the app's skill store, inside the data folder.
-const SkillsDir = "skills"
+const SkillsDir = config.SkillsDir
 
 // maxSkillFile caps a skill file load_skill returns.
 const maxSkillFile = 256 << 10

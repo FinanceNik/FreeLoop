@@ -29,10 +29,15 @@ const ConfigEventName = "freeloop:config"
 // for it was clicked (GUI-008).
 const OpenSessionEventName = "freeloop:open-session"
 
+// FilesDroppedEventName carries the paths dropped onto an element marked
+// data-file-drop-target, such as the skills page's drop zone (SKL-005).
+const FilesDroppedEventName = "freeloop:files-dropped"
+
 func init() {
 	application.RegisterEvent[event.Event](EventName)
 	application.RegisterEvent[engine.ConfigChange](ConfigEventName)
 	application.RegisterEvent[string](OpenSessionEventName)
+	application.RegisterEvent[[]string](FilesDroppedEventName)
 }
 
 func main() {
@@ -87,6 +92,11 @@ func main() {
 		MinWidth:  720,
 		MinHeight: 480,
 		URL:       "/",
+		// Only elements marked data-file-drop-target accept drops.
+		EnableFileDrop: true,
+	})
+	win.OnWindowEvent(events.Common.WindowFilesDropped, func(ev *application.WindowEvent) {
+		app.Event.Emit(FilesDroppedEventName, ev.Context().DroppedFiles())
 	})
 
 	desk.start(app, win)

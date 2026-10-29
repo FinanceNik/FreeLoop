@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { EngineService, type ProjectInfo, type SkillList } from "./api.ts";
+import { Events } from "@wailsio/runtime";
+import { EngineService, FILES_DROPPED_EVENT_NAME, type ProjectInfo, type SkillCandidate, type SkillList } from "./api.ts";
 
 // Skills (SKL-002): every skill the app found, where it came from, and
 // switches globally and per project. The model sees only the names and
@@ -12,6 +13,8 @@ interface Props {
   onProjectsChanged: () => void;
   onError: (err: unknown) => void;
 }
+
+const STATUS: Record<string, string> = { new: "new", same: "up to date", changed: "changed", invalid: "cannot load" };
 
 const SOURCE: Record<string, string> = {
   app: "Skill store",
@@ -41,6 +44,49 @@ export default function Skills({ projects, configVersion, onConfigChanged, onPro
       })
       .catch(onError);
 
+  // Import and install (SKL-003, SKL-005): preview what a source offers,
+  // then copy the chosen skills into the store.
+  const [preview, setPreview] = useState<{ src: string; cands: SkillCandidate[]; picked: string[] } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [installed, setInstalled] = useState("");
+  const [path, setPath] = useState("");
+  const open = (src: string) => {
+    if (!src) return;
+    setInstalled("");
+    EngineService.PreviewSkills(src)
+      .then((list) => {
+        const cands = list ?? [];
+        setPreview({ src, cands, picked: cands.filter((c) => c.status === "new" || c.status === "changed").map((c) => c.name) });
+      })
+      .catch(onError);
+  };
+  const importClaude = () =>
+    EngineService.ClaudeSkillsDir()
+      .then(open)
+      .catch(onError);
+  const chooseFolder = () =>
+    EngineService.ChooseFolder()
+      .then((p) => p && open(p))
+      .catch(onError);
+  // A folder or .zip dropped on the drop zone.
+  useEffect(() => Events.On(FILES_DROPPED_EVENT_NAME, ({ data }) => open(((data as string[]) ?? [])[0] ?? "")), []);
+  const install = () => {
+    if (!preview) return;
+    setBusy(true);
+    EngineService.InstallSkills(preview.src, preview.picked)
+      .then((done) => {
+        setInstalled((done ?? []).length > 0 ? `Installed ${(done ?? []).join(", ")}.` : "Nothing to install; the chosen skills are up to date.");
+        setPreview(null);
+        load();
+      })
+      .catch(onError)
+      .finally(() => setBusy(false));
+  };
+  const remove = (name: string) => {
+    if (!confirm(`Remove ${name} from the skill store? Its folder is deleted.`)) return;
+    EngineService.RemoveSkill(name).then(load).catch(onError);
+  };
+
   const skills = list?.skills ?? [];
   return (
     <section className="page">
@@ -50,6 +96,70 @@ export default function Skills({ projects, configVersion, onConfigChanged, onPro
         <code>.agents/skills</code> and <code>.claude/skills</code>. A project skill hides a store skill of the same name. Profiles can limit a session to
         some skills.
       </p>
+      <div className="card skill-install" data-file-drop-target="skills">
+        <div className="row wrap">
+          <button onClick={importClaude}>Import from Claude Code</button>
+          <button onClick={chooseFolder}>Install from a folder…</button>
+          <span className="muted">or drop a skill folder or .zip here. Skills are copied into the store; the source is not changed.</span>
+        </div>
+        <form
+          className="row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            open(path.trim());
+          }}
+        >
+          <input value={path} onChange={(e) => setPath(e.target.value)} placeholder="Or paste the path of a skill folder or .zip" aria-label="Skill source path" />
+          <button type="submit" disabled={!path.trim()}>
+            Preview
+          </button>
+        </form>
+        {installed && <p className="ok">{installed}</p>}
+        {preview && (
+          <div className="skill-preview">
+            <p className="muted">
+              From <code>{preview.src}</code>
+            </p>
+            {preview.cands.map((c) => (
+              <div key={c.name} className="skill-candidate">
+                <label className="row">
+                  <input
+                    type="checkbox"
+                    disabled={c.status === "invalid" || c.status === "same"}
+                    checked={preview.picked.includes(c.name)}
+                    onChange={(e) =>
+                      setPreview({ ...preview, picked: e.target.checked ? [...preview.picked, c.name] : preview.picked.filter((n) => n !== c.name) })
+                    }
+                  />
+                  <strong>{c.name}</strong> <span className={`badge skill-${c.status}`}>{STATUS[c.status] ?? c.status}</span>
+                </label>
+                {c.description && <div>{c.description}</div>}
+                {c.issue && <div className="error-text">{c.issue}</div>}
+                {(c.scripts ?? []).length > 0 && (
+                  <div className="muted">
+                    Scripts: <code>{(c.scripts ?? []).join(", ")}</code>. They run only through the shell tool, which asks before each command.
+                  </div>
+                )}
+                {(c.changes ?? []).length > 0 && (
+                  <pre className="skill-changes">{(c.changes ?? []).join("\n")}</pre>
+                )}
+                {c.installed && c.status !== "new" && (
+                  <div className="muted">
+                    Installed from <code>{c.installed.source}</code>
+                    {c.installed.importedAt && !c.installed.importedAt.startsWith("0001") ? ` on ${new Date(c.installed.importedAt).toLocaleDateString()}` : ""}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="row">
+              <button className="primary" disabled={busy || preview.picked.length === 0} onClick={install}>
+                Install {preview.picked.length} {preview.picked.length === 1 ? "skill" : "skills"}
+              </button>
+              <button onClick={() => setPreview(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
       <label className="row">
         Project{" "}
         <select value={root} onChange={(e) => setRoot(e.target.value)}>
@@ -85,6 +195,11 @@ export default function Skills({ projects, configVersion, onConfigChanged, onPro
                 </label>
               )}
             </div>
+            {s.source === "app" && (
+              <button className="link" onClick={() => remove(s.name)}>
+                Remove
+              </button>
+            )}
           </li>
         ))}
       </ul>
