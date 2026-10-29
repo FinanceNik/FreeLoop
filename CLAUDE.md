@@ -43,7 +43,7 @@ Status: M0 is done. M1 (thin vertical slice) is in progress: slice 1 (the agent 
 Prerequisites: Go (Homebrew), Node with npm, Xcode command line tools, and `make tools` once to install the pinned `wails3` CLI into `$(go env GOPATH)/bin`.
 
 - `make dev`: run the app with live reload. It sets `FREELOOP_DEV=1`, which adds a scripted demo provider so the whole loop can be tried without an API key. Set `FREELOOP_HOME=/some/dir` to keep dev data out of `~/Library/Application Support/freeloop`.
-- `make build` / `make package`: production binary in `bin/` / ad-hoc signed `bin/Freeloop.app`.
+- `make build` / `make package` / `make dmg`: production binary in `bin/` / ad-hoc signed `bin/Freeloop.app` / `bin/Freeloop.dmg` holding the app and a link to Applications.
 - `make test`: Go tests under `internal/` with the race detector, then frontend tests (`node --test`, no test framework). One Go test: `go test ./internal/<pkg>/ -run '^TestName$'`.
 - `make lint`: gofmt, `go vet`, the architecture boundary test (`internal/archtest`: ENV-001, Wails only in `cmd/freeloop`, macOS code only in `internal/platform/darwin`) and `tsc`.
 - `make test-keychain`: the Keychain backend against the real login keychain (creates and deletes one item under service `freeloop-test`).

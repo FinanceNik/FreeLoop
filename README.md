@@ -21,9 +21,10 @@ Build from source on macOS 14 or later. You need Go, Node.js with npm and the Xc
 ```sh
 make tools     # once: install the pinned wails3 CLI
 make package   # build bin/Freeloop.app, ad-hoc signed
+make dmg       # optional: bin/Freeloop.dmg with the app and a link to Applications
 ```
 
-Move `bin/Freeloop.app` to Applications. It is not notarized yet, so the first time, right-click it and choose Open.
+Move `bin/Freeloop.app` to Applications, or open the DMG and drag it there. It is not notarized yet, so the first time, right-click it and choose Open.
 
 ## First run
 

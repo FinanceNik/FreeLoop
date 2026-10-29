@@ -10,7 +10,7 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 export CGO_CFLAGS := -O2 -g -mmacosx-version-min=14.0
 export CGO_LDFLAGS := -mmacosx-version-min=14.0
 
-.PHONY: help tools dev build package bindings test test-keychain frontend-test lint fmt clean
+.PHONY: help tools dev build package dmg bindings test test-keychain frontend-test lint fmt clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -26,6 +26,17 @@ build: ## Build a production binary into bin/
 
 package: ## Build bin/Freeloop.app (ad-hoc signed)
 	$(WAILS) package
+
+# The DMG holds the app and a link to /Applications, compressed (UDZO). It is
+# as signed as the app inside: ad-hoc until OQ-009 is settled.
+dmg: package ## Build bin/Freeloop.dmg from bin/Freeloop.app
+	rm -rf bin/dmg bin/Freeloop.dmg
+	mkdir -p bin/dmg
+	cp -R bin/Freeloop.app bin/dmg/
+	ln -s /Applications bin/dmg/Applications
+	hdiutil create -volname Freeloop -srcfolder bin/dmg -ov -format UDZO -quiet bin/Freeloop.dmg
+	rm -rf bin/dmg
+	@echo "bin/Freeloop.dmg"
 
 test: ## Run Go engine tests (race detector on) and frontend tests
 	go test -race ./internal/...
