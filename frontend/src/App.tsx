@@ -296,6 +296,7 @@ export default function App() {
             environments={environments}
             defaults={config?.defaults}
             onManageProviders={() => setScreen({ kind: "providers" })}
+            onProvidersChanged={refreshProviders}
             onCreated={(s) => {
               setSessions((list) => (list.some((x) => x.id === s.id) ? list : [s, ...list]));
               openSession(s.id);

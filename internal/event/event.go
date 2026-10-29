@@ -96,6 +96,10 @@ type Event struct {
 type ContentBlock struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
+	// URI and Name describe a resource_link, such as a file mentioned in a
+	// prompt.
+	URI  string `json:"uri,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 // MessageChunk is the payload of the three *_message_chunk / thought variants.

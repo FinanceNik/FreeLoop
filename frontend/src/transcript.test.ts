@@ -101,3 +101,13 @@ test("buildView keeps the latest git state", () => {
   assert.equal(v.git?.dirty, 3);
   assert.equal(buildView([]).git, null);
 });
+
+test("buildView attaches mentioned files to the user message", () => {
+  const v = buildView([
+    at(1, "user_message_chunk", { content: { type: "text", text: "fix @a.go" } }),
+    at(2, "user_message_chunk", { content: { type: "resource_link", uri: "file:///r/a.go", name: "a.go" } }),
+  ]);
+  assert.equal(v.items.length, 1);
+  assert.deepEqual(v.items[0].kind === "user" && v.items[0].files, ["a.go"]);
+  assert.equal(v.items[0].rev, 2);
+});

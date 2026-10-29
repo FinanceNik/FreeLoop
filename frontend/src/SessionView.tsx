@@ -1,4 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
+import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Session } from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
 import { Markdown } from "./Markdown.tsx";
@@ -41,6 +43,49 @@ export default function SessionView({ session, events, provider, environment, al
   const [queued, setQueued] = useState(0);
   const bottom = useRef<HTMLDivElement>(null);
   const mode = view.mode ?? session.mode;
+  const approvalWaiting = view.items.some((i) => i.kind === "tool" && awaitingDecision(i));
+
+  // @ mentions (GUI-004): the project's files load when the picker opens and
+  // reload when the list is older than ten seconds.
+  const input = useRef<HTMLTextAreaElement>(null);
+  const [mention, setMention] = useState<Mention | null>(null);
+  const [dismissed, setDismissed] = useState<number | null>(null);
+  const [pick, setPick] = useState(0);
+  const [files, setFiles] = useState<string[] | null>(null);
+  const filesAt = useRef(0);
+  useEffect(() => {
+    setFiles(null);
+    filesAt.current = 0;
+  }, [session.id]);
+  const loadFiles = () => {
+    if (Date.now() - filesAt.current < 10_000) return;
+    filesAt.current = Date.now();
+    EngineService.ProjectFiles(session.id)
+      .then((list) => setFiles(list ?? []))
+      .catch((err) => {
+        setFiles([]);
+        onError(err);
+      });
+  };
+  const syncMention = (el: HTMLTextAreaElement) => {
+    const m = el.selectionStart === el.selectionEnd ? mentionAt(el.value, el.selectionStart) : null;
+    if (m && m.start === dismissed) return setMention(null);
+    if (m && (m.start !== mention?.start || m.query !== mention?.query)) setPick(0);
+    setMention(m);
+    if (m) loadFiles();
+  };
+  const matches = useMemo(() => (mention && files ? rankFiles(mention.query, files) : []), [mention, files]);
+  const choose = (path: string) => {
+    const el = input.current;
+    if (!el || !mention) return;
+    const r = insertMention(draft, mention, el.selectionStart, path);
+    setDraft(r.text);
+    setMention(null);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(r.caret, r.caret);
+    });
+  };
 
   // Follow the conversation as it grows.
   useEffect(() => {
@@ -63,7 +108,29 @@ export default function SessionView({ session, events, provider, environment, al
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+    if (e.nativeEvent.isComposing) return;
+    if (mention && matches.length > 0) {
+      const n = matches.length;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setPick((p) => (p + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
+        return;
+      }
+      if ((e.key === "Enter" && !e.metaKey) || e.key === "Tab") {
+        e.preventDefault();
+        choose(matches[Math.min(pick, n - 1)]);
+        return;
+      }
+    }
+    if (mention && e.key === "Escape") {
+      e.preventDefault();
+      setDismissed(mention.start);
+      setMention(null);
+      return;
+    }
+    // ⌘↩ answers a waiting approval (see shortcuts.ts) instead of sending.
+    if (e.metaKey && approvalWaiting) return;
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
     }
@@ -144,12 +211,41 @@ export default function SessionView({ session, events, provider, environment, al
       </div>
 
       <div className="composer">
+        {mention && (
+          <ul className="mention-picker" role="listbox" aria-label="Files">
+            {files === null && <li className="muted">Listing files…</li>}
+            {files !== null && matches.length === 0 && <li className="muted">No matching files</li>}
+            {matches.map((f, i) => (
+              <li
+                key={f}
+                role="option"
+                aria-selected={i === pick}
+                className={i === pick ? "picked" : ""}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(f);
+                }}
+                onMouseEnter={() => setPick(i)}
+              >
+                <span>{f.slice(f.lastIndexOf("/") + 1)}</span> <span className="muted">{f}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <textarea
+          ref={input}
           aria-label="Message"
-          placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation…"}
+          aria-autocomplete="list"
+          placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file."}
           value={draft}
           rows={3}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (dismissed !== null && !e.target.value.slice(dismissed).startsWith("@")) setDismissed(null);
+            syncMention(e.target);
+          }}
+          onSelect={(e) => syncMention(e.currentTarget)}
+          onBlur={() => setMention(null)}
           onKeyDown={onKeyDown}
         />
         <div className="composer-actions">
@@ -179,7 +275,20 @@ const ItemView = memo(
 function ItemBody({ item, onError }: { item: Item; onError: (err: unknown) => void }) {
   switch (item.kind) {
     case "user":
-      return <div className="msg msg-user">{item.text}</div>;
+      return (
+        <div className="msg msg-user">
+          {item.text}
+          {item.files.length > 0 && (
+            <div className="attached" aria-label="Attached files">
+              {item.files.map((f) => (
+                <code key={f} title="Attached to this message">
+                  {f}
+                </code>
+              ))}
+            </div>
+          )}
+        </div>
+      );
     case "agent":
       return (
         <div className="msg msg-agent">
@@ -219,6 +328,26 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
     EngineService.Decide({ requestId: item.permission!.requestId, optionId, reason, scope }).catch(onError);
   const offersAlways = item.permission?.options.some((o) => o.kind === "allow_always");
 
+  // Shortcuts (GUI-006) go to the first waiting card on screen only.
+  const box = useRef<HTMLDivElement>(null);
+  const shownAt = useRef(0);
+  useEffect(() => {
+    if (!waiting) return;
+    shownAt.current = Date.now();
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.repeat || e.defaultPrevented || e.isComposing) return;
+      if (document.querySelector(".approval") !== box.current) return;
+      const kind = approvalShortcut(e, isTextField(e.target));
+      const opt = kind && item.permission?.options.find((o) => optionKind(o.kind) === kind);
+      if (!opt) return;
+      e.preventDefault();
+      if (Date.now() - shownAt.current < APPROVAL_GRACE_MS) return;
+      decide(opt.optionId);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [waiting, item.permission, reason, scope]);
+
   const plan = item.tool === "present_plan" ? String((item.input as { plan?: string } | null)?.plan ?? "") : null;
 
   return (
@@ -248,7 +377,7 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
         </p>
       )}
       {waiting && (
-        <div className="approval" role="group" aria-label="Approve this tool call">
+        <div className="approval" role="group" aria-label="Approve this tool call" ref={box}>
           {item.permission?.command && (
             <p>
               Run <code>{item.permission.command}</code>?
@@ -267,11 +396,21 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
                 <option value="global">Always: everywhere</option>
               </select>
             )}
-            {item.permission!.options.map((o) => (
-              <button key={o.optionId} className={o.kind.startsWith("allow") ? "primary" : "danger"} onClick={() => decide(o.optionId)}>
-                {o.name}
-              </button>
-            ))}
+            {item.permission!.options.map((o) => {
+              const kind = optionKind(o.kind);
+              const hint = kind ? APPROVAL_HINTS[kind] : null;
+              return (
+                <button
+                  key={o.optionId}
+                  className={o.kind.startsWith("allow") ? "primary" : "danger"}
+                  onClick={() => decide(o.optionId)}
+                  title={hint ? `Shortcut: ${hint}` : undefined}
+                >
+                  {o.name}
+                  {hint && <kbd>{hint.split(" ")[0]}</kbd>}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

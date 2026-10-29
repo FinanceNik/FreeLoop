@@ -59,10 +59,25 @@ const (
 	StopError     StopReason = "error"
 )
 
+// Prompt is one user message: its text and the files it mentions, which the
+// engine reads and embeds the way an ACP client embeds resources (GUI-004).
+type Prompt struct {
+	Text      string
+	Resources []Resource
+}
+
+// Resource is a file embedded in a prompt.
+type Resource struct {
+	// Path is relative to the project root; URI is its file:// form.
+	Path string
+	URI  string
+	Text string
+}
+
 // Session is one running conversation.
 type Session interface {
 	// Prompt runs one user turn to completion. Cancelling ctx stops it.
-	Prompt(ctx context.Context, text string) (StopReason, error)
+	Prompt(ctx context.Context, p Prompt) (StopReason, error)
 	Mode() permission.Mode
 	// SetMode takes effect on the next tool call (GUI-007).
 	SetMode(m permission.Mode)

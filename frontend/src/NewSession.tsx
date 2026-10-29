@@ -10,6 +10,7 @@ import {
   type ProviderInfo,
   type Session,
 } from "./api.ts";
+import { orderModels } from "./models.ts";
 import type { Defaults } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
   defaults?: Defaults;
   onCreated: (s: Session) => void;
   onManageProviders: () => void;
+  onProvidersChanged: () => void;
   onError: (err: unknown) => void;
 }
 
@@ -29,7 +31,7 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, defaults, onCreated, onManageProviders, onError }: Props) {
+export default function NewSession({ providers, projects, environments, defaults, onCreated, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers[0];
   const [root, setRoot] = useState("");
@@ -90,6 +92,22 @@ export default function NewSession({ providers, projects, environments, defaults
     if (project) setEnvironmentId(project.defaultEnvironmentId || defaults?.environmentId || "local");
   }, [project?.id]);
   const env = environments.find((e) => e.id === (environmentId || "local"));
+
+  // Favorites and hidden models (PRV-003).
+  const current = providers.find((p) => p.id === providerId);
+  const favorites = current?.favorites ?? [];
+  const hidden = current?.hidden ?? [];
+  const [showHidden, setShowHidden] = useState(false);
+  const listed = orderModels(
+    models.map((m) => m.id),
+    favorites,
+    hidden,
+    showHidden,
+  );
+  const names = new Map(models.map((m) => [m.id, m.displayName]));
+  const chosen = model.trim();
+  const flag = (favorite: boolean, hide: boolean) =>
+    EngineService.SetModelFlags(providerId, chosen, favorite, hide).then(onProvidersChanged).catch(onError);
 
   const pickProvider = (id: string) => {
     setProviderId(id);
@@ -171,15 +189,54 @@ export default function NewSession({ providers, projects, environments, defaults
           Model
           <input list="models" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Pick or type a model ID" required />
           <datalist id="models">
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.displayName && m.displayName !== m.id ? m.displayName : undefined}
-              </option>
-            ))}
+            {listed.map((id) => {
+              const name = names.get(id);
+              const label = [favorites.includes(id) && "★", hidden.includes(id) && "hidden", name && name !== id && name].filter(Boolean).join(" ");
+              return (
+                <option key={id} value={id}>
+                  {label || undefined}
+                </option>
+              );
+            })}
           </datalist>
           {modelsError && <span className="error-text">Could not list models: {modelsError}</span>}
-          {!modelsError && models.length > 0 && <span className="muted">{models.length} models available</span>}
+          {!modelsError && models.length > 0 && (
+            <span className="muted">
+              {models.length} models available
+              {hidden.length > 0 && ` · ${hidden.length} hidden`}
+            </span>
+          )}
         </label>
+        {!current?.builtin && (
+          <div className="row wrap model-flags">
+            {favorites.length > 0 && <span className="muted">Favorites:</span>}
+            {favorites.map((f) => (
+              <button type="button" key={f} className={f === chosen ? "chip chip-on" : "chip"} onClick={() => setModel(f)}>
+                {f}
+              </button>
+            ))}
+            {chosen && (
+              <>
+                <button
+                  type="button"
+                  aria-pressed={favorites.includes(chosen)}
+                  onClick={() => flag(!favorites.includes(chosen), false)}
+                  title="Favorites are listed first"
+                >
+                  {favorites.includes(chosen) ? "★ Unfavorite" : "☆ Favorite"}
+                </button>
+                <button type="button" onClick={() => flag(false, !hidden.includes(chosen))} title="Hidden models are left out of the list">
+                  {hidden.includes(chosen) ? "Unhide" : "Hide"}
+                </button>
+              </>
+            )}
+            {hidden.length > 0 && (
+              <label className="row">
+                <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show hidden
+              </label>
+            )}
+          </div>
+        )}
 
         <div className="caps" role="status">
           {capsState === "loading" && <span className="muted">Checking the model…</span>}

@@ -101,7 +101,7 @@ func TestToolLoopEndToEnd(t *testing.T) {
 	defer close(stop)
 	f.answer("allow_once", stop) // the shell call asks in accept-edits mode
 
-	reason, err := f.sess.Prompt(context.Background(), "show me the demo")
+	reason, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "show me the demo"})
 	if err != nil || reason != harness.StopEndTurn {
 		t.Fatalf("Prompt = %s, %v", reason, err)
 	}
@@ -153,7 +153,7 @@ func TestPlanModeRefusesWritesAndApprovalSwitchesMode(t *testing.T) {
 	defer close(stop)
 	f.answer("approve_accept_edits", stop)
 
-	if _, err := f.sess.Prompt(context.Background(), "plan it"); err != nil {
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "plan it"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(f.root, "x.txt")); err == nil {
@@ -187,7 +187,7 @@ func TestCancelWhileWaitingForApproval(t *testing.T) {
 		}
 		cancel()
 	}()
-	reason, _ := f.sess.Prompt(ctx, "run it")
+	reason, _ := f.sess.Prompt(ctx, harness.Prompt{Text: "run it"})
 	if reason != harness.StopCancelled {
 		t.Errorf("reason = %s", reason)
 	}
@@ -199,7 +199,7 @@ func TestCancelWhileWaitingForApproval(t *testing.T) {
 	// The next prompt continues the same context.
 	f.prov = scripted.New("p", scripted.Step{Text: "fine"})
 	f.sess.(*session).p.Provider = f.prov
-	if _, err := f.sess.Prompt(context.Background(), "never mind"); err != nil {
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "never mind"}); err != nil {
 		t.Fatal(err)
 	}
 	msgs := f.prov.Requests()[0].Messages
@@ -216,7 +216,7 @@ func TestInvalidInputAndUnknownTool(t *testing.T) {
 		}},
 		scripted.Step{Text: "done"},
 	)
-	if _, err := f.sess.Prompt(context.Background(), "go"); err != nil {
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "go"}); err != nil {
 		t.Fatal(err)
 	}
 	results := f.prov.Requests()[1].Messages[2].Parts
@@ -238,7 +238,7 @@ func TestEditFile(t *testing.T) {
 		scripted.Step{Text: "done"},
 	)
 	os.WriteFile(filepath.Join(f.root, "a.txt"), []byte("x x"), 0o644)
-	if _, err := f.sess.Prompt(context.Background(), "edit"); err != nil {
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "edit"}); err != nil {
 		t.Fatal(err)
 	}
 	results := f.prov.Requests()[1].Messages[2].Parts
@@ -261,7 +261,7 @@ func TestProtectedPathRefusedInBypass(t *testing.T) {
 		scripted.Step{Calls: []scripted.Call{{Name: "write_file", Input: map[string]any{"path": ".git/config", "content": "x"}}}},
 		scripted.Step{Text: "done"},
 	)
-	if _, err := f.sess.Prompt(context.Background(), "go"); err != nil {
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "go"}); err != nil {
 		t.Fatal(err)
 	}
 	r := f.prov.Requests()[1].Messages[2].Parts[0]
@@ -278,7 +278,7 @@ func TestDisabledToolsAreNotOffered(t *testing.T) {
 	f.sess.(*session).p.DisabledTools = []string{"shell"}
 	s := f.sess.(*session)
 	s.tools = slices.DeleteFunc(s.tools, func(t *tool) bool { return t.spec.Name == "shell" })
-	if _, err := f.sess.Prompt(context.Background(), "go"); err != nil {
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "go"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, tool := range f.prov.Requests()[0].Tools {
@@ -306,7 +306,7 @@ func TestRestoredHistoryWithUnansweredCallIsRepaired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sess.Prompt(context.Background(), "continue"); err != nil {
+	if _, err := sess.Prompt(context.Background(), harness.Prompt{Text: "continue"}); err != nil {
 		t.Fatal(err)
 	}
 	msgs := f.prov.Requests()[0].Messages
@@ -323,7 +323,7 @@ func TestInstructionFileLinkedOutsideIsNotRead(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "notes.md")
 	os.WriteFile(outside, []byte("PRIVATE NOTES"), 0o600)
 	os.Symlink(outside, filepath.Join(f.root, "AGENTS.md"))
-	if _, err := f.sess.Prompt(context.Background(), "hi"); err != nil {
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "hi"}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(f.prov.Requests()[0].System, "PRIVATE NOTES") {
@@ -344,7 +344,7 @@ func TestNestedAgentsFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(f.root, "web", "AGENTS.md"), []byte("Use pnpm in web."), 0o644)
 	os.WriteFile(filepath.Join(f.root, "api", "AGENTS.md"), []byte("API rule."), 0o644)
 	os.WriteFile(filepath.Join(f.root, "web", "src", "app.ts"), []byte("x"), 0o644)
-	if _, err := f.sess.Prompt(context.Background(), "go"); err != nil {
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "go"}); err != nil {
 		t.Fatal(err)
 	}
 	reqs := f.prov.Requests()
@@ -359,5 +359,30 @@ func TestNestedAgentsFiles(t *testing.T) {
 	}
 	if !strings.Contains(reqs[1].System, "Root rule.") {
 		t.Error("root AGENTS.md missing")
+	}
+}
+
+func TestPromptEmbedsResources(t *testing.T) {
+	f := setup(t, permission.ModeAsk, scripted.Step{Text: "ok"})
+	p := harness.Prompt{Text: "look at @a.go", Resources: []harness.Resource{{Path: "a.go", URI: "file:///r/a.go", Text: "package a"}}}
+	if _, err := f.sess.Prompt(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+	var links []event.ContentBlock
+	for _, ev := range f.log.all() {
+		if ev.Type == event.UserMessageChunk {
+			var c event.MessageChunk
+			json.Unmarshal(ev.Data, &c)
+			if c.Content.Type == "resource_link" {
+				links = append(links, c.Content)
+			}
+		}
+	}
+	if len(links) != 1 || links[0].Name != "a.go" || links[0].URI != "file:///r/a.go" {
+		t.Errorf("resource links = %+v", links)
+	}
+	parts := f.prov.Requests()[0].Messages[0].Parts
+	if len(parts) != 2 || parts[0].Text != "look at @a.go" || parts[1].Text != "<file path=\"a.go\">\npackage a\n</file>" {
+		t.Errorf("user parts = %+v", parts)
 	}
 }

@@ -94,7 +94,7 @@ export interface ToolContent {
 // Every item carries rev, the seq of the last event that changed it, so the
 // view can skip re-rendering items that did not change.
 export type Item =
-  | { kind: "user"; key: string; rev: number; text: string; ts: string }
+  | { kind: "user"; key: string; rev: number; text: string; ts: string; files: string[] }
   | { kind: "agent"; key: string; rev: number; text: string }
   | { kind: "thought"; key: string; rev: number; text: string }
   | {
@@ -156,9 +156,16 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
     const key = String(ev.seq);
     const rev = ev.seq;
     switch (ev.type) {
-      case "user_message_chunk":
-        items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts });
+      case "user_message_chunk": {
+        // A resource_link is a file the message mentions (GUI-004).
+        const prev = last();
+        if (d.content?.type === "resource_link") {
+          if (prev?.kind === "user") items[items.length - 1] = { ...prev, rev, files: [...prev.files, d.content.name ?? d.content.uri] };
+          break;
+        }
+        items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [] });
         break;
+      }
       case "agent_message_chunk":
       case "agent_thought_chunk": {
         const kind = ev.type === "agent_message_chunk" ? "agent" : "thought";

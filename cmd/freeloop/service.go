@@ -81,6 +81,15 @@ func (s *EngineService) SetToolsOverride(providerID, model string, tools *bool) 
 	return s.eng.SetToolsOverride(providerID, model, tools)
 }
 
+func (s *EngineService) SetModelFlags(providerID, model string, favorite, hidden bool) error {
+	return s.eng.SetModelFlags(providerID, model, favorite, hidden)
+}
+
+// ProjectFiles lists a session's project files for the @ picker.
+func (s *EngineService) ProjectFiles(ctx context.Context, sessionID string) ([]string, error) {
+	return s.eng.ProjectFiles(ctx, sessionID)
+}
+
 func (s *EngineService) ListRules(sessionID string) []permission.Rule {
 	return s.eng.ListRules(sessionID)
 }

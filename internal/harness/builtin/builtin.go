@@ -166,11 +166,16 @@ func (s *session) appendUser(parts ...provider.Part) {
 	s.commit(len(s.history), provider.Message{Role: provider.RoleUser, Parts: parts})
 }
 
-func (s *session) Prompt(ctx context.Context, text string) (harness.StopReason, error) {
+func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopReason, error) {
 	s.p.Emit(event.TurnStarted, struct{}{})
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "running"})
-	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: text}})
-	s.appendUser(provider.Part{Type: provider.PartText, Text: text})
+	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}})
+	parts := []provider.Part{{Type: provider.PartText, Text: p.Text}}
+	for _, r := range p.Resources {
+		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "resource_link", URI: r.URI, Name: r.Path}})
+		parts = append(parts, provider.Part{Type: provider.PartText, Text: fmt.Sprintf("<file path=%q>\n%s\n</file>", r.Path, r.Text)})
+	}
+	s.appendUser(parts...)
 
 	stop, err := s.loop(ctx)
 	if err != nil {

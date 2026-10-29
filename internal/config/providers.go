@@ -31,11 +31,17 @@ type Provider struct {
 	Models map[string]ModelSettings `yaml:"models,omitempty" json:"models,omitempty"`
 }
 
-// ModelSettings are a user's choices for one model (PRV-005).
+// ModelSettings are a user's choices for one model (PRV-003, PRV-005).
 type ModelSettings struct {
 	// Tools overrides detected tool-calling support.
 	Tools *bool `yaml:"tools,omitempty" json:"tools,omitempty"`
+	// Favorite models are listed first; hidden ones only on request.
+	Favorite bool `yaml:"favorite,omitempty" json:"favorite,omitempty"`
+	Hidden   bool `yaml:"hidden,omitempty" json:"hidden,omitempty"`
 }
+
+// IsZero reports whether s holds no choice, so it need not be stored.
+func (s ModelSettings) IsZero() bool { return s.Tools == nil && !s.Favorite && !s.Hidden }
 
 type providersFile struct {
 	Version   int        `yaml:"version"`

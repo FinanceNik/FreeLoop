@@ -93,8 +93,10 @@
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": { "type": "string", "description": "ACP content block type. v0 fixes only \"text\"." },
-        "text": { "type": "string" }
+        "type": { "type": "string", "description": "ACP content block type: \"text\", or \"resource_link\" for a file a user message mentions." },
+        "text": { "type": "string" },
+        "uri": { "type": "string", "description": "resource_link: the file's file:// URI." },
+        "name": { "type": "string", "description": "resource_link: the path relative to the project root." }
       }
     },
     "messageChunk": {

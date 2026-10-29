@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -43,10 +44,22 @@ type ProviderInfo struct {
 	HasKey       bool   `json:"hasKey"`
 	// Builtin marks providers that are not in providers.yaml.
 	Builtin bool `json:"builtin"`
+	// Favorites and Hidden are the user's model lists (PRV-003).
+	Favorites []string `json:"favorites"`
+	Hidden    []string `json:"hidden"`
 }
 
 func info(c config.Provider) ProviderInfo {
-	return ProviderInfo{ID: c.ID, Name: c.Name, Type: c.Type, Preset: c.Preset, BaseURL: c.BaseURL, DefaultModel: c.DefaultModel, HasKey: c.APIKey != ""}
+	pi := ProviderInfo{ID: c.ID, Name: c.Name, Type: c.Type, Preset: c.Preset, BaseURL: c.BaseURL, DefaultModel: c.DefaultModel, HasKey: c.APIKey != "", Favorites: []string{}, Hidden: []string{}}
+	for _, m := range slices.Sorted(maps.Keys(c.Models)) {
+		if c.Models[m].Favorite {
+			pi.Favorites = append(pi.Favorites, m)
+		}
+		if c.Models[m].Hidden {
+			pi.Hidden = append(pi.Hidden, m)
+		}
+	}
+	return pi
 }
 
 // PresetInfo prefills the provider form (PRV-001).
@@ -345,6 +358,23 @@ func (e *Engine) saveProbe(providerID, model string, tools bool) {
 // SetToolsOverride records the user's choice for a model's tool support;
 // nil removes the override (PRV-005).
 func (e *Engine) SetToolsOverride(providerID, model string, tools *bool) error {
+	return e.updateModel(providerID, model, func(s *config.ModelSettings) { s.Tools = tools })
+}
+
+// SetModelFlags marks a model as a favorite or hidden; a model is not both
+// (PRV-003).
+func (e *Engine) SetModelFlags(providerID, model string, favorite, hidden bool) error {
+	if model == "" {
+		return errors.New("no model")
+	}
+	if favorite && hidden {
+		return errors.New("a model cannot be both a favorite and hidden")
+	}
+	return e.updateModel(providerID, model, func(s *config.ModelSettings) { s.Favorite, s.Hidden = favorite, hidden })
+}
+
+// updateModel changes one model's settings in providers.yaml.
+func (e *Engine) updateModel(providerID, model string, change func(*config.ModelSettings)) error {
 	e.mu.Lock()
 	cfgs := slices.Clone(e.providers.configs)
 	e.mu.Unlock()
@@ -357,8 +387,8 @@ func (e *Engine) SetToolsOverride(providerID, model string, tools *bool) error {
 		models[k] = v
 	}
 	s := models[model]
-	s.Tools = tools
-	if s.Tools == nil {
+	change(&s)
+	if s.IsZero() {
 		delete(models, model)
 	} else {
 		models[model] = s
