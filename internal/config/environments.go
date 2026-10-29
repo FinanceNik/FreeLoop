@@ -35,6 +35,9 @@ type Environment struct {
 	DisabledTools []string `yaml:"disabledTools,omitempty" json:"disabledTools"`
 	// DefaultMode is the permission mode new sessions start in.
 	DefaultMode string `yaml:"defaultMode,omitempty" json:"defaultMode"`
+	// Rules apply to every session in the environment, between the global
+	// and the profile rules (SEC-002).
+	Rules []permission.Rule `yaml:"rules,omitempty" json:"rules"`
 }
 
 var varName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -54,6 +57,11 @@ func (e Environment) Validate() error {
 	for k := range e.Env {
 		if !varName.MatchString(k) {
 			return fmt.Errorf("env: %q is not a valid variable name", k)
+		}
+	}
+	for i, r := range e.Rules {
+		if err := r.Validate(); err != nil {
+			return fmt.Errorf("rules[%d]: %w", i, err)
 		}
 	}
 	for k, ref := range e.Secrets {
@@ -105,6 +113,9 @@ func LoadEnvironments(dir string) ([]Environment, []Issue, error) {
 		e.ID = id
 		if e.Kind == "" {
 			e.Kind = "local"
+		}
+		for i := range e.Rules {
+			e.Rules[i].Scope, e.Rules[i].Source = permission.ScopeEnvironment, filepath.Join(EnvironmentsDir, id+".yaml")
 		}
 		if err := e.Validate(); err != nil {
 			issues = append(issues, Issue{File: path, Message: err.Error()})

@@ -28,6 +28,8 @@ type Scope string
 const (
 	ScopeGlobal  Scope = "global"
 	ScopeSession Scope = "session"
+	// ScopeEnvironment rules come from an environment file (SEC-002).
+	ScopeEnvironment Scope = "environment"
 	// ScopeProfile rules come from a harness profile (HRN-003).
 	ScopeProfile Scope = "profile"
 	// ScopeProject rules come from a trusted project's .freeloop/ and can

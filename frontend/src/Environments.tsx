@@ -106,6 +106,8 @@ export default function Environments({ environments, onChanged, onError }: Props
                 {Object.keys(env.env ?? {}).length} variables · {(env.secretNames ?? []).length} secrets
                 {(env.secretNames ?? []).length > 0 && ` (${(env.secretNames ?? []).join(", ")})`}
                 {(env.disabledTools ?? []).length > 0 && ` · tools off: ${(env.disabledTools ?? []).join(", ")}`}
+                {(env.rules ?? []).length > 0 &&
+                  ` · rules: ${(env.rules ?? []).map((r) => `${r.effect} ${r.tool}${r.command ? `(${r.command})` : r.path ? `(${r.path})` : ""}`).join(", ")} (edit environments/${env.id}.yaml)`}
                 {env.defaultMode && ` · starts in ${MODES.find((m) => m.id === env.defaultMode)?.name ?? env.defaultMode}`}
               </div>
             </div>

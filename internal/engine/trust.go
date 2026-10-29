@@ -178,7 +178,7 @@ func (e *Engine) sessionProject(ctx context.Context, ses session.Session) sessio
 	return p
 }
 
-// scopedRules returns a session's profile and project rules for the
+// scopedRules returns a session's environment, profile and project rules for the
 // broker, with the error that makes it fail closed.
 func (e *Engine) scopedRules(sid string) ([]permission.Rule, error) {
 	ctx := context.Background()
@@ -189,6 +189,13 @@ func (e *Engine) scopedRules(sid string) ([]permission.Rule, error) {
 	project := e.sessionProject(ctx, ses)
 	pc := e.projectConfig(project)
 	var out []permission.Rule
+	envID := ses.EnvironmentID
+	if envID == "" {
+		envID = DefaultEnvironmentID
+	}
+	if env, err := e.environment(envID); err == nil {
+		out = append(out, env.Rules...)
+	}
 	if prof, err := e.profileFor(project, ses.ProfileID); err == nil {
 		out = append(out, prof.Rules...)
 	}

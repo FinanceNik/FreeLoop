@@ -12,6 +12,7 @@ import (
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -257,5 +258,44 @@ func TestProjectsFingerprintAndRelink(t *testing.T) {
 	}
 	if got, err := e.RelinkProject(ctx, p.ID, moved); err != nil || !strings.HasSuffix(got.Root, "moved") {
 		t.Errorf("relink = %+v, %v", got, err)
+	}
+}
+
+// SEC-002: an environment's rules apply to its sessions; a deny there wins
+// over a global allow, and saving the environment from the form keeps them.
+func TestEnvironmentScopeRules(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
+	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "ci.yaml"), []byte("name: CI\nrules:\n  - effect: deny\n    tool: shell\n    command: git push *\n"), 0o600)
+	e.loadEnvironments()
+	if err := e.AddRule(permission.Rule{Effect: permission.Allow, Tool: "shell", Command: "git *"}); err != nil {
+		t.Fatal(err)
+	}
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProviderID: DemoProviderID, EnvironmentID: "ci"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules, _ := e.rules.Rules(ses.ID)
+	var deny *permission.Rule
+	for i := range rules {
+		if rules[i].Scope == permission.ScopeEnvironment {
+			deny = &rules[i]
+		}
+	}
+	if deny == nil || deny.Source != "environments/ci.yaml" {
+		t.Fatalf("rules = %+v", rules)
+	}
+	d := e.broker.Request(ctx, permission.Context{Mode: permission.ModeAsk, Root: ses.ProjectRoot}, permission.Request{SessionID: ses.ID, Tool: "shell", Kind: permission.KindExecute, Command: "git push origin"})
+	if d.Outcome != permission.Denied {
+		t.Errorf("git push in the CI environment = %s", d.Outcome)
+	}
+	if _, err := e.SaveEnvironment(SaveEnvironmentRequest{ID: "ci", Name: "CI renamed"}); err != nil {
+		t.Fatal(err)
+	}
+	if env, _ := e.environment("ci"); len(env.Rules) != 1 {
+		t.Error("saving from the form dropped the rules")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
@@ -29,6 +30,8 @@ type EnvironmentInfo struct {
 	SecretNames   []string          `json:"secretNames"`
 	DisabledTools []string          `json:"disabledTools"`
 	DefaultMode   string            `json:"defaultMode"`
+	// Rules come from the environment's file (SEC-002); edit them there.
+	Rules []permission.Rule `json:"rules"`
 }
 
 func envInfo(c config.Environment) EnvironmentInfo {
@@ -41,7 +44,11 @@ func envInfo(c config.Environment) EnvironmentInfo {
 	if tools == nil {
 		tools = []string{}
 	}
-	return EnvironmentInfo{ID: c.ID, Name: c.Name, Kind: c.Kind, Env: env, SecretNames: names, DisabledTools: tools, DefaultMode: c.DefaultMode}
+	rules := c.Rules
+	if rules == nil {
+		rules = []permission.Rule{}
+	}
+	return EnvironmentInfo{ID: c.ID, Name: c.Name, Kind: c.Kind, Env: env, SecretNames: names, DisabledTools: tools, DefaultMode: c.DefaultMode, Rules: rules}
 }
 
 func (e *Engine) loadEnvironments() {
@@ -125,7 +132,8 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 		cur = envs[i]
 	}
 
-	next := config.Environment{ID: cur.ID, Name: req.Name, Kind: cur.Kind, DefaultMode: req.DefaultMode, Secrets: map[string]string{}}
+	// Rules are edited in the file; the form keeps them.
+	next := config.Environment{ID: cur.ID, Name: req.Name, Kind: cur.Kind, DefaultMode: req.DefaultMode, Secrets: map[string]string{}, Rules: cur.Rules}
 	if len(req.Env) > 0 {
 		next.Env = map[string]string{}
 		for k, v := range req.Env {
