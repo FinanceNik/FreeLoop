@@ -19,6 +19,7 @@ type transcript struct {
 	f       *os.File
 	lastSeq int64
 	dirty   bool
+	search  indexer // guarded by mu
 }
 
 // openTranscript opens path for appending. A torn last line, left by a crash

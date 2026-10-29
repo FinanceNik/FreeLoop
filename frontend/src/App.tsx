@@ -15,8 +15,10 @@ import {
   type ProjectInfo,
   type ProviderInfo,
   type Session,
+  type SessionHits,
 } from "./api.ts";
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
+import { HIT_LABEL, snippetParts } from "./search.ts";
 import SessionView from "./SessionView.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
@@ -31,7 +33,7 @@ import MCP from "./MCP.tsx";
 import ClaudeImport from "./ClaudeImport.tsx";
 
 type Screen =
-  | { kind: "session"; id: string }
+  | { kind: "session"; id: string; focus?: { seq: number; n: number } }
   | { kind: "new"; root?: string }
   | { kind: "onboarding" }
   | { kind: "providers" }
@@ -75,6 +77,8 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  // Full-text results for the sidebar query (SES-007), for that query.
+  const [found, setFound] = useState<{ query: string; results: SessionHits[] } | null>(null);
   // Sessions that need the user (GUI-002).
   const [attention, setAttention] = useState<AttentionItem[]>([]);
 
@@ -226,8 +230,8 @@ export default function App() {
     });
   }, []);
 
-  const openSession = (sid: string) => {
-    setScreen({ kind: "session", id: sid });
+  const openSession = (sid: string, seq?: number) => {
+    setScreen({ kind: "session", id: sid, focus: seq ? { seq, n: Date.now() } : undefined });
     setLastSessionId(sid);
     if (!transcriptsRef.current[sid]) catchUp(sid);
   };
@@ -270,6 +274,21 @@ export default function App() {
         refreshSessions();
       })
       .catch(report);
+
+  // The query also searches every transcript, once typing pauses.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setFound(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      EngineService.Search(q)
+        .then((results) => setFound({ query: q, results: results ?? [] }))
+        .catch(report);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   // Sessions grouped under their projects (GUI-001); sessions from before
   // projects existed are grouped by folder.
@@ -374,7 +393,38 @@ export default function App() {
             </section>
           ))}
           {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
-          {sessions.length > 0 && visible.length === 0 && <p className="muted">No sessions match.</p>}
+          {sessions.length > 0 && visible.length === 0 && !found?.results.length && <p className="muted">No sessions match.</p>}
+          {found && found.query === query.trim() && found.results.length > 0 && (
+            <section className="project-group search-results" aria-label="Found in transcripts">
+              <h2 className="project-name">In transcripts</h2>
+              <ul>
+                {found.results.map((r) => {
+                  const s = sessions.find((x) => x.id === r.sessionId);
+                  if (!s) return null;
+                  return (
+                    <li key={r.sessionId}>
+                      <span className="session-title search-session" title={s.projectRoot}>
+                        {s.title}
+                        {s.status === "archived" && <span className="muted"> · archived</span>}
+                      </span>
+                      <ul>
+                        {(r.hits ?? []).map((h, i) => (
+                          <li key={i}>
+                            <button className="search-hit" onClick={() => openSession(s.id, h.seq)}>
+                              <span className="muted search-kind">{HIT_LABEL[h.kind] ?? h.kind}</span>
+                              <span className="search-snippet">
+                                {snippetParts(h.snippet).map((p, j) => (p.mark ? <mark key={j}>{p.text}</mark> : <span key={j}>{p.text}</span>))}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
         </nav>
         <footer className="row">
           <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
@@ -412,6 +462,7 @@ export default function App() {
           <SessionView
             key={selected.id}
             session={selected}
+            focus={screen.focus}
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
             providers={providers}

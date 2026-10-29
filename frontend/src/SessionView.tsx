@@ -6,10 +6,13 @@ import { EngineService, MODES, type EnvironmentInfo, type HarnessInfo, type Proj
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel from "./SessionPanel.tsx";
+import { itemForSeq } from "./search.ts";
 
 interface Props {
   session: Session;
   events: TranscriptEvent[];
+  // A search hit to scroll to (SES-007); n tells repeated jumps apart.
+  focus?: { seq: number; n: number };
   provider?: ProviderInfo;
   providers: ProviderInfo[];
   environment?: EnvironmentInfo;
@@ -45,7 +48,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
+export default function SessionView({ session, events, focus, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -163,10 +166,30 @@ export default function SessionView({ session, events, provider, providers, envi
     });
   };
 
-  // Follow the conversation as it grows.
+  // Follow the conversation as it grows, unless a search hit is shown.
+  const holdBottom = useRef(false);
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "end" });
+    if (!holdBottom.current) bottom.current?.scrollIntoView({ block: "end" });
   }, [view.items.length, view.items[view.items.length - 1]]);
+
+  // Scroll to a search hit once its item is there and mark it for a moment.
+  const [focused, setFocused] = useState<string | null>(null);
+  const shown = useRef(0);
+  useEffect(() => {
+    if (!focus || shown.current === focus.n) return;
+    const key = itemForSeq(view.items, focus.seq);
+    const el = key && document.querySelector<HTMLElement>(`[data-item="${key}"]`);
+    if (!el) return;
+    shown.current = focus.n;
+    holdBottom.current = true;
+    // Items above have estimated heights until rendered; scroll again once
+    // they settle.
+    el.scrollIntoView({ block: "center" });
+    setTimeout(() => el.scrollIntoView({ block: "center" }), 80);
+    setFocused(key);
+    const t = setTimeout(() => setFocused(null), 2500);
+    return () => clearTimeout(t);
+  }, [focus, view.items]);
 
   useEffect(() => {
     if (!view.running) setQueued(0);
@@ -181,6 +204,7 @@ export default function SessionView({ session, events, provider, providers, envi
       setMode(m);
       return;
     }
+    holdBottom.current = false;
     EngineService.Prompt(session.id, text)
       .then((r) => {
         setDraft("");
@@ -379,7 +403,7 @@ export default function SessionView({ session, events, provider, providers, envi
         <div className="conversation" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {view.items.map((item) => (
-            <ItemView key={item.key} item={item} onError={onError} onRewind={rewind} />
+            <ItemView key={item.key} item={item} focused={item.key === focused} onError={onError} onRewind={rewind} />
           ))}
           {view.running && (
             <p className="muted working">{view.status === "queued" ? "Waiting for a free slot on the provider…" : "Working…"}</p>
@@ -481,14 +505,25 @@ export default function SessionView({ session, events, provider, providers, envi
 
 // ItemView re-renders only when its item changed (see Item.rev).
 const ItemView = memo(
-  function ItemView({ item, onError, onRewind }: { item: Item; onError: (err: unknown) => void; onRewind: (seq: number, text: string) => void }) {
+  function ItemView({
+    item,
+    focused,
+    onError,
+    onRewind,
+  }: {
+    item: Item;
+    focused: boolean;
+    onError: (err: unknown) => void;
+    onRewind: (seq: number, text: string) => void;
+  }) {
+    const cls = [item.rewound && "rewound", focused && "found"].filter(Boolean).join(" ");
     return (
-      <div className={item.rewound ? "rewound" : undefined}>
+      <div data-item={item.key} className={cls || undefined}>
         <ItemBody item={item} onError={onError} onRewind={onRewind} />
       </div>
     );
   },
-  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev,
+  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused,
 );
 
 function ItemBody({ item, onError, onRewind }: { item: Item; onError: (err: unknown) => void; onRewind: (seq: number, text: string) => void }) {

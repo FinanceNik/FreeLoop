@@ -1390,3 +1390,57 @@ fieldset {
   display: inline-flex;
   gap: 4px;
 }
+
+/* Search across sessions (SES-007) */
+.search-results ul ul {
+  margin: 2px 0 8px;
+}
+
+.search-session {
+  display: block;
+  font-size: 13px;
+  padding: 2px 6px;
+}
+
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  margin-bottom: 2px;
+  text-align: left;
+  font-size: 12px;
+  background: transparent;
+  border-color: transparent;
+}
+
+.search-hit:hover {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+.search-kind {
+  font-size: 11px;
+}
+
+.search-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.search-snippet mark,
+.found {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: inherit;
+  border-radius: 3px;
+}
+
+.found {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 2px;
+  transition: background 0.4s;
+}

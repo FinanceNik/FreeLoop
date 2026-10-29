@@ -56,8 +56,10 @@ type Store struct {
 	mu    sync.Mutex // guards files
 	files map[string]*transcript
 
-	stop chan struct{}
-	done chan struct{}
+	stop    chan struct{}
+	done    chan struct{}
+	cancel  context.CancelFunc // stops the background indexing
+	indexed sync.WaitGroup
 }
 
 // Open opens or creates the store in opts.Dir.
@@ -96,11 +98,20 @@ func Open(opts Options) (*Store, error) {
 		interval = 200 * time.Millisecond
 	}
 	go s.syncLoop(interval)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.indexed.Add(1)
+	go func() {
+		defer s.indexed.Done()
+		s.IndexAll(ctx)
+	}()
 	return s, nil
 }
 
 // Close fsyncs and closes every open transcript and the database.
 func (s *Store) Close() error {
+	s.cancel()
+	s.indexed.Wait()
 	close(s.stop)
 	<-s.done
 	s.mu.Lock()
@@ -231,7 +242,9 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 		}
 		// The transcript is the source of truth; a failed index update is
 		// repaired from it on the next open, so it does not fail the append.
-		s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE sessions SET `+sets+` WHERE id = ?`, append(args, sid)...)
+		s.index(ctx, t, sid, ev, sets, args)
+	} else {
+		s.index(ctx, t, sid, ev, "", nil)
 	}
 	if s.onAppend != nil {
 		s.onAppend(ev)
@@ -358,6 +371,8 @@ var migrations = []string{
 	`ALTER TABLE sessions ADD COLUMN external_id TEXT NOT NULL DEFAULT '';`,
 	`ALTER TABLE sessions ADD COLUMN worktree TEXT NOT NULL DEFAULT '';
 	ALTER TABLE projects ADD COLUMN worktree_default TEXT NOT NULL DEFAULT '';`,
+	`CREATE VIRTUAL TABLE search USING fts5(body, session_id UNINDEXED, seq UNINDEXED, kind UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
+	ALTER TABLE sessions ADD COLUMN search_seq INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.
@@ -403,6 +418,9 @@ func (s *Store) DeleteSession(ctx context.Context, sid string) error {
 	s.mu.Unlock()
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ?`, sid); err != nil {
 		return fmt.Errorf("store: delete session: %w", err)
+	}
+	if err := deleteIndex(ctx, s.db, sid); err != nil {
+		return fmt.Errorf("store: delete search index: %w", err)
 	}
 	if err := os.RemoveAll(s.sessionDir(sid)); err != nil {
 		return fmt.Errorf("store: remove transcript: %w", err)

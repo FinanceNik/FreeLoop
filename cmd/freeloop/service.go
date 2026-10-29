@@ -223,6 +223,10 @@ func (s *EngineService) Rewind(ctx context.Context, sessionID string, seq int64)
 	return s.eng.Rewind(ctx, sessionID, seq)
 }
 
+func (s *EngineService) Search(ctx context.Context, query string) ([]engine.SessionHits, error) {
+	return s.eng.Search(ctx, query)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

@@ -116,7 +116,7 @@ With M2's buildable work done, the v1 features come in this order, chosen for wh
 2. **Context compaction (HRN-013).** *Built 2026-10-29.* A context meter; at 80 % of the model's window the built-in harness summarises older turns into one message, records the compaction in the transcript and continues; a manual compact command.
 3. **Docker and devcontainer environment (ENV-005, ENV-006, ENV-007, OQ-014).** *Built 2026-10-29, tested against Colima.* An environment kind that runs every command, file access and external agent inside a container built from `.devcontainer/devcontainer.json` or an image, the repository bind-mounted, with setup and health checks.
 4. **Checkpoints and rewind (SES-014).** *Built 2026-10-29.* A snapshot of the working tree before each turn that changes files; "rewind to here" on a user message restores the files and the context.
-5. **Search across sessions (SES-007).** An SQLite full-text index over transcripts, searched from the sidebar.
+5. **Search across sessions (SES-007).** *Built 2026-10-29.* An SQLite full-text index over transcripts, searched from the sidebar.
 6. **Cost estimates (PRV-008).** A price table per model, cost per turn, session and day.
 7. **Command palette (GUI-014).** ⌘K for sessions, profiles, pages, actions and slash commands.
 8. **Hooks (EXT-005).** Scripts on session start, before and after tool calls and on permission requests, JSON on stdin, an exit-code contract that can block a call.

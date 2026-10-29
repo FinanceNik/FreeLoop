@@ -257,6 +257,8 @@ One versioned schema (EXT-002), a strict superset of ACP's `session/update` vari
 
 *As built for v1 (SES-014):* before each prompt the engine snapshots the session's folder into `sessions/<id>/checkpoints.git`, a bare repository of the session's own driven with `--git-dir` and `--work-tree` (the project's repository, if any, is never touched; `.gitignore` files apply, `.git` is skipped, and nothing from the project's git configuration runs), and records a `checkpoint` event before the turn's events. Rewind snapshots the current state, restores the checkpoint with `read-tree --reset -u` (files the later turns added are removed, ignored files left alone), cuts the built-in harness's history back to the checkpoint's length through `history_message` reset events, and records `rewind`, which the conversation shows by dimming the turns after the checkpoint; an external agent's own context cannot be cut back, which the transcript says. A folder that cannot be snapshotted in 90 seconds turns checkpoints off for the session.
 
+*As built for v1 (SES-007):* `internal/store/search.go` keeps one FTS5 table (`unicode61`, diacritics folded) of user and agent messages, thoughts, compaction summaries and tool calls (title, command, path, pattern) with their output and diffs, each row capped at 32 KB and pointing at the seq where the message or tool call starts. The store feeds every appended event to a per-session indexer under the transcript lock: streamed chunks are joined into whole messages before they are indexed, and the rows go in with the session's `search_seq` in one transaction. A transcript ahead of its `search_seq` (written before the index existed, or whose index write failed) is caught up from the JSONL file on its next append, and at startup in the background. The query turns every word and quoted phrase into an FTS5 string, the last word as a prefix, so FTS5 syntax in the input is plain text; snippets mark matches with control characters, which the sidebar renders as `<mark>` elements, never as markup. A hit opens the session scrolled to its message. Among 24,000 rows a phrase is found in milliseconds.
+
 Transcript line format: `{"v":1,"seq":412,"ts":"2026-10-24T09:12:03.120Z","sid":"…","type":"tool_call","data":{…}}`. `data` is the ACP update object without its `sessionUpdate` discriminator, with ACP's camelCase field names; Freeloop's own payloads use camelCase too. The store writes each event with one write call before publishing it (an app crash loses at most the event being written), fsyncs dirty transcripts every 200 ms and on close, and truncates a torn last line on open. `seq` is contiguous per session, so a UI subscriber that misses events notices the gap and catches up from the store.
 
 ## 5. Harness adapters
@@ -300,7 +302,7 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
   rules.yaml               global permission rules (SEC-002)
   skills/<name>/           app skill store (SKL-002)
   presets/harnesses/*.yaml ACP agent presets (HRN-006, HRN-007)
-  freeloop.db              SQLite: projects, environments, sessions, attention queue, usage, (v1) FTS5 index
+  freeloop.db              SQLite: projects, environments, sessions, attention queue, usage, FTS5 search index (SES-007)
   sessions/<id>/events.jsonl   append-only transcript (SES-002)
   sessions/<id>/attachments/
   logs/                    local only, secrets redacted
