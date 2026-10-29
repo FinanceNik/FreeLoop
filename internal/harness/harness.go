@@ -46,7 +46,18 @@ type Params struct {
 	Tools          []string
 	MaxTurns       int
 	NoInstructions bool
-	Emit           Emitter
+	// Commands are the profile's slash commands; a prompt that starts with
+	// /name runs the command's prompt (GUI-004).
+	Commands []Command
+	Emit     Emitter
+}
+
+// Command is a slash command that sends a prepared prompt; text after the
+// name is appended to it.
+type Command struct {
+	Name        string
+	Description string
+	Prompt      string
 }
 
 // Harness creates sessions.

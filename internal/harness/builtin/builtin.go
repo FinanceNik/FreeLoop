@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -172,7 +173,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	s.p.Emit(event.TurnStarted, struct{}{})
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "running"})
 	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}})
-	parts := []provider.Part{{Type: provider.PartText, Text: p.Text}}
+	parts := []provider.Part{{Type: provider.PartText, Text: s.expand(p.Text)}}
 	for _, r := range p.Resources {
 		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "resource_link", URI: r.URI, Name: r.Path}})
 		parts = append(parts, provider.Part{Type: provider.PartText, Text: fmt.Sprintf("<file path=%q>\n%s\n</file>", r.Path, r.Text)})
@@ -192,6 +193,30 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	}
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: status})
 	return stop, err
+}
+
+// expand replaces a leading /name with the command's prompt, followed by any
+// text after the name. The transcript keeps what the user typed; the model
+// sees the prompt.
+func (s *session) expand(text string) string {
+	text = strings.TrimSpace(text)
+	name, args := text, ""
+	if i := strings.IndexFunc(text, unicode.IsSpace); i >= 0 {
+		name, args = text[:i], text[i:]
+	}
+	name, ok := strings.CutPrefix(name, "/")
+	if !ok {
+		return text
+	}
+	for _, c := range s.p.Commands {
+		if c.Name == name {
+			if args = strings.TrimSpace(args); args != "" {
+				return c.Prompt + "\n\n" + args
+			}
+			return c.Prompt
+		}
+	}
+	return text
 }
 
 func (s *session) loop(ctx context.Context) (harness.StopReason, error) {

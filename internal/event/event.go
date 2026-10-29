@@ -140,6 +140,18 @@ type TurnEndedData struct {
 	StopReason string `json:"stopReason"`
 }
 
+// AvailableCommandsData is the payload of available_commands_update: the
+// slash commands the session's harness offers, as in ACP.
+type AvailableCommandsData struct {
+	AvailableCommands []AvailableCommand `json:"availableCommands"`
+}
+
+// AvailableCommand is one slash command.
+type AvailableCommand struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 // ErrorData is the payload of error.
 type ErrorData struct {
 	Message string `json:"message"`

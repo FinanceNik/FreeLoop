@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -106,10 +107,19 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	}
 	e.rules.restore(sid, events)
 	r := &runtime{env: env, base: ses.BaseCommit, sid: sid}
+	lastCommands := []byte(`{"availableCommands":[]}`)
 	for _, ev := range events {
-		if ev.Type == event.GitState {
+		switch ev.Type {
+		case event.GitState:
 			json.Unmarshal(ev.Data, &r.lastGit)
+		case event.AvailableCommandsUpdate:
+			lastCommands = ev.Data
 		}
+	}
+	commands, advertised := commandsOf(prof)
+	if b, _ := json.Marshal(advertised); !bytes.Equal(b, lastCommands) {
+		// The profile's commands changed since the session last ran.
+		e.emit(sid, event.AvailableCommandsUpdate, advertised)
 	}
 	hs, err := builtin.Harness{}.NewSession(ctx, harness.Params{
 		SessionID:      sid,
@@ -125,6 +135,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		Tools:          prof.Tools,
 		MaxTurns:       prof.MaxTurns,
 		NoInstructions: prof.Instructions == "none",
+		Commands:       commands,
 		Emit: func(typ event.Type, data any) {
 			e.emit(sid, typ, data)
 			if changesFiles(typ, data) {

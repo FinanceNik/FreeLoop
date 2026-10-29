@@ -136,6 +136,13 @@ export interface SessionView {
   mode: string | null;
   status: string | null;
   running: boolean;
+  // The slash commands the session's harness offers (GUI-004).
+  commands: AvailableCommand[];
+}
+
+export interface AvailableCommand {
+  name: string;
+  description: string;
 }
 
 type Data = Record<string, any>;
@@ -149,6 +156,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   let status: string | null = null;
   let running = false;
   let git: GitState | null = null;
+  let commands: AvailableCommand[] = [];
 
   const last = () => items[items.length - 1];
   for (const ev of events) {
@@ -178,6 +186,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         }
         break;
       }
+      case "available_commands_update":
+        commands = Array.isArray(d.availableCommands) ? d.availableCommands : [];
+        break;
       case "tool_call": {
         const item = {
           kind: "tool" as const,
@@ -251,7 +262,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
     }
   }
-  return { items, usage, git, mode, status, running };
+  return { items, usage, git, mode, status, running, commands };
 }
 
 function replaceTool(

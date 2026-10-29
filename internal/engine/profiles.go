@@ -6,6 +6,8 @@ import (
 	"slices"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 )
@@ -86,6 +88,18 @@ func (e *Engine) SetProjectProfile(ctx context.Context, projectID, profileID str
 	}
 	p.DefaultProfileID = profileID
 	return e.store.UpdateProject(ctx, p)
+}
+
+// commandsOf returns a profile's slash commands as the harness takes them
+// and as the session advertises them.
+func commandsOf(p config.Profile) ([]harness.Command, event.AvailableCommandsData) {
+	cmds := []harness.Command{}
+	data := event.AvailableCommandsData{AvailableCommands: []event.AvailableCommand{}}
+	for _, c := range p.Commands {
+		cmds = append(cmds, harness.Command{Name: c.Name, Description: c.Description, Prompt: c.Prompt})
+		data.AvailableCommands = append(data.AvailableCommands, event.AvailableCommand{Name: c.Name, Description: c.Description})
+	}
+	return cmds, data
 }
 
 // profileRules returns the rules of sid's profile as it is now, so edits to

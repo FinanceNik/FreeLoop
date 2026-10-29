@@ -131,3 +131,15 @@ test("panelData lists approvals and finished edits", () => {
   assert.deepEqual(p.changes, [{ path: "a.go", edits: 2, lastToolCallId: "c2" }]);
   assert.equal(p.turns, 1);
 });
+
+test("buildView keeps the latest advertised commands", () => {
+  const cmd = (seq: number, names: string[]): TranscriptEvent => ({
+    ...ev(seq, { availableCommands: names.map((name) => ({ name, description: "" })) }),
+    type: "available_commands_update",
+  });
+  assert.deepEqual(buildView([]).commands, []);
+  assert.deepEqual(
+    buildView([cmd(1, ["a", "b"]), cmd(2, ["review"])]).commands.map((c) => c.name),
+    ["review"],
+  );
+});

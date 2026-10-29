@@ -455,6 +455,14 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 			return session.Session{}, err
 		}
 	}
+	// The profile's slash commands, as an ACP agent advertises its own
+	// (GUI-004).
+	if _, cmds := commandsOf(prof); len(cmds.AvailableCommands) > 0 {
+		data, _ = json.Marshal(cmds)
+		if ev, err = e.store.Append(ctx, ses.ID, event.AvailableCommandsUpdate, data); err != nil {
+			return session.Session{}, err
+		}
+	}
 	ses.LastSeq, ses.UpdatedAt = ev.Seq, ev.TS
 	return ses, nil
 }

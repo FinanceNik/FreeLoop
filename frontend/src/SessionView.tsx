@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
+import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
 import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Session } from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
@@ -101,6 +102,36 @@ export default function SessionView({ session, events, provider, environment, al
     if (m) loadFiles();
   };
   const matches = useMemo(() => (mention && files ? rankFiles(mention.query, files) : []), [mention, files]);
+
+  // Slash commands (GUI-004): the app's mode commands and the ones the
+  // session's harness advertises.
+  const [slash, setSlash] = useState<string | null>(null);
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const commands = useMemo<SlashCommand[]>(
+    () => [...MODE_COMMANDS.filter((c) => c.mode !== "bypass" || allowBypass), ...view.commands.map((c) => ({ name: c.name, description: c.description }))],
+    [view.commands, allowBypass],
+  );
+  const slashMatches = useMemo(() => (slash === null ? [] : matchCommands(slash, commands)), [slash, commands]);
+  const syncSlash = (el: HTMLTextAreaElement) => {
+    const q = el.selectionStart === el.selectionEnd ? slashQuery(el.value, el.selectionStart) : null;
+    if (q === null) setSlashDismissed(false);
+    if (q !== slash) setPick(0);
+    setSlash(slashDismissed && q !== null ? null : q);
+  };
+  const chooseCommand = (c: SlashCommand) => {
+    setSlash(null);
+    if (c.mode) {
+      setDraft("");
+      setMode(c.mode);
+      return;
+    }
+    const text = `/${c.name} `;
+    setDraft(text);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(text.length, text.length);
+    });
+  };
   const choose = (path: string) => {
     const el = input.current;
     if (!el || !mention) return;
@@ -125,6 +156,12 @@ export default function SessionView({ session, events, provider, environment, al
   const send = () => {
     const text = draft.trim();
     if (!text) return;
+    const m = modeCommand(text);
+    if (m && (m !== "bypass" || allowBypass)) {
+      setDraft("");
+      setMode(m);
+      return;
+    }
     EngineService.Prompt(session.id, text)
       .then((r) => {
         setDraft("");
@@ -135,6 +172,25 @@ export default function SessionView({ session, events, provider, environment, al
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;
+    if (slash !== null && slashMatches.length > 0) {
+      const n = slashMatches.length;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setPick((p) => (p + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
+        return;
+      }
+      if ((e.key === "Enter" && !e.metaKey && !e.shiftKey) || e.key === "Tab") {
+        e.preventDefault();
+        chooseCommand(slashMatches[Math.min(pick, n - 1)]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSlashDismissed(true);
+        setSlash(null);
+        return;
+      }
+    }
     if (mention && matches.length > 0) {
       const n = matches.length;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -241,6 +297,25 @@ export default function SessionView({ session, events, provider, environment, al
         </div>
 
         <div className="composer">
+          {slash !== null && slashMatches.length > 0 && (
+            <ul className="mention-picker" role="listbox" aria-label="Commands">
+              {slashMatches.map((c, i) => (
+                <li
+                  key={c.name}
+                  role="option"
+                  aria-selected={i === pick}
+                  className={i === pick ? "picked" : ""}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    chooseCommand(c);
+                  }}
+                  onMouseEnter={() => setPick(i)}
+                >
+                  <span>/{c.name}</span> <span className="muted">{c.mode ? `Mode: ${c.description}` : c.description}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {mention && (
             <ul className="mention-picker" role="listbox" aria-label="Files">
               {files === null && <li className="muted">Listing files…</li>}
@@ -266,16 +341,23 @@ export default function SessionView({ session, events, provider, environment, al
             ref={input}
             aria-label="Message"
             aria-autocomplete="list"
-            placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file."}
+            placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file, / for commands."}
             value={draft}
             rows={3}
             onChange={(e) => {
               setDraft(e.target.value);
               if (dismissed !== null && !e.target.value.slice(dismissed).startsWith("@")) setDismissed(null);
               syncMention(e.target);
+              syncSlash(e.target);
             }}
-            onSelect={(e) => syncMention(e.currentTarget)}
-            onBlur={() => setMention(null)}
+            onSelect={(e) => {
+              syncMention(e.currentTarget);
+              syncSlash(e.currentTarget);
+            }}
+            onBlur={() => {
+              setMention(null);
+              setSlash(null);
+            }}
             onKeyDown={onKeyDown}
           />
           <div className="composer-actions">
