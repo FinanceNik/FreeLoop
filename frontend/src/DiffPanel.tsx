@@ -28,6 +28,9 @@ export default function DiffPanel({ session, gitKey, agentEdits, onError }: Prop
   const [busy, setBusy] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [committed, setCommitted] = useState("");
+  // Merging a worktree session's branch back (SES-010).
+  const [merging, setMerging] = useState(false);
+  const [merged, setMerged] = useState("");
   // Bumped after each action so an open diff refetches.
   const [version, setVersion] = useState(0);
 
@@ -87,6 +90,37 @@ export default function DiffPanel({ session, gitKey, agentEdits, onError }: Prop
           Refresh
         </button>
       </div>
+      {session.worktree && (
+        <div className="worktree-bar">
+          <span className="muted">
+            Own worktree on <code>{session.branch}</code>
+          </span>
+          {merging ? (
+            <span className="row">
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() =>
+                  act(
+                    EngineService.MergeWorktree(session.id).then((r) => {
+                      setMerged(r.message);
+                      setMerging(false);
+                    }),
+                  )
+                }
+              >
+                Merge into the main checkout
+              </button>
+              <button onClick={() => setMerging(false)}>Cancel</button>
+            </span>
+          ) : (
+            <button onClick={() => setMerging(true)} title="Merges the session's committed work into the branch the project's main checkout is on">
+              Merge…
+            </button>
+          )}
+        </div>
+      )}
+      {merged && <p className="ok">{merged}</p>}
       {files.length === 0 && <p className="muted">No changes against the session's base commit.</p>}
       {uncommitted.length > 0 && (
         <div className="row">

@@ -170,6 +170,7 @@ function Info({ session, view, turns, provider, environment, configVersion, onEr
     ["Mode", MODES.find((m) => m.id === mode)?.name ?? mode],
     ["Environment", environment?.name ?? (session.environmentId || "Local")],
     ["Project", <code>{session.projectRoot}</code>],
+    ...(session.worktree ? ([["Worktree", <code>{session.worktree}</code>]] as [string, ReactNode][]) : []),
     ["Branch", view.git?.repo ? view.git.branch || "detached" : "not a git repository"],
     ["Base commit", session.baseCommit ? <code title={session.baseCommit}>{session.baseCommit.slice(0, 12)}</code> : "none"],
     ["Turns", turns],

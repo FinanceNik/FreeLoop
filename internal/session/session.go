@@ -48,10 +48,13 @@ type Session struct {
 	ProfileID string `json:"profileId"`
 	// ExternalID is the harness's own ID for the session, used to load it
 	// after a restart (SES-003).
-	ExternalID string    `json:"externalId"`
-	LastSeq    int64     `json:"lastSeq"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	ExternalID string `json:"externalId"`
+	// Worktree is the session's own git worktree, when it has one
+	// (SES-010); the agent works there instead of the project root.
+	Worktree  string    `json:"worktree"`
+	LastSeq   int64     `json:"lastSeq"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Project is a repository the user works in (ENV-003). It is identified by
@@ -74,8 +77,11 @@ type Project struct {
 	// Muted projects send no notifications (GUI-008).
 	Muted bool `json:"muted"`
 	// DisabledSkills are skills turned off in this project (SKL-002).
-	DisabledSkills []string  `json:"disabledSkills"`
-	CreatedAt      time.Time `json:"createdAt"`
+	DisabledSkills []string `json:"disabledSkills"`
+	// WorktreeDefault is the remembered answer to giving a new session its
+	// own worktree: always, never, or empty to ask (OQ-008).
+	WorktreeDefault string    `json:"worktreeDefault"`
+	CreatedAt       time.Time `json:"createdAt"`
 }
 
 var idEncoding = base32.NewEncoding("0123456789abcdefghjkmnpqrstvwxyz").WithPadding(base32.NoPadding)
@@ -92,4 +98,13 @@ func newID(prefix string, now time.Time) string {
 	binary.BigEndian.PutUint64(b[:8], uint64(now.UnixMilli())<<16)
 	rand.Read(b[6:])
 	return prefix + strings.ToLower(idEncoding.EncodeToString(b[:]))
+}
+
+// WorkRoot is where the session's agent works: its worktree, or the
+// project root.
+func (s Session) WorkRoot() string {
+	if s.Worktree != "" {
+		return s.Worktree
+	}
+	return s.ProjectRoot
 }

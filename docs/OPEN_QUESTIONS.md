@@ -5,7 +5,6 @@ Decisions not yet made, each with options, a recommendation and the milestone by
 ## Open
 
 - **OQ-006 · How skills reach external harnesses · needed by v1 (SKL-008).** Claude Code discovers skills from its own locations, and the app must not write into `~/.claude`. Options: project-level materialization into the harness's project discovery directory, a per-session config directory passed by environment variable, or no projection. Needs a check of each harness's configuration surface.
-- **OQ-008 · Worktree default · needed by v1.** Worktree per session is opt-in at v1 (SES-010). Should it become the default when a second session opens on a repo that already has an active session? Recommendation: prompt the second time, remember the answer per project.
 - **OQ-009 · Code signing and notarization timing · needed by M2.** Requires an Apple Developer account (99 USD per year) and a signing pipeline in CI. Options: sign from the MVP, or ship unsigned MVP builds with right-click-to-open instructions and sign at v1. Recommendation: set up the account during M2 so the MVP is signed; it is the single biggest trust signal for a desktop download. *Checked 2026-10-25:* Wails v3 ships `wails3 setup signing` and `wails3 task darwin:sign:notarize` on top of `codesign` and `notarytool`; it needs an Apple Developer account, a Developer ID Application certificate and the Xcode command line tools, works only from a macOS host, and has no DMG task, so the DMG step is ours: `make dmg` (2026-10-29) builds a compressed DMG with `hdiutil`, as signed as the app inside. The user's part: enrol at developer.apple.com (99 USD per year), create a Developer ID Application certificate, and store a `notarytool` keychain profile; CI then needs the certificate and profile as secrets.
 - **OQ-014 · Secrets inside Docker environments · needed by v1.** The Keychain is not reachable from a container. Options: inject as env vars at `docker exec` time, or mount a tmpfs secrets file. Recommendation: env vars at exec time for the harness process only, never baked into the image or compose file.
 - **OQ-015 · Update mechanism · needed by M2.** Options: GitHub releases plus a Homebrew cask; Sparkle in-app updates; both. Recommendation: GitHub releases and a cask for the MVP, Sparkle at v1 once builds are signed. Update checks stay opt-in (SEC-009).
@@ -15,6 +14,8 @@ Decisions not yet made, each with options, a recommendation and the milestone by
 
 
 ## Closed
+
+- **OQ-008 · Worktree default** · closed 2026-10-29. As recommended: worktrees stay opt-in, and the new-session form preselects one, with a line saying why, when another session already works in the project; "Remember for <project>" stores always or never on the project, which then decides without asking.
 
 - **OQ-022 · Virtualizing the transcript** · closed 2026-10-29. (a): the conversation keeps rendering every item with `content-visibility: auto`, which measured 226 ms to open a 5,001-event transcript and at most 1.7 ms of layout per scroll step in the built-in browser. The user checks scrolling in the packaged app on an M1; a virtualized list comes only if that misses 60 fps, and GUI-003 and NFR-PERF-002 are reworded to the measured targets once it passes.
 

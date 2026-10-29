@@ -22,6 +22,7 @@ interface Props {
   environments: EnvironmentInfo[];
   profiles: Profile[];
   harnesses: HarnessInfo[];
+  sessions: Session[];
   defaults?: Defaults;
   // A folder chosen beforehand, by the first-run guide (GUI-010).
   initialRoot?: string;
@@ -39,7 +40,7 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, profiles, harnesses, defaults, initialRoot, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
+export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers.find((p) => !p.builtin) ?? providers[0];
   const [root, setRoot] = useState(initialRoot ?? "");
@@ -47,6 +48,10 @@ export default function NewSession({ providers, projects, environments, profiles
   const [mode, setMode] = useState("");
   const [profileId, setProfileId] = useState(defaults?.profileId || "default");
   const [makeDefault, setMakeDefault] = useState(false);
+  // An own worktree (SES-010), and whether to remember the choice for the
+  // project (OQ-008).
+  const [worktree, setWorktree] = useState(false);
+  const [rememberWorktree, setRememberWorktree] = useState(false);
   const [providerId, setProviderId] = useState(initial?.id ?? "");
   const [model, setModel] = useState((initial && initial.id === defaults?.providerId && defaults?.model) || initial?.defaultModel || "");
   const [title, setTitle] = useState("");
@@ -103,7 +108,11 @@ export default function NewSession({ providers, projects, environments, profiles
     setEnvironmentId(project.defaultEnvironmentId || defaults?.environmentId || "local");
     pickProfile(project.defaultProfileId || defaults?.profileId || "default");
     setMakeDefault(false);
+    setRememberWorktree(false);
+    setWorktree(project.worktreeDefault === "always" || (project.worktreeDefault !== "never" && sessionsIn(project.id) > 0));
   }, [project?.id]);
+  const sessionsIn = (projectId: string) => sessions.filter((s) => s.projectId === projectId && s.status !== "archived").length;
+  const others = project ? sessionsIn(project.id) : 0;
   // Trust and .freeloop/ settings of the chosen folder (SEC-006, SET-002).
   const [settings, setSettings] = useState<ProjectSettings | null>(null);
   const loadSettings = () => {
@@ -180,8 +189,10 @@ export default function NewSession({ providers, projects, environments, profiles
   const create = (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode })
+    const own = worktree && !!settings?.trusted;
+    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode, worktree: own })
       .then(async (s) => {
+        if (rememberWorktree && s.projectId) await EngineService.SetProjectWorktreeDefault(s.projectId, own ? "always" : "never").catch(onError);
         if (makeDefault && s.projectId) await EngineService.SetProjectProfile(s.projectId, profileId).catch(onError);
         onCreated(s);
       })
@@ -401,6 +412,25 @@ export default function NewSession({ providers, projects, environments, profiles
           </>
         )}
 
+        {root.trim() && (
+          <div className="worktree-choice">
+            {others > 0 && project && !project.worktreeDefault && (
+              <p className="muted">
+                {others === 1 ? "Another session works" : `${others} other sessions work`} in {project.name}. Its own worktree keeps this one's edits apart.
+              </p>
+            )}
+            <label className="row">
+              <input type="checkbox" checked={worktree && !!settings?.trusted} disabled={!settings?.trusted} onChange={(e) => setWorktree(e.target.checked)} />
+              Work in its own git worktree and branch
+              {!settings?.trusted && <span className="muted"> (trust the project first)</span>}
+            </label>
+            {project && settings?.trusted && (
+              <label className="row muted">
+                <input type="checkbox" checked={rememberWorktree} onChange={(e) => setRememberWorktree(e.target.checked)} /> Remember for {project.name}
+              </label>
+            )}
+          </div>
+        )}
         <label>
           Environment
           <select value={environmentId || "local"} onChange={(e) => setEnvironmentId(e.target.value)}>

@@ -96,10 +96,10 @@ func (e *Engine) sessionGit(ctx context.Context, sid string) (environment.Enviro
 	if ok {
 		return r.env, ses, nil
 	}
-	if !environment.IsDir(ses.ProjectRoot) {
-		return nil, ses, fmt.Errorf("the project folder %s is missing; relink the project", ses.ProjectRoot)
+	if !environment.IsDir(ses.WorkRoot()) {
+		return nil, ses, missingRoot(ses)
 	}
-	env, err := e.localEnv(ses.ProjectRoot, nil)
+	env, err := e.localEnv(ses.WorkRoot(), nil)
 	return env, ses, err
 }
 

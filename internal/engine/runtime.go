@@ -104,10 +104,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !environment.IsDir(ses.ProjectRoot) {
-		return nil, fmt.Errorf("the project folder %s is missing; relink the project", ses.ProjectRoot)
+	if !environment.IsDir(ses.WorkRoot()) {
+		return nil, missingRoot(ses)
 	}
-	env, err := e.localEnv(ses.ProjectRoot, vars)
+	env, err := e.localEnv(ses.WorkRoot(), vars)
 	if err != nil {
 		return nil, err
 	}

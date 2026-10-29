@@ -260,11 +260,12 @@ export default function SessionView({ session, events, provider, providers, envi
               </form>
             )}
             <p className="muted">
-              <code>{session.projectRoot}</code>
+              <code title={session.worktree ? `Worktree of ${session.projectRoot}` : undefined}>{session.worktree || session.projectRoot}</code>
               {view.git?.repo && (
                 <span title={`HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}`}>
                   {" "}
                   · {view.git.branch || "detached"}
+                  {session.worktree ? " (own worktree)" : ""}
                   {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : view.git.dirty < 0 ? " · changes not checked" : " · clean"}
                 </span>
               )}

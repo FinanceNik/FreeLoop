@@ -1335,3 +1335,22 @@ fieldset {
   white-space: nowrap;
   border: 0;
 }
+
+/* Worktrees (SES-010) */
+.worktree-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.worktree-choice p {
+  margin: 0;
+}
+
+.worktree-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"strings"
 	"unicode/utf8"
 
@@ -74,8 +76,17 @@ func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) 
 	if archived {
 		e.stopRuntime(sid)
 		status = session.StatusArchived
+		// A worktree goes with the archive unless it holds uncommitted
+		// work; its branch and commits stay (SES-010).
+		if ses.Worktree != "" {
+			if ok, err := e.removeWorktree(ctx, ses); !ok {
+				e.emit(sid, event.Notice, event.NoticeData{Message: fmt.Sprintf("The worktree %s was kept: %v", ses.Worktree, err)})
+			}
+		}
 	} else if ses.Status != session.StatusArchived {
 		return nil
+	} else if err := e.restoreWorktree(ctx, ses); err != nil {
+		return err
 	}
 	e.emit(sid, event.SessionStatus, event.SessionStatusData{Status: string(status)})
 	return nil
@@ -84,10 +95,17 @@ func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) 
 // DeleteSession stops a session and removes its transcript and database
 // rows (SES-005). The UI confirms first.
 func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
-	if _, err := e.store.GetSession(ctx, sid); err != nil {
+	ses, err := e.store.GetSession(ctx, sid)
+	if err != nil {
 		return err
 	}
 	e.stopRuntime(sid)
+	if ses.Worktree != "" {
+		// Uncommitted work keeps the worktree; the branch always stays.
+		if ok, err := e.removeWorktree(ctx, ses); !ok {
+			log.Printf("engine: kept the worktree %s of deleted session %s: %v", ses.Worktree, sid, err)
+		}
+	}
 	e.bg.Wait() // a git refresh must not recreate the transcript
 	e.mu.Lock()
 	delete(e.streams, sid)

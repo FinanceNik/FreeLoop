@@ -11,7 +11,7 @@ Status: early. Milestone M1 (the thin vertical slice) is built and M2 (the first
 - **Profiles.** A profile sets a session's harness, model, tools, prompt, permission rules, skills, MCP servers and slash commands, as a YAML file.
 - **Skills and MCP.** Agent Skills (`SKILL.md`) load unchanged, from the app's store or a trusted project. MCP servers run over stdio or Streamable HTTP after you approve exactly what they run. Both can be imported from Claude Code.
 - **One permission chokepoint.** Every tool call from every harness is decided by one broker: modes (ask, accept edits, plan, bypass), rules at global, environment, profile, project and session scope where deny always wins, and protected paths that are never touched.
-- **Many sessions.** A sidebar by project, an attention view that answers every waiting approval in one place, notifications and a dock badge, a diff and commit panel per session.
+- **Many sessions.** A sidebar by project, an attention view that answers every waiting approval in one place, notifications and a dock badge, a diff and commit panel per session, and an optional git worktree per session so sessions on one repository never edit the same checkout, merged back from the panel.
 - **Projects you trust.** A project's `AGENTS.md`, `.freeloop/` settings and git status are used only after you trust it; its own settings can tighten permissions, never loosen them.
 
 ## Install

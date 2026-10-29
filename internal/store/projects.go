@@ -14,13 +14,13 @@ import (
 // ErrProjectNotFound is returned for an unknown project.
 var ErrProjectNotFound = errors.New("store: project not found")
 
-const projectColumns = `id, name, root, first_commit, remote, default_env, default_profile, trusted, muted, disabled_skills, created_at`
+const projectColumns = `id, name, root, first_commit, remote, default_env, default_profile, trusted, muted, disabled_skills, worktree_default, created_at`
 
 func scanProject(r scanner) (session.Project, error) {
 	var p session.Project
 	var created int64
 	var skills string
-	if err := r.Scan(&p.ID, &p.Name, &p.Root, &p.FirstCommit, &p.Remote, &p.DefaultEnvironmentID, &p.DefaultProfileID, &p.Trusted, &p.Muted, &skills, &created); err != nil {
+	if err := r.Scan(&p.ID, &p.Name, &p.Root, &p.FirstCommit, &p.Remote, &p.DefaultEnvironmentID, &p.DefaultProfileID, &p.Trusted, &p.Muted, &skills, &p.WorktreeDefault, &created); err != nil {
 		return session.Project{}, err
 	}
 	p.DisabledSkills = []string{}
@@ -36,8 +36,8 @@ func (s *Store) CreateProject(ctx context.Context, tmpl session.Project) (sessio
 	p := tmpl
 	now := s.now().UTC()
 	p.ID, p.CreatedAt = session.NewProjectID(now), now
-	_, err := s.db.ExecContext(ctx, `INSERT INTO projects (`+projectColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Name, p.Root, p.FirstCommit, p.Remote, p.DefaultEnvironmentID, p.DefaultProfileID, p.Trusted, p.Muted, strings.Join(p.DisabledSkills, ","), now.UnixMilli())
+	_, err := s.db.ExecContext(ctx, `INSERT INTO projects (`+projectColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Name, p.Root, p.FirstCommit, p.Remote, p.DefaultEnvironmentID, p.DefaultProfileID, p.Trusted, p.Muted, strings.Join(p.DisabledSkills, ","), p.WorktreeDefault, now.UnixMilli())
 	if err != nil {
 		return session.Project{}, fmt.Errorf("store: insert project: %w", err)
 	}
@@ -92,8 +92,8 @@ func (s *Store) UpdateProject(ctx context.Context, p session.Project) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE projects SET name = ?, root = ?, first_commit = ?, remote = ?, default_env = ?, default_profile = ?, trusted = ?, muted = ?, disabled_skills = ? WHERE id = ?`,
-		p.Name, p.Root, p.FirstCommit, p.Remote, p.DefaultEnvironmentID, p.DefaultProfileID, p.Trusted, p.Muted, strings.Join(p.DisabledSkills, ","), p.ID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE projects SET name = ?, root = ?, first_commit = ?, remote = ?, default_env = ?, default_profile = ?, trusted = ?, muted = ?, disabled_skills = ?, worktree_default = ? WHERE id = ?`,
+		p.Name, p.Root, p.FirstCommit, p.Remote, p.DefaultEnvironmentID, p.DefaultProfileID, p.Trusted, p.Muted, strings.Join(p.DisabledSkills, ","), p.WorktreeDefault, p.ID); err != nil {
 		return fmt.Errorf("store: update project: %w", err)
 	}
 	if old.Root != p.Root {

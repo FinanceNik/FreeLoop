@@ -398,6 +398,8 @@ type CreateSessionRequest struct {
 	ProviderID string `json:"providerId"`
 	Model      string `json:"model"`
 	Mode       string `json:"mode"`
+	// Worktree gives the session its own git worktree and branch (SES-010).
+	Worktree bool `json:"worktree"`
 }
 
 // CreateSession creates an idle session and records its initial status as
@@ -481,16 +483,28 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	}
 	// The base commit is recorded now so the session's changes stay
 	// visible after unrelated commits (SES-006).
+	root, worktree := project.Root, ""
+	if req.Worktree {
+		path, _, err := e.addWorktree(ctx, project, title)
+		if err != nil {
+			return session.Session{}, err
+		}
+		root, worktree = path, path
+	}
 	var git event.GitStateData
-	if env, err := e.localEnv(project.Root, nil); err == nil {
+	if env, err := e.localEnv(root, nil); err == nil {
 		git = gitState(ctx, env, project.Trusted)
 	}
 	git.BaseCommit = git.Head
 	ses, err := e.store.CreateSession(ctx, session.Session{
 		Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
 		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
+		Worktree: worktree,
 	})
 	if err != nil {
+		if worktree != "" {
+			e.removeWorktree(ctx, session.Session{ProjectID: project.ID, Worktree: worktree})
+		}
 		return session.Session{}, err
 	}
 	data, _ := json.Marshal(event.SessionStatusData{Status: string(session.StatusIdle)})

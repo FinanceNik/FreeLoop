@@ -208,6 +208,16 @@ func (s *EngineService) SaveProfileYAML(id, text string) error {
 	return s.eng.SaveProfileYAML(id, text)
 }
 
+// MergeWorktree and SetProjectWorktreeDefault handle session worktrees
+// (SES-010).
+func (s *EngineService) MergeWorktree(ctx context.Context, sessionID string) (engine.MergeResult, error) {
+	return s.eng.MergeWorktree(ctx, sessionID)
+}
+
+func (s *EngineService) SetProjectWorktreeDefault(ctx context.Context, projectID, choice string) error {
+	return s.eng.SetProjectWorktreeDefault(ctx, projectID, choice)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

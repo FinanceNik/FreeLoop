@@ -436,6 +436,7 @@ export default function App() {
             environments={environments}
             profiles={profiles}
             harnesses={harnesses}
+            sessions={sessions}
             defaults={config?.defaults}
             initialRoot={screen.root}
             onManageProviders={() => setScreen({ kind: "providers" })}
