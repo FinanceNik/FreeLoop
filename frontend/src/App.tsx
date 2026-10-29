@@ -8,6 +8,7 @@ import {
   errorText,
   type AttentionItem,
   type Config,
+  type DayCost,
   type EnvironmentInfo,
   type HarnessInfo,
   type Issue,
@@ -19,6 +20,7 @@ import {
 } from "./api.ts";
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
 import { HIT_LABEL, snippetParts } from "./search.ts";
+import { formatCost } from "./cost.ts";
 import SessionView from "./SessionView.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
@@ -81,6 +83,8 @@ export default function App() {
   const [found, setFound] = useState<{ query: string; results: SessionHits[] } | null>(null);
   // Sessions that need the user (GUI-002).
   const [attention, setAttention] = useState<AttentionItem[]>([]);
+  // Today's model calls and their estimated cost (PRV-008).
+  const [today, setToday] = useState<DayCost | null>(null);
 
   // The reducer state lives in a ref so event callbacks always see the latest
   // transcripts; React state mirrors it for rendering.
@@ -109,6 +113,10 @@ export default function App() {
   const refreshAttention = () =>
     EngineService.Attention()
       .then((list) => setAttention(list ?? []))
+      .catch(report);
+  const refreshToday = () =>
+    EngineService.Usage(1)
+      .then((days) => setToday(days?.[0] ?? null))
       .catch(report);
   // Events that change what needs attention arrive in bursts; one refresh
   // per burst is enough.
@@ -207,6 +215,7 @@ export default function App() {
 
     return Events.On(EVENT_NAME, ({ data: ev }) => {
       ingest(ev.sid, [ev]);
+      if (ev.type === "turn_ended") refreshToday();
       if (ev.type === "permission_requested" || ev.type === "permission_decided" || ev.type === "session_status") scheduleAttention();
       setSessions((list) => {
         const i = list.findIndex((s) => s.id === ev.sid);
@@ -274,6 +283,11 @@ export default function App() {
         refreshSessions();
       })
       .catch(report);
+
+  // Saved prices change today's estimate.
+  useEffect(() => {
+    if (config) refreshToday();
+  }, [config]);
 
   // The query also searches every transcript, once typing pauses.
   useEffect(() => {
@@ -426,6 +440,17 @@ export default function App() {
             </section>
           )}
         </nav>
+        {today && (today.models ?? []).length > 0 && (
+          <button
+            className="link today"
+            title="Estimated from the price table in Settings; calls to models without a price are left out"
+            onClick={() => setScreen({ kind: "settings" })}
+          >
+            {(today.models ?? []).some((m) => m.priced)
+              ? `Today ≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`
+              : "Today: no prices set"}
+          </button>
+        )}
         <footer className="row">
           <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
           <button onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
@@ -463,6 +488,7 @@ export default function App() {
             key={selected.id}
             session={selected}
             focus={screen.focus}
+            prices={config?.prices ?? []}
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
             providers={providers}

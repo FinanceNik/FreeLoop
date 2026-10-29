@@ -126,6 +126,10 @@ type UsageData struct {
 	// ContextWindow the model's, for the context meter (HRN-013).
 	ContextTokens int64 `json:"contextTokens,omitempty"`
 	ContextWindow int   `json:"contextWindow,omitempty"`
+	// ProviderID and Model made the call, for cost estimates (PRV-008);
+	// empty when the harness does not say (an external agent).
+	ProviderID string `json:"providerId,omitempty"`
+	Model      string `json:"model,omitempty"`
 }
 
 // CompactionData is the payload of compaction_update (HRN-013): status

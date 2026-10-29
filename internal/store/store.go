@@ -373,6 +373,23 @@ var migrations = []string{
 	ALTER TABLE projects ADD COLUMN worktree_default TEXT NOT NULL DEFAULT '';`,
 	`CREATE VIRTUAL TABLE search USING fts5(body, session_id UNINDEXED, seq UNINDEXED, kind UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
 	ALTER TABLE sessions ADD COLUMN search_seq INTEGER NOT NULL DEFAULT 0;`,
+	// Usage per day (PRV-008) comes from the same pass over the
+	// transcripts as the search index, which is rebuilt to fill it.
+	`CREATE TABLE usage (
+		day         TEXT NOT NULL,
+		session_id  TEXT NOT NULL,
+		provider_id TEXT NOT NULL,
+		model       TEXT NOT NULL,
+		input       INTEGER NOT NULL,
+		output      INTEGER NOT NULL,
+		cache_read  INTEGER NOT NULL,
+		cache_write INTEGER NOT NULL,
+		calls       INTEGER NOT NULL,
+		PRIMARY KEY (day, session_id, provider_id, model)
+	);
+	ALTER TABLE sessions RENAME COLUMN search_seq TO indexed_seq;
+	UPDATE sessions SET indexed_seq = 0;
+	DELETE FROM search;`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

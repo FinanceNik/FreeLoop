@@ -142,7 +142,7 @@ func (s *session) replaceHistory(msgs []provider.Message) {
 }
 
 // complete runs one model call without streaming it into the transcript
-// and returns its text.
+// and returns its text. Its tokens are recorded for cost estimates.
 func (s *session) complete(ctx context.Context, prov provider.Provider, req provider.ChatRequest) (string, error) {
 	ch, err := prov.Stream(ctx, req)
 	if err != nil {
@@ -151,6 +151,9 @@ func (s *session) complete(ctx context.Context, prov provider.Provider, req prov
 	for ev := range ch {
 		switch ev.Type {
 		case provider.EventDone:
+			u := ev.Usage
+			s.p.Emit(event.UsageUpdate, event.UsageData{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
+				CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, ProviderID: prov.ID(), Model: req.Model})
 			var sb strings.Builder
 			if ev.Message != nil {
 				for _, p := range ev.Message.Parts {

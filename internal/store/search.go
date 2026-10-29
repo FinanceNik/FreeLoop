@@ -1,24 +1,27 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/FinanceNik/Freeloop/internal/event"
 )
 
-// Full-text search across sessions (SES-007). Every session's messages,
-// thoughts and tool calls go into one SQLite FTS5 table as they are
-// appended: streamed chunks are joined into whole messages first, so a
-// phrase split across chunks is found. sessions.search_seq records how far a
-// session's transcript is in the index; transcripts written before the index
-// existed, or whose last appends missed it, are caught up from the JSONL
-// file, which stays the source of truth.
+// Full-text search across sessions (SES-007) and token usage per day
+// (PRV-008). Every session's messages, thoughts and tool calls go into one
+// SQLite FTS5 table as they are appended: streamed chunks are joined into
+// whole messages first, so a phrase split across chunks is found. Model
+// calls' tokens are added up per day, session and model in the usage table.
+// sessions.indexed_seq records how far a session's transcript is in both;
+// transcripts written before they existed, or whose last appends missed
+// them, are caught up from the JSONL file, which stays the source of truth.
 
 // maxIndexed caps the text one row indexes; a longer message or output is
 // indexed from its start.
@@ -57,6 +60,25 @@ type row struct {
 	body string
 }
 
+// usage is one model call's tokens, on the day of the call.
+type usage struct {
+	day, providerID, model                      string
+	input, output, cacheRead, cacheWrite, calls int64
+}
+
+// batch is what events add to the index.
+type batch struct {
+	rows  []row
+	usage []usage
+}
+
+func (b *batch) add(o batch) {
+	b.rows = append(b.rows, o.rows...)
+	b.usage = append(b.usage, o.usage...)
+}
+
+func (b batch) empty() bool { return len(b.rows) == 0 && len(b.usage) == 0 }
+
 // indexer turns a session's events into rows. Chunks of one kind collect
 // until an event of another type ends the message.
 type indexer struct {
@@ -68,6 +90,8 @@ type indexer struct {
 	// calls maps tool call IDs to the seq of their tool_call, where a
 	// result is reported, so a hit points at the call in the conversation.
 	calls map[string]int64
+	// The session's model, for usage events that do not name theirs.
+	providerID, model string
 }
 
 func chunkKind(t event.Type) string {
@@ -84,11 +108,28 @@ func chunkKind(t event.Type) string {
 	return ""
 }
 
-// feed takes the next event and returns the rows it completes, and the seq
-// up to which every event is in those rows or earlier ones.
-func (x *indexer) feed(ev event.Event) ([]row, int64) {
+// feed takes the next event and returns what it completes, and the seq up
+// to which every event is in that or earlier batches.
+func (x *indexer) feed(ev event.Event) (batch, int64) {
 	x.seen = ev.Seq
-	var rows []row
+	var b batch
+	switch ev.Type {
+	case event.ModelChanged:
+		var d event.ModelChangedData
+		json.Unmarshal(ev.Data, &d)
+		if d.Model != "" {
+			x.providerID, x.model = cmp.Or(d.ProviderID, x.providerID), d.Model
+		}
+	case event.UsageUpdate:
+		var d event.UsageData
+		json.Unmarshal(ev.Data, &d)
+		if d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens > 0 {
+			b.usage = append(b.usage, usage{day: ev.TS.In(time.Local).Format(time.DateOnly),
+				providerID: cmp.Or(d.ProviderID, x.providerID), model: cmp.Or(d.Model, x.model),
+				input: d.InputTokens, output: d.OutputTokens, cacheRead: d.CacheReadTokens, cacheWrite: d.CacheWriteTokens, calls: 1})
+		}
+	}
+	rows := b.rows
 	kind := chunkKind(ev.Type)
 	if x.kind != "" && kind != x.kind {
 		rows = append(rows, row{seq: x.start, kind: x.kind, body: x.buf.String()})
@@ -104,7 +145,8 @@ func (x *indexer) feed(ev event.Event) ([]row, int64) {
 		if x.buf.Len() < maxIndexed {
 			x.buf.WriteString(d.Content.Text)
 		}
-		return rows, x.start - 1
+		b.rows = rows
+		return b, x.start - 1
 	}
 	if body, id := eventText(ev); strings.TrimSpace(body) != "" || id != "" {
 		seq := ev.Seq
@@ -120,7 +162,8 @@ func (x *indexer) feed(ev event.Event) ([]row, int64) {
 			rows = append(rows, row{seq: seq, kind: HitTool, body: body})
 		}
 	}
-	return rows, ev.Seq
+	b.rows = rows
+	return b, ev.Seq
 }
 
 // eventText is the searchable text of a tool call (its title, command and
@@ -179,26 +222,36 @@ func (s *Store) index(ctx context.Context, t *transcript, sid string, ev event.E
 			log.Printf("store: search index %s: %v", sid, err)
 		}
 	}
-	var rows []row
+	var b batch
 	done := int64(-1)
 	if t.search.loaded && t.search.seen == ev.Seq-1 {
-		rows, done = t.search.feed(ev)
+		b, done = t.search.feed(ev)
 	}
-	if len(rows) == 0 && (done < 0 || chunk(ev.Type)) && sets == "" {
+	if b.empty() && (done < 0 || chunk(ev.Type)) && sets == "" {
 		return
 	}
-	if err := s.writeIndex(ctx, sid, rows, done, sets, args); err != nil {
+	if err := s.writeIndex(ctx, sid, b, done, sets, args); err != nil {
 		log.Printf("store: search index %s: %v", sid, err)
 	}
 }
 
-func (s *Store) writeIndex(ctx context.Context, sid string, rows []row, done int64, sets string, args []any) error {
+func (s *Store) writeIndex(ctx context.Context, sid string, b batch, done int64, sets string, args []any) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	for _, r := range rows {
+	for _, u := range b.usage {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO usage (day, session_id, provider_id, model, input, output, cache_read, cache_write, calls)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (day, session_id, provider_id, model) DO UPDATE SET
+			input = input + excluded.input, output = output + excluded.output, cache_read = cache_read + excluded.cache_read,
+			cache_write = cache_write + excluded.cache_write, calls = calls + excluded.calls`,
+			u.day, sid, u.providerID, u.model, u.input, u.output, u.cacheRead, u.cacheWrite, u.calls); err != nil {
+			return err
+		}
+	}
+	for _, r := range b.rows {
 		if strings.TrimSpace(r.body) == "" {
 			continue
 		}
@@ -210,7 +263,7 @@ func (s *Store) writeIndex(ctx context.Context, sid string, rows []row, done int
 		if sets != "" {
 			sets += ", "
 		}
-		sets += "search_seq = ?"
+		sets += "indexed_seq = ?"
 		args = append(args, done)
 	}
 	if sets != "" {
@@ -225,23 +278,24 @@ func (s *Store) writeIndex(ctx context.Context, sid string, rows []row, done int
 // and leaves the indexer ready for the next event. Callers hold t.mu.
 func (s *Store) catchUp(ctx context.Context, t *transcript, sid string) error {
 	var from int64
-	if err := s.db.QueryRowContext(ctx, `SELECT search_seq FROM sessions WHERE id = ?`, sid).Scan(&from); err != nil {
+	x := indexer{loaded: true}
+	if err := s.db.QueryRowContext(ctx, `SELECT indexed_seq, provider_id, model FROM sessions WHERE id = ?`, sid).Scan(&from, &x.providerID, &x.model); err != nil {
 		return err
 	}
-	x := indexer{loaded: true, seen: from}
+	x.seen = from
 	if from < t.lastSeq {
 		events, err := readEvents(t.path, from)
 		if err != nil {
 			return err
 		}
-		var rows []row
+		var b batch
 		done := from
 		for _, ev := range events {
 			r, d := x.feed(ev)
-			rows = append(rows, r...)
+			b.add(r)
 			done = d
 		}
-		if err := s.writeIndex(ctx, sid, rows, done, "", nil); err != nil {
+		if err := s.writeIndex(ctx, sid, b, done, "", nil); err != nil {
 			return err
 		}
 	}
@@ -253,7 +307,7 @@ func (s *Store) catchUp(ctx context.Context, t *transcript, sid string) error {
 // for transcripts written before the index existed. It runs once after
 // Open, in the background.
 func (s *Store) IndexAll(ctx context.Context) error {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sessions WHERE search_seq < last_seq`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sessions WHERE indexed_seq < last_seq`)
 	if err != nil {
 		return err
 	}
@@ -354,4 +408,38 @@ func tokens(s string) string {
 func deleteIndex(ctx context.Context, db *sql.DB, sid string) error {
 	_, err := db.ExecContext(ctx, `DELETE FROM search WHERE session_id = ?`, sid)
 	return err
+}
+
+// Usage is the tokens one model used on one day, across sessions.
+type Usage struct {
+	Day              string `json:"day"`
+	ProviderID       string `json:"providerId"`
+	Model            string `json:"model"`
+	InputTokens      int64  `json:"inputTokens"`
+	OutputTokens     int64  `json:"outputTokens"`
+	CacheReadTokens  int64  `json:"cacheReadTokens"`
+	CacheWriteTokens int64  `json:"cacheWriteTokens"`
+	Calls            int64  `json:"calls"`
+}
+
+// UsageSince returns the tokens per day and model from day since
+// (YYYY-MM-DD, local time) on, newest day first. A deleted session's usage
+// stays: the tokens were spent.
+func (s *Store) UsageSince(ctx context.Context, since string) ([]Usage, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT day, provider_id, model, sum(input), sum(output), sum(cache_read), sum(cache_write), sum(calls)
+		 FROM usage WHERE day >= ? GROUP BY day, provider_id, model ORDER BY day DESC, provider_id, model`, since)
+	if err != nil {
+		return nil, fmt.Errorf("store: usage: %w", err)
+	}
+	defer rows.Close()
+	out := []Usage{}
+	for rows.Next() {
+		var u Usage
+		if err := rows.Scan(&u.Day, &u.ProviderID, &u.Model, &u.InputTokens, &u.OutputTokens, &u.CacheReadTokens, &u.CacheWriteTokens, &u.Calls); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
 }

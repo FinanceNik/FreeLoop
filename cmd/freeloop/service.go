@@ -227,6 +227,10 @@ func (s *EngineService) Search(ctx context.Context, query string) ([]engine.Sess
 	return s.eng.Search(ctx, query)
 }
 
+func (s *EngineService) Usage(ctx context.Context, days int) ([]engine.DayCost, error) {
+	return s.eng.Usage(ctx, days)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

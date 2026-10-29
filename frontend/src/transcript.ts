@@ -1,3 +1,5 @@
+import type { ModelCall } from "./cost.ts";
+
 // A session's transcript in the UI is a pure function of its events. Replay
 // from disk and the live stream both go through apply, so they cannot drift.
 // This module has no runtime imports so `node --test` can run it directly.
@@ -113,7 +115,7 @@ type ItemKinds =
       content: ToolContent[];
       permission?: PermissionState;
     }
-  | { kind: "turn_end"; key: string; rev: number; stopReason: string; ts: string }
+  | { kind: "turn_end"; key: string; rev: number; stopReason: string; ts: string; calls: ModelCall[] }
   | { kind: "error"; key: string; rev: number; message: string }
   | { kind: "mode"; key: string; rev: number; mode: string }
   | { kind: "model"; key: string; rev: number; model: string; providerId: string }
@@ -138,6 +140,8 @@ export interface GitState {
 export interface SessionView {
   items: Item[];
   usage: Usage;
+  // Every model call, for cost estimates (PRV-008).
+  calls: ModelCall[];
   git: GitState | null;
   mode: string | null;
   status: string | null;
@@ -171,6 +175,12 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   const rewound: { from: number; to: number }[] = [];
   let contextTokens = 0;
   let contextWindow = 0;
+  // Model calls, all and since the last turn ended, and the model a call
+  // that does not name its own was made with ("" until a switch: the
+  // session's).
+  const calls: ModelCall[] = [];
+  let turnCalls: ModelCall[] = [];
+  let current = { providerId: "", model: "" };
 
   const last = () => items[items.length - 1];
   for (const ev of events) {
@@ -254,18 +264,30 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "turn_ended":
         running = false;
-        items.push({ kind: "turn_end", key, rev, stopReason: d.stopReason ?? "", ts: ev.ts });
+        items.push({ kind: "turn_end", key, rev, stopReason: d.stopReason ?? "", ts: ev.ts, calls: turnCalls });
+        turnCalls = [];
         break;
-      case "usage_update":
-        usage.inputTokens += d.inputTokens ?? 0;
-        usage.outputTokens += d.outputTokens ?? 0;
-        usage.cacheReadTokens += d.cacheReadTokens ?? 0;
-        usage.cacheWriteTokens += d.cacheWriteTokens ?? 0;
+      case "usage_update": {
+        const c: ModelCall = {
+          providerId: d.model ? (d.providerId ?? "") : current.providerId,
+          model: d.model || current.model,
+          inputTokens: d.inputTokens ?? 0,
+          outputTokens: d.outputTokens ?? 0,
+          cacheReadTokens: d.cacheReadTokens ?? 0,
+          cacheWriteTokens: d.cacheWriteTokens ?? 0,
+        };
+        calls.push(c);
+        turnCalls.push(c);
+        usage.inputTokens += c.inputTokens;
+        usage.outputTokens += c.outputTokens;
+        usage.cacheReadTokens += c.cacheReadTokens;
+        usage.cacheWriteTokens += c.cacheWriteTokens;
         if (d.contextTokens) {
           contextTokens = d.contextTokens;
           contextWindow = d.contextWindow ?? 0;
         }
         break;
+      }
       case "current_mode_update":
         mode = d.currentModeId ?? mode;
         items.push({ kind: "mode", key, rev, mode: d.currentModeId });
@@ -304,6 +326,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         items.push({ kind: "notice", key, rev, message: d.message ?? "", warn: true });
         break;
       case "model_changed":
+        if (d.model) current = { providerId: d.providerId ?? current.providerId, model: d.model };
         items.push({ kind: "model", key, rev, model: d.model ?? "", providerId: d.providerId ?? "" });
         break;
       case "session_status":
@@ -324,7 +347,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       if (seq > r.from && seq < r.to && !items[i].rewound) items[i] = { ...items[i], rewound: true, rev: r.to };
     }
   }
-  return { items, usage, git, mode, status, running, commands, context };
+  return { items, usage, calls, git, mode, status, running, commands, context };
 }
 
 function replaceTool(

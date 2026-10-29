@@ -7,12 +7,15 @@ import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, typ
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel from "./SessionPanel.tsx";
 import { itemForSeq } from "./search.ts";
+import { estimate, formatCost, type PriceEntry } from "./cost.ts";
 
 interface Props {
   session: Session;
   events: TranscriptEvent[];
   // A search hit to scroll to (SES-007); n tells repeated jumps apart.
   focus?: { seq: number; n: number };
+  // The price table for cost estimates (PRV-008).
+  prices: PriceEntry[];
   provider?: ProviderInfo;
   providers: ProviderInfo[];
   environment?: EnvironmentInfo;
@@ -48,7 +51,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
+export default function SessionView({ session, events, focus, prices, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -75,6 +78,17 @@ export default function SessionView({ session, events, focus, provider, provider
     EngineService.DeleteSession(session.id).then(onDeleted).catch(onError);
   };
   const view = useMemo(() => buildView(events), [events]);
+  // Estimated cost of the session and of each turn, by turn_end key.
+  const costs = useMemo(() => {
+    const own = { providerId: session.providerId, model: session.model };
+    const turns = new Map<string, string>();
+    for (const it of view.items) {
+      if (it.kind !== "turn_end" || it.calls.length === 0) continue;
+      const e = estimate(prices, it.calls, own);
+      if (e.unpriced < it.calls.length) turns.set(it.key, `≈ ${formatCost(e.cost)}${e.unpriced ? " + unpriced calls" : ""}`);
+    }
+    return { session: estimate(prices, view.calls, own), calls: view.calls.length, turns };
+  }, [view, prices, session.providerId, session.model]);
 
   // Screen readers hear approvals and turn ends, not every streamed word
   // (NFR-A11Y-002).
@@ -345,6 +359,18 @@ export default function SessionView({ session, events, focus, provider, provider
             <span className="muted" title="Input (including cache reads and writes) / output tokens">
               {total.toLocaleString()} in · {view.usage.outputTokens.toLocaleString()} out
             </span>
+            {costs.calls > 0 && (
+              <span
+                className="muted"
+                title={
+                  costs.session.unpriced === costs.calls
+                    ? "No price for this model; add one in Settings to estimate the cost"
+                    : `Estimated from the price table in Settings${costs.session.unpriced ? `; ${costs.session.unpriced} calls to models without a price are left out` : ""}`
+                }
+              >
+                {costs.session.unpriced === costs.calls ? "cost: no price" : `≈ ${formatCost(costs.session.cost)}${costs.session.unpriced ? "+" : ""}`}
+              </span>
+            )}
           </div>
         </header>
         {switching && (
@@ -403,7 +429,7 @@ export default function SessionView({ session, events, focus, provider, provider
         <div className="conversation" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {view.items.map((item) => (
-            <ItemView key={item.key} item={item} focused={item.key === focused} onError={onError} onRewind={rewind} />
+            <ItemView key={item.key} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} onError={onError} onRewind={rewind} />
           ))}
           {view.running && (
             <p className="muted working">{view.status === "queued" ? "Waiting for a free slot on the provider…" : "Working…"}</p>
@@ -508,25 +534,27 @@ const ItemView = memo(
   function ItemView({
     item,
     focused,
+    cost,
     onError,
     onRewind,
   }: {
     item: Item;
     focused: boolean;
+    cost?: string;
     onError: (err: unknown) => void;
     onRewind: (seq: number, text: string) => void;
   }) {
     const cls = [item.rewound && "rewound", focused && "found"].filter(Boolean).join(" ");
     return (
       <div data-item={item.key} className={cls || undefined}>
-        <ItemBody item={item} onError={onError} onRewind={onRewind} />
+        <ItemBody item={item} cost={cost} onError={onError} onRewind={onRewind} />
       </div>
     );
   },
-  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused,
+  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused && a.cost === b.cost,
 );
 
-function ItemBody({ item, onError, onRewind }: { item: Item; onError: (err: unknown) => void; onRewind: (seq: number, text: string) => void }) {
+function ItemBody({ item, cost, onError, onRewind }: { item: Item; cost?: string; onError: (err: unknown) => void; onRewind: (seq: number, text: string) => void }) {
   switch (item.kind) {
     case "user":
       return (
@@ -563,6 +591,7 @@ function ItemBody({ item, onError, onRewind }: { item: Item; onError: (err: unkn
       return (
         <div className={`turn-end ${item.stopReason !== "end_turn" ? "turn-end-warn" : ""}`}>
           {STOP_LABEL[item.stopReason] ?? item.stopReason} · {new Date(item.ts).toLocaleTimeString()}
+          {cost && <span title="Estimated from the price table in Settings"> · {cost}</span>}
         </div>
       );
     case "error":

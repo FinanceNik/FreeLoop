@@ -179,3 +179,21 @@ test("buildView ties checkpoints to user messages and dims rewound turns", () =>
   assert.equal(v.items.find((i) => i.kind === "agent" && i.text === "two")?.rewound, true);
   assert.equal(v.items.find((i) => i.kind === "agent" && i.text === "one")?.rewound, undefined);
 });
+
+test("buildView records each model call with its model, per turn", () => {
+  const v = buildView([
+    at(1, "usage_update", { inputTokens: 10, outputTokens: 1, providerId: "p", model: "big" }),
+    at(2, "usage_update", { inputTokens: 20, outputTokens: 2 }),
+    at(3, "turn_ended", { stopReason: "end_turn" }),
+    at(4, "model_changed", { providerId: "q", model: "small" }),
+    at(5, "usage_update", { inputTokens: 30, outputTokens: 3 }),
+    at(6, "turn_ended", { stopReason: "end_turn" }),
+  ]);
+  assert.deepEqual(
+    v.calls.map((c) => `${c.providerId}/${c.model}/${c.inputTokens}`),
+    ["p/big/10", "//20", "q/small/30"],
+  );
+  const ends = v.items.filter((i) => i.kind === "turn_end");
+  assert.deepEqual(ends.map((e) => (e.kind === "turn_end" ? e.calls.length : -1)), [2, 1]);
+  assert.equal(v.usage.inputTokens, 60);
+});

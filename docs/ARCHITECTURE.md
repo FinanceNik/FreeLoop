@@ -259,6 +259,8 @@ One versioned schema (EXT-002), a strict superset of ACP's `session/update` vari
 
 *As built for v1 (SES-007):* `internal/store/search.go` keeps one FTS5 table (`unicode61`, diacritics folded) of user and agent messages, thoughts, compaction summaries and tool calls (title, command, path, pattern) with their output and diffs, each row capped at 32 KB and pointing at the seq where the message or tool call starts. The store feeds every appended event to a per-session indexer under the transcript lock: streamed chunks are joined into whole messages before they are indexed, and the rows go in with the session's `search_seq` in one transaction. A transcript ahead of its `search_seq` (written before the index existed, or whose index write failed) is caught up from the JSONL file on its next append, and at startup in the background. The query turns every word and quoted phrase into an FTS5 string, the last word as a prefix, so FTS5 syntax in the input is plain text; snippets mark matches with control characters, which the sidebar renders as `<mark>` elements, never as markup. A hit opens the session scrolled to its message. Among 24,000 rows a phrase is found in milliseconds.
 
+*As built for v1 (PRV-008):* the built-in harness's `usage_update` events name the provider and model of the call (compaction's summary call included); an event that does not (an external agent's, or one from before) counts for the session's model. The same per-session pass that feeds the search index adds every call's tokens to the `usage` table per local day, session, provider and model, and `sessions.indexed_seq` (renamed from `search_seq`; the migration rebuilds both) records how far it got. Prices are a list in `config.yaml` (`prices:`, US dollars per million input, output, cache-read and cache-write tokens, an optional provider and a model glob, first match wins), edited in Settings; costs are computed when shown, by `Engine.Usage` per day and by `frontend/src/cost.ts` per turn and session, so a price added later applies to past usage. The app ships no prices (OQ-023). A deleted session's usage stays in the daily totals.
+
 Transcript line format: `{"v":1,"seq":412,"ts":"2026-10-24T09:12:03.120Z","sid":"…","type":"tool_call","data":{…}}`. `data` is the ACP update object without its `sessionUpdate` discriminator, with ACP's camelCase field names; Freeloop's own payloads use camelCase too. The store writes each event with one write call before publishing it (an app crash loses at most the event being written), fsyncs dirty transcripts every 200 ms and on close, and truncates a torn last line on open. `seq` is contiguous per session, so a UI subscriber that misses events notices the gap and catches up from the store.
 
 ## 5. Harness adapters
@@ -302,7 +304,7 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
   rules.yaml               global permission rules (SEC-002)
   skills/<name>/           app skill store (SKL-002)
   presets/harnesses/*.yaml ACP agent presets (HRN-006, HRN-007)
-  freeloop.db              SQLite: projects, environments, sessions, attention queue, usage, FTS5 search index (SES-007)
+  freeloop.db              SQLite: projects, environments, sessions, attention queue, tokens per day and model (PRV-008), FTS5 search index (SES-007)
   sessions/<id>/events.jsonl   append-only transcript (SES-002)
   sessions/<id>/attachments/
   logs/                    local only, secrets redacted

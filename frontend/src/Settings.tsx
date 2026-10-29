@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { PriceTable, UsageTable } from "./Costs.tsx";
 import { EngineService, type Config, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
@@ -171,6 +172,9 @@ export default function Settings({ config, providers, environments, profiles, pr
           </fieldset>
         )}
 
+        <h3 id="prices">Prices</h3>
+        <PriceTable prices={form.prices ?? []} providers={providers} onChange={(prices) => setForm({ ...form, prices })} />
+
         <div className="row">
           <button type="submit" className="primary">
             Save
@@ -178,6 +182,18 @@ export default function Settings({ config, providers, environments, profiles, pr
           {saved && <span className="ok">Saved</span>}
         </div>
       </form>
+
+      <div className="card">
+        <h3>Usage and estimated cost</h3>
+        <UsageTable
+          version={config}
+          onError={onError}
+          onPrice={(providerId, model) => {
+            setForm({ ...form, prices: [...(form.prices ?? []), { providerId, model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }] });
+            document.getElementById("prices")?.scrollIntoView({ block: "start" });
+          }}
+        />
+      </div>
     </section>
   );
 }

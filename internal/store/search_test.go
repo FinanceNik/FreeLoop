@@ -106,7 +106,7 @@ func TestSearchCatchesUpOldTranscripts(t *testing.T) {
 	s.Append(ctx, b.ID, event.ToolCallUpdate, toolOutput("c", "old output mentioning kerberos"))
 	// Forget the index, as a database from before it would be.
 	s.db.Exec(`DELETE FROM search`)
-	s.db.Exec(`UPDATE sessions SET search_seq = 0`)
+	s.db.Exec(`UPDATE sessions SET indexed_seq = 0`)
 	s.Close()
 
 	s = openTest(t, dir, nil)

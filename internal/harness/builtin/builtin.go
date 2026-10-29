@@ -358,10 +358,11 @@ func (s *session) call(ctx context.Context, prov provider.Provider, req provider
 			total := u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
 			s.mu.Lock()
 			s.context = total
-			window := s.window
+			window, prov, model := s.window, s.prov, s.model
 			s.mu.Unlock()
 			s.p.Emit(event.UsageUpdate, event.UsageData{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
-				CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, ContextTokens: total, ContextWindow: window})
+				CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, ContextTokens: total, ContextWindow: window,
+				ProviderID: prov.ID(), Model: model})
 			return ev.Message, ev.StopReason, nil
 		case provider.EventError:
 			return nil, "", ev.Err

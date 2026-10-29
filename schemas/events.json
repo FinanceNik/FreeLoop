@@ -148,7 +148,11 @@
         "inputTokens": { "type": "integer" },
         "outputTokens": { "type": "integer" },
         "cacheReadTokens": { "type": "integer" },
-        "cacheWriteTokens": { "type": "integer" }
+        "cacheWriteTokens": { "type": "integer" },
+        "contextTokens": { "type": "integer" },
+        "contextWindow": { "type": "integer" },
+        "providerId": { "type": "string" },
+        "model": { "type": "string" }
       }
     },
     "error": {

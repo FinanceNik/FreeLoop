@@ -51,6 +51,8 @@ type Config struct {
 	Notifications Notifications `yaml:"notifications" json:"notifications"`
 	// Skills holds the global skill switches (SKL-002).
 	Skills Skills `yaml:"skills,omitempty" json:"skills"`
+	// Prices estimate what sessions cost (PRV-008).
+	Prices []Price `yaml:"prices,omitempty" json:"prices"`
 }
 
 // Skills lists skills turned off everywhere; every other discovered skill
@@ -116,7 +118,9 @@ func (c *Config) Validate() []Issue {
 		issues = append(issues, Issue{Field: "ui.fontSize", Message: fmt.Sprintf("%d is outside 11 to 20", c.UI.FontSize)})
 		c.UI.FontSize = def.UI.FontSize
 	}
-	return issues
+	var priceIssues []Issue
+	c.Prices, priceIssues = validatePrices(c.Prices)
+	return append(issues, priceIssues...)
 }
 
 // Save writes config.yaml.
