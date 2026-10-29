@@ -13,12 +13,12 @@ import (
 // ErrProjectNotFound is returned for an unknown project.
 var ErrProjectNotFound = errors.New("store: project not found")
 
-const projectColumns = `id, name, root, first_commit, remote, default_env, default_profile, trusted, created_at`
+const projectColumns = `id, name, root, first_commit, remote, default_env, default_profile, trusted, muted, created_at`
 
 func scanProject(r scanner) (session.Project, error) {
 	var p session.Project
 	var created int64
-	if err := r.Scan(&p.ID, &p.Name, &p.Root, &p.FirstCommit, &p.Remote, &p.DefaultEnvironmentID, &p.DefaultProfileID, &p.Trusted, &created); err != nil {
+	if err := r.Scan(&p.ID, &p.Name, &p.Root, &p.FirstCommit, &p.Remote, &p.DefaultEnvironmentID, &p.DefaultProfileID, &p.Trusted, &p.Muted, &created); err != nil {
 		return session.Project{}, err
 	}
 	p.CreatedAt = time.UnixMilli(created).UTC()
@@ -30,8 +30,8 @@ func (s *Store) CreateProject(ctx context.Context, tmpl session.Project) (sessio
 	p := tmpl
 	now := s.now().UTC()
 	p.ID, p.CreatedAt = session.NewProjectID(now), now
-	_, err := s.db.ExecContext(ctx, `INSERT INTO projects (`+projectColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Name, p.Root, p.FirstCommit, p.Remote, p.DefaultEnvironmentID, p.DefaultProfileID, p.Trusted, now.UnixMilli())
+	_, err := s.db.ExecContext(ctx, `INSERT INTO projects (`+projectColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Name, p.Root, p.FirstCommit, p.Remote, p.DefaultEnvironmentID, p.DefaultProfileID, p.Trusted, p.Muted, now.UnixMilli())
 	if err != nil {
 		return session.Project{}, fmt.Errorf("store: insert project: %w", err)
 	}
@@ -86,8 +86,8 @@ func (s *Store) UpdateProject(ctx context.Context, p session.Project) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE projects SET name = ?, root = ?, first_commit = ?, remote = ?, default_env = ?, default_profile = ?, trusted = ? WHERE id = ?`,
-		p.Name, p.Root, p.FirstCommit, p.Remote, p.DefaultEnvironmentID, p.DefaultProfileID, p.Trusted, p.ID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE projects SET name = ?, root = ?, first_commit = ?, remote = ?, default_env = ?, default_profile = ?, trusted = ?, muted = ? WHERE id = ?`,
+		p.Name, p.Root, p.FirstCommit, p.Remote, p.DefaultEnvironmentID, p.DefaultProfileID, p.Trusted, p.Muted, p.ID); err != nil {
 		return fmt.Errorf("store: update project: %w", err)
 	}
 	if old.Root != p.Root {

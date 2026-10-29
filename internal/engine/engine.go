@@ -41,6 +41,8 @@ type Options struct {
 	WatchInterval time.Duration
 	// OnConfigChange is called after files changed on disk were reloaded.
 	OnConfigChange func(ConfigChange)
+	// OnNotice receives notices (GUI-008) from a goroutine of its own.
+	OnNotice func(Notice)
 }
 
 // ConfigChange lists the config files that were reloaded, relative to the
@@ -70,6 +72,8 @@ type Engine struct {
 
 	// bg tracks background work (git refreshes) that Close waits for.
 	bg sync.WaitGroup
+	// notifying is the notice goroutine, which ends when the bus closes.
+	notifying sync.WaitGroup
 
 	mu sync.Mutex
 	// projects caches trusted projects' .freeloop/ settings.
@@ -126,6 +130,11 @@ func Open(opts Options) (*Engine, error) {
 	}
 	e.rememberStoredSecrets()
 	e.recover(context.Background())
+	if opts.OnNotice != nil {
+		events, _ := e.bus.subscribe(1024)
+		e.notifying.Add(1)
+		go e.notify(events, opts.OnNotice)
+	}
 	if opts.WatchInterval >= 0 {
 		interval := opts.WatchInterval
 		if interval == 0 {
@@ -153,6 +162,7 @@ func (e *Engine) Close() error {
 	e.watching.Wait()
 	e.bg.Wait()
 	e.bus.close()
+	e.notifying.Wait()
 	return e.store.Close()
 }
 

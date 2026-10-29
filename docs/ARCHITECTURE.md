@@ -298,6 +298,8 @@ Wails v3 exposes Go services as generated TypeScript bindings for request/respon
 
 Frontend state is one reducer per session over the event schema, so the transcript view is a pure function of events, which also makes replay from JSONL trivial. Message deltas are coalesced at about 30 ms for rendering while being persisted as received. The transcript list is virtualized (NFR-PERF-002); tool outputs load lazily.
 
+*As built in M2 (GUI-008):* the engine turns persisted events into `Notice`s (`internal/engine/notices.go`: `permission_requested`, `error`, and `turn_ended` other than cancelled or error) on a bus subscriber of its own, honouring `notifications` in `config.yaml` and the project's mute flag; `cmd/freeloop/desktop.go` shows them through the Wails notifications service only while the window is not focused, re-opens the session from the notification's `sessionId` with the `freeloop:open-session` event, and sets the dock badge from `Engine.AttentionCount` after events that change it. Both Wails services are cross-platform, so no code went into `internal/platform/darwin`; server builds (`-tags server`) compile a no-op `desktop` instead.
+
 ## 11. Plugin and extension model
 
 - **Files:** profiles, environments, rules, MCP servers, provider configs, harness presets, skills.

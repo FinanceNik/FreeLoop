@@ -116,6 +116,11 @@ func (s *EngineService) SetProjectTrust(ctx context.Context, root string, truste
 	return s.eng.SetProjectTrust(ctx, root, trusted)
 }
 
+// SetProjectMuted turns a project's notifications off or on (GUI-008).
+func (s *EngineService) SetProjectMuted(ctx context.Context, projectID string, muted bool) error {
+	return s.eng.SetProjectMuted(ctx, projectID, muted)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

@@ -4,6 +4,7 @@ import {
   CONFIG_EVENT_NAME,
   EngineService,
   EVENT_NAME,
+  OPEN_SESSION_EVENT_NAME,
   errorText,
   type AttentionItem,
   type Config,
@@ -208,6 +209,11 @@ export default function App() {
     if (!transcriptsRef.current[sid]) catchUp(sid);
   };
 
+  // A clicked notification opens its session (GUI-008).
+  const openRef = useRef(openSession);
+  openRef.current = openSession;
+  useEffect(() => Events.On(OPEN_SESSION_EVENT_NAME, ({ data }) => openRef.current(String(data))), []);
+
   const selected = screen.kind === "session" ? (sessions.find((s) => s.id === screen.id) ?? null) : null;
 
   const relink = (p: ProjectInfo) =>
@@ -387,7 +393,14 @@ export default function App() {
         )}
         {screen.kind === "providers" && <Providers providers={providers} onChanged={refreshProviders} onError={report} />}
         {screen.kind === "settings" && config && (
-          <Settings config={config} providers={providers} environments={environments} profiles={profiles} onSaved={setConfig} onError={report} />
+          <Settings
+            config={config}
+            providers={providers}
+            environments={environments}
+            profiles={profiles}
+            projects={projects}
+            onProjectsChanged={refreshProjects}
+            onSaved={setConfig} onError={report} />
         )}
         {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
         {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}

@@ -1,16 +1,18 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, type Config, type EnvironmentInfo, type Profile, type ProviderInfo } from "./api.ts";
+import { EngineService, type Config, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
   config: Config;
   providers: ProviderInfo[];
   environments: EnvironmentInfo[];
   profiles: Profile[];
+  projects: ProjectInfo[];
+  onProjectsChanged: () => void;
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
 }
 
-export default function Settings({ config, providers, environments, profiles, onSaved, onError }: Props) {
+export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
   useEffect(() => setForm(config), [config]);
@@ -123,6 +125,45 @@ export default function Settings({ config, providers, environments, profiles, on
           />
           Allow bypass mode to be chosen for a session
         </label>
+
+        <h3>Notifications</h3>
+        <p className="muted">Shown while Freeloop is in the background; clicking one opens its session.</p>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={form.notifications.enabled}
+            onChange={(e) => setForm({ ...form, notifications: { ...form.notifications, enabled: e.target.checked } })}
+          />
+          When a session needs an approval or fails
+        </label>
+        <label className="row">
+          <input
+            type="checkbox"
+            disabled={!form.notifications.enabled}
+            checked={form.notifications.finished}
+            onChange={(e) => setForm({ ...form, notifications: { ...form.notifications, finished: e.target.checked } })}
+          />
+          Also when a session finishes a turn
+        </label>
+        {projects.length > 0 && (
+          <fieldset>
+            <legend>Projects <span className="muted">(saved at once)</span></legend>
+            {projects.map((p) => (
+              <label key={p.id} className="row">
+                <input
+                  type="checkbox"
+                  checked={!p.muted}
+                  onChange={(e) =>
+                    EngineService.SetProjectMuted(p.id, !e.target.checked)
+                      .then(onProjectsChanged)
+                      .catch(onError)
+                  }
+                />
+                {p.name} <span className="muted">{p.muted ? "muted" : ""}</span>
+              </label>
+            ))}
+          </fieldset>
+        )}
 
         <div className="row">
           <button type="submit" className="primary">

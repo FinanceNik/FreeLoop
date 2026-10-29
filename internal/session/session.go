@@ -64,7 +64,9 @@ type Project struct {
 	// Trusted is set once the user trusts the project (SEC-006); until
 	// then the app reads none of its instruction files or .freeloop/
 	// settings and runs no git command that its config can extend.
-	Trusted   bool      `json:"trusted"`
+	Trusted bool `json:"trusted"`
+	// Muted projects send no notifications (GUI-008).
+	Muted     bool      `json:"muted"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

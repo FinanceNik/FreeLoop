@@ -46,6 +46,17 @@ type Config struct {
 	UI          UI          `yaml:"ui" json:"ui"`
 	Permissions Permissions `yaml:"permissions" json:"permissions"`
 	Defaults    Defaults    `yaml:"defaults,omitempty" json:"defaults"`
+	// Notifications are macOS notifications for sessions that need the
+	// user while the app is in the background (GUI-008).
+	Notifications Notifications `yaml:"notifications" json:"notifications"`
+}
+
+// Notifications holds notification settings.
+type Notifications struct {
+	// Enabled sends notifications at all; projects can be muted one by one.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// Finished also notifies when a turn ends without needing the user.
+	Finished bool `yaml:"finished" json:"finished"`
 }
 
 // Defaults preselect the new-session form (SET-004).
@@ -73,7 +84,7 @@ type UI struct {
 
 // Default returns the configuration used when config.yaml is missing.
 func Default() Config {
-	return Config{Version: 1, UI: UI{Theme: "system", FontSize: 14}}
+	return Config{Version: 1, UI: UI{Theme: "system", FontSize: 14}, Notifications: Notifications{Enabled: true, Finished: true}}
 }
 
 // Validate fixes invalid fields to their defaults and reports each.
