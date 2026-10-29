@@ -86,7 +86,8 @@ func modern(model string) bool {
 
 func (p *Provider) Capabilities(model string) provider.ModelCaps {
 	c := provider.ModelCaps{
-		Tools: true, ParallelTools: true, StreamedToolArgs: true, StableToolCallIDs: true,
+		Source: provider.CapsStatic,
+		Tools:  true, ParallelTools: true, StreamedToolArgs: true, StableToolCallIDs: true,
 		PromptCaching: true, ContextWindow: 200_000, MaxOutput: 64_000,
 	}
 	if modern(model) {

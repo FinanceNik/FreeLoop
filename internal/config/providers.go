@@ -25,6 +25,16 @@ type Provider struct {
 	APIKey       string            `yaml:"apiKey,omitempty" json:"-"` // keychain:// reference
 	DefaultModel string            `yaml:"defaultModel,omitempty" json:"defaultModel"`
 	Headers      map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
+	// Preset names the OpenAI-compatible endpoint preset.
+	Preset string `yaml:"preset,omitempty" json:"preset,omitempty"`
+	// Models holds per-model settings the user chose.
+	Models map[string]ModelSettings `yaml:"models,omitempty" json:"models,omitempty"`
+}
+
+// ModelSettings are a user's choices for one model (PRV-005).
+type ModelSettings struct {
+	// Tools overrides detected tool-calling support.
+	Tools *bool `yaml:"tools,omitempty" json:"tools,omitempty"`
 }
 
 type providersFile struct {

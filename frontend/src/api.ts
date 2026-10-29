@@ -1,8 +1,8 @@
 // One import point for the generated bindings.
 export { EngineService } from "../bindings/github.com/FinanceNik/Freeloop/cmd/freeloop";
 export type { Config, Issue } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
-export type { ProviderInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
-export type { ModelInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/provider/models";
+export type { PresetInfo, ProviderInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
+export type { ModelCaps, ModelInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/provider/models";
 export type { Session } from "../bindings/github.com/FinanceNik/Freeloop/internal/session/models";
 
 // Must match EventName in cmd/freeloop/main.go.

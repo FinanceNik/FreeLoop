@@ -12,6 +12,8 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/provider/anthropic"
+	"github.com/FinanceNik/Freeloop/internal/provider/ollama"
+	"github.com/FinanceNik/Freeloop/internal/provider/openaicompat"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -22,6 +24,7 @@ const DemoProviderID = "demo"
 type providerRegistry struct {
 	configs []config.Provider
 	built   map[string]*configuredProvider
+	probes  config.Probes
 }
 
 type configuredProvider struct {
@@ -34,11 +37,41 @@ type ProviderInfo struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Type         string `json:"type"`
+	Preset       string `json:"preset"`
 	BaseURL      string `json:"baseUrl"`
 	DefaultModel string `json:"defaultModel"`
 	HasKey       bool   `json:"hasKey"`
 	// Builtin marks providers that are not in providers.yaml.
 	Builtin bool `json:"builtin"`
+}
+
+func info(c config.Provider) ProviderInfo {
+	return ProviderInfo{ID: c.ID, Name: c.Name, Type: c.Type, Preset: c.Preset, BaseURL: c.BaseURL, DefaultModel: c.DefaultModel, HasKey: c.APIKey != ""}
+}
+
+// PresetInfo prefills the provider form (PRV-001).
+type PresetInfo struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	BaseURL      string `json:"baseUrl"`
+	NeedsKey     bool   `json:"needsKey"`
+	Local        bool   `json:"local"`
+	DefaultModel string `json:"defaultModel"`
+	Note         string `json:"note"`
+}
+
+// ProviderPresets lists the endpoints the provider form offers.
+func (e *Engine) ProviderPresets() []PresetInfo {
+	out := []PresetInfo{
+		{ID: "anthropic", Name: "Anthropic", Type: string(provider.TypeAnthropic), BaseURL: anthropic.DefaultBaseURL, NeedsKey: true, DefaultModel: anthropic.DefaultModel},
+		{ID: "ollama", Name: "Ollama", Type: string(ollama.Type), BaseURL: ollama.DefaultBaseURL, Local: true,
+			Note: "Pull a model with tool support first, for example `ollama pull qwen3`."},
+	}
+	for _, p := range openaicompat.Presets {
+		out = append(out, PresetInfo{ID: p.ID, Name: p.Name, Type: string(openaicompat.Type), BaseURL: p.BaseURL, NeedsKey: p.NeedsKey, Local: p.Local, Note: p.Note})
+	}
+	return out
 }
 
 func (e *Engine) loadProviders() error {
@@ -48,7 +81,7 @@ func (e *Engine) loadProviders() error {
 	}
 	e.mu.Lock()
 	e.issues = append(e.issues, issues...)
-	e.providers = &providerRegistry{configs: cfgs, built: map[string]*configuredProvider{}}
+	e.providers = &providerRegistry{configs: cfgs, built: map[string]*configuredProvider{}, probes: config.LoadProbes(e.dataDir)}
 	e.mu.Unlock()
 	return nil
 }
@@ -64,11 +97,12 @@ func (e *Engine) ListProviders() []ProviderInfo {
 	e.mu.Unlock()
 	out := []ProviderInfo{}
 	for _, c := range cfgs {
-		out = append(out, ProviderInfo{ID: c.ID, Name: c.Name, Type: c.Type, BaseURL: c.BaseURL, DefaultModel: c.DefaultModel, HasKey: c.APIKey != ""})
+		out = append(out, info(c))
 	}
 	if e.dev {
-		d := e.demoConfig()
-		out = append(out, ProviderInfo{ID: d.ID, Name: d.Name, Type: d.Type, DefaultModel: d.DefaultModel, Builtin: true})
+		pi := info(e.demoConfig())
+		pi.Builtin = true
+		out = append(out, pi)
 	}
 	return out
 }
@@ -93,25 +127,29 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 	}
 	e.mu.Unlock()
 
+	key := ""
+	if cfg.APIKey != "" {
+		ref, err := secrets.ParseRef(cfg.APIKey)
+		if err != nil {
+			return nil, err
+		}
+		if key, err = e.secrets.Get(ref); err != nil {
+			return nil, fmt.Errorf("provider %s: read API key from the Keychain: %w", cfg.Name, err)
+		}
+		e.remember(key)
+	}
 	var p provider.Provider
 	switch provider.Type(cfg.Type) {
 	case provider.TypeAnthropic:
-		key := ""
-		if cfg.APIKey != "" {
-			ref, err := secrets.ParseRef(cfg.APIKey)
-			if err != nil {
-				return nil, err
-			}
-			if key, err = e.secrets.Get(ref); err != nil {
-				return nil, fmt.Errorf("provider %s: read API key from the Keychain: %w", cfg.Name, err)
-			}
-			e.remember(key)
-		}
 		p = anthropic.New(anthropic.Options{ID: cfg.ID, BaseURL: cfg.BaseURL, APIKey: key, Headers: cfg.Headers})
+	case openaicompat.Type:
+		p = openaicompat.New(openaicompat.Options{ID: cfg.ID, Preset: cfg.Preset, BaseURL: cfg.BaseURL, APIKey: key, Headers: cfg.Headers})
+	case ollama.Type:
+		p = ollama.New(ollama.Options{ID: cfg.ID, BaseURL: cfg.BaseURL})
 	case provider.TypeScripted:
 		p = scripted.Demo(cfg.ID)
 	default:
-		return nil, fmt.Errorf("provider %s: type %q is not supported yet", cfg.Name, cfg.Type)
+		return nil, fmt.Errorf("provider %s: type %q is not supported", cfg.Name, cfg.Type)
 	}
 	cp := &configuredProvider{cfg: cfg, p: p}
 	e.mu.Lock()
@@ -126,6 +164,7 @@ type SaveProviderRequest struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Type         string `json:"type"`
+	Preset       string `json:"preset"`
 	BaseURL      string `json:"baseUrl"`
 	APIKey       string `json:"apiKey"`
 	DefaultModel string `json:"defaultModel"`
@@ -139,8 +178,18 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 	if req.Name == "" {
 		return ProviderInfo{}, errors.New("a provider needs a name")
 	}
-	if req.Type != string(provider.TypeAnthropic) {
-		return ProviderInfo{}, fmt.Errorf("provider type %q is not supported yet", req.Type)
+	switch provider.Type(req.Type) {
+	case provider.TypeAnthropic, ollama.Type:
+		req.Preset = ""
+	case openaicompat.Type:
+		if req.Preset == "" {
+			req.Preset = "custom"
+		}
+	default:
+		return ProviderInfo{}, fmt.Errorf("provider type %q is not supported", req.Type)
+	}
+	if req.Type == string(openaicompat.Type) && req.Preset == "custom" && strings.TrimSpace(req.BaseURL) == "" {
+		return ProviderInfo{}, errors.New("a custom endpoint needs a base URL")
 	}
 	e.mu.Lock()
 	cfgs := slices.Clone(e.providers.configs)
@@ -162,9 +211,10 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 			req.ID = fmt.Sprintf("%s-%d", base, n)
 		}
 	}
-	cfg := config.Provider{ID: req.ID, Name: req.Name, Type: req.Type, BaseURL: strings.TrimSpace(req.BaseURL), DefaultModel: strings.TrimSpace(req.DefaultModel)}
+	cfg := config.Provider{ID: req.ID, Name: req.Name, Type: req.Type, Preset: req.Preset,
+		BaseURL: strings.TrimSpace(req.BaseURL), DefaultModel: strings.TrimSpace(req.DefaultModel)}
 	if i >= 0 {
-		cfg.APIKey, cfg.Headers = cfgs[i].APIKey, cfgs[i].Headers
+		cfg.APIKey, cfg.Headers, cfg.Models = cfgs[i].APIKey, cfgs[i].Headers, cfgs[i].Models
 	}
 	if key := strings.TrimSpace(req.APIKey); key != "" {
 		ref := secrets.Ref{Service: "freeloop", Account: "providers/" + req.ID}
@@ -179,14 +229,23 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 	} else {
 		cfgs = append(cfgs, cfg)
 	}
-	if err := config.SaveProviders(e.dataDir, cfgs); err != nil {
+	if err := e.saveConfigs(cfgs); err != nil {
 		return ProviderInfo{}, err
+	}
+	return info(cfg), nil
+}
+
+// saveConfigs writes providers.yaml and drops built providers so the next
+// use picks up the change.
+func (e *Engine) saveConfigs(cfgs []config.Provider) error {
+	if err := config.SaveProviders(e.dataDir, cfgs); err != nil {
+		return err
 	}
 	e.mu.Lock()
 	e.providers.configs = cfgs
-	delete(e.providers.built, cfg.ID)
+	e.providers.built = map[string]*configuredProvider{}
 	e.mu.Unlock()
-	return ProviderInfo{ID: cfg.ID, Name: cfg.Name, Type: cfg.Type, BaseURL: cfg.BaseURL, DefaultModel: cfg.DefaultModel, HasKey: cfg.APIKey != ""}, nil
+	return nil
 }
 
 // DeleteProvider removes a provider and its Keychain entry.
@@ -203,19 +262,11 @@ func (e *Engine) DeleteProvider(id string) error {
 			return err
 		}
 	}
-	cfgs = slices.Delete(cfgs, i, i+1)
-	if err := config.SaveProviders(e.dataDir, cfgs); err != nil {
-		return err
-	}
-	e.mu.Lock()
-	e.providers.configs = cfgs
-	delete(e.providers.built, id)
-	e.mu.Unlock()
-	return nil
+	return e.saveConfigs(slices.Delete(cfgs, i, i+1))
 }
 
 // TestProvider lists a provider's models, which proves the URL and key
-// (PRV-002).
+// (PRV-002, PRV-003).
 func (e *Engine) TestProvider(ctx context.Context, id string) ([]provider.ModelInfo, error) {
 	p, err := e.provider(id)
 	if err != nil {
@@ -227,5 +278,111 @@ func (e *Engine) TestProvider(ctx context.Context, id string) ([]provider.ModelI
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", p.cfg.Name, err)
 	}
+	if models == nil {
+		models = []provider.ModelInfo{}
+	}
 	return models, nil
+}
+
+// ModelCapabilities resolves what a model can do (PRV-005): the user's
+// override wins, then a cached probe, then what the adapter or endpoint
+// reports. With probe set, a model still unknown is probed and the result
+// cached.
+func (e *Engine) ModelCapabilities(ctx context.Context, providerID, model string, probe bool) (provider.ModelCaps, error) {
+	p, err := e.provider(providerID)
+	if err != nil {
+		return provider.ModelCaps{}, err
+	}
+	caps := p.p.Capabilities(model)
+	if caps.Source == provider.CapsUnknown {
+		if d, ok := p.p.(provider.Describer); ok {
+			dctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			described, err := d.Describe(dctx, model)
+			cancel()
+			if err != nil {
+				return provider.ModelCaps{}, fmt.Errorf("%s: %w", p.cfg.Name, err)
+			}
+			caps = described
+		}
+	}
+	if caps.Source == provider.CapsUnknown {
+		e.mu.Lock()
+		cached, ok := e.providers.probes[providerID][model]
+		e.mu.Unlock()
+		switch {
+		case ok:
+			caps.Source, caps.Tools = provider.CapsProbe, cached.Tools
+		case probe:
+			ok, err := provider.ProbeTools(ctx, p.p, model)
+			if err != nil {
+				return provider.ModelCaps{}, fmt.Errorf("tool-calling probe of %s on %s: %w", model, p.cfg.Name, err)
+			}
+			caps.Source, caps.Tools = provider.CapsProbe, ok
+			e.saveProbe(providerID, model, ok)
+		}
+	}
+	if s, ok := p.cfg.Models[model]; ok && s.Tools != nil {
+		caps.Source, caps.Tools = provider.CapsOverride, *s.Tools
+	}
+	return caps, nil
+}
+
+func (e *Engine) saveProbe(providerID, model string, tools bool) {
+	e.mu.Lock()
+	if e.providers.probes[providerID] == nil {
+		e.providers.probes[providerID] = map[string]config.ProbeResult{}
+	}
+	e.providers.probes[providerID][model] = config.ProbeResult{Tools: tools, ProbedAt: time.Now().UTC()}
+	snapshot := e.providers.probes
+	e.mu.Unlock()
+	if err := config.SaveProbes(e.dataDir, snapshot); err != nil {
+		e.mu.Lock()
+		e.issues = append(e.issues, config.Issue{File: config.CapabilitiesFileName, Message: err.Error()})
+		e.mu.Unlock()
+	}
+}
+
+// SetToolsOverride records the user's choice for a model's tool support;
+// nil removes the override (PRV-005).
+func (e *Engine) SetToolsOverride(providerID, model string, tools *bool) error {
+	e.mu.Lock()
+	cfgs := slices.Clone(e.providers.configs)
+	e.mu.Unlock()
+	i := slices.IndexFunc(cfgs, func(c config.Provider) bool { return c.ID == providerID })
+	if i < 0 {
+		return fmt.Errorf("no provider %q", providerID)
+	}
+	models := map[string]config.ModelSettings{}
+	for k, v := range cfgs[i].Models {
+		models[k] = v
+	}
+	s := models[model]
+	s.Tools = tools
+	if s.Tools == nil {
+		delete(models, model)
+	} else {
+		models[model] = s
+	}
+	if len(models) == 0 {
+		models = nil
+	}
+	cfgs[i].Models = models
+	return e.saveConfigs(cfgs)
+}
+
+// requireTools fails when the built-in harness cannot use model.
+func (e *Engine) requireTools(ctx context.Context, providerID, model string) error {
+	caps, err := e.ModelCapabilities(ctx, providerID, model, true)
+	if err != nil {
+		return err
+	}
+	if !caps.Tools {
+		how := map[provider.CapsSource]string{
+			provider.CapsReported: "the endpoint reports no tool support for it",
+			provider.CapsProbe:    "it did not return a tool call when tested",
+			provider.CapsOverride: "tool use is turned off for it",
+		}[caps.Source]
+		return fmt.Errorf("model %s cannot be used by the built-in harness because %s; turn on \"Use anyway\" to override (PRV-005)", model, how)
+	}
+	return nil
 }

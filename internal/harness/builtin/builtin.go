@@ -38,8 +38,6 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 	switch {
 	case p.Env == nil, p.Broker == nil, p.Provider == nil, p.Emit == nil:
 		return nil, errors.New("builtin: Env, Broker, Provider and Emit are required")
-	case !p.Provider.Capabilities(p.Model).Tools:
-		return nil, fmt.Errorf("builtin: model %s does not support tool calling", p.Model)
 	}
 	mode := p.Mode
 	if !mode.Valid() {

@@ -482,3 +482,11 @@ pre {
   align-items: center;
   gap: 8px;
 }
+
+.caps {
+  min-height: 1.5em;
+}
+
+.caps button {
+  margin-left: 4px;
+}

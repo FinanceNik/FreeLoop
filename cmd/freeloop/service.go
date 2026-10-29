@@ -69,6 +69,18 @@ func (s *EngineService) TestProvider(ctx context.Context, id string) ([]provider
 	return s.eng.TestProvider(ctx, id)
 }
 
+func (s *EngineService) ProviderPresets() []engine.PresetInfo {
+	return s.eng.ProviderPresets()
+}
+
+func (s *EngineService) ModelCapabilities(ctx context.Context, providerID, model string, probe bool) (provider.ModelCaps, error) {
+	return s.eng.ModelCapabilities(ctx, providerID, model, probe)
+}
+
+func (s *EngineService) SetToolsOverride(providerID, model string, tools *bool) error {
+	return s.eng.SetToolsOverride(providerID, model, tools)
+}
+
 func (s *EngineService) Config() config.Config {
 	return s.eng.Config()
 }

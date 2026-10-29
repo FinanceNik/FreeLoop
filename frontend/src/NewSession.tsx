@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, MODES, type ProviderInfo, type Session } from "./api.ts";
+import { EngineService, MODES, errorText, type ModelCaps, type ModelInfo, type ProviderInfo, type Session } from "./api.ts";
 
 interface Props {
   providers: ProviderInfo[];
@@ -8,6 +8,13 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
+const SOURCE: Record<string, string> = {
+  static: "known for this provider",
+  reported: "reported by the server",
+  probe: "tested",
+  override: "set by you",
+};
+
 export default function NewSession({ providers, onCreated, onManageProviders, onError }: Props) {
   const [root, setRoot] = useState("");
   const [providerId, setProviderId] = useState(providers[0]?.id ?? "");
@@ -15,6 +22,11 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
   const [mode, setMode] = useState("ask");
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [caps, setCaps] = useState<ModelCaps | null>(null);
+  const [capsState, setCapsState] = useState<"idle" | "loading" | "probing">("idle");
+  const [capsError, setCapsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!providerId && providers[0]) {
@@ -23,10 +35,47 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
     }
   }, [providers]);
 
+  // Discover the provider's models (PRV-003).
+  useEffect(() => {
+    if (!providerId) return;
+    setModels([]);
+    setModelsError(null);
+    EngineService.TestProvider(providerId)
+      .then((list) => setModels(list ?? []))
+      .catch((err) => setModelsError(errorText(err)));
+  }, [providerId]);
+
+  const loadCaps = (probe: boolean) => {
+    if (!providerId || !model.trim()) {
+      setCaps(null);
+      return;
+    }
+    setCapsState(probe ? "probing" : "loading");
+    setCapsError(null);
+    EngineService.ModelCapabilities(providerId, model.trim(), probe)
+      .then(setCaps)
+      .catch((err) => {
+        setCaps(null);
+        setCapsError(errorText(err));
+      })
+      .finally(() => setCapsState("idle"));
+  };
+
+  // What the chosen model can do (PRV-005), after typing settles.
+  useEffect(() => {
+    const t = setTimeout(() => loadCaps(false), 400);
+    return () => clearTimeout(t);
+  }, [providerId, model]);
+
   const pickProvider = (id: string) => {
     setProviderId(id);
     setModel(providers.find((p) => p.id === id)?.defaultModel ?? "");
   };
+
+  const override = (tools: boolean | null) =>
+    EngineService.SetToolsOverride(providerId, model.trim(), tools)
+      .then(() => loadCaps(false))
+      .catch(onError);
 
   const choose = () =>
     EngineService.ChooseFolder()
@@ -36,7 +85,7 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
   const create = (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    EngineService.CreateSession({ title, projectRoot: root, providerId, model, mode })
+    EngineService.CreateSession({ title, projectRoot: root, providerId, model: model.trim(), mode })
       .then(onCreated)
       .catch(onError)
       .finally(() => setBusy(false));
@@ -53,6 +102,8 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
       </section>
     );
   }
+
+  const blocked = caps !== null && !caps.tools;
 
   return (
     <section className="page">
@@ -79,8 +130,54 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
         </label>
         <label>
           Model
-          <input value={model} onChange={(e) => setModel(e.target.value)} required />
+          <input list="models" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Pick or type a model ID" required />
+          <datalist id="models">
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.displayName && m.displayName !== m.id ? m.displayName : undefined}
+              </option>
+            ))}
+          </datalist>
+          {modelsError && <span className="error-text">Could not list models: {modelsError}</span>}
+          {!modelsError && models.length > 0 && <span className="muted">{models.length} models available</span>}
         </label>
+
+        <div className="caps" role="status">
+          {capsState === "loading" && <span className="muted">Checking the model…</span>}
+          {capsState === "probing" && <span className="muted">Testing tool calling; local models may need a minute to load…</span>}
+          {capsState === "idle" && capsError && <span className="error-text">{capsError}</span>}
+          {capsState === "idle" && caps && caps.source === "unknown" && (
+            <span>
+              Tool support is not known yet; it is tested when the session starts.{" "}
+              <button type="button" onClick={() => loadCaps(true)}>
+                Test now
+              </button>
+            </span>
+          )}
+          {capsState === "idle" && caps && caps.source !== "unknown" && caps.tools && (
+            <span className="ok">
+              Tool calling supported ({SOURCE[caps.source] ?? caps.source})
+              {caps.contextWindow > 0 && ` · ${caps.contextWindow.toLocaleString()} token context`}
+              {caps.source === "override" && (
+                <>
+                  {" "}
+                  <button type="button" onClick={() => override(null)}>
+                    Undo override
+                  </button>
+                </>
+              )}
+            </span>
+          )}
+          {capsState === "idle" && blocked && caps.source !== "unknown" && (
+            <span className="error-text">
+              This model cannot be used by the built-in harness: no tool calling ({SOURCE[caps.source] ?? caps.source}).{" "}
+              <button type="button" onClick={() => override(caps.source === "override" ? null : true)}>
+                {caps.source === "override" ? "Undo override" : "Use anyway"}
+              </button>
+            </span>
+          )}
+        </div>
+
         <label>
           Permission mode
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
@@ -96,8 +193,8 @@ export default function NewSession({ providers, onCreated, onManageProviders, on
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="New session" />
         </label>
         <div className="row">
-          <button type="submit" className="primary" disabled={busy || !root}>
-            Start session
+          <button type="submit" className="primary" disabled={busy || !root || !model.trim() || (blocked && caps?.source !== "unknown")}>
+            {busy ? "Starting…" : "Start session"}
           </button>
         </div>
       </form>

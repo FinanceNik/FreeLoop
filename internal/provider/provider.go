@@ -36,13 +36,30 @@ type ModelInfo struct {
 	DisplayName string `json:"displayName"`
 }
 
+// CapsSource says where a model's capabilities came from.
+type CapsSource string
+
+const (
+	// CapsStatic: the adapter knows the model family.
+	CapsStatic CapsSource = "static"
+	// CapsReported: the endpoint described the model (Ollama /api/show).
+	CapsReported CapsSource = "reported"
+	// CapsProbe: a tool-calling probe ran against the model.
+	CapsProbe CapsSource = "probe"
+	// CapsOverride: the user set them.
+	CapsOverride CapsSource = "override"
+	// CapsUnknown: nothing is known yet; Tools is false until a probe runs.
+	CapsUnknown CapsSource = "unknown"
+)
+
 // ModelCaps is what the built-in harness may rely on for a model (PRV-005).
 type ModelCaps struct {
-	Tools             bool `json:"tools"`
-	ParallelTools     bool `json:"parallelTools"`
-	StreamedToolArgs  bool `json:"streamedToolArgs"`
-	StableToolCallIDs bool `json:"stableToolCallIds"`
-	Reasoning         bool `json:"reasoning"`
+	Source            CapsSource `json:"source"`
+	Tools             bool       `json:"tools"`
+	ParallelTools     bool       `json:"parallelTools"`
+	StreamedToolArgs  bool       `json:"streamedToolArgs"`
+	StableToolCallIDs bool       `json:"stableToolCallIds"`
+	Reasoning         bool       `json:"reasoning"`
 	// Effort reports support for the effort levels low through max.
 	Effort        bool `json:"effort"`
 	PromptCaching bool `json:"promptCaching"`

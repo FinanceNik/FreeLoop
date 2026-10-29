@@ -201,6 +201,9 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if model == "" {
 		return session.Session{}, errors.New("choose a model")
 	}
+	if err := e.requireTools(ctx, req.ProviderID, model); err != nil {
+		return session.Session{}, err
+	}
 	ses, err := e.store.CreateSession(ctx, session.Session{
 		Title: title, HarnessID: builtin.ID, ProjectRoot: req.ProjectRoot,
 		ProviderID: req.ProviderID, Model: model, Mode: string(mode),

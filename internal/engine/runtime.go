@@ -63,8 +63,8 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !p.p.Capabilities(ses.Model).Tools {
-		return nil, fmt.Errorf("model %s cannot call tools, which the built-in harness needs (PRV-005)", ses.Model)
+	if err := e.requireTools(ctx, ses.ProviderID, ses.Model); err != nil {
+		return nil, err
 	}
 	env, err := environment.NewLocal(environment.LocalOptions{
 		ID: "local", Root: ses.ProjectRoot, Guard: e.broker.Policy().Guard(ses.ProjectRoot),

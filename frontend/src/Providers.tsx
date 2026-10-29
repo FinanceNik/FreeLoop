@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { EngineService, errorText, type ModelInfo, type ProviderInfo } from "./api.ts";
+import { useEffect, useState, type FormEvent } from "react";
+import { EngineService, errorText, type ModelInfo, type PresetInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
   providers: ProviderInfo[];
@@ -7,23 +7,65 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-const BLANK = { id: "", name: "Anthropic", type: "anthropic", baseUrl: "", apiKey: "", defaultModel: "claude-opus-5-5" };
+interface Form {
+  id: string;
+  preset: string;
+  name: string;
+  type: string;
+  baseUrl: string;
+  apiKey: string;
+  defaultModel: string;
+}
+
+const EMPTY: Form = { id: "", preset: "", name: "", type: "", baseUrl: "", apiKey: "", defaultModel: "" };
+
+// presetOf maps a saved provider back to the preset it came from.
+function presetOf(p: ProviderInfo): string {
+  return p.type === "openai_compat" ? p.preset || "custom" : p.type;
+}
 
 export default function Providers({ providers, onChanged, onError }: Props) {
-  const [form, setForm] = useState(BLANK);
-  const [editing, setEditing] = useState(false);
+  const [presets, setPresets] = useState<PresetInfo[]>([]);
+  const [form, setForm] = useState<Form | null>(null);
   const [tests, setTests] = useState<Record<string, { ok: boolean; text: string; models?: ModelInfo[] }>>({});
   const [busy, setBusy] = useState(false);
 
-  const set = (k: keyof typeof BLANK) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  useEffect(() => {
+    EngineService.ProviderPresets()
+      .then((list) => setPresets(list ?? []))
+      .catch(onError);
+  }, []);
+
+  const preset = presets.find((p) => p.id === form?.preset);
+
+  const choosePreset = (id: string) => {
+    const p = presets.find((x) => x.id === id);
+    if (!p || !form) return;
+    setForm({ ...form, preset: p.id, type: p.type, name: form.id ? form.name : p.name, baseUrl: p.baseUrl, defaultModel: p.defaultModel });
+  };
+
+  const startAdd = () => {
+    const p = presets[0];
+    setForm(p ? { ...EMPTY, preset: p.id, type: p.type, name: p.name, baseUrl: p.baseUrl, defaultModel: p.defaultModel } : EMPTY);
+  };
+
+  const set = (k: keyof Form) => (e: { target: { value: string } }) => form && setForm({ ...form, [k]: e.target.value });
 
   const save = (e: FormEvent) => {
     e.preventDefault();
+    if (!form) return;
     setBusy(true);
-    EngineService.SaveProvider(form)
+    EngineService.SaveProvider({
+      id: form.id,
+      name: form.name,
+      type: form.type,
+      preset: form.type === "openai_compat" ? form.preset : "",
+      baseUrl: form.baseUrl === preset?.baseUrl ? "" : form.baseUrl,
+      apiKey: form.apiKey,
+      defaultModel: form.defaultModel,
+    })
       .then((p) => {
-        setForm(BLANK);
-        setEditing(false);
+        setForm(null);
         onChanged();
         test(p.id);
       })
@@ -36,7 +78,7 @@ export default function Providers({ providers, onChanged, onError }: Props) {
     EngineService.TestProvider(id)
       .then((models) => {
         const list = models ?? [];
-        setTests((t) => ({ ...t, [id]: { ok: true, text: `Connected: ${list.length} models`, models: list } }));
+        setTests((t) => ({ ...t, [id]: { ok: true, text: `Connected: ${list.length} model${list.length === 1 ? "" : "s"}`, models: list } }));
       })
       .catch((err) => setTests((t) => ({ ...t, [id]: { ok: false, text: errorText(err) } })));
   };
@@ -47,8 +89,8 @@ export default function Providers({ providers, onChanged, onError }: Props) {
   };
 
   const edit = (p: ProviderInfo) => {
-    setForm({ id: p.id, name: p.name, type: p.type, baseUrl: p.baseUrl, apiKey: "", defaultModel: p.defaultModel });
-    setEditing(true);
+    const pr = presets.find((x) => x.id === presetOf(p));
+    setForm({ id: p.id, preset: presetOf(p), name: p.name, type: p.type, baseUrl: p.baseUrl || pr?.baseUrl || "", apiKey: "", defaultModel: p.defaultModel });
   };
 
   return (
@@ -61,10 +103,11 @@ export default function Providers({ providers, onChanged, onError }: Props) {
         {providers.map((p) => (
           <li key={p.id} className="card">
             <div>
-              <strong>{p.name}</strong> <span className="muted">{p.type}</span>
+              <strong>{p.name}</strong> <span className="muted">{presets.find((x) => x.id === presetOf(p))?.name ?? p.type}</span>
               {p.builtin && <span className="muted"> · development only</span>}
               <div className="muted">
-                {p.baseUrl || "default endpoint"} · default model {p.defaultModel || "none"} · {p.hasKey || p.builtin ? "key set" : "no key"}
+                {p.baseUrl || "default endpoint"} · default model {p.defaultModel || "none"}
+                {p.hasKey ? " · key set" : ""}
               </div>
               {tests[p.id] && (
                 <div className={tests[p.id].ok ? "ok" : "error-text"} role="status">
@@ -85,53 +128,54 @@ export default function Providers({ providers, onChanged, onError }: Props) {
         ))}
       </ul>
 
-      {!editing && (
-        <button className="primary" onClick={() => setEditing(true)}>
+      {!form && (
+        <button className="primary" onClick={startAdd} disabled={presets.length === 0}>
           Add provider
         </button>
       )}
-      {editing && (
+      {form && (
         <form className="card form" onSubmit={save}>
           <h3>{form.id ? `Edit ${form.name}` : "Add provider"}</h3>
           <label>
-            Type
-            <select value={form.type} onChange={set("type")}>
-              <option value="anthropic">Anthropic</option>
+            Kind
+            <select value={form.preset} onChange={(e) => choosePreset(e.target.value)} disabled={!!form.id}>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.local ? " (local)" : ""}
+                </option>
+              ))}
             </select>
           </label>
+          {preset?.note && <p className="muted">{preset.note}</p>}
           <label>
             Name
             <input value={form.name} onChange={set("name")} required />
           </label>
           <label>
             Base URL
-            <input value={form.baseUrl} onChange={set("baseUrl")} placeholder="https://api.anthropic.com" />
+            <input value={form.baseUrl} onChange={set("baseUrl")} placeholder={preset?.baseUrl || "http://localhost:8080/v1"} required={preset?.id === "custom"} />
           </label>
           <label>
-            API key
+            API key {preset && !preset.needsKey && <span className="muted">(optional for local servers)</span>}
             <input
               type="password"
               autoComplete="off"
               value={form.apiKey}
               onChange={set("apiKey")}
-              placeholder={form.id ? "Leave empty to keep the saved key" : "sk-ant-…"}
+              placeholder={form.id ? "Leave empty to keep the saved key" : ""}
+              required={!form.id && !!preset?.needsKey}
             />
           </label>
           <label>
-            Default model
-            <input value={form.defaultModel} onChange={set("defaultModel")} placeholder="claude-opus-5-5" />
+            Default model <span className="muted">(optional)</span>
+            <input value={form.defaultModel} onChange={set("defaultModel")} placeholder={preset?.local ? "Pick one when starting a session" : ""} />
           </label>
           <div className="row">
             <button type="submit" className="primary" disabled={busy}>
               Save
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setForm(BLANK);
-                setEditing(false);
-              }}
-            >
+            <button type="button" onClick={() => setForm(null)}>
               Cancel
             </button>
           </div>

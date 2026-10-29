@@ -51,7 +51,7 @@ func (p *Provider) ListModels(context.Context) ([]provider.ModelInfo, error) {
 }
 
 func (p *Provider) Capabilities(string) provider.ModelCaps {
-	return provider.ModelCaps{Tools: true, ParallelTools: true, StableToolCallIDs: true, ContextWindow: 100_000, MaxOutput: 8_000}
+	return provider.ModelCaps{Source: provider.CapsStatic, Tools: true, ParallelTools: true, StableToolCallIDs: true, ContextWindow: 100_000, MaxOutput: 8_000}
 }
 
 // Requests returns every request received so far.
