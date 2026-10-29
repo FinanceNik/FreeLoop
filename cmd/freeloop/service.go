@@ -62,6 +62,32 @@ func (s *EngineService) DismissError(ctx context.Context, sessionID string) erro
 	return s.eng.DismissError(ctx, sessionID)
 }
 
+// Changes, FileDiff, StageFiles, Commit, DiscardFile and
+// SuggestCommitMessage feed the diff panel (GUI-005).
+func (s *EngineService) Changes(ctx context.Context, sessionID string) (engine.Changes, error) {
+	return s.eng.Changes(ctx, sessionID)
+}
+
+func (s *EngineService) FileDiff(ctx context.Context, sessionID, path string) (engine.FileDiff, error) {
+	return s.eng.FileDiff(ctx, sessionID, path)
+}
+
+func (s *EngineService) StageFiles(ctx context.Context, sessionID string, paths []string, staged bool) error {
+	return s.eng.StageFiles(ctx, sessionID, paths, staged)
+}
+
+func (s *EngineService) Commit(ctx context.Context, sessionID, message string) (string, error) {
+	return s.eng.Commit(ctx, sessionID, message)
+}
+
+func (s *EngineService) DiscardFile(ctx context.Context, sessionID, path string) error {
+	return s.eng.DiscardFile(ctx, sessionID, path)
+}
+
+func (s *EngineService) SuggestCommitMessage(ctx context.Context, sessionID string) (string, error) {
+	return s.eng.SuggestCommitMessage(ctx, sessionID)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

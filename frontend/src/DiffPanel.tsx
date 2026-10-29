@@ -1,0 +1,257 @@
+import { useEffect, useRef, useState } from "react";
+import { EngineService, type ChangedFile, type Changes, type FileDiff, type Session } from "./api.ts";
+import { diffStats, parseDiff } from "./diff.ts";
+import type { FileChange } from "./transcript.ts";
+import { showTool } from "./SessionPanel.tsx";
+
+// DiffPanel is the Diff tab of the right panel (GUI-005): the files that
+// differ from the session's base commit, each with its diff, plus staging,
+// committing and discarding. It refetches whenever the session's git state
+// changes, which the engine records after every tool call, turn and panel
+// action.
+
+interface Props {
+  session: Session;
+  // Changes the git state event, so the list refetches.
+  gitKey: string;
+  // Files the agent's file tools edited, to mark them and jump to the edit.
+  agentEdits: FileChange[];
+  onError: (err: unknown) => void;
+}
+
+const STATUS_MARK: Record<string, string> = { added: "A", modified: "M", deleted: "D", untracked: "U" };
+
+export default function DiffPanel({ session, gitKey, agentEdits, onError }: Props) {
+  const [changes, setChanges] = useState<Changes | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [committed, setCommitted] = useState("");
+  // Bumped after each action so an open diff refetches.
+  const [version, setVersion] = useState(0);
+
+  const load = () =>
+    EngineService.Changes(session.id)
+      .then((c) => {
+        setChanges(c);
+        setVersion((v) => v + 1);
+      })
+      .catch(onError);
+  useEffect(() => {
+    load();
+  }, [session.id, gitKey]);
+
+  const act = (p: Promise<unknown>) => {
+    setBusy(true);
+    return p
+      .catch(onError)
+      .finally(() => {
+        setBusy(false);
+        load();
+      });
+  };
+
+  if (!changes) return <p className="muted">Loading…</p>;
+  if (!changes.repo) return <p className="muted">The project is not a git repository.</p>;
+  if (changes.blocked) return <p className="banner warn">{changes.blocked}</p>;
+
+  const files = changes.files ?? [];
+  const staged = files.filter((f) => f.staged);
+  const uncommitted = files.filter((f) => f.staged || f.unstaged);
+  const edited = new Map(agentEdits.map((c) => [relative(c.path, session.projectRoot), c]));
+
+  const commit = () =>
+    act(
+      EngineService.Commit(session.id, message).then((hash) => {
+        setCommitted(hash);
+        setMessage("");
+      }),
+    );
+  const suggest = () => {
+    setSuggesting(true);
+    EngineService.SuggestCommitMessage(session.id)
+      .then((m) => setMessage(m))
+      .catch(onError)
+      .finally(() => setSuggesting(false));
+  };
+
+  return (
+    <div className="diff-panel">
+      <div className="row diff-head">
+        <span className="muted">
+          {files.length} {files.length === 1 ? "file" : "files"} changed since{" "}
+          {changes.base ? <code title={changes.base}>{changes.base.slice(0, 8)}</code> : "the first commit"}
+        </span>
+        <button className="link" onClick={load} disabled={busy}>
+          Refresh
+        </button>
+      </div>
+      {files.length === 0 && <p className="muted">No changes against the session's base commit.</p>}
+      {uncommitted.length > 0 && (
+        <div className="row">
+          <button
+            disabled={busy || uncommitted.every((f) => f.staged && !f.unstaged)}
+            onClick={() => act(EngineService.StageFiles(session.id, uncommitted.map((f) => f.path), true))}
+          >
+            Stage all
+          </button>
+          <button disabled={busy || staged.length === 0} onClick={() => act(EngineService.StageFiles(session.id, staged.map((f) => f.path), false))}>
+            Unstage all
+          </button>
+        </div>
+      )}
+      <ul className="panel-list diff-files">
+        {files.map((f) => (
+          <FileRow
+            key={f.path}
+            file={f}
+            sessionId={session.id}
+            open={open === f.path}
+            version={version}
+            edit={edited.get(f.path)}
+            busy={busy}
+            onToggle={() => setOpen(open === f.path ? null : f.path)}
+            onStage={(on) => act(EngineService.StageFiles(session.id, [f.path], on))}
+            onDiscard={() => act(EngineService.DiscardFile(session.id, f.path))}
+            onError={onError}
+          />
+        ))}
+      </ul>
+
+      <h3>Commit</h3>
+      <textarea
+        className="commit-message"
+        rows={4}
+        placeholder="Commit message"
+        aria-label="Commit message"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+      />
+      <div className="row">
+        <button className="primary" disabled={busy || staged.length === 0 || !message.trim()} onClick={commit}>
+          Commit {staged.length} staged
+        </button>
+        <button disabled={suggesting || uncommitted.length === 0} onClick={suggest} title="Asks the session's model; uses tokens">
+          {suggesting ? "Suggesting…" : "Suggest message"}
+        </button>
+      </div>
+      {committed && (
+        <p className="muted">
+          Committed <code>{committed.slice(0, 8)}</code>.
+        </p>
+      )}
+      <p className="muted">Commits from the panel do not run git hooks.</p>
+    </div>
+  );
+}
+
+interface RowProps {
+  file: ChangedFile;
+  sessionId: string;
+  open: boolean;
+  version: number;
+  edit?: FileChange;
+  busy: boolean;
+  onToggle: () => void;
+  onStage: (on: boolean) => void;
+  onDiscard: () => void;
+  onError: (err: unknown) => void;
+}
+
+function FileRow({ file, sessionId, open, version, edit, busy, onToggle, onStage, onDiscard, onError }: RowProps) {
+  const [diff, setDiff] = useState<FileDiff | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const box = useRef<HTMLInputElement>(null);
+  const uncommitted = file.staged || file.unstaged;
+
+  useEffect(() => {
+    if (box.current) box.current.indeterminate = file.staged && file.unstaged;
+  }, [file.staged, file.unstaged]);
+  useEffect(() => {
+    if (!open) return;
+    EngineService.FileDiff(sessionId, file.path).then(setDiff).catch(onError);
+  }, [open, version, sessionId, file.path]);
+
+  const rows = diff ? parseDiff(diff.diff) : [];
+  const stats = diffStats(rows);
+  return (
+    <li className="diff-file">
+      <div className="diff-file-row">
+        {uncommitted ? (
+          <input
+            ref={box}
+            type="checkbox"
+            checked={file.staged && !file.unstaged}
+            disabled={busy}
+            onChange={() => onStage(!(file.staged && !file.unstaged))}
+            aria-label={`Stage ${file.path}`}
+            title={file.staged ? (file.unstaged ? "Partly staged; click to stage all of it" : "Staged") : "Not staged"}
+          />
+        ) : (
+          <span className="diff-committed" title="Committed since the session started">
+            ✓
+          </span>
+        )}
+        <span className={`diff-status diff-status-${file.status}`} title={file.status}>
+          {STATUS_MARK[file.status] ?? "?"}
+        </span>
+        <button className="link diff-path" onClick={onToggle} aria-expanded={open}>
+          <code>{file.path}</code>
+        </button>
+        {edit && (
+          <button className="link muted diff-agent" onClick={() => showTool(edit.lastToolCallId)} title="Show the agent's latest edit">
+            agent
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="diff-body">
+          {!diff && <p className="muted">Loading…</p>}
+          {diff && (
+            <>
+              <div className="row diff-tools">
+                <span className="muted">
+                  <span className="diff-plus">+{stats.added}</span> <span className="diff-minus">−{stats.deleted}</span>
+                </span>
+                {uncommitted &&
+                  (confirming ? (
+                    <>
+                      <button className="danger" disabled={busy} onClick={() => (setConfirming(false), onDiscard())}>
+                        {file.status === "untracked" ? "Delete the file" : "Discard uncommitted changes"}
+                      </button>
+                      <button onClick={() => setConfirming(false)}>Keep</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setConfirming(true)} disabled={busy}>
+                      Discard…
+                    </button>
+                  ))}
+              </div>
+              <pre className="diff-view">
+                {rows.map((r, i) => (
+                  <div key={i} className={`diff-line diff-${r.kind}`}>
+                    <span className="diff-no">{r.oldNo ?? ""}</span>
+                    <span className="diff-no">{r.newNo ?? ""}</span>
+                    <span className="diff-text">
+                      {r.kind === "add" ? "+" : r.kind === "del" ? "-" : r.kind === "ctx" ? " " : ""}
+                      {r.text}
+                    </span>
+                  </div>
+                ))}
+              </pre>
+              {diff.truncated && <p className="muted">The diff is longer than 1 MB and was cut.</p>}
+            </>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+// relative makes an agent's path relative to the project root, as git's are.
+function relative(path: string, root: string): string {
+  const r = root.endsWith("/") ? root : root + "/";
+  if (path.startsWith(r)) return path.slice(r.length);
+  return path.replace(/^\.\//, "");
+}

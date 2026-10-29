@@ -1,12 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
-import { panelData, type FileChange, type SessionView, type ToolItem } from "./transcript.ts";
+import { panelData, type SessionView, type ToolItem } from "./transcript.ts";
+import DiffPanel from "./DiffPanel.tsx";
 
 // SessionPanel is the right panel of the main window (GUI-001): approvals,
-// the files the agent changed, and the session's details. It reads the same
+// the diff against the session's base commit (GUI-005), and the session's
+// details. It reads the same
 // folded transcript as the conversation, so it never disagrees with it.
 
-type Tab = "approvals" | "changes" | "info";
+type Tab = "approvals" | "diff" | "info";
 
 interface Props {
   session: Session;
@@ -29,15 +31,17 @@ export function showTool(toolCallId: string) {
 export default function SessionPanel({ session, view, provider, environment, configVersion, onClose, onError }: Props) {
   const data = panelData(view);
   const [tab, setTab] = useState<Tab>("approvals");
+  // Uncommitted files, from the latest git state.
+  const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
 
   return (
-    <aside className="panel" aria-label="Session panel">
+    <aside className={tab === "diff" ? "panel panel-wide" : "panel"} aria-label="Session panel">
       <div className="panel-tabs" role="tablist">
         <TabButton id="approvals" tab={tab} setTab={setTab}>
           Approvals{data.pending.length > 0 && <span className="badge badge-waiting_permission">{data.pending.length}</span>}
         </TabButton>
-        <TabButton id="changes" tab={tab} setTab={setTab}>
-          Changes{data.changes.length > 0 && <span className="muted"> {data.changes.length}</span>}
+        <TabButton id="diff" tab={tab} setTab={setTab}>
+          Diff{dirty > 0 && <span className="muted"> {dirty}</span>}
         </TabButton>
         <TabButton id="info" tab={tab} setTab={setTab}>
           Info
@@ -48,7 +52,7 @@ export default function SessionPanel({ session, view, provider, environment, con
       </div>
       <div className="panel-body" role="tabpanel">
         {tab === "approvals" && <Approvals pending={data.pending} decided={data.decided} onError={onError} />}
-        {tab === "changes" && <Changes changes={data.changes} />}
+        {tab === "diff" && <DiffPanel session={session} gitKey={JSON.stringify(view.git)} agentEdits={data.changes} onError={onError} />}
         {tab === "info" && (
           <Info
             session={session}
@@ -130,31 +134,6 @@ function Approvals({ pending, decided, onError }: { pending: ToolItem[]; decided
           );
         })}
       </ul>
-    </>
-  );
-}
-
-function Changes({ changes }: { changes: FileChange[] }) {
-  return (
-    <>
-      <h3>Files the agent edited</h3>
-      {changes.length === 0 && <p className="muted">No edits in this session yet.</p>}
-      <ul className="panel-list">
-        {changes.map((c) => (
-          <li key={c.path}>
-            <button className="link" onClick={() => showTool(c.lastToolCallId)} title="Show the latest edit">
-              <code>{c.path}</code>
-            </button>{" "}
-            <span className="muted">
-              {c.edits} {c.edits === 1 ? "edit" : "edits"}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <p className="muted">
-        Edits made through the agent's file tools. Changes made by shell commands, the diff against the session's base commit
-        and committing arrive with the diff panel (GUI-005).
-      </p>
     </>
   );
 }

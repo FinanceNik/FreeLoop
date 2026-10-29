@@ -950,3 +950,152 @@ fieldset {
 .attention-command {
   word-break: break-all;
 }
+
+/* Diff and commit panel (GUI-005) */
+.panel.panel-wide {
+  width: 460px;
+}
+
+@media (max-width: 1000px) {
+  .panel.panel-wide {
+    width: min(460px, 92%);
+  }
+}
+
+.diff-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.diff-head {
+  justify-content: space-between;
+}
+
+.diff-files {
+  gap: 2px;
+}
+
+.diff-file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.diff-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-path code {
+  word-break: normal;
+}
+
+.diff-agent {
+  margin-left: auto;
+  font-size: 0.85em;
+}
+
+.diff-committed {
+  width: 13px;
+  text-align: center;
+  color: var(--ok);
+}
+
+.diff-status {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  font-weight: 600;
+  width: 1em;
+  text-align: center;
+}
+
+.diff-status-added,
+.diff-status-untracked {
+  color: var(--ok);
+}
+
+.diff-status-modified {
+  color: var(--warn);
+}
+
+.diff-status-deleted {
+  color: var(--danger);
+}
+
+.diff-body {
+  margin: 4px 0 8px;
+}
+
+.diff-tools {
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.diff-plus {
+  color: var(--ok);
+}
+
+.diff-minus {
+  color: var(--danger);
+}
+
+.diff-view {
+  margin: 0;
+  padding: 4px 0;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 0.85em;
+  line-height: 1.45;
+}
+
+.diff-line {
+  display: grid;
+  grid-template-columns: 3.2em 3.2em max-content;
+  min-width: 100%;
+  width: max-content;
+}
+
+.diff-no {
+  color: var(--muted);
+  text-align: right;
+  padding-right: 6px;
+  user-select: none;
+}
+
+.diff-text {
+  white-space: pre;
+  padding-right: 8px;
+}
+
+.diff-line.diff-add {
+  background: var(--add);
+}
+
+.diff-line.diff-del {
+  background: var(--del);
+}
+
+.diff-line.diff-hunk,
+.diff-line.diff-meta {
+  color: var(--muted);
+}
+
+.diff-line.diff-hunk .diff-text,
+.diff-line.diff-meta .diff-text {
+  padding-left: 4px;
+}
+
+.commit-message {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: inherit;
+}
