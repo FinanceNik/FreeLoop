@@ -62,7 +62,7 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 			offered = append(offered, t)
 		}
 	}
-	s := &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered, prov: p.Provider, model: p.Model}
+	s := &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered, prov: p.Provider, model: p.Model, window: p.ContextWindow}
 	s.repair()
 	return s, nil
 }
@@ -108,8 +108,11 @@ type session struct {
 	history []provider.Message
 	// prov and model answer the next model call; SetModel changes them
 	// (PRV-006).
-	prov  provider.Provider
-	model string
+	prov   provider.Provider
+	model  string
+	window int
+	// context is the size of the latest model call's context.
+	context int64
 	// nested are AGENTS.md files below the root, as paths relative to it,
 	// found when a tool call touched their folder (HRN-010).
 	nested []string
@@ -167,9 +170,9 @@ func (s *session) current() (provider.Provider, string) {
 
 // SetModel makes the next model call use prov and model (PRV-006); the
 // history carries over, since it is in the provider-neutral form.
-func (s *session) SetModel(prov provider.Provider, model string) {
+func (s *session) SetModel(prov provider.Provider, model string, window int) {
 	s.mu.Lock()
-	s.prov, s.model = prov, model
+	s.prov, s.model, s.window = prov, model, window
 	s.mu.Unlock()
 }
 
@@ -203,6 +206,9 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	s.p.Emit(event.TurnStarted, struct{}{})
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "running"})
 	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}})
+	if strings.TrimSpace(p.Text) == "/"+CompactCommand && len(p.Resources) == 0 {
+		return s.endTurn(harness.StopEndTurn, s.compact(ctx, "manual"))
+	}
 	parts := []provider.Part{{Type: provider.PartText, Text: s.expand(p.Text)}}
 	for _, r := range p.Resources {
 		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "resource_link", URI: r.URI, Name: r.Path}})
@@ -210,8 +216,13 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	}
 	s.appendUser(parts...)
 
-	stop, err := s.loop(ctx)
+	return s.endTurn(s.loop(ctx))
+}
+
+// endTurn records the end of a prompt.
+func (s *session) endTurn(stop harness.StopReason, err error) (harness.StopReason, error) {
 	if err != nil {
+		stop = harness.StopError
 		s.p.Emit(event.Error, event.ErrorData{Message: err.Error()})
 	}
 	s.p.Emit(event.TurnEnded, event.TurnEndedData{StopReason: string(stop)})
@@ -257,6 +268,14 @@ func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
 	for range limit {
 		if ctx.Err() != nil {
 			return harness.StopCancelled, nil
+		}
+		if s.needsCompaction() {
+			if err := s.compact(ctx, "auto"); err != nil {
+				if ctx.Err() != nil {
+					return harness.StopCancelled, nil
+				}
+				return harness.StopError, fmt.Errorf("compacting the context: %w", err)
+			}
 		}
 		mode := s.Mode()
 		prov, model := s.current()
@@ -312,7 +331,14 @@ func (s *session) call(ctx context.Context, prov provider.Provider, req provider
 		case provider.EventThinkingDelta:
 			s.p.Emit(event.AgentThoughtChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: ev.Text}})
 		case provider.EventDone:
-			s.p.Emit(event.UsageUpdate, event.UsageData(ev.Usage))
+			u := ev.Usage
+			total := u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
+			s.mu.Lock()
+			s.context = total
+			window := s.window
+			s.mu.Unlock()
+			s.p.Emit(event.UsageUpdate, event.UsageData{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
+				CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, ContextTokens: total, ContextWindow: window})
 			return ev.Message, ev.StopReason, nil
 		case provider.EventError:
 			return nil, "", ev.Err
@@ -568,9 +594,14 @@ func Restore(events []event.Event) []provider.Message {
 		var d struct {
 			Index   int              `json:"index"`
 			Message provider.Message `json:"message"`
+			// Reset starts the history over at Index (a compaction).
+			Reset bool `json:"reset"`
 		}
 		if json.Unmarshal(ev.Data, &d) != nil || d.Index < 0 || d.Index > len(history) {
 			continue
+		}
+		if d.Reset {
+			history = history[:d.Index]
 		}
 		if d.Index == len(history) {
 			history = append(history, d.Message)

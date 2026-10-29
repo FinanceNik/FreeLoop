@@ -1354,3 +1354,23 @@ fieldset {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* Context meter and compaction (HRN-013) */
+.context-meter {
+  font-size: 0.9em;
+}
+
+.context-high {
+  color: var(--warn);
+}
+
+.compaction summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.compaction .md {
+  margin: 4px 0 8px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--border);
+}

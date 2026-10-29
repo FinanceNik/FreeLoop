@@ -148,7 +148,11 @@ func (e *Engine) SetModel(ctx context.Context, sid, providerID, model string) er
 	e.mu.Unlock()
 	if ok {
 		if ms, ok := r.hs.(harness.ModelSetter); ok {
-			ms.SetModel(e.limit(p, sid), model)
+			window := 0
+			if caps, err := e.ModelCapabilities(ctx, providerID, model, false); err == nil {
+				window = caps.ContextWindow
+			}
+			ms.SetModel(e.limit(p, sid), model, window)
 		}
 	}
 	e.emit(sid, event.ModelChanged, event.ModelChangedData{ProviderID: providerID, Model: model})

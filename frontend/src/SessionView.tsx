@@ -302,6 +302,14 @@ export default function SessionView({ session, events, provider, providers, envi
                 ))}
               </select>
             </label>
+            {view.context && (
+              <span
+                className={view.context.window > 0 && view.context.tokens >= 0.8 * view.context.window ? "context-meter context-high" : "context-meter muted"}
+                title="Context of the latest model call; the session compacts at 80 % of the model's window, or on /compact"
+              >
+                context {view.context.window > 0 ? `${Math.round((100 * view.context.tokens) / view.context.window)} % of ${Math.round(view.context.window / 1000)}k` : `${Math.round(view.context.tokens / 1000)}k tokens`}
+              </span>
+            )}
             <span className="muted" title="Input (including cache reads and writes) / output tokens">
               {total.toLocaleString()} in · {view.usage.outputTokens.toLocaleString()} out
             </span>
@@ -517,6 +525,17 @@ function ItemBody({ item, onError }: { item: Item; onError: (err: unknown) => vo
       return <div className="turn-end">Model changed to {item.model}</div>;
     case "notice":
       return <div className="turn-end turn-end-warn">{item.message}</div>;
+    case "compaction":
+      return (
+        <details className="compaction">
+          <summary className="turn-end">
+            Context compacted{item.reason === "manual" ? "" : " automatically"}: {item.before.toLocaleString()} → about {item.after.toLocaleString()} tokens
+          </summary>
+          <div className="md">
+            <Markdown text={item.summary} />
+          </div>
+        </details>
+      );
   }
 }
 

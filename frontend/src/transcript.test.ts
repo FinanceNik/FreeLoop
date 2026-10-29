@@ -143,3 +143,15 @@ test("buildView keeps the latest advertised commands", () => {
     ["review"],
   );
 });
+
+test("buildView tracks the context and records compactions", () => {
+  const typed = (seq: number, type: string, data: unknown): TranscriptEvent => ({ ...ev(seq, data), type });
+  const v = buildView([
+    typed(1, "usage_update", { inputTokens: 10, outputTokens: 1, contextTokens: 850, contextWindow: 1000 }),
+    typed(2, "compaction_update", { status: "started", reason: "auto", contextTokens: 850 }),
+    typed(3, "compaction_update", { status: "completed", reason: "auto", contextTokens: 850, afterTokens: 40, summary: "did things" }),
+  ]);
+  assert.deepEqual(v.context, { tokens: 40, window: 1000 });
+  const c = v.items.find((i) => i.kind === "compaction");
+  assert.ok(c && c.kind === "compaction" && c.summary === "did things" && c.before === 850);
+});

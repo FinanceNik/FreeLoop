@@ -158,6 +158,9 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	var hs harness.Session
 	if p != nil {
 		params.Provider = e.limit(p, sid)
+		if caps, err := e.ModelCapabilities(ctx, ses.ProviderID, ses.Model, false); err == nil {
+			params.ContextWindow = caps.ContextWindow
+		}
 		hs, err = builtin.Harness{}.NewSession(ctx, params)
 	} else {
 		params.MCPServers = e.agentServers(prof)

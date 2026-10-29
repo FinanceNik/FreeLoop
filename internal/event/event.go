@@ -118,6 +118,21 @@ type UsageData struct {
 	OutputTokens     int64 `json:"outputTokens"`
 	CacheReadTokens  int64 `json:"cacheReadTokens"`
 	CacheWriteTokens int64 `json:"cacheWriteTokens"`
+	// ContextTokens is the size of the context this call sent, and
+	// ContextWindow the model's, for the context meter (HRN-013).
+	ContextTokens int64 `json:"contextTokens,omitempty"`
+	ContextWindow int   `json:"contextWindow,omitempty"`
+}
+
+// CompactionData is the payload of compaction_update (HRN-013): status
+// started or completed, why (auto or manual), the context size before and
+// an estimate after, and the summary the session continues from.
+type CompactionData struct {
+	Status        string `json:"status"`
+	Reason        string `json:"reason"`
+	ContextTokens int64  `json:"contextTokens"`
+	AfterTokens   int64  `json:"afterTokens,omitempty"`
+	Summary       string `json:"summary,omitempty"`
 }
 
 // GitStateData is the payload of git_state (SES-006).

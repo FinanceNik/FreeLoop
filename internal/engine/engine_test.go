@@ -57,11 +57,15 @@ func TestAppendedEventIsPersistedThenPublished(t *testing.T) {
 	defer cancel()
 
 	ses, _ := demoSession(t, e, "  demo  ", "")
-	if ses.Title != "demo" || ses.LastSeq != 1 || ses.Model != "scripted" || ses.Mode != "ask" {
+	// A new built-in session records its status and advertises /compact.
+	if ses.Title != "demo" || ses.LastSeq != 2 || ses.Model != "scripted" || ses.Mode != "ask" {
 		t.Errorf("session = %+v", ses)
 	}
 	if ev := next(t, ch); ev.Type != event.SessionStatus || ev.Seq != 1 {
 		t.Errorf("first event = %+v, want session_status seq 1", ev)
+	}
+	if ev := next(t, ch); ev.Type != event.AvailableCommandsUpdate || ev.Seq != 2 {
+		t.Errorf("second event = %+v, want available_commands_update seq 2", ev)
 	}
 
 	ev, err := e.AppendEvent(ctx, AppendEventRequest{
@@ -81,7 +85,7 @@ func TestAppendedEventIsPersistedThenPublished(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
-	if len(lines) != 2 || !strings.Contains(lines[1], `"text":"hello"`) {
+	if len(lines) != 3 || !strings.Contains(lines[2], `"text":"hello"`) {
 		t.Errorf("transcript = %q", b)
 	}
 	e.Close()
@@ -90,11 +94,11 @@ func TestAppendedEventIsPersistedThenPublished(t *testing.T) {
 	e = openTest(t, dir)
 	defer e.Close()
 	evs, err := e.Events(ctx, ses.ID, 0)
-	if err != nil || len(evs) != 2 {
+	if err != nil || len(evs) != 3 {
 		t.Fatalf("Events after reopen = %v, %v", evs, err)
 	}
 	list, _ := e.ListSessions(ctx)
-	if len(list) != 1 || list[0].ID != ses.ID || list[0].LastSeq != 2 {
+	if len(list) != 1 || list[0].ID != ses.ID || list[0].LastSeq != 3 {
 		t.Errorf("ListSessions after reopen = %+v", list)
 	}
 }

@@ -32,8 +32,11 @@ type Params struct {
 	Broker    *permission.Broker
 	Provider  provider.Provider
 	Model     string
-	Effort    string
-	Mode      permission.Mode
+	// ContextWindow is the model's context size in tokens; 0 when unknown,
+	// which turns automatic compaction off (HRN-013).
+	ContextWindow int
+	Effort        string
+	Mode          permission.Mode
 	// History restores a built-in session's context after a restart.
 	History []provider.Message
 	// DisabledTools are not offered to the model (the environment's tool
@@ -128,7 +131,7 @@ type Resumable interface {
 // ModelSetter is implemented by sessions whose model can change between
 // turns (PRV-006): the built-in harness's.
 type ModelSetter interface {
-	SetModel(p provider.Provider, model string)
+	SetModel(p provider.Provider, model string, contextWindow int)
 }
 
 // Command is a slash command that sends a prepared prompt; text after the

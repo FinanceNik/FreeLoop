@@ -114,7 +114,8 @@ export type Item =
   | { kind: "error"; key: string; rev: number; message: string }
   | { kind: "mode"; key: string; rev: number; mode: string }
   | { kind: "model"; key: string; rev: number; model: string; providerId: string }
-  | { kind: "notice"; key: string; rev: number; message: string };
+  | { kind: "notice"; key: string; rev: number; message: string }
+  | { kind: "compaction"; key: string; rev: number; reason: string; before: number; after: number; summary: string };
 
 export interface Usage {
   inputTokens: number;
@@ -140,6 +141,8 @@ export interface SessionView {
   running: boolean;
   // The slash commands the session's harness offers (GUI-004).
   commands: AvailableCommand[];
+  // The latest model call's context and the model's window (HRN-013).
+  context: { tokens: number; window: number } | null;
 }
 
 export interface AvailableCommand {
@@ -159,6 +162,8 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   let running = false;
   let git: GitState | null = null;
   let commands: AvailableCommand[] = [];
+  let contextTokens = 0;
+  let contextWindow = 0;
 
   const last = () => items[items.length - 1];
   for (const ev of events) {
@@ -248,10 +253,20 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         usage.outputTokens += d.outputTokens ?? 0;
         usage.cacheReadTokens += d.cacheReadTokens ?? 0;
         usage.cacheWriteTokens += d.cacheWriteTokens ?? 0;
+        if (d.contextTokens) {
+          contextTokens = d.contextTokens;
+          contextWindow = d.contextWindow ?? 0;
+        }
         break;
       case "current_mode_update":
         mode = d.currentModeId ?? mode;
         items.push({ kind: "mode", key, rev, mode: d.currentModeId });
+        break;
+      case "compaction_update":
+        if (d.status === "completed") {
+          items.push({ kind: "compaction", key, rev, reason: d.reason ?? "", before: d.contextTokens ?? 0, after: d.afterTokens ?? 0, summary: d.summary ?? "" });
+          if (contextTokens > 0) contextTokens = d.afterTokens ?? 0;
+        }
         break;
       case "notice":
         items.push({ kind: "notice", key, rev, message: d.message ?? "" });
@@ -270,7 +285,8 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
     }
   }
-  return { items, usage, git, mode, status, running, commands };
+  const context = contextTokens > 0 ? { tokens: contextTokens, window: contextWindow } : null;
+  return { items, usage, git, mode, status, running, commands, context };
 }
 
 function replaceTool(

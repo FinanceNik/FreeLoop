@@ -114,6 +114,10 @@ func (e *Engine) SetProjectProfile(ctx context.Context, projectID, profileID str
 func commandsOf(p config.Profile) ([]harness.Command, event.AvailableCommandsData) {
 	cmds := []harness.Command{}
 	data := event.AvailableCommandsData{AvailableCommands: []event.AvailableCommand{}}
+	if p.Harness == "" || p.Harness == builtin.ID {
+		// The built-in harness's own command (HRN-013).
+		data.AvailableCommands = append(data.AvailableCommands, event.AvailableCommand{Name: builtin.CompactCommand, Description: "Summarise the conversation so far to free up context"})
+	}
 	for _, c := range p.Commands {
 		cmds = append(cmds, harness.Command{Name: c.Name, Description: c.Description, Prompt: c.Prompt})
 		data.AvailableCommands = append(data.AvailableCommands, event.AvailableCommand{Name: c.Name, Description: c.Description})

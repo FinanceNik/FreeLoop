@@ -78,7 +78,7 @@ func BuiltinDefaultProfile() Profile {
 
 // ReservedCommands are the app's own slash commands; profiles cannot
 // redefine them.
-var ReservedCommands = []string{"ask", "accept-edits", "plan", "bypass", "mode", "help"}
+var ReservedCommands = []string{"ask", "accept-edits", "plan", "bypass", "mode", "help", "compact"}
 
 var (
 	commandName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
