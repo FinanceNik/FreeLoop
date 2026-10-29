@@ -31,6 +31,7 @@ function blank(): Profile {
     instructions: "",
     commands: [],
     skills: [],
+    mcpServers: [],
     source: "",
   };
 }
@@ -161,6 +162,22 @@ export default function Profiles({ profiles, providers, onChanged, onError }: Pr
               onBlur={(e) =>
                 set(
                   "skills",
+                  e.target.value
+                    .split(",")
+                    .map((x) => x.trim())
+                    .filter(Boolean),
+                )
+              }
+            />
+          </label>
+          <label>
+            MCP servers <span className="muted">(IDs separated by commas, added to the servers that are on for everyone)</span>
+            <input
+              key={form.id + "-mcp"}
+              defaultValue={(form.mcpServers ?? []).join(", ")}
+              onBlur={(e) =>
+                set(
+                  "mcpServers",
                   e.target.value
                     .split(",")
                     .map((x) => x.trim())

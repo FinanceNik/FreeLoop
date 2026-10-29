@@ -20,6 +20,7 @@ func Fingerprint(dir string) map[string]string {
 	add(FileName)
 	add(ProvidersFileName)
 	add(RulesFileName)
+	add(MCPFileName)
 	for _, sub := range []string{EnvironmentsDir, ProfilesDir} {
 		if entries, err := os.ReadDir(filepath.Join(dir, sub)); err == nil {
 			for _, e := range entries {

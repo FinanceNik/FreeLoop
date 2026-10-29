@@ -3,6 +3,7 @@ package environment
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -258,5 +259,35 @@ func TestCommandsGetAMinimalEnvironment(t *testing.T) {
 	}
 	if !strings.HasPrefix(res.Output, "none yes /") {
 		t.Errorf("output = %q; the app's own variables must not leak", res.Output)
+	}
+}
+
+func TestSpawnPipesAndEnvironment(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("FREELOOP_TEST_LEAK", "secret")
+	l, err := NewLocal(LocalOptions{Root: root, Guard: denyGuard{}, Shell: []string{"sh", "-c"}, Env: map[string]string{"FROM_ENV": "1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := l.Spawn(context.Background(), SpawnSpec{Argv: []string{"sh", "-c", `read line; echo "got $line $FROM_ENV $EXTRA ${FREELOOP_TEST_LEAK:-none}"; echo oops >&2`}, Env: map[string]string{"EXTRA": "x"}, LoginShell: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Stdin().Write([]byte("hello\n"))
+	out, _ := io.ReadAll(p.Stdout())
+	p.Wait()
+	if string(out) != "got hello 1 x none\n" || !strings.Contains(p.Stderr(), "oops") {
+		t.Errorf("out = %q, stderr = %q", out, p.Stderr())
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p, _ = l.Spawn(ctx, SpawnSpec{Argv: []string{"sleep", "30"}})
+	cancel()
+	done := make(chan struct{})
+	go func() { p.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancel did not kill the process")
 	}
 }

@@ -6,6 +6,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -55,7 +56,27 @@ type Params struct {
 	// Skills are the session's enabled skills, asked at every model call
 	// so toggles apply at once (SKL-002, SKL-004); nil means none.
 	Skills SkillSource
-	Emit   Emitter
+	// MCP are the session's MCP tools (MCP-003), asked at every model call
+	// so servers that start or stop are picked up; nil means none.
+	MCP  MCPSource
+	Emit Emitter
+}
+
+// MCPSource lists a session's MCP tools and calls them.
+type MCPSource interface {
+	Tools() []MCPTool
+	// Call runs the tool named as Tools listed it.
+	Call(ctx context.Context, name string, input json.RawMessage) (text string, isError bool, err error)
+}
+
+// MCPTool is one MCP tool as the model sees it: Name is
+// mcp__<server>__<tool>, made safe for every provider.
+type MCPTool struct {
+	Name        string
+	Description string
+	InputSchema map[string]any
+	Server      string
+	Tool        string
 }
 
 // SkillSource lists a session's enabled skills and reads them.

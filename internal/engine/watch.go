@@ -62,6 +62,8 @@ func (e *Engine) reload(changed []string) {
 			}
 		case f == config.RulesFileName:
 			e.rules.reload()
+		case f == config.MCPFileName:
+			e.loadMCP()
 		case strings.HasPrefix(f, config.EnvironmentsDir+string(filepath.Separator)):
 			envs = true
 		case strings.HasPrefix(f, config.ProfilesDir+string(filepath.Separator)):

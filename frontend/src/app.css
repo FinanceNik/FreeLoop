@@ -1207,3 +1207,44 @@ fieldset {
 .skill-install form input {
   flex: 1;
 }
+
+/* MCP servers (MCP-001) */
+.mcp-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mcp-cmd {
+  word-break: break-all;
+}
+
+.mcp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+}
+
+.mcp-approve pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 6px 0;
+}
+
+.badge.mcp-running {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.badge.mcp-error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.badge.mcp-approval {
+  color: var(--accent-text);
+  background: var(--warn);
+  border-color: var(--warn);
+}

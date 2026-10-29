@@ -26,6 +26,7 @@ import Attention from "./Attention.tsx";
 import Profiles from "./Profiles.tsx";
 import Onboarding from "./Onboarding.tsx";
 import Skills from "./Skills.tsx";
+import MCP from "./MCP.tsx";
 
 type Screen =
   | { kind: "session"; id: string }
@@ -38,6 +39,7 @@ type Screen =
   | { kind: "attention" }
   | { kind: "profiles" }
   | { kind: "skills" }
+  | { kind: "mcp" }
   | { kind: "none" };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -343,6 +345,7 @@ export default function App() {
           <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
           <button onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
           <button onClick={() => setScreen({ kind: "skills" })}>Skills</button>
+          <button onClick={() => setScreen({ kind: "mcp" })}>MCP</button>
           <button onClick={() => setScreen({ kind: "environments" })}>Environments</button>
           <button onClick={() => setScreen({ kind: "rules" })}>Rules</button>
           <button onClick={() => setScreen({ kind: "settings" })}>Settings</button>
@@ -431,6 +434,7 @@ export default function App() {
             onError={report}
           />
         )}
+        {screen.kind === "mcp" && <MCP configVersion={configVersion} onError={report} />}
         {screen.kind === "skills" && (
           <Skills projects={projects} configVersion={configVersion} onConfigChanged={refreshConfig} onProjectsChanged={refreshProjects} onError={report} />
         )}

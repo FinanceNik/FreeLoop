@@ -18,6 +18,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
+	"github.com/FinanceNik/Freeloop/internal/mcp"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 	"github.com/FinanceNik/Freeloop/internal/session"
@@ -82,12 +83,15 @@ type Engine struct {
 	projects   projectCache
 	skillCache skillCache
 
-	envs      []config.Environment
-	profiles  []config.Profile
-	providers *providerRegistry
-	runtimes  map[string]*runtime
-	streams   map[string]*streamBuf
-	known     []string // secret values to redact
+	envs     []config.Environment
+	profiles []config.Profile
+	// mcpServers are mcp.yaml's servers; mcp runs them.
+	mcpServers []config.MCPServer
+	mcp        *mcp.Manager
+	providers  *providerRegistry
+	runtimes   map[string]*runtime
+	streams    map[string]*streamBuf
+	known      []string // secret values to redact
 }
 
 // Open loads configuration and opens the store in opts.DataDir. Config
@@ -128,6 +132,14 @@ func Open(opts Options) (*Engine, error) {
 	e.broker.SetRules(e.rules, e.rules)
 	e.loadEnvironments()
 	e.loadProfiles()
+	// MCP servers run in a local environment at the user's home: they are
+	// the app's, not one project's.
+	if env, err := e.localEnv(e.home, nil); err == nil {
+		e.mcp = mcp.New(env)
+	} else {
+		e.mcp = mcp.New(nil)
+	}
+	e.loadMCP()
 	if err := e.loadProviders(); err != nil {
 		e.store.Close()
 		return nil, err
@@ -162,6 +174,7 @@ func (e *Engine) Close() error {
 	for _, r := range running {
 		r.stop()
 	}
+	e.mcp.StopAll()
 	close(e.quit)
 	e.watching.Wait()
 	e.bg.Wait()
@@ -209,9 +222,10 @@ const (
 	issueRules        = "rules"
 	issueCapabilities = "capabilities"
 	issueProfiles     = "profiles"
+	issueMCP          = "mcp"
 )
 
-var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issueProfiles, issueRules, issueCapabilities}
+var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issueProfiles, issueMCP, issueRules, issueCapabilities}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()
@@ -310,6 +324,11 @@ func (e *Engine) rememberStoredSecrets() {
 	}
 	for _, env := range e.envs {
 		for _, ref := range env.Secrets {
+			refs = append(refs, ref)
+		}
+	}
+	for _, s := range e.mcpServers {
+		for _, ref := range s.Secrets {
 			refs = append(refs, ref)
 		}
 	}

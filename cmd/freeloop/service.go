@@ -148,6 +148,31 @@ func (s *EngineService) ClaudeSkillsDir() string {
 	return s.eng.ClaudeSkillsDir()
 }
 
+// The MCP page (MCP-001, MCP-005).
+func (s *EngineService) ListMCPServers() []engine.MCPServerInfo {
+	return s.eng.ListMCPServers()
+}
+
+func (s *EngineService) SaveMCPServer(req engine.SaveMCPServerRequest) (engine.MCPServerInfo, error) {
+	return s.eng.SaveMCPServer(req)
+}
+
+func (s *EngineService) DeleteMCPServer(id string) error {
+	return s.eng.DeleteMCPServer(id)
+}
+
+func (s *EngineService) ApproveMCPServer(ctx context.Context, id, fingerprint string) (engine.MCPServerInfo, error) {
+	return s.eng.ApproveMCPServer(ctx, id, fingerprint)
+}
+
+func (s *EngineService) StartMCPServer(ctx context.Context, id string) error {
+	return s.eng.StartMCPServer(ctx, id)
+}
+
+func (s *EngineService) StopMCPServer(id string) {
+	s.eng.StopMCPServer(id)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

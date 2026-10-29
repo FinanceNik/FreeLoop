@@ -53,6 +53,9 @@ type Profile struct {
 	// Skills, when set, are the only skills the profile's sessions see
 	// (SKL-002).
 	Skills []string `yaml:"skills,omitempty" json:"skills"`
+	// MCPServers are servers from mcp.yaml the profile's sessions use even
+	// when they are not enabled for everyone (MCP-001).
+	MCPServers []string `yaml:"mcpServers,omitempty" json:"mcpServers"`
 	// Commands are the profile's slash commands (GUI-004).
 	Commands []Command `yaml:"commands,omitempty" json:"commands"`
 	// Source is the file the profile came from; empty for the built-in

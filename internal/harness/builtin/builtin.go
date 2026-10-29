@@ -314,6 +314,13 @@ func (s *session) toolSpecs(mode permission.Mode) []provider.ToolSpec {
 			out = append(out, t.spec)
 		}
 	}
+	// MCP tools can do anything their server can, so plan mode leaves them
+	// out whatever their annotations claim.
+	if s.p.MCP != nil && mode != permission.ModePlan {
+		for _, t := range s.p.MCP.Tools() {
+			out = append(out, provider.ToolSpec{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema})
+		}
+	}
 	return out
 }
 
@@ -347,6 +354,8 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 		prepErr = fmt.Errorf("the %s tool is turned off in this environment", c.ToolName)
 	case t == nil && len(s.p.Tools) > 0 && slices.Contains(ToolNames(), c.ToolName):
 		prepErr = fmt.Errorf("the %s tool is not part of this session's profile", c.ToolName)
+	case t == nil && strings.HasPrefix(c.ToolName, "mcp__") && s.p.MCP != nil:
+		prepared, prepErr = s.prepareMCP(c.ToolName, c.Input)
 	case t == nil:
 		prepErr = fmt.Errorf("unknown tool %q", c.ToolName)
 	default:
@@ -493,6 +502,30 @@ const basePrompt = `You are the built-in coding agent of Freeloop, working in th
 - Some tool calls need the user's approval. If a call is denied, do not repeat it; pick another approach or ask the user.
 - Never read or write credentials, keys or files outside the project unless the user asks you to.
 `
+
+// prepareMCP describes an MCP tool call for the broker (MCP-003): it asks
+// as the namespaced tool, so rules such as allow mcp__github__* apply, and
+// it is never treated as a read, whatever the server says about it.
+func (s *session) prepareMCP(name string, input json.RawMessage) (*call, error) {
+	i := slices.IndexFunc(s.p.MCP.Tools(), func(t harness.MCPTool) bool { return t.Name == name })
+	if i < 0 {
+		return nil, fmt.Errorf("the MCP tool %s is not available; its server may have stopped", name)
+	}
+	t := s.p.MCP.Tools()[i]
+	return &call{
+		title: t.Server + " · " + t.Tool,
+		run: func(ctx context.Context, _ permission.Decision) (result, error) {
+			text, isError, err := s.p.MCP.Call(ctx, name, input)
+			if err != nil {
+				return result{}, err
+			}
+			if isError {
+				return result{}, errors.New(strings.TrimSpace("The tool reported an error. " + text))
+			}
+			return result{text: truncate(text, maxToolOutput)}, nil
+		},
+	}, nil
+}
 
 // ToolNames lists the built-in tools, for validating profiles.
 func ToolNames() []string {

@@ -438,3 +438,52 @@ func TestProfileToolsAndTurnCap(t *testing.T) {
 		t.Error("the model was not told the tool is outside the profile")
 	}
 }
+
+type fakeMCP struct{ calls int }
+
+func (f *fakeMCP) Tools() []harness.MCPTool {
+	return []harness.MCPTool{{Name: "mcp__srv__do", Description: "Do it.", InputSchema: map[string]any{"type": "object"}, Server: "srv", Tool: "do"}}
+}
+
+func (f *fakeMCP) Call(context.Context, string, json.RawMessage) (string, bool, error) {
+	f.calls++
+	return "did it", false, nil
+}
+
+// MCP-003: MCP tools are offered outside plan mode only, and every call
+// asks the broker under its namespaced name.
+func TestMCPToolsAskAndStayOutOfPlanMode(t *testing.T) {
+	f := setup(t, permission.ModeAsk, scripted.Step{Calls: []scripted.Call{{Name: "mcp__srv__do", Input: map[string]any{}}}}, scripted.Step{Text: "ok"})
+	src := &fakeMCP{}
+	s := f.sess.(*session)
+	s.p.MCP = src
+	stop := make(chan struct{})
+	defer close(stop)
+	var asked []string
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			for _, r := range f.broker.Pending() {
+				asked = append(asked, r.Tool)
+				f.broker.Decide(r.ID, "allow_once", "", "")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if src.calls != 1 || len(asked) != 1 || asked[0] != "mcp__srv__do" {
+		t.Errorf("calls = %d, asked = %v", src.calls, asked)
+	}
+	if !slices.ContainsFunc(s.toolSpecs(permission.ModeAsk), func(t provider.ToolSpec) bool { return t.Name == "mcp__srv__do" }) {
+		t.Error("not offered in ask mode")
+	}
+	if slices.ContainsFunc(s.toolSpecs(permission.ModePlan), func(t provider.ToolSpec) bool { return t.Name == "mcp__srv__do" }) {
+		t.Error("offered in plan mode")
+	}
+}
