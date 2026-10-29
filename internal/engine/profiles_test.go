@@ -56,6 +56,7 @@ func TestProfilesRunSideBySide(t *testing.T) {
 
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("Project rule: tabs."), 0o644)
+	e.SetProjectTrust(ctx, root, true)
 	r, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "reader"})
 	if err != nil {
 		t.Fatal(err)

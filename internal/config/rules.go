@@ -38,20 +38,27 @@ func LoadRules(dir string) ([]permission.Rule, []Issue, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("config: %w", err)
 	}
+	return ParseRules(b, permission.ScopeGlobal, path)
+}
+
+// ParseRules decodes a rules file's contents, giving each rule scope and
+// source. Like LoadRules it returns the valid rules with the issues and
+// ErrRulesInvalid when any rule is bad.
+func ParseRules(b []byte, scope permission.Scope, source string) ([]permission.Rule, []Issue, error) {
 	var f rulesFile
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
 	if err := dec.Decode(&f); err != nil && !errors.Is(err, io.EOF) {
-		return nil, []Issue{{File: path, Message: err.Error()}}, ErrRulesInvalid
+		return nil, []Issue{{File: source, Line: yamlErrorLine(err), Message: err.Error()}}, ErrRulesInvalid
 	}
 	var out []permission.Rule
 	var issues []Issue
 	for i, r := range f.Rules {
 		if err := r.Validate(); err != nil {
-			issues = append(issues, Issue{File: path, Field: fmt.Sprintf("rules[%d]", i), Message: err.Error()})
+			issues = append(issues, Issue{File: source, Field: fmt.Sprintf("rules[%d]", i), Line: fieldLine(b, fmt.Sprintf("rules[%d]", i)), Message: err.Error()})
 			continue
 		}
-		r.Scope, r.Source = permission.ScopeGlobal, path
+		r.Scope, r.Source = scope, source
 		out = append(out, r)
 	}
 	if len(issues) > 0 {

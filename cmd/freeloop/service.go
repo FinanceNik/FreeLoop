@@ -106,6 +106,16 @@ func (s *EngineService) SetProjectProfile(ctx context.Context, projectID, profil
 	return s.eng.SetProjectProfile(ctx, projectID, profileID)
 }
 
+// ProjectSettings and SetProjectTrust handle project trust and .freeloop/
+// settings (SEC-006, SET-002).
+func (s *EngineService) ProjectSettings(ctx context.Context, root string) (engine.ProjectSettings, error) {
+	return s.eng.ProjectSettings(ctx, root)
+}
+
+func (s *EngineService) SetProjectTrust(ctx context.Context, root string, trusted bool) (engine.ProjectInfo, error) {
+	return s.eng.SetProjectTrust(ctx, root, trusted)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

@@ -21,9 +21,10 @@ import (
 // running, if any. Prompts sent while one runs wait in a queue and start at
 // the next turn boundary (GUI-004).
 type runtime struct {
-	hs  harness.Session
-	sid string
-	env environment.Environment
+	hs        harness.Session
+	sid       string
+	projectID string
+	env       environment.Environment
 
 	// Git state, refreshed after tool calls and turns (SES-006).
 	gitMu   sync.Mutex
@@ -82,7 +83,8 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	prof, err := e.profile(ses.ProfileID)
+	project := e.sessionProject(ctx, ses)
+	prof, err := e.profileFor(project, ses.ProfileID)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +108,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
-	r := &runtime{env: env, base: ses.BaseCommit, sid: sid}
+	r := &runtime{env: env, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID}
 	lastCommands := []byte(`{"availableCommands":[]}`)
 	for _, ev := range events {
 		switch ev.Type {
@@ -136,6 +138,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		MaxTurns:       prof.MaxTurns,
 		NoInstructions: prof.Instructions == "none",
 		Commands:       commands,
+		Trusted:        func() bool { return e.trusted(ses.ProjectID) },
 		Emit: func(typ event.Type, data any) {
 			e.emit(sid, typ, data)
 			if changesFiles(typ, data) {
@@ -175,7 +178,7 @@ func changesFiles(typ event.Type, data any) bool {
 func (e *Engine) refreshGit(r *runtime) {
 	r.gitMu.Lock()
 	defer r.gitMu.Unlock()
-	st := gitState(context.Background(), r.env)
+	st := gitState(context.Background(), r.env, e.trusted(r.projectID))
 	st.BaseCommit = r.base
 	if st == r.lastGit || (!st.Repo && !r.lastGit.Repo) {
 		return

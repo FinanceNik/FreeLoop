@@ -30,6 +30,9 @@ const (
 	ScopeSession Scope = "session"
 	// ScopeProfile rules come from a harness profile (HRN-003).
 	ScopeProfile Scope = "profile"
+	// ScopeProject rules come from a trusted project's .freeloop/ and can
+	// only deny (SET-002).
+	ScopeProject Scope = "project"
 )
 
 // Rule is Freeloop's canonical rule (OQ-010): a tool, and optionally a
@@ -146,11 +149,36 @@ func simpleCommands(cmd string, depth int) []string {
 		fields[0] = filepath.Base(strings.TrimPrefix(fields[0], "\\"))
 		simple := strings.Join(fields, " ")
 		out = append(out, simple)
+		if g := withoutGitOptions(fields); g != "" {
+			out = append(out, g)
+		}
 		if m := shellC.FindStringSubmatch(simple); m != nil && depth < 3 {
 			out = append(out, simpleCommands(strings.Trim(m[1], "'\""), depth+1)...)
 		}
 	}
 	return out
+}
+
+// gitValueOptions are git's global options that take a separate value.
+var gitValueOptions = []string{"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix", "--attr-source", "--exec-path"}
+
+// withoutGitOptions returns a git command without the global options before
+// its subcommand, so a deny rule for "git push *" also matches
+// "git -C . push" and "git -c a=b --no-pager push"; "" when fields is not a
+// git command with such options.
+func withoutGitOptions(fields []string) string {
+	if fields[0] != "git" || len(fields) < 2 || !strings.HasPrefix(fields[1], "-") {
+		return ""
+	}
+	rest := fields[1:]
+	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") {
+		if slices.Contains(gitValueOptions, rest[0]) && len(rest) > 1 && rest[0] != "--exec-path" {
+			rest = rest[2:]
+			continue
+		}
+		rest = rest[1:]
+	}
+	return strings.Join(append([]string{"git"}, rest...), " ")
 }
 
 // segments splits a command line at shell operators.

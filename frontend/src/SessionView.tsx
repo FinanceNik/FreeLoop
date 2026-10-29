@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
 import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
-import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Session } from "./api.ts";
+import { EngineService, MODES, type EnvironmentInfo, type ProjectInfo, type ProviderInfo, type Session } from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel from "./SessionPanel.tsx";
@@ -12,6 +12,8 @@ interface Props {
   events: TranscriptEvent[];
   provider?: ProviderInfo;
   environment?: EnvironmentInfo;
+  project?: ProjectInfo;
+  onProjectsChanged: () => void;
   allowBypass: boolean;
   configVersion: number;
   onError: (err: unknown) => void;
@@ -41,7 +43,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, provider, environment, allowBypass, configVersion, onError, onDeleted }: Props) {
+export default function SessionView({ session, events, provider, environment, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -246,7 +248,7 @@ export default function SessionView({ session, events, provider, environment, al
                 <span title={`HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}`}>
                   {" "}
                   · {view.git.branch || "detached"}
-                  {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : view.git.dirty < 0 ? " · changes not checked (repo has content filters)" : " · clean"}
+                  {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : view.git.dirty < 0 ? " · changes not checked" : " · clean"}
                 </span>
               )}
               {" "}· env {environment?.name ?? session.environmentId ?? "Local"}
@@ -281,6 +283,23 @@ export default function SessionView({ session, events, provider, environment, al
             </span>
           </div>
         </header>
+        {project && !project.trusted && !project.missing && (
+          <div className="banner warn row" role="status">
+            <span>
+              Untrusted project: this session uses your global settings only, without the project's <code>AGENTS.md</code>,{" "}
+              <code>.freeloop/</code> settings or git status.
+            </span>
+            <button
+              onClick={() =>
+                EngineService.SetProjectTrust(project.root, true)
+                  .then(onProjectsChanged)
+                  .catch(onError)
+              }
+            >
+              Trust project
+            </button>
+          </div>
+        )}
         {mode === "bypass" && (
           <div className="banner error" role="status">
             Bypass mode: tool calls run without asking. Protected paths are still refused.

@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
-	"github.com/FinanceNik/Freeloop/internal/permission"
+	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
 // Profiles (HRN-003) live in profiles/<id>.yaml. The built-in default
@@ -36,7 +37,22 @@ func (e *Engine) ListProfiles() []config.Profile {
 	return slices.Clone(e.profiles)
 }
 
-// profile returns the profile with id; "" is the default.
+// profileFor returns the profile with id for a session in project: a
+// project profile (from a trusted project's .freeloop/profiles/) when id
+// has the project prefix, else an app profile; "" is the default.
+func (e *Engine) profileFor(project session.Project, id string) (config.Profile, error) {
+	if strings.HasPrefix(id, config.ProjectProfilePrefix) {
+		for _, p := range e.projectConfig(project).Profiles {
+			if p.ID == id {
+				return p, nil
+			}
+		}
+		return config.Profile{}, fmt.Errorf("no profile %q in %s; the project may be untrusted, or the file deleted or invalid", id, project.Root)
+	}
+	return e.profile(id)
+}
+
+// profile returns the app profile with id; "" is the default.
 func (e *Engine) profile(id string) (config.Profile, error) {
 	if id == "" {
 		id = config.DefaultProfileID
@@ -79,11 +95,11 @@ func (e *Engine) DeleteProfile(id string) error {
 // SetProjectProfile changes the profile new sessions of a project start
 // with (HRN-004).
 func (e *Engine) SetProjectProfile(ctx context.Context, projectID, profileID string) error {
-	if _, err := e.profile(profileID); err != nil {
-		return err
-	}
 	p, err := e.store.GetProject(ctx, projectID)
 	if err != nil {
+		return err
+	}
+	if _, err := e.profileFor(p, profileID); err != nil {
 		return err
 	}
 	p.DefaultProfileID = profileID
@@ -100,20 +116,4 @@ func commandsOf(p config.Profile) ([]harness.Command, event.AvailableCommandsDat
 		data.AvailableCommands = append(data.AvailableCommands, event.AvailableCommand{Name: c.Name, Description: c.Description})
 	}
 	return cmds, data
-}
-
-// profileRules returns the rules of sid's profile as it is now, so edits to
-// the file apply at the next permission check.
-func (e *Engine) profileRules(sid string) []permission.Rule {
-	ses, err := e.store.GetSession(context.Background(), sid)
-	if err != nil {
-		return nil
-	}
-	p, err := e.profile(ses.ProfileID)
-	if err != nil {
-		// A session whose profile went away keeps no allow rules but must
-		// not lose its denies; it cannot start anyway (runtimeFor).
-		return nil
-	}
-	return p.Rules
 }

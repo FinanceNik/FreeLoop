@@ -8,6 +8,7 @@ import {
   type ModelInfo,
   type Profile,
   type ProjectInfo,
+  type ProjectSettings,
   type ProviderInfo,
   type Session,
 } from "./api.ts";
@@ -21,6 +22,7 @@ interface Props {
   profiles: Profile[];
   defaults?: Defaults;
   onCreated: (s: Session) => void;
+  onProjectsChanged: () => void;
   onManageProviders: () => void;
   onProvidersChanged: () => void;
   onError: (err: unknown) => void;
@@ -33,7 +35,7 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, profiles, defaults, onCreated, onManageProviders, onProvidersChanged, onError }: Props) {
+export default function NewSession({ providers, projects, environments, profiles, defaults, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers[0];
   const [root, setRoot] = useState("");
@@ -98,7 +100,29 @@ export default function NewSession({ providers, projects, environments, profiles
     pickProfile(project.defaultProfileId || defaults?.profileId || "default");
     setMakeDefault(false);
   }, [project?.id]);
-  const profile = profiles.find((p) => p.id === profileId);
+  // Trust and .freeloop/ settings of the chosen folder (SEC-006, SET-002).
+  const [settings, setSettings] = useState<ProjectSettings | null>(null);
+  const loadSettings = () => {
+    if (!root.trim()) return setSettings(null);
+    EngineService.ProjectSettings(root.trim())
+      .then(setSettings)
+      .catch(() => setSettings(null));
+  };
+  useEffect(() => {
+    setSettings(null);
+    const t = setTimeout(loadSettings, 300);
+    return () => clearTimeout(t);
+  }, [root]);
+  const trust = () =>
+    EngineService.SetProjectTrust(root.trim(), true)
+      .then(() => {
+        loadSettings();
+        onProjectsChanged();
+      })
+      .catch(onError);
+  const projectProfiles = settings?.profiles ?? [];
+  const allProfiles = [...profiles, ...projectProfiles];
+  const profile = allProfiles.find((p) => p.id === profileId);
   const env = environments.find((e) => e.id === (environmentId || "local"));
 
   // Favorites and hidden models (PRV-003).
@@ -126,7 +150,7 @@ export default function NewSession({ providers, projects, environments, profiles
   // editable.
   const pickProfile = (id: string) => {
     setProfileId(id);
-    const p = profiles.find((x) => x.id === id);
+    const p = [...profiles, ...(settings?.profiles ?? [])].find((x) => x.id === id);
     if (!p) return;
     const prov = providers.find((x) => x.id === p.provider);
     if (prov) {
@@ -201,6 +225,36 @@ export default function NewSession({ providers, projects, environments, profiles
             </button>
           </div>
         </label>
+        {root.trim() && settings && !settings.trusted && (
+          <div className="banner warn trust-box" role="status">
+            <strong>Do you trust this folder?</strong>
+            <p>
+              Until you do, sessions here use your global settings only: Freeloop does not read its <code>AGENTS.md</code> or{" "}
+              <code>CLAUDE.md</code>, its <code>.freeloop/</code> settings, or run <code>git status</code> in it. Trust only folders whose contents you
+              know.
+            </p>
+            <div className="row">
+              <button type="button" className="primary" onClick={trust}>
+                Trust this project
+              </button>
+              <span className="muted">or start without trusting it.</span>
+            </div>
+          </div>
+        )}
+        {settings && (settings.issues ?? []).length > 0 && (
+          <div className="banner warn" role="status">
+            <strong>Problems in the project's .freeloop/ settings</strong>
+            <ul>
+              {(settings.issues ?? []).map((i, n) => (
+                <li key={n}>
+                  {i.file}
+                  {i.line ? `:${i.line}` : ""}
+                  {i.field ? ` (${i.field})` : ""}: {i.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <label>
           Profile
           <select value={profileId} onChange={(e) => pickProfile(e.target.value)}>
@@ -214,6 +268,16 @@ export default function NewSession({ providers, projects, environments, profiles
                   </option>
                 ))}
             </optgroup>
+            {projectProfiles.length > 0 && (
+              <optgroup label="Built-in harness · this project's .freeloop/">
+                {projectProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {project && project.defaultProfileId === p.id ? " (project default)" : ""}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           {profile?.description && <span className="muted">{profile.description}</span>}
           {project && (project.defaultProfileId || "default") !== profileId && (

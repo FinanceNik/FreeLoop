@@ -92,7 +92,7 @@ func TestGitCallsDoNotRunRepositoryCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(repo, "a.txt"), []byte("changed"), 0o644)
-	if st := gitState(ctx, env); st.Dirty != 1 || st.Branch != "main" {
+	if st := gitState(ctx, env, true); st.Dirty != 1 || st.Branch != "main" {
 		t.Errorf("state = %+v", st)
 	}
 	if _, err := os.Stat(marker); err == nil {
@@ -101,7 +101,7 @@ func TestGitCallsDoNotRunRepositoryCommands(t *testing.T) {
 
 	setConfig("filter.evil.clean", "touch "+marker)
 	os.WriteFile(filepath.Join(repo, ".gitattributes"), []byte("* filter=evil\n"), 0o644)
-	st := gitState(ctx, env)
+	st := gitState(ctx, env, true)
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("a content filter ran")
 	}

@@ -204,6 +204,9 @@ func TestGitStateFollowsTheSession(t *testing.T) {
 		scripted.Step{Calls: []scripted.Call{{Name: "write_file", Input: map[string]any{"path": "new.txt", "content": "x"}}}},
 		scripted.Step{Text: "done"},
 	)
+	if _, err := e.SetProjectTrust(ctx, repo, true); err != nil {
+		t.Fatal(err)
+	}
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: "s", Model: "m", Mode: "accept_edits"})
 	if err != nil {
 		t.Fatal(err)

@@ -42,6 +42,9 @@ func TestDiffPanel(t *testing.T) {
 	e := openTest(t, t.TempDir())
 	defer e.Close()
 	withScript(e, "msg", scripted.Step{Text: "Change a and add b"})
+	if _, err := e.SetProjectTrust(ctx, repo, true); err != nil {
+		t.Fatal(err)
+	}
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: "msg", Model: "scripted"})
 	if err != nil {
 		t.Fatal(err)
@@ -149,6 +152,7 @@ func TestDiffPanelRefusesCommandConfig(t *testing.T) {
 	repo := gitRepo(t)
 	e := openTest(t, t.TempDir())
 	defer e.Close()
+	e.SetProjectTrust(ctx, repo, true)
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: DemoProviderID})
 	if err != nil {
 		t.Fatal(err)

@@ -122,8 +122,15 @@ func (e *Engine) Changes(ctx context.Context, sid string) (Changes, error) {
 	if err != nil {
 		return Changes{}, err
 	}
+	if !e.trusted(ses.ProjectID) {
+		_, repo := git(ctx, env, "rev-parse", "--git-dir")
+		return Changes{Repo: repo, Base: ses.BaseCommit, Files: []ChangedFile{}, Blocked: untrustedDiff}, nil
+	}
 	return changes(ctx, env, ses.BaseCommit)
 }
+
+// untrustedDiff is why the diff panel is off in an untrusted project.
+const untrustedDiff = "Trust this project to see and commit its changes. Until then the app runs no git command its configuration could extend (SEC-006)."
 
 func changes(ctx context.Context, env environment.Environment, base string) (Changes, error) {
 	top, ok := git(ctx, env, "rev-parse", "--show-toplevel")
@@ -215,6 +222,9 @@ func (e *Engine) changedFiles(ctx context.Context, sid string, paths ...string) 
 	if err != nil {
 		return nil, ses, nil, err
 	}
+	if !e.trusted(ses.ProjectID) {
+		return nil, ses, nil, errors.New(untrustedDiff)
+	}
 	c, err := changes(ctx, env, ses.BaseCommit)
 	if err != nil {
 		return nil, ses, nil, err
@@ -299,6 +309,9 @@ func (e *Engine) Commit(ctx context.Context, sid, message string) (string, error
 	if err != nil {
 		return "", err
 	}
+	if !e.trusted(ses.ProjectID) {
+		return "", errors.New(untrustedDiff)
+	}
 	if why := blocked(ctx, env); why != "" {
 		return "", errors.New(why)
 	}
@@ -349,7 +362,7 @@ func (e *Engine) gitChanged(sid string) {
 		if err != nil {
 			return
 		}
-		st := gitState(ctx, env)
+		st := gitState(ctx, env, e.trusted(ses.ProjectID))
 		st.BaseCommit = ses.BaseCommit
 		e.emit(sid, event.GitState, st)
 	})
@@ -364,6 +377,9 @@ func (e *Engine) SuggestCommitMessage(ctx context.Context, sid string) (string, 
 	env, ses, err := e.sessionGit(ctx, sid)
 	if err != nil {
 		return "", err
+	}
+	if !e.trusted(ses.ProjectID) {
+		return "", errors.New(untrustedDiff)
 	}
 	if why := blocked(ctx, env); why != "" {
 		return "", errors.New(why)

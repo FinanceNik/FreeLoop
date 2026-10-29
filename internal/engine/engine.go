@@ -71,7 +71,10 @@ type Engine struct {
 	// bg tracks background work (git refreshes) that Close waits for.
 	bg sync.WaitGroup
 
-	mu        sync.Mutex
+	mu sync.Mutex
+	// projects caches trusted projects' .freeloop/ settings.
+	projects projectCache
+
 	envs      []config.Environment
 	profiles  []config.Profile
 	providers *providerRegistry
@@ -113,7 +116,7 @@ func Open(opts Options) (*Engine, error) {
 	}
 	e.broker = permission.NewBroker(permission.NewPolicy(opts.Home, opts.DataDir), e.emit)
 	e.rules = newRuleStore(opts.DataDir, func(issues []config.Issue) { e.setIssues(issueRules, issues) })
-	e.rules.profileRules = e.profileRules
+	e.rules.scopedRules = e.scopedRules
 	e.broker.SetRules(e.rules, e.rules)
 	e.loadEnvironments()
 	e.loadProfiles()
@@ -393,7 +396,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if profileID == "" {
 		profileID = e.Config().Defaults.ProfileID
 	}
-	prof, err := e.profile(profileID)
+	prof, err := e.profileFor(project, profileID)
 	if err != nil {
 		return session.Session{}, err
 	}
@@ -434,7 +437,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	// visible after unrelated commits (SES-006).
 	var git event.GitStateData
 	if env, err := e.localEnv(project.Root, nil); err == nil {
-		git = gitState(ctx, env)
+		git = gitState(ctx, env, project.Trusted)
 	}
 	git.BaseCommit = git.Head
 	ses, err := e.store.CreateSession(ctx, session.Session{

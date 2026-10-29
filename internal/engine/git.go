@@ -15,9 +15,11 @@ import (
 // makes for its own display, not side effects of a harness.
 
 // A repository's own .git/config can make git run commands
-// (core.fsmonitor, hooks, content filters). Until projects are trusted
-// explicitly (SEC-006), the app's git calls turn off what can be turned off
-// and skip the file scan where filters are configured.
+// (core.fsmonitor, hooks, content filters). The app's git calls turn off
+// what can be turned off; in a project the user has not trusted (SEC-006)
+// they are limited to plumbing reads that run nothing (rev-parse,
+// symbolic-ref, rev-list, config --get), and in a trusted one the file scan
+// is still skipped where filters are configured.
 var safeGit = []string{"git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"}
 
 func git(ctx context.Context, env environment.Environment, args ...string) (string, bool) {
@@ -34,13 +36,18 @@ func git(ctx context.Context, env environment.Environment, args ...string) (stri
 	return res.Output, true
 }
 
-// gitState reads branch, HEAD and the number of changed files. In a
-// repository that configures content filters, which git status may run, it
-// reads only branch and HEAD and reports the count as unknown (-1).
-func gitState(ctx context.Context, env environment.Environment) event.GitStateData {
-	if filters, ok := git(ctx, env, "config", "--local", "--name-only", "--get-regexp", `^filter\.`); ok && strings.TrimSpace(filters) != "" {
+// gitState reads branch, HEAD and the number of changed files. In an
+// untrusted project, or a repository that configures content filters, which
+// git status may run, it reads only branch and HEAD and reports the count as
+// unknown (-1).
+func gitState(ctx context.Context, env environment.Environment, trusted bool) event.GitStateData {
+	filters, _ := git(ctx, env, "config", "--local", "--includes", "--name-only", "--get-regexp", `^filter\.`)
+	if !trusted || strings.TrimSpace(filters) != "" {
+		if _, ok := git(ctx, env, "rev-parse", "--git-dir"); !ok {
+			return event.GitStateData{}
+		}
 		st := event.GitStateData{Repo: true, Dirty: -1}
-		if out, ok := git(ctx, env, "rev-parse", "HEAD"); ok {
+		if out, ok := git(ctx, env, "rev-parse", "--verify", "--quiet", "HEAD"); ok {
 			st.Head = strings.TrimSpace(out)
 		}
 		if out, ok := git(ctx, env, "symbolic-ref", "--quiet", "--short", "HEAD"); ok {

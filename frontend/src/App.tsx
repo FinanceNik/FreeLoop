@@ -284,6 +284,11 @@ export default function App() {
             <section key={g.key} className="project-group">
               <h2 className="project-name" title={g.project?.root ?? g.key}>
                 {g.name}
+                {g.project && !g.project.trusted && !g.project.missing && (
+                  <span className="muted untrusted" title="Untrusted: global settings only">
+                    untrusted
+                  </span>
+                )}
                 {g.project?.missing && (
                   <>
                     <span className="badge badge-error">missing</span>
@@ -352,6 +357,8 @@ export default function App() {
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
             environment={environments.find((x) => x.id === (selected.environmentId || "local"))}
+            project={projects.find((p) => p.id === selected.projectId)}
+            onProjectsChanged={refreshProjects}
             configVersion={configVersion}
             allowBypass={config?.permissions.allowBypass ?? false}
             onError={report}
@@ -370,6 +377,7 @@ export default function App() {
             defaults={config?.defaults}
             onManageProviders={() => setScreen({ kind: "providers" })}
             onProvidersChanged={refreshProviders}
+            onProjectsChanged={refreshProjects}
             onCreated={(s) => {
               setSessions((list) => (list.some((x) => x.id === s.id) ? list : [s, ...list]));
               openSession(s.id);

@@ -60,8 +60,12 @@ type Project struct {
 	// DefaultEnvironmentID is preselected for new sessions.
 	DefaultEnvironmentID string `json:"defaultEnvironmentId"`
 	// DefaultProfileID is preselected for new sessions (HRN-004).
-	DefaultProfileID string    `json:"defaultProfileId"`
-	CreatedAt        time.Time `json:"createdAt"`
+	DefaultProfileID string `json:"defaultProfileId"`
+	// Trusted is set once the user trusts the project (SEC-006); until
+	// then the app reads none of its instruction files or .freeloop/
+	// settings and runs no git command that its config can extend.
+	Trusted   bool      `json:"trusted"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 var idEncoding = base32.NewEncoding("0123456789abcdefghjkmnpqrstvwxyz").WithPadding(base32.NoPadding)

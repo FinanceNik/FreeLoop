@@ -1116,3 +1116,19 @@ fieldset {
 .form input[type="checkbox"] {
   flex: none;
 }
+
+/* Project trust (SEC-006) */
+.trust-box p {
+  margin: 6px 0;
+}
+
+.project-name .untrusted {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.banner.row {
+  justify-content: space-between;
+  gap: 12px;
+}

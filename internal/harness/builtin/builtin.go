@@ -427,7 +427,7 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 	if s.p.SystemPrompt != "" {
 		fmt.Fprintf(&sb, "\n# Profile instructions\n\n%s\n", strings.TrimSpace(s.p.SystemPrompt))
 	}
-	if s.p.NoInstructions {
+	if s.p.NoInstructions || (s.p.Trusted != nil && !s.p.Trusted()) {
 		return sb.String()
 	}
 	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {

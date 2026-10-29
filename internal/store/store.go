@@ -347,6 +347,7 @@ var migrations = []string{
 	ALTER TABLE sessions ADD COLUMN branch TEXT NOT NULL DEFAULT '';`,
 	`ALTER TABLE sessions ADD COLUMN profile_id TEXT NOT NULL DEFAULT '';
 	ALTER TABLE projects ADD COLUMN default_profile TEXT NOT NULL DEFAULT '';`,
+	`ALTER TABLE projects ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

@@ -132,6 +132,51 @@ func (p Profile) Validate() error {
 	return nil
 }
 
+// ValidateProject reports what a project's own profile may not do: project
+// configuration can tighten permissions but never loosen them (SET-002), so
+// it cannot start sessions in a mode that asks less than ask, or carry allow
+// rules.
+func (p Profile) ValidateProject() error {
+	if p.Mode != "" && p.Mode != string(permission.ModeAsk) && p.Mode != string(permission.ModePlan) {
+		return fieldErr("mode", "a project profile can start in ask or plan only, not %s", p.Mode)
+	}
+	for i, r := range p.Rules {
+		if r.Effect != permission.Deny {
+			return fieldErr(fmt.Sprintf("rules[%d]", i), "a project profile can only add deny rules")
+		}
+	}
+	return nil
+}
+
+// ParseProjectProfile is ParseProfile for a project's .freeloop/profiles/
+// file, which also must pass ValidateProject. Its ID gets the project
+// prefix.
+func ParseProjectProfile(id string, b []byte, tools []string, source string) (Profile, *Issue) {
+	p, issue := ParseProfile(id, b, tools)
+	if issue == nil {
+		if err := p.ValidateProject(); err != nil {
+			var fe fieldError
+			errors.As(err, &fe)
+			issue = &Issue{Field: fe.field, Line: fieldLine(b, fe.field), Message: fe.msg}
+		}
+	}
+	if issue != nil {
+		issue.File = source
+		return p, issue
+	}
+	p.ID = ProjectProfilePrefix + id
+	p.Source = source
+	for i := range p.Rules {
+		p.Rules[i].Scope = permission.ScopeProject
+		p.Rules[i].Source = source
+	}
+	return p, nil
+}
+
+// ProjectProfilePrefix marks the ID of a profile from a project's
+// .freeloop/profiles/.
+const ProjectProfilePrefix = "project:"
+
 func profilesDir(dir string) string { return filepath.Join(dir, ProfilesDir) }
 
 // LoadProfiles reads every profiles/*.yaml in dir, sorted by ID. Files with

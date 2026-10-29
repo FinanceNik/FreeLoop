@@ -46,6 +46,9 @@ type Params struct {
 	Tools          []string
 	MaxTurns       int
 	NoInstructions bool
+	// Trusted, when set, is asked before every model call; project
+	// instruction files are read only while it returns true (SEC-006).
+	Trusted func() bool
 	// Commands are the profile's slash commands; a prompt that starts with
 	// /name runs the command's prompt (GUI-004).
 	Commands []Command

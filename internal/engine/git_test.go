@@ -51,13 +51,17 @@ func TestGitAgainstARealRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	st := gitState(ctx, env)
+	st := gitState(ctx, env, true)
 	if !st.Repo || st.Branch != "main" || len(st.Head) != 40 || st.Dirty != 0 {
 		t.Errorf("clean repo = %+v", st)
 	}
 	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0o644)
-	if st := gitState(ctx, env); st.Dirty != 1 {
+	if st := gitState(ctx, env, true); st.Dirty != 1 {
 		t.Errorf("dirty = %d, want 1", st.Dirty)
+	}
+	// An untrusted project gets branch and HEAD from plumbing only.
+	if u := gitState(ctx, env, false); !u.Repo || u.Dirty != -1 || u.Branch != "main" || u.Head != st.Head {
+		t.Errorf("untrusted = %+v", u)
 	}
 	first, remote := fingerprint(ctx, env)
 	if first != st.Head || remote != "https://example.com/r.git" {
@@ -66,7 +70,7 @@ func TestGitAgainstARealRepo(t *testing.T) {
 
 	plain := t.TempDir()
 	penv, _ := environment.NewLocal(environment.LocalOptions{Root: plain, Guard: permission.NewPolicy(home, filepath.Join(home, "d")).Guard(plain)})
-	if st := gitState(ctx, penv); st.Repo {
+	if st := gitState(ctx, penv, true); st.Repo {
 		t.Errorf("not a repo = %+v", st)
 	}
 }
