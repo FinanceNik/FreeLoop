@@ -49,6 +49,14 @@ type Config struct {
 	// Notifications are macOS notifications for sessions that need the
 	// user while the app is in the background (GUI-008).
 	Notifications Notifications `yaml:"notifications" json:"notifications"`
+	// Skills holds the global skill switches (SKL-002).
+	Skills Skills `yaml:"skills,omitempty" json:"skills"`
+}
+
+// Skills lists skills turned off everywhere; every other discovered skill
+// is on unless a project or profile says otherwise.
+type Skills struct {
+	Disabled []string `yaml:"disabled,omitempty" json:"disabled"`
 }
 
 // Notifications holds notification settings.

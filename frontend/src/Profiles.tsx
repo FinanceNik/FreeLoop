@@ -30,6 +30,7 @@ function blank(): Profile {
     maxTurns: 0,
     instructions: "",
     commands: [],
+    skills: [],
     source: "",
   };
 }
@@ -152,6 +153,22 @@ export default function Profiles({ profiles, providers, onChanged, onError }: Pr
               ))}
             </div>
           </fieldset>
+          <label>
+            Skills <span className="muted">(names separated by commas; empty means every skill that is on)</span>
+            <input
+              key={form.id}
+              defaultValue={(form.skills ?? []).join(", ")}
+              onBlur={(e) =>
+                set(
+                  "skills",
+                  e.target.value
+                    .split(",")
+                    .map((x) => x.trim())
+                    .filter(Boolean),
+                )
+              }
+            />
+          </label>
           <label className="row">
             <input type="checkbox" checked={form.instructions !== "none"} onChange={(e) => set("instructions", e.target.checked ? "" : "none")} /> Read
             the project's AGENTS.md or CLAUDE.md

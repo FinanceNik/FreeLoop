@@ -52,7 +52,33 @@ type Params struct {
 	// Commands are the profile's slash commands; a prompt that starts with
 	// /name runs the command's prompt (GUI-004).
 	Commands []Command
-	Emit     Emitter
+	// Skills are the session's enabled skills, asked at every model call
+	// so toggles apply at once (SKL-002, SKL-004); nil means none.
+	Skills SkillSource
+	Emit   Emitter
+}
+
+// SkillSource lists a session's enabled skills and reads them.
+type SkillSource interface {
+	Enabled() []SkillEntry
+	// Load returns a skill's SKILL.md body, or with file set one of its
+	// files, relative to the skill's folder.
+	Load(name, file string) (SkillContent, error)
+}
+
+// SkillEntry is what the system prompt lists for a skill.
+type SkillEntry struct {
+	Name        string
+	Description string
+}
+
+// SkillContent is a loaded skill or skill file.
+type SkillContent struct {
+	Text string
+	// Dir is the skill's absolute folder, for running its scripts; Files
+	// lists its other files when the body was loaded.
+	Dir   string
+	Files []string
 }
 
 // Command is a slash command that sends a prepared prompt; text after the

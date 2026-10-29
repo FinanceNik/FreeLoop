@@ -150,6 +150,7 @@ func (e *Engine) SetProjectTrust(ctx context.Context, root string, trusted bool)
 	e.projects.mu.Lock()
 	delete(e.projects.byDir, p.Root)
 	e.projects.mu.Unlock()
+	e.forgetSkills()
 	list, err := e.store.ListSessions(ctx)
 	if err == nil {
 		for _, s := range list {

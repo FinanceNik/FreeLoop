@@ -32,7 +32,10 @@ type call struct {
 	paths   []string
 	command string
 	options []permission.Option
-	run     func(ctx context.Context, d permission.Decision) (result, error)
+	// permTool names the call for the broker when it differs from the
+	// tool, as skill:<name> for load_skill (SEC-002).
+	permTool string
+	run      func(ctx context.Context, d permission.Decision) (result, error)
 }
 
 // result is what a tool returns: text for the model and display content for
@@ -77,7 +80,7 @@ func decode(input json.RawMessage, v any, required ...string) error {
 }
 
 func tools() []*tool {
-	return []*tool{readFile(), listDir(), globTool(), grepTool(), writeFile(), editFile(), shellTool(), presentPlan()}
+	return []*tool{readFile(), listDir(), globTool(), grepTool(), writeFile(), editFile(), shellTool(), presentPlan(), loadSkill()}
 }
 
 func readFile() *tool {
@@ -365,6 +368,54 @@ func shellTool() *tool {
 				}
 				return result{text: sb.String(), content: []any{map[string]any{"type": "terminal_output", "exitCode": res.ExitCode, "output": res.Output}}}, nil
 			}}, nil
+		},
+	}
+}
+
+// loadSkill reads an enabled skill (SKL-004): the body of its SKILL.md and
+// the list of its files, or one of those files. Only names and descriptions
+// are in the system prompt; the rest is read on demand. Scripts are run with
+// the shell tool, which asks like any command.
+func loadSkill() *tool {
+	return &tool{
+		spec: provider.ToolSpec{
+			Name:        "load_skill",
+			Description: "Load a skill listed under Skills in the system prompt: returns its instructions and the files it contains. Pass file to read one of those files.",
+			InputSchema: schema([]string{"name"}, map[string]any{
+				"name": str("The skill's name, as listed."),
+				"file": str("Optional: a file inside the skill, relative to its folder, such as references/guide.md."),
+			}),
+		},
+		kind: permission.KindRead, readOnly: true,
+		prepare: func(s *session, input json.RawMessage) (*call, error) {
+			var in struct{ Name, File string }
+			if err := decode(input, &in, "name"); err != nil {
+				return nil, err
+			}
+			if s.p.Skills == nil {
+				return nil, errors.New("this session has no skills")
+			}
+			title := "Load skill " + in.Name
+			if in.File != "" {
+				title += ": " + in.File
+			}
+			return &call{
+				title: title, permTool: "skill:" + in.Name,
+				run: func(context.Context, permission.Decision) (result, error) {
+					c, err := s.p.Skills.Load(in.Name, in.File)
+					if err != nil {
+						return result{}, err
+					}
+					text := c.Text
+					if in.File == "" {
+						text = fmt.Sprintf("<skill name=%q folder=%q>\n%s\n</skill>\n", in.Name, c.Dir, strings.TrimSpace(c.Text))
+						if len(c.Files) > 0 {
+							text += "\nFiles in the skill (read them with load_skill and file; run scripts with the shell tool from the folder above):\n- " + strings.Join(c.Files, "\n- ") + "\n"
+						}
+					}
+					return result{text: truncate(text, maxToolOutput), content: []any{textContent(fmt.Sprintf("Loaded %d characters", len(text)))}}, nil
+				},
+			}, nil
 		},
 	}
 }

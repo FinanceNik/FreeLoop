@@ -188,6 +188,8 @@ type SkillStore interface {
 }
 ```
 
+*As built in M2:* `internal/skill` parses and discovers skills through an `FS` (an environment's file system), so it does no file I/O of its own; the engine reads the app store through a local environment rooted at `skills/` whose guard allows reads there only (the protected-path policy keeps the data folder from the agent's file tools, so `load_skill` with `file` is how the model reads a store skill's references), and project skills through the project's environment, only once the project is trusted. Global switches are `skills.disabled` in `config.yaml`, project switches a column on the project row, and a profile's `skills:` is an allowlist; the harness gets a `SkillSource` it asks at every model call, so switches apply at once. `load_skill` asks the broker as `skill:<name>`, so rules can allow or deny a skill by name.
+
 Progressive disclosure (SKL-004): the system prompt carries name and description of enabled skills; the `load_skill` tool returns the body; referenced files are read through the environment on demand; scripts run through `Environment.Exec` under the permission broker like any shell call.
 
 ### 4.5 ToolCall, permissions and policy

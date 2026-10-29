@@ -1160,3 +1160,15 @@ fieldset {
   margin-top: 12px;
   align-items: center;
 }
+
+/* Skills (SKL-002) */
+.skill-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+}
+
+.skill code {
+  word-break: break-all;
+}

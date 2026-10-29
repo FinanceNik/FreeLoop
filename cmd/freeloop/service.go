@@ -121,6 +121,15 @@ func (s *EngineService) SetProjectMuted(ctx context.Context, projectID string, m
 	return s.eng.SetProjectMuted(ctx, projectID, muted)
 }
 
+// ListSkills and SetSkillEnabled feed the skills page (SKL-002).
+func (s *EngineService) ListSkills(ctx context.Context, projectRoot string) (engine.SkillList, error) {
+	return s.eng.ListSkills(ctx, projectRoot)
+}
+
+func (s *EngineService) SetSkillEnabled(ctx context.Context, name, projectID string, enabled bool) error {
+	return s.eng.SetSkillEnabled(ctx, name, projectID, enabled)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

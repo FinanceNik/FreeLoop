@@ -76,8 +76,10 @@ type Engine struct {
 	notifying sync.WaitGroup
 
 	mu sync.Mutex
-	// projects caches trusted projects' .freeloop/ settings.
-	projects projectCache
+	// projects caches trusted projects' .freeloop/ settings, skillCache
+	// the skills found per project.
+	projects   projectCache
+	skillCache skillCache
 
 	envs      []config.Environment
 	profiles  []config.Profile

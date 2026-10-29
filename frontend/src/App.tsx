@@ -25,6 +25,7 @@ import Settings from "./Settings.tsx";
 import Attention from "./Attention.tsx";
 import Profiles from "./Profiles.tsx";
 import Onboarding from "./Onboarding.tsx";
+import Skills from "./Skills.tsx";
 
 type Screen =
   | { kind: "session"; id: string }
@@ -36,6 +37,7 @@ type Screen =
   | { kind: "settings" }
   | { kind: "attention" }
   | { kind: "profiles" }
+  | { kind: "skills" }
   | { kind: "none" };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -340,6 +342,7 @@ export default function App() {
         <footer className="row">
           <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
           <button onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
+          <button onClick={() => setScreen({ kind: "skills" })}>Skills</button>
           <button onClick={() => setScreen({ kind: "environments" })}>Environments</button>
           <button onClick={() => setScreen({ kind: "rules" })}>Rules</button>
           <button onClick={() => setScreen({ kind: "settings" })}>Settings</button>
@@ -427,6 +430,9 @@ export default function App() {
             onDone={(root) => setScreen({ kind: "new", root })}
             onError={report}
           />
+        )}
+        {screen.kind === "skills" && (
+          <Skills projects={projects} configVersion={configVersion} onConfigChanged={refreshConfig} onProjectsChanged={refreshProjects} onError={report} />
         )}
         {screen.kind === "profiles" && (
           <Profiles

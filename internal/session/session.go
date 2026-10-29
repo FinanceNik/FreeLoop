@@ -66,8 +66,10 @@ type Project struct {
 	// settings and runs no git command that its config can extend.
 	Trusted bool `json:"trusted"`
 	// Muted projects send no notifications (GUI-008).
-	Muted     bool      `json:"muted"`
-	CreatedAt time.Time `json:"createdAt"`
+	Muted bool `json:"muted"`
+	// DisabledSkills are skills turned off in this project (SKL-002).
+	DisabledSkills []string  `json:"disabledSkills"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 var idEncoding = base32.NewEncoding("0123456789abcdefghjkmnpqrstvwxyz").WithPadding(base32.NoPadding)

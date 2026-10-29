@@ -50,6 +50,9 @@ type Profile struct {
 	// Instructions is project (AGENTS.md, then CLAUDE.md; the default) or
 	// none.
 	Instructions string `yaml:"instructions,omitempty" json:"instructions"`
+	// Skills, when set, are the only skills the profile's sessions see
+	// (SKL-002).
+	Skills []string `yaml:"skills,omitempty" json:"skills"`
 	// Commands are the profile's slash commands (GUI-004).
 	Commands []Command `yaml:"commands,omitempty" json:"commands"`
 	// Source is the file the profile came from; empty for the built-in

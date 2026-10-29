@@ -349,6 +349,7 @@ var migrations = []string{
 	ALTER TABLE projects ADD COLUMN default_profile TEXT NOT NULL DEFAULT '';`,
 	`ALTER TABLE projects ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0;`,
 	`ALTER TABLE projects ADD COLUMN muted INTEGER NOT NULL DEFAULT 0;`,
+	`ALTER TABLE projects ADD COLUMN disabled_skills TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

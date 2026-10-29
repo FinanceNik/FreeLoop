@@ -4,6 +4,7 @@
 package builtin
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,6 +27,10 @@ import (
 // ID is the built-in harness's ID.
 const ID = "builtin"
 
+// maxSkillDescription caps a skill's description in the system prompt, so
+// each enabled skill adds well under 100 tokens (SKL-004).
+const maxSkillDescription = 240
+
 // MaxTurns caps model calls per prompt.
 const MaxTurns = 100
 
@@ -47,8 +52,12 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 	}
 	var offered []*tool
 	for _, t := range tools() {
-		// present_plan belongs to plan mode, not to a profile's tool set.
-		allowed := len(p.Tools) == 0 || slices.Contains(p.Tools, t.spec.Name) || t.kind == permission.KindSwitchMode
+		// present_plan belongs to plan mode and load_skill to the session's
+		// skills, not to a profile's tool set.
+		allowed := len(p.Tools) == 0 || slices.Contains(p.Tools, t.spec.Name) || t.kind == permission.KindSwitchMode || t.spec.Name == "load_skill"
+		if t.spec.Name == "load_skill" && p.Skills == nil {
+			allowed = false
+		}
 		if allowed && !slices.Contains(p.DisabledTools, t.spec.Name) {
 			offered = append(offered, t)
 		}
@@ -295,7 +304,11 @@ func (s *session) call(ctx context.Context, req provider.ChatRequest) (*provider
 
 func (s *session) toolSpecs(mode permission.Mode) []provider.ToolSpec {
 	var out []provider.ToolSpec
+	skills := s.p.Skills != nil && len(s.p.Skills.Enabled()) > 0
 	for _, t := range s.tools {
+		if t.spec.Name == "load_skill" && !skills {
+			continue
+		}
 		plan := t.kind == permission.KindSwitchMode
 		if (mode == permission.ModePlan && (t.readOnly || plan)) || (mode != permission.ModePlan && !plan) {
 			out = append(out, t.spec)
@@ -360,7 +373,7 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 
 	s.discover(prepared.paths, kind == permission.KindSearch || c.ToolName == "list_dir")
 	d := s.p.Broker.Request(ctx, permission.Context{Mode: mode, Root: s.env.Root()}, permission.Request{
-		SessionID: s.p.SessionID, ToolCallID: c.ToolCallID, Tool: c.ToolName, Kind: kind,
+		SessionID: s.p.SessionID, ToolCallID: c.ToolCallID, Tool: cmp.Or(prepared.permTool, c.ToolName), Kind: kind,
 		Title: title, Input: c.Input, Paths: prepared.paths, Command: prepared.command, Options: prepared.options,
 	})
 	switch d.Outcome {
@@ -423,6 +436,18 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 		sb.WriteString("\n# Mode: plan\n\nYou are in plan mode: you can read and search but not change anything. Investigate, then call present_plan with a concrete plan. Once the user approves it you can make changes.\n")
 	case permission.ModeBypass:
 		sb.WriteString("\n# Mode: bypass\n\nTool calls run without asking the user. Be careful with destructive commands.\n")
+	}
+	if s.p.Skills != nil {
+		if list := s.p.Skills.Enabled(); len(list) > 0 {
+			sb.WriteString("\n# Skills\n\nSkills are folders of instructions and scripts for particular tasks. When a task matches a skill's description, call load_skill with its name before starting, then follow it.\n\n")
+			for _, sk := range list {
+				desc := strings.Join(strings.Fields(sk.Description), " ")
+				if len(desc) > maxSkillDescription {
+					desc = strings.ToValidUTF8(desc[:maxSkillDescription], "") + "…"
+				}
+				fmt.Fprintf(&sb, "- %s: %s\n", sk.Name, desc)
+			}
+		}
 	}
 	if s.p.SystemPrompt != "" {
 		fmt.Fprintf(&sb, "\n# Profile instructions\n\n%s\n", strings.TrimSpace(s.p.SystemPrompt))
