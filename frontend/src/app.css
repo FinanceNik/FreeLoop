@@ -1374,3 +1374,19 @@ fieldset {
   padding: 8px 12px;
   border-left: 2px solid var(--border);
 }
+
+/* Checkpoints and rewind (SES-014) */
+.rewound {
+  opacity: 0.45;
+}
+
+.msg-user .rewind {
+  float: right;
+  margin-left: 8px;
+  font-size: 0.85em;
+}
+
+.msg-user span.rewind {
+  display: inline-flex;
+  gap: 4px;
+}

@@ -31,6 +31,8 @@ type runtime struct {
 	// host is the session's folder on this Mac, where the app's own git
 	// commands run even when env is a container.
 	host *environment.Local
+	// noCheckpoints is set once a snapshot failed (SES-014).
+	noCheckpoints bool
 
 	// Git state, refreshed after tool calls and turns (SES-006).
 	gitMu   sync.Mutex
@@ -272,6 +274,7 @@ func (e *Engine) Prompt(ctx context.Context, sid, text string) (PromptResult, er
 // Cancel can never fall between the two.
 func (e *Engine) run(r *runtime, text string, ctx context.Context) {
 	for {
+		e.checkpoint(r)
 		if _, err := r.hs.Prompt(ctx, e.embedMentions(r.sid, r.env, text)); err != nil {
 			log.Printf("engine: prompt: %v", err)
 		}

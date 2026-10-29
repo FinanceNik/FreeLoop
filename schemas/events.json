@@ -37,7 +37,9 @@
         "env_health",
         "hook_ran",
         "error",
-        "history_message"
+        "history_message",
+        "checkpoint",
+        "rewind"
       ],
       "x-acp-types": [
         "user_message_chunk",

@@ -52,6 +52,10 @@ const (
 	// session continues with its full context after a restart (SES-003).
 	// The UI does not render it.
 	HistoryMessage Type = "history_message"
+	// Checkpoint records a snapshot of the session's files at the start of
+	// a turn; Rewind restores one (SES-014).
+	Checkpoint Type = "checkpoint"
+	Rewind     Type = "rewind"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -64,7 +68,7 @@ var ACPTypes = []Type{
 // FreeloopTypes lists the variants Freeloop adds, in schema order.
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
-	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage,
+	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind,
 }
 
 // AllTypes returns every known variant.
@@ -153,6 +157,26 @@ type CurrentModeData struct {
 // TurnEndedData is the payload of turn_ended.
 type TurnEndedData struct {
 	StopReason string `json:"stopReason"`
+}
+
+// CheckpointData is the payload of checkpoint: the snapshot of the
+// session's files before a turn and, for the built-in harness, how many
+// context messages the session had then.
+type CheckpointData struct {
+	Commit     string `json:"commit"`
+	HistoryLen int    `json:"historyLen"`
+}
+
+// RewindData is the payload of rewind: the checkpoint event restored, and
+// the snapshot taken of the files just before, which a later rewind can
+// return to.
+type RewindData struct {
+	CheckpointSeq int64  `json:"checkpointSeq"`
+	Commit        string `json:"commit"`
+	Saved         string `json:"saved"`
+	// Context is false when the harness cannot rewind its context, as for
+	// an external agent.
+	Context bool `json:"context"`
 }
 
 // NoticeData is the payload of notice: something the user should know

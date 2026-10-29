@@ -155,3 +155,27 @@ test("buildView tracks the context and records compactions", () => {
   const c = v.items.find((i) => i.kind === "compaction");
   assert.ok(c && c.kind === "compaction" && c.summary === "did things" && c.before === 850);
 });
+
+test("buildView ties checkpoints to user messages and dims rewound turns", () => {
+  const typed = (seq: number, type: string, data: unknown): TranscriptEvent => ({ ...ev(seq, data), type });
+  const text = (t: string) => ({ content: { type: "text", text: t } });
+  const v = buildView([
+    typed(1, "checkpoint", { commit: "a", historyLen: 0 }),
+    typed(2, "user_message_chunk", text("first")),
+    typed(3, "agent_message_chunk", text("one")),
+    typed(4, "checkpoint", { commit: "b", historyLen: 2 }),
+    typed(5, "user_message_chunk", text("second")),
+    typed(6, "agent_message_chunk", text("two")),
+    typed(7, "rewind", { checkpointSeq: 4, commit: "b", saved: "c", context: true }),
+  ]);
+  const users = v.items.filter((i) => i.kind === "user");
+  assert.deepEqual(
+    users.map((u) => (u.kind === "user" ? [u.text, u.checkpointSeq, !!u.rewound] : null)),
+    [
+      ["first", 1, false],
+      ["second", 4, true],
+    ],
+  );
+  assert.equal(v.items.find((i) => i.kind === "agent" && i.text === "two")?.rewound, true);
+  assert.equal(v.items.find((i) => i.kind === "agent" && i.text === "one")?.rewound, undefined);
+});

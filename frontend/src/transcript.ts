@@ -93,8 +93,11 @@ export interface ToolContent {
 
 // Every item carries rev, the seq of the last event that changed it, so the
 // view can skip re-rendering items that did not change.
-export type Item =
-  | { kind: "user"; key: string; rev: number; text: string; ts: string; files: string[] }
+// Items after a rewind's checkpoint carry rewound (SES-014).
+export type Item = ItemKinds & { rewound?: boolean };
+
+type ItemKinds =
+  | { kind: "user"; key: string; rev: number; text: string; ts: string; files: string[]; checkpointSeq?: number }
   | { kind: "agent"; key: string; rev: number; text: string }
   | { kind: "thought"; key: string; rev: number; text: string }
   | {
@@ -162,6 +165,10 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   let running = false;
   let git: GitState | null = null;
   let commands: AvailableCommand[] = [];
+  // The latest checkpoint not yet tied to a user message, and the ranges
+  // of events a rewind undid.
+  let checkpoint: number | null = null;
+  const rewound: { from: number; to: number }[] = [];
   let contextTokens = 0;
   let contextWindow = 0;
 
@@ -178,7 +185,8 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           if (prev?.kind === "user") items[items.length - 1] = { ...prev, rev, files: [...prev.files, d.content.name ?? d.content.uri] };
           break;
         }
-        items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [] });
+        items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [], checkpointSeq: checkpoint ?? undefined });
+        checkpoint = null;
         break;
       }
       case "agent_message_chunk":
@@ -262,6 +270,21 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         mode = d.currentModeId ?? mode;
         items.push({ kind: "mode", key, rev, mode: d.currentModeId });
         break;
+      case "checkpoint":
+        checkpoint = ev.seq;
+        break;
+      case "rewind":
+        rewound.push({ from: d.checkpointSeq ?? 0, to: ev.seq });
+        items.push({
+          kind: "notice",
+          key,
+          rev,
+          message: d.context
+            ? "Rewound to before the dimmed turns: the files are restored and the conversation continues from there."
+            : "Rewound the files to before the dimmed turns; the agent still remembers them.",
+          warn: false,
+        });
+        break;
       case "env_health":
         items.push({
           kind: "notice",
@@ -295,6 +318,12 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
     }
   }
   const context = contextTokens > 0 ? { tokens: contextTokens, window: contextWindow } : null;
+  for (const r of rewound) {
+    for (let i = 0; i < items.length; i++) {
+      const seq = Number(items[i].key);
+      if (seq > r.from && seq < r.to && !items[i].rewound) items[i] = { ...items[i], rewound: true, rev: r.to };
+    }
+  }
   return { items, usage, git, mode, status, running, commands, context };
 }
 

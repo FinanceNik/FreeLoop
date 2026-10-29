@@ -238,6 +238,14 @@ export default function SessionView({ session, events, provider, providers, envi
   };
 
   const setMode = (m: string) => EngineService.SetMode(session.id, m).catch(onError);
+  // The rewound message comes back to the composer for editing (SES-014).
+  const rewind = (seq: number, text: string) =>
+    EngineService.Rewind(session.id, seq)
+      .then(() => {
+        setDraft(text);
+        input.current?.focus();
+      })
+      .catch(onError);
   const total = view.usage.inputTokens + view.usage.cacheReadTokens + view.usage.cacheWriteTokens;
 
   return (
@@ -371,7 +379,7 @@ export default function SessionView({ session, events, provider, providers, envi
         <div className="conversation" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {view.items.map((item) => (
-            <ItemView key={item.key} item={item} onError={onError} />
+            <ItemView key={item.key} item={item} onError={onError} onRewind={rewind} />
           ))}
           {view.running && (
             <p className="muted working">{view.status === "queued" ? "Waiting for a free slot on the provider…" : "Working…"}</p>
@@ -473,17 +481,22 @@ export default function SessionView({ session, events, provider, providers, envi
 
 // ItemView re-renders only when its item changed (see Item.rev).
 const ItemView = memo(
-  function ItemView({ item, onError }: { item: Item; onError: (err: unknown) => void }) {
-    return <ItemBody item={item} onError={onError} />;
+  function ItemView({ item, onError, onRewind }: { item: Item; onError: (err: unknown) => void; onRewind: (seq: number, text: string) => void }) {
+    return (
+      <div className={item.rewound ? "rewound" : undefined}>
+        <ItemBody item={item} onError={onError} onRewind={onRewind} />
+      </div>
+    );
   },
   (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev,
 );
 
-function ItemBody({ item, onError }: { item: Item; onError: (err: unknown) => void }) {
+function ItemBody({ item, onError, onRewind }: { item: Item; onError: (err: unknown) => void; onRewind: (seq: number, text: string) => void }) {
   switch (item.kind) {
     case "user":
       return (
         <div className="msg msg-user">
+          {item.checkpointSeq && !item.rewound && <RewindButton onRewind={() => onRewind(item.checkpointSeq!, item.text)} />}
           {item.text}
           {item.files.length > 0 && (
             <div className="attached" aria-label="Attached files">
@@ -537,6 +550,23 @@ function ItemBody({ item, onError }: { item: Item; onError: (err: unknown) => vo
         </details>
       );
   }
+}
+
+// RewindButton asks once more before rewinding (SES-014).
+function RewindButton({ onRewind }: { onRewind: () => void }) {
+  const [sure, setSure] = useState(false);
+  return sure ? (
+    <span className="rewind">
+      <button className="danger" onClick={onRewind}>
+        Rewind files and conversation
+      </button>
+      <button onClick={() => setSure(false)}>Keep</button>
+    </span>
+  ) : (
+    <button className="link rewind" onClick={() => setSure(true)} title="Restore the files to before this message and continue from here">
+      Rewind to here
+    </button>
+  );
 }
 
 function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; onError: (err: unknown) => void }) {

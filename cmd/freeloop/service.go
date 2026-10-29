@@ -218,6 +218,11 @@ func (s *EngineService) SetProjectWorktreeDefault(ctx context.Context, projectID
 	return s.eng.SetProjectWorktreeDefault(ctx, projectID, choice)
 }
 
+// Rewind restores a session to a checkpoint (SES-014).
+func (s *EngineService) Rewind(ctx context.Context, sessionID string, seq int64) error {
+	return s.eng.Rewind(ctx, sessionID, seq)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

@@ -176,6 +176,29 @@ func (s *session) SetModel(prov provider.Provider, model string, window int) {
 	s.mu.Unlock()
 }
 
+// HistoryLen and TruncateHistory let the engine rewind the context to a
+// checkpoint (SES-014).
+func (s *session) HistoryLen() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.history)
+}
+
+func (s *session) TruncateHistory(n int) {
+	s.mu.Lock()
+	h := slices.Clone(s.history[:min(n, len(s.history))])
+	s.mu.Unlock()
+	if len(h) == 0 {
+		// An empty history still has to be recorded as reset.
+		s.mu.Lock()
+		s.history = nil
+		s.mu.Unlock()
+		s.p.Emit(event.HistoryMessage, map[string]any{"index": 0, "reset": true, "clear": true})
+		return
+	}
+	s.replaceHistory(h)
+}
+
 // Close has nothing to release: the built-in harness runs in-process.
 func (s *session) Close() error { return nil }
 
@@ -594,14 +617,19 @@ func Restore(events []event.Event) []provider.Message {
 		var d struct {
 			Index   int              `json:"index"`
 			Message provider.Message `json:"message"`
-			// Reset starts the history over at Index (a compaction).
+			// Reset starts the history over at Index (a compaction or a
+			// rewind); Clear leaves it empty.
 			Reset bool `json:"reset"`
+			Clear bool `json:"clear"`
 		}
 		if json.Unmarshal(ev.Data, &d) != nil || d.Index < 0 || d.Index > len(history) {
 			continue
 		}
 		if d.Reset {
 			history = history[:d.Index]
+		}
+		if d.Clear {
+			continue
 		}
 		if d.Index == len(history) {
 			history = append(history, d.Message)

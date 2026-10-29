@@ -1,0 +1,130 @@
+package engine
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
+	"github.com/FinanceNik/Freeloop/internal/provider"
+)
+
+// byPrompt writes the file the latest prompt names, then ends the turn.
+type byPrompt struct {
+	mu       sync.Mutex
+	requests []provider.ChatRequest
+}
+
+func (b *byPrompt) ID() string                                               { return "byprompt" }
+func (b *byPrompt) Type() provider.Type                                      { return provider.TypeScripted }
+func (b *byPrompt) ListModels(context.Context) ([]provider.ModelInfo, error) { return nil, nil }
+func (b *byPrompt) Capabilities(string) provider.ModelCaps {
+	return provider.ModelCaps{Source: provider.CapsStatic, Tools: true}
+}
+
+func (b *byPrompt) Stream(ctx context.Context, req provider.ChatRequest) (<-chan provider.Event, error) {
+	b.mu.Lock()
+	b.requests = append(b.requests, req)
+	b.mu.Unlock()
+	last := req.Messages[len(req.Messages)-1]
+	msg := provider.Message{Role: provider.RoleAssistant, Parts: []provider.Part{{Type: provider.PartText, Text: "done"}}}
+	stop := provider.StopEndTurn
+	if last.Parts[0].Type != provider.PartToolResult {
+		// "write <path> <content>"
+		f := strings.Fields(last.Parts[0].Text)
+		in, _ := json.Marshal(map[string]string{"path": f[1], "content": f[2] + "\n"})
+		msg.Parts = []provider.Part{{Type: provider.PartToolUse, ToolCallID: "c" + f[1], ToolName: "write_file", Input: in}}
+		stop = provider.StopToolUse
+	}
+	ch := make(chan provider.Event, 1)
+	ch <- provider.Event{Type: provider.EventDone, Message: &msg, StopReason: stop}
+	close(ch)
+	return ch, nil
+}
+
+// SES-014: rewinding to before a turn brings its files back, removes what it
+// added, leaves ignored files alone, and the next model call's context ends
+// where the checkpoint was; the rewind keeps a snapshot of the files it
+// replaced, and a restart rebuilds the rewound context.
+func TestCheckpointsAndRewind(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	prov := &byPrompt{}
+	e.mu.Lock()
+	e.providers.built["bp"] = &configuredProvider{cfg: config.Provider{ID: "bp", Name: "bp", Type: "scripted"}, p: prov}
+	e.mu.Unlock()
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, ".gitignore"), []byte("ignored.txt\n"), 0o644)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProviderID: "bp", Model: "m", Mode: "accept_edits"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(name string) string {
+		b, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			return "<missing>"
+		}
+		return string(b)
+	}
+	e.Prompt(ctx, ses.ID, "write a.txt one")
+	waitIdle(t, ch, ses.ID)
+	e.Prompt(ctx, ses.ID, "write b.txt two")
+	waitIdle(t, ch, ses.ID)
+	os.WriteFile(filepath.Join(root, "a.txt"), []byte("edited by hand\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "ignored.txt"), []byte("keep me\n"), 0o644)
+
+	evs, _ := e.Events(ctx, ses.ID, 0)
+	var cps []event.Event
+	for _, ev := range evs {
+		if ev.Type == event.Checkpoint {
+			cps = append(cps, ev)
+		}
+	}
+	if len(cps) != 2 {
+		t.Fatalf("checkpoints = %d", len(cps))
+	}
+	if err := e.Rewind(ctx, ses.ID, cps[1].Seq); err != nil {
+		t.Fatal(err)
+	}
+	if read("a.txt") != "one\n" || read("b.txt") != "<missing>" || read("ignored.txt") != "keep me\n" {
+		t.Fatalf("after rewind: a = %q, b = %q, ignored = %q", read("a.txt"), read("b.txt"), read("ignored.txt"))
+	}
+	n := len(prov.requests)
+	e.Prompt(ctx, ses.ID, "write c.txt three")
+	waitIdle(t, ch, ses.ID)
+	first := prov.requests[n]
+	var cp event.CheckpointData
+	json.Unmarshal(cps[1].Data, &cp)
+	if len(first.Messages) != cp.HistoryLen+1 || strings.Contains(first.Messages[len(first.Messages)-1].Parts[0].Text, "b.txt") {
+		t.Errorf("after the rewind the model saw %d messages, the checkpoint had %d", len(first.Messages), cp.HistoryLen)
+	}
+
+	// The rewind event names the snapshot of the files it replaced.
+	evs, _ = e.Events(ctx, ses.ID, 0)
+	var rw event.RewindData
+	for _, ev := range evs {
+		if ev.Type == event.Rewind {
+			json.Unmarshal(ev.Data, &rw)
+		}
+	}
+	if !rw.Context || rw.Saved == "" {
+		t.Fatalf("rewind = %+v", rw)
+	}
+	// The transcript rebuilds the rewound context after a restart.
+	e.mu.Lock()
+	r := e.runtimes[ses.ID]
+	e.mu.Unlock()
+	live := r.hs.(History).HistoryLen()
+	if got := len(builtin.Restore(evs)); got != live || live != cp.HistoryLen+4 {
+		t.Errorf("restored %d messages, live %d, checkpoint %d", got, live, cp.HistoryLen)
+	}
+}
