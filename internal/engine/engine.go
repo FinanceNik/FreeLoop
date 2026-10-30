@@ -392,6 +392,11 @@ func (e *Engine) ListSessions(ctx context.Context) ([]session.Session, error) {
 	return e.store.ListSessions(ctx)
 }
 
+// GetSession returns one session.
+func (e *Engine) GetSession(ctx context.Context, sid string) (session.Session, error) {
+	return e.store.GetSession(ctx, sid)
+}
+
 // CreateSessionRequest is the input of CreateSession.
 type CreateSessionRequest struct {
 	Title       string `json:"title"`

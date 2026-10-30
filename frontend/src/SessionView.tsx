@@ -101,6 +101,16 @@ export default function SessionView({ session, events, focus, prices, provider, 
       .then(() => setRenaming(null))
       .catch(onError);
   };
+  // Export (SES-008): the path saved to, shown for a moment.
+  const [exported, setExported] = useState("");
+  const exportAs = (format: "markdown" | "json") =>
+    EngineService.ExportSession(session.id, format)
+      .then((path) => {
+        if (!path) return;
+        setExported(path);
+        setTimeout(() => setExported(""), 4000);
+      })
+      .catch(onError);
   const archived = session.status === "archived";
   const archive = () => EngineService.ArchiveSession(session.id, !archived).catch(onError);
   const remove = () => {
@@ -423,6 +433,8 @@ export default function SessionView({ session, events, focus, prices, provider, 
         if (confirm("Restore the files to before this message and continue from there?")) rewind(u.checkpointSeq!, u.text);
       }, { keywords: `undo checkpoint restore ${n === 0 ? u.text.slice(0, 60) : ""}` }),
     ),
+    act("export-md", "Export as Markdown…", () => exportAs("markdown"), { keywords: "save share download" }),
+    act("export-json", "Export as JSON…", () => exportAs("json"), { keywords: "save download events" }),
     act("rename", "Rename session", () => setRenaming(session.title), { keywords: "title" }),
     act("archive", archived ? "Unarchive session" : "Archive session", archive, { keywords: "hide" }),
     act("delete", "Delete session…", remove, { keywords: "remove" }),
@@ -467,9 +479,21 @@ export default function SessionView({ session, events, focus, prices, provider, 
               <button className="danger" onClick={remove}>
                 Delete
               </button>
+              <details className="export-menu">
+                <summary>Export</summary>
+                <div className="export-options">
+                  <button onClick={() => exportAs("markdown")}>Markdown…</button>
+                  <button onClick={() => exportAs("json")}>JSON…</button>
+                </div>
+              </details>
               <button onClick={togglePanel} aria-pressed={panelOpen} title="Show or hide the right panel">
                 Panel
               </button>
+              {exported && (
+                <span className="ok" role="status" title={exported}>
+                  Exported
+                </span>
+              )}
             </div>
             <span className="muted" title="Provider and model">
               {session.providerId ? `${provider?.name ?? session.providerId} · ${session.model}` : (harness?.name ?? session.harnessId)}

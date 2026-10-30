@@ -14,8 +14,8 @@ import (
 )
 
 // EngineService exposes the engine to the frontend. It is a thin adapter:
-// each method forwards to the engine and adds nothing, except ChooseFolder,
-// which is a native dialog.
+// each method forwards to the engine and adds nothing, except ChooseFolder
+// and ExportSession, which show native dialogs.
 type EngineService struct {
 	eng *engine.Engine
 	app *application.App
@@ -342,6 +342,24 @@ func (s *EngineService) Config() config.Config {
 
 func (s *EngineService) ConfigIssues() []config.Issue {
 	return s.eng.ConfigIssues()
+}
+
+// ExportSession asks where to save a session's export (SES-008) and writes
+// it there; it returns the path, or "" when the user cancels.
+func (s *EngineService) ExportSession(ctx context.Context, sessionID, format string) (string, error) {
+	ses, err := s.eng.GetSession(ctx, sessionID)
+	if err != nil {
+		return "", err
+	}
+	path, err := s.app.Dialog.SaveFile().
+		SetMessage("Export the session").
+		SetFilename(engine.ExportFileName(ses.Title, format)).
+		CanCreateDirectories(true).
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return "", err
+	}
+	return path, s.eng.ExportSession(ctx, sessionID, format, path)
 }
 
 // ChooseFolder shows a native folder picker and returns the chosen path, or

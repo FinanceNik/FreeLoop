@@ -1632,3 +1632,34 @@ table.hooks .hook-command {
   flex-direction: column;
   gap: 2px;
 }
+
+/* Session export (SES-008) */
+.export-menu {
+  position: relative;
+}
+
+.export-menu summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.export-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.export-options {
+  position: absolute;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}

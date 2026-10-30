@@ -124,6 +124,21 @@ With M2's buildable work done, the v1 features come in this order, chosen for wh
 
 Review follow-ups (2026-10-30). A review of the nine features above found three security problems and a dozen bugs, fixed in the commits after it; the five smaller findings left open then (the startup index rebuild holding up live sessions, `session_start` running twice on a concurrent start, project hooks missing from the trust prompt, a stopped command running on in its container, git in a Docker worktree session) were fixed on 2026-10-30 as well.
 
+### Feature order, part 2 (planned 2026-10-30)
+
+The next v1 items that need nothing from the user (no accounts, signing, real-provider runs or new dependencies), in order:
+
+1. **Export (SES-008).** *Built 2026-10-30.* A session as Markdown (messages, tool calls with input and output, edits as diffs) or as JSON with every event, saved where the user chooses.
+2. **Fork from a message (SES-009).** A new session with the history up to a message and a transcript of its own.
+3. **Retry and fallback (PRV-010).** Backoff on 429 and 5xx, shown as a notice; an optional fallback model per profile.
+4. **Switch harness or profile mid-session (HRN-012).** A new session seeded with a handoff summary, in the same environment.
+5. **Config backup (SET-005).** Export and restore providers, profiles, environments, rules and settings without secrets.
+6. **Parallel read-only tool calls (HRN-014, first half).** Independent reads in one model turn run concurrently.
+7. **Local-only switch (NFR-OFF-003).** Block every non-loopback connection the app would make and report attempts.
+8. **Contributor documentation (NFR-REL-004).** Architecture overview, adding a provider, a harness preset, an environment.
+
+Left for later because they need the user: signed builds and the update check (SEC-012, NFR-SEC-004, OQ-009, OQ-015), verified external-agent presets and OAuth against real servers (HRN-007, MCP-006), prompt caching checked against a real provider (PRV-009), and the integrated terminal, which needs a PTY library (GUI-012).
+
 ## Later (unscheduled)
 
 ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SES-012, SES-013, GUI-016, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
