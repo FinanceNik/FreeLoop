@@ -131,7 +131,8 @@ type ItemKinds =
   | { kind: "mode"; key: string; rev: number; mode: string }
   | { kind: "model"; key: string; rev: number; model: string; providerId: string }
   | { kind: "notice"; key: string; rev: number; message: string; warn: boolean }
-  | { kind: "compaction"; key: string; rev: number; reason: string; before: number; after: number; summary: string };
+  | { kind: "compaction"; key: string; rev: number; reason: string; before: number; after: number; summary: string }
+  | { kind: "handoff"; key: string; rev: number; fromTitle: string; summary: string; generated: boolean };
 
 export interface Usage {
   inputTokens: number;
@@ -224,6 +225,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         }
         break;
       }
+      case "handoff":
+        items.push({ kind: "handoff", key, rev, fromTitle: d.fromTitle ?? "", summary: d.summary ?? "", generated: !!d.generated });
+        break;
       case "history_message":
         if (d.reset) resets.push(ev.seq);
         break;

@@ -106,6 +106,15 @@ func (e *Engine) removeWorktree(ctx context.Context, ses session.Session) (bool,
 		gitOK(ctx, env, "worktree", "prune")
 		return true, nil
 	}
+	// A profile switch shares a worktree between sessions (HRN-012); it
+	// goes with the last of them.
+	if list, err := e.store.ListSessions(ctx); err == nil {
+		for _, other := range list {
+			if other.ID != ses.ID && other.Worktree == ses.Worktree && other.Status != session.StatusArchived {
+				return false, fmt.Errorf("the session %q works in it too", other.Title)
+			}
+		}
+	}
 	// Commits made off the session's branch would be left unreachable.
 	if wt, err := e.localEnv(ses.Worktree, nil); err == nil {
 		head, _ := git(ctx, wt, "symbolic-ref", "--quiet", "--short", "HEAD")

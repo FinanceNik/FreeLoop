@@ -10,6 +10,7 @@ import {
   type ProjectInfo,
   type ProviderInfo,
   type Hook,
+  type Profile,
   type ResourceRef,
   type Session,
   type SessionMCPContext,
@@ -31,6 +32,8 @@ interface Props {
   prices: PriceEntry[];
   // Text for the composer, as after a fork (SES-009).
   initialDraft?: string;
+  // Profiles to continue the session with (HRN-012).
+  profiles: Profile[];
   onForked: (sessionId: string, text: string) => void;
   provider?: ProviderInfo;
   providers: ProviderInfo[];
@@ -67,7 +70,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -114,6 +117,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
         setTimeout(() => setExported(""), 4000);
       })
       .catch(onError);
+  // Continue with another profile or harness (HRN-012): a new session that
+  // gets a handoff summary.
+  const [switchingTo, setSwitchingTo] = useState<string | null>(null);
+  const continueWith = (p: Profile) => {
+    setSwitchingTo(p.name);
+    EngineService.SwitchProfile(session.id, p.id)
+      .then((ses) => onForked(ses.id, ""))
+      .catch(onError)
+      .finally(() => setSwitchingTo(null));
+  };
+  const otherProfiles = profiles.filter((p) => p.id !== (session.profileId || "default"));
   const archived = session.status === "archived";
   const archive = () => EngineService.ArchiveSession(session.id, !archived).catch(onError);
   const remove = () => {
@@ -453,6 +467,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
           ),
         ]
       : []),
+    ...otherProfiles.map((p) =>
+      act(`continue:${p.id}`, `Continue with ${p.name}`, () => continueWith(p), { keywords: "switch profile harness handoff", detail: p.description || undefined }),
+    ),
     act("export-md", "Export as Markdown…", () => exportAs("markdown"), { keywords: "save share download" }),
     act("export-json", "Export as JSON…", () => exportAs("json"), { keywords: "save download events" }),
     act("rename", "Rename session", () => setRenaming(session.title), { keywords: "title" }),
@@ -499,6 +516,18 @@ export default function SessionView({ session, events, focus, prices, initialDra
               <button className="danger" onClick={remove}>
                 Delete
               </button>
+              {otherProfiles.length > 0 && (
+                <details className="export-menu">
+                  <summary title="A new session with another profile or harness, told what happened here">{switchingTo ? `Handing over to ${switchingTo}…` : "Continue with…"}</summary>
+                  <div className="export-options">
+                    {otherProfiles.map((p) => (
+                      <button key={p.id} disabled={!!switchingTo || view.running} onClick={() => continueWith(p)}>
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              )}
               <details className="export-menu">
                 <summary>Export</summary>
                 <div className="export-options">
@@ -904,6 +933,16 @@ function ItemBody({
       return <div className="turn-end">Model changed to {item.model}</div>;
     case "notice":
       return <div className={item.warn ? "turn-end turn-end-warn" : "turn-end"}>{item.message}</div>;
+    case "handoff":
+      return (
+        <details className="handoff">
+          <summary>
+            Continues from <strong>{item.fromTitle}</strong>
+            {item.generated ? "" : " (the end of its transcript; no model was available for a summary)"}
+          </summary>
+          {item.generated ? <Markdown text={item.summary} /> : <pre>{item.summary}</pre>}
+        </details>
+      );
     case "compaction":
       return (
         <details className="compaction">

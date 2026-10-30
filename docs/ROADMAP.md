@@ -131,7 +131,7 @@ The next v1 items that need nothing from the user (no accounts, signing, real-pr
 1. **Export (SES-008).** *Built 2026-10-30.* A session as Markdown (messages, tool calls with input and output, edits as diffs) or as JSON with every event, saved where the user chooses.
 2. **Fork from a message (SES-009).** *Built 2026-10-30.* A new session with the history up to a message and a transcript of its own.
 3. **Retry and fallback (PRV-010).** *Built 2026-10-30.* Backoff on 429 and 5xx, shown as a notice; an optional fallback model per profile.
-4. **Switch harness or profile mid-session (HRN-012).** A new session seeded with a handoff summary, in the same environment.
+4. **Switch harness or profile mid-session (HRN-012).** *Built 2026-10-30.* A new session seeded with a handoff summary, in the same environment.
 5. **Config backup (SET-005).** Export and restore providers, profiles, environments, rules and settings without secrets.
 6. **Parallel read-only tool calls (HRN-014, first half).** Independent reads in one model turn run concurrently.
 7. **Local-only switch (NFR-OFF-003).** Block every non-loopback connection the app would make and report attempts.

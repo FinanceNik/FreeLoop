@@ -412,6 +412,9 @@ type CreateSessionRequest struct {
 	Mode       string `json:"mode"`
 	// Worktree gives the session its own git worktree and branch (SES-010).
 	Worktree bool `json:"worktree"`
+	// shareWorktree puts the session in an existing session's worktree,
+	// for a profile switch (HRN-012).
+	shareWorktree *session.Session
 }
 
 // CreateSession creates an idle session and records its initial status as
@@ -496,7 +499,9 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	// The base commit is recorded now so the session's changes stay
 	// visible after unrelated commits (SES-006).
 	root, worktree, worktreeBranch := project.Root, "", ""
-	if req.Worktree {
+	if s := req.shareWorktree; s != nil && s.Worktree != "" {
+		root, worktree, worktreeBranch = s.Worktree, s.Worktree, s.OwnBranch()
+	} else if req.Worktree {
 		path, branch, err := e.addWorktree(ctx, project, title, "")
 		if err != nil {
 			return session.Session{}, err

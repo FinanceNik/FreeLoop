@@ -56,6 +56,9 @@ const (
 	// a turn; Rewind restores one (SES-014).
 	Checkpoint Type = "checkpoint"
 	Rewind     Type = "rewind"
+	// Handoff starts a session that continues another with a different
+	// profile or harness (HRN-012).
+	Handoff Type = "handoff"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -68,7 +71,7 @@ var ACPTypes = []Type{
 // FreeloopTypes lists the variants Freeloop adds, in schema order.
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
-	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind,
+	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
 }
 
 // AllTypes returns every known variant.
@@ -211,4 +214,14 @@ type AvailableCommand struct {
 type ErrorData struct {
 	Message string `json:"message"`
 	Code    string `json:"code,omitempty"`
+}
+
+// HandoffData is the payload of handoff: the session continued from and
+// what the new one is told about it, a model's summary (Generated) or the
+// end of its transcript.
+type HandoffData struct {
+	FromSessionID string `json:"fromSessionId"`
+	FromTitle     string `json:"fromTitle"`
+	Summary       string `json:"summary"`
+	Generated     bool   `json:"generated"`
 }

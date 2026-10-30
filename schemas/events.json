@@ -39,7 +39,8 @@
         "error",
         "history_message",
         "checkpoint",
-        "rewind"
+        "rewind",
+        "handoff"
       ],
       "x-acp-types": [
         "user_message_chunk",

@@ -227,6 +227,10 @@ func (s *EngineService) ForkSession(ctx context.Context, sessionID string, seq i
 	return s.eng.ForkSession(ctx, sessionID, seq)
 }
 
+func (s *EngineService) SwitchProfile(ctx context.Context, sessionID, profileID string) (session.Session, error) {
+	return s.eng.SwitchProfile(ctx, sessionID, profileID)
+}
+
 func (s *EngineService) Search(ctx context.Context, query string) ([]engine.SessionHits, error) {
 	return s.eng.Search(ctx, query)
 }

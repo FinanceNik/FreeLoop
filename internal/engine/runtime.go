@@ -46,6 +46,8 @@ type runtime struct {
 	mu     sync.Mutex
 	busy   bool
 	cancel context.CancelFunc
+	// handoff goes with the session's first prompt (HRN-012).
+	handoff *harness.Resource
 	// turn is the running turn's context, which Stop cancels; hooks run
 	// for the turn use it.
 	turn  context.Context
@@ -167,7 +169,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
-	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID, profileID: ses.ProfileID}
+	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID, profileID: ses.ProfileID, handoff: pendingHandoff(events)}
 	e.mu.Lock()
 	e.starting[sid] = r
 	e.mu.Unlock()
@@ -364,6 +366,12 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 		if !q.noMentions {
 			p = e.embedMentions(r.sid, r.env, q.text)
 		}
+		r.mu.Lock()
+		if r.handoff != nil {
+			p.Resources = append([]harness.Resource{*r.handoff}, p.Resources...)
+			r.handoff = nil
+		}
+		r.mu.Unlock()
 		p.Resources = append(p.Resources, q.inline...)
 		p.Resources = append(p.Resources, e.readResources(ctx, r, q.refs)...)
 		if _, err := r.hs.Prompt(ctx, p); err != nil {

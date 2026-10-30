@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -205,6 +206,9 @@ type Session interface {
 func ResourceText(r Resource) string {
 	if r.Server != "" {
 		return fmt.Sprintf("<resource server=%q uri=%q>\n%s\n</resource>", r.Server, r.URI, r.Text)
+	}
+	if !strings.HasPrefix(r.URI, "file://") {
+		return fmt.Sprintf("<resource name=%q uri=%q>\n%s\n</resource>", r.Path, r.URI, r.Text)
 	}
 	return fmt.Sprintf("<file path=%q>\n%s\n</file>", r.Path, r.Text)
 }

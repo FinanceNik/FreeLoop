@@ -580,6 +580,7 @@ export default function App() {
             session={selected}
             focus={screen.focus}
             initialDraft={forkDraft?.sid === selected.id ? forkDraft.text : undefined}
+            profiles={profiles}
             onForked={(sid, text) => {
               setForkDraft({ sid, text });
               refreshSessions();

@@ -1663,3 +1663,25 @@ table.hooks .hook-command {
   border-radius: 6px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
 }
+
+/* Handoff from another session (HRN-012) */
+.handoff {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  font-size: 13px;
+}
+
+.handoff summary {
+  cursor: pointer;
+}
+
+.handoff .md,
+.handoff pre {
+  margin: 6px 0 0;
+  max-height: 24em;
+  overflow: auto;
+  white-space: pre-wrap;
+}
