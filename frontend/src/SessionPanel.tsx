@@ -8,10 +8,12 @@ import DiffPanel from "./DiffPanel.tsx";
 // details. It reads the same
 // folded transcript as the conversation, so it never disagrees with it.
 
-type Tab = "approvals" | "diff" | "info";
+export type Tab = "approvals" | "diff" | "info";
 
 interface Props {
   session: Session;
+  tab: Tab;
+  onTab: (t: Tab) => void;
   view: SessionView;
   provider?: ProviderInfo;
   environment?: EnvironmentInfo;
@@ -29,9 +31,8 @@ export function showTool(toolCallId: string) {
   el.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
 }
 
-export default function SessionPanel({ session, view, provider, environment, configVersion, onClose, onError }: Props) {
+export default function SessionPanel({ session, tab, onTab: setTab, view, provider, environment, configVersion, onClose, onError }: Props) {
   const data = panelData(view);
-  const [tab, setTab] = useState<Tab>("approvals");
   // Uncommitted files, from the latest git state.
   const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
 

@@ -3,6 +3,8 @@ import { EngineService, type ChangedFile, type Changes, type FileDiff, type Sess
 import { diffStats, parseDiff } from "./diff.ts";
 import type { FileChange } from "./transcript.ts";
 import { showTool } from "./SessionPanel.tsx";
+import { usePaletteActions } from "./Palette.tsx";
+import type { PaletteItem } from "./palette.ts";
 
 // DiffPanel is the Diff tab of the right panel (GUI-005): the files that
 // differ from the session's base commit, each with its diff, plus staging,
@@ -54,6 +56,43 @@ export default function DiffPanel({ session, gitKey, agentEdits, onError }: Prop
         load();
       });
   };
+
+  // The panel's actions in the palette (GUI-014), while the tab is open.
+  const messageBox = useRef<HTMLTextAreaElement>(null);
+  const live = changes?.repo && !changes.blocked ? (changes.files ?? []) : [];
+  const liveStaged = live.filter((f) => f.staged);
+  const liveUncommitted = live.filter((f) => f.staged || f.unstaged);
+  const item = (id: string, title: string, run: () => void, extra: Partial<PaletteItem> = {}): PaletteItem => ({
+    id: `diff:${session.id}:${id}`,
+    title,
+    group: "Changes",
+    run,
+    ...extra,
+  });
+  usePaletteActions(
+    changes?.repo && !changes.blocked
+      ? [
+          item("refresh", "Refresh changes", load),
+          ...(liveUncommitted.some((f) => f.unstaged) ? [item("stage", "Stage all changes", () => act(EngineService.StageFiles(session.id, liveUncommitted.map((f) => f.path), true)))] : []),
+          ...(liveStaged.length ? [item("unstage", "Unstage all changes", () => act(EngineService.StageFiles(session.id, liveStaged.map((f) => f.path), false)))] : []),
+          ...(liveStaged.length ? [item("commit", `Commit ${liveStaged.length} staged…`, () => messageBox.current?.focus(), { detail: "write the message, then Commit" })] : []),
+          ...(liveUncommitted.length ? [item("suggest", "Suggest a commit message", () => suggest(), { detail: "uses tokens" })] : []),
+          ...(session.worktree ? [item("merge", "Merge into the main checkout…", () => setMerging(true), { keywords: "worktree branch" })] : []),
+          ...live.flatMap((f) => [
+            item(`open:${f.path}`, `Show the diff of ${f.path}`, () => setOpen(f.path), { keywords: "file" }),
+            ...(f.unstaged ? [item(`stage:${f.path}`, `Stage ${f.path}`, () => act(EngineService.StageFiles(session.id, [f.path], true)))] : []),
+            ...(f.staged ? [item(`unstage:${f.path}`, `Unstage ${f.path}`, () => act(EngineService.StageFiles(session.id, [f.path], false)))] : []),
+            ...(f.staged || f.unstaged
+              ? [
+                  item(`discard:${f.path}`, `Discard changes to ${f.path}…`, () => {
+                    if (confirm(`Discard the changes to ${f.path}? This cannot be undone.`)) act(EngineService.DiscardFile(session.id, f.path));
+                  }),
+                ]
+              : []),
+          ]),
+        ]
+      : [],
+  );
 
   if (!changes) return <p className="muted">Loading…</p>;
   if (!changes.repo) return <p className="muted">The project is not a git repository.</p>;
@@ -156,6 +195,7 @@ export default function DiffPanel({ session, gitKey, agentEdits, onError }: Prop
       <h3>Commit</h3>
       <textarea
         className="commit-message"
+        ref={messageBox}
         rows={4}
         placeholder="Commit message"
         aria-label="Commit message"

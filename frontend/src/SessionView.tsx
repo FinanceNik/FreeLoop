@@ -5,7 +5,9 @@ import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optio
 import { EngineService, MODES, type EnvironmentInfo, type HarnessInfo, type ProjectInfo, type ProviderInfo, type Session } from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
 import { Markdown } from "./Markdown.tsx";
-import SessionPanel from "./SessionPanel.tsx";
+import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
+import { usePaletteActions } from "./Palette.tsx";
+import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
 import { estimate, formatCost, type PriceEntry } from "./cost.ts";
 
@@ -62,6 +64,7 @@ export default function SessionView({ session, events, focus, prices, provider, 
       }
       return !open;
     });
+  const [panelTab, setPanelTab] = useState<PanelTab>("approvals");
   const [renaming, setRenaming] = useState<string | null>(null);
   // The model switch form (PRV-006).
   const [switching, setSwitching] = useState<{ providerId: string; model: string } | null>(null);
@@ -285,6 +288,65 @@ export default function SessionView({ session, events, focus, prices, provider, 
       })
       .catch(onError);
   const total = view.usage.inputTokens + view.usage.cacheReadTokens + view.usage.cacheWriteTokens;
+
+  // Everything this view shows a control for, for the palette (GUI-014).
+  const showPanel = (t: PanelTab) => {
+    setPanelTab(t);
+    if (!panelOpen) togglePanel();
+  };
+  const rewindable = view.items.filter((i): i is Extract<Item, { kind: "user" }> => i.kind === "user" && !!i.checkpointSeq && !i.rewound).reverse();
+  const act = (id: string, title: string, run: () => void, extra: Partial<PaletteItem> = {}): PaletteItem => ({
+    id: `session:${session.id}:${id}`,
+    title,
+    group: "Session",
+    detail: session.title,
+    run,
+    ...extra,
+  });
+  const decideFirst = (t: Item, kind: "allow_once" | "reject") => {
+    if (t.kind !== "tool" || !t.permission) return;
+    const opt = t.permission.options.find((o) => (kind === "reject" ? o.kind.startsWith("reject") : o.kind === kind));
+    if (opt) EngineService.Decide({ requestId: t.permission.requestId, optionId: opt.optionId, reason: "", scope: "session" }).catch(onError);
+  };
+  usePaletteActions([
+    ...waitingTools.flatMap((t) =>
+      t.kind !== "tool"
+        ? []
+        : [
+            act(`allow:${t.toolCallId}`, `Allow once: ${t.title}`, () => decideFirst(t, "allow_once"), { group: "Approval", keywords: "approve yes" }),
+            act(`deny:${t.toolCallId}`, `Deny: ${t.title}`, () => decideFirst(t, "reject"), { group: "Approval", keywords: "reject no" }),
+            act(`show:${t.toolCallId}`, `Show the request: ${t.title}`, () => showTool(t.toolCallId), { group: "Approval" }),
+          ],
+    ),
+    ...(view.running ? [act("stop", "Stop the turn", () => EngineService.Cancel(session.id).catch(onError), { keywords: "cancel interrupt" })] : []),
+    act("compose", "Write a message", () => input.current?.focus(), { keywords: "composer prompt focus" }),
+    ...commands.map((c) =>
+      act(`cmd:${c.name}`, `/${c.name}`, () => {
+        if (c.mode) setMode(c.mode);
+        else {
+          setDraft(`/${c.name} `);
+          setTimeout(() => input.current?.focus(), 0);
+        }
+      }, { group: "Command", detail: c.description, keywords: "slash" }),
+    ),
+    ...MODES.filter((m) => m.id !== mode && (m.id !== "bypass" || allowBypass)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
+    ...(session.providerId ? [act("model", "Switch model…", () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
+    act("panel", panelOpen ? "Hide the panel" : "Show the panel", togglePanel, { keywords: "right sidebar" }),
+    act("approvals", "Show approvals", () => showPanel("approvals"), { keywords: "panel decided" }),
+    act("diff", "Show changes", () => showPanel("diff"), { keywords: "diff git commit stage panel" }),
+    act("info", "Show session details", () => showPanel("info"), { keywords: "info panel tokens" }),
+    ...(project && !project.trusted && !project.missing
+      ? [act("trust", "Trust this project", () => EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError), { detail: project.root })]
+      : []),
+    ...rewindable.map((u, n) =>
+      act(`rewind:${u.key}`, n === 0 ? "Rewind to before the last message…" : `Rewind to before “${u.text.slice(0, 60)}”…`, () => {
+        if (confirm("Restore the files to before this message and continue from there?")) rewind(u.checkpointSeq!, u.text);
+      }, { keywords: `undo checkpoint restore ${n === 0 ? u.text.slice(0, 60) : ""}` }),
+    ),
+    act("rename", "Rename session", () => setRenaming(session.title), { keywords: "title" }),
+    act("archive", archived ? "Unarchive session" : "Archive session", archive, { keywords: "hide" }),
+    act("delete", "Delete session…", remove, { keywords: "remove" }),
+  ]);
 
   return (
     <div className="session-layout">
@@ -517,6 +579,8 @@ export default function SessionView({ session, events, focus, prices, provider, 
       {panelOpen && (
         <SessionPanel
           session={session}
+          tab={panelTab}
+          onTab={setPanelTab}
           view={view}
           provider={provider}
           environment={environment}

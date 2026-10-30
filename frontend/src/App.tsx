@@ -21,6 +21,8 @@ import {
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
 import { HIT_LABEL, snippetParts } from "./search.ts";
 import { formatCost } from "./cost.ts";
+import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
+import type { PaletteItem } from "./palette.ts";
 import SessionView from "./SessionView.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
@@ -85,6 +87,10 @@ export default function App() {
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   // Today's model calls and their estimated cost (PRV-008).
   const [today, setToday] = useState<DayCost | null>(null);
+  // The command palette (GUI-014) and the actions views offer to it.
+  const [palette, setPalette] = useState<PaletteItem[] | null>(null);
+  const { registry, collect } = useRegistry();
+  const searchInput = useRef<HTMLInputElement>(null);
 
   // The reducer state lives in a ref so event callbacks always see the latest
   // transcripts; React state mirrors it for rendering.
@@ -263,6 +269,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // ⌘K opens the command palette over everything, and closes it again.
+  const paletteRef = useRef<() => PaletteItem[]>(() => []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || e.key.toLowerCase() !== "k") return;
+      e.preventDefault();
+      setPalette((open) => (open ? null : paletteRef.current()));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // The first-run guide (GUI-010) opens once, before the first session.
   useEffect(() => {
     if (config && sessionsLoaded && !config.ui.onboarded && sessions.length === 0 && screen.kind === "none") setScreen({ kind: "onboarding" });
@@ -330,7 +348,78 @@ export default function App() {
   // reply without a request.
   const attentionCount = attention.reduce((n, it) => n + Math.max(it.requests?.length ?? 0, 1), 0);
 
+  // The palette lists, in this order: the views' own actions (the open
+  // session's first), the app's pages and actions, then every session.
+  paletteRef.current = () => {
+    const page = (id: string, title: string, go: () => void, extra: Partial<PaletteItem> = {}): PaletteItem => ({ id: `page:${id}`, title, group: "Page", run: go, ...extra });
+    const items: PaletteItem[] = [
+      ...collect(),
+      { id: "app:new", title: "New session", group: "Action", keywords: "create start", run: () => setScreen({ kind: "new" }) },
+      page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: "⌘0", detail: attentionCount ? `${attentionCount} waiting` : undefined }),
+      page("providers", "Providers", () => setScreen({ kind: "providers" }), { keywords: "api keys models" }),
+      page("profiles", "Profiles", () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
+      page("skills", "Skills", () => setScreen({ kind: "skills" })),
+      page("mcp", "MCP servers", () => setScreen({ kind: "mcp" }), { keywords: "tools" }),
+      page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
+      page("rules", "Permission rules", () => setScreen({ kind: "rules" }), { keywords: "allow deny" }),
+      page("settings", "Settings", () => setScreen({ kind: "settings" }), { keywords: "preferences theme notifications prices" }),
+      page("usage", "Usage and prices", () => setScreen({ kind: "settings" }), { keywords: "cost tokens", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
+      page("import", "Import from Claude Code", () => setScreen({ kind: "import" })),
+      page("guide", "Setup guide", () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
+      {
+        id: "app:find",
+        title: "Find a session",
+        group: "Action",
+        keywords: "search filter transcripts",
+        run: () => searchInput.current?.focus(),
+      },
+      {
+        id: "app:archived",
+        title: showArchived ? "Show active sessions" : "Show archived sessions",
+        group: "Filter",
+        run: () => setShowArchived(!showArchived),
+      },
+      ...[
+        ["", "Any status"],
+        ["waiting_permission", "Needs you"],
+        ["running", "Running"],
+        ["idle", "Idle"],
+        ["error", "Error"],
+      ].map(([v, name]) => ({
+        id: `filter:${v}`,
+        title: `Show sessions: ${name}`,
+        group: "Filter",
+        detail: statusFilter === v ? "current" : undefined,
+        run: () => setStatusFilter(v),
+      })),
+      ...projects.map((p) => ({
+        id: `new:${p.id}`,
+        title: `New session in ${p.name}`,
+        group: "Action",
+        detail: p.root,
+        run: () => setScreen({ kind: "new", root: p.root }),
+      })),
+      ...projects
+        .filter((p) => p.missing)
+        .map((p) => ({ id: `relink:${p.id}`, title: `Relink ${p.name}…`, group: "Action", detail: p.root, keywords: "missing moved", run: () => relink(p) })),
+      ...sessions.map((s) => {
+        const listed = listedRef.current.indexOf(s);
+        return {
+          id: `session:${s.id}`,
+          title: s.title,
+          group: "Session",
+          detail: `${projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)} · ${STATUS_LABEL[s.status] ?? s.status}`,
+          keywords: `${s.branch ?? ""} ${s.status === "archived" ? "archived" : ""}`,
+          shortcut: listed >= 0 && listed < 9 ? `⌘${listed + 1}` : undefined,
+          run: () => openSession(s.id),
+        };
+      }),
+    ];
+    return items;
+  };
+
   return (
+    <PaletteContext.Provider value={registry}>
     <div className="app">
       <aside className="sidebar">
         <header>
@@ -353,7 +442,7 @@ export default function App() {
           {attentionCount > 0 && <span className="badge badge-waiting_permission">{attentionCount}</span>}
         </button>
         <div className="filters">
-          <input type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
           <div className="row">
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
               <option value="">Any status</option>
@@ -584,7 +673,9 @@ export default function App() {
           </div>
         )}
       </main>
+      {palette && <Palette items={palette} onClose={() => setPalette(null)} />}
     </div>
+    </PaletteContext.Provider>
   );
 }
 
