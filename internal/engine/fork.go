@@ -10,6 +10,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
@@ -68,6 +69,10 @@ func (e *Engine) ForkSession(ctx context.Context, sid string, seq int64) (ForkRe
 		EnvironmentID: src.EnvironmentID, BaseCommit: src.BaseCommit, Branch: src.Branch, ProviderID: src.ProviderID,
 		Model: src.Model, Mode: src.Mode, ProfileID: src.ProfileID,
 	}
+	// Like any new session, a fork never starts in bypass (SEC-001).
+	if permission.Mode(ses.Mode) == permission.ModeBypass {
+		ses.Mode = string(permission.ModeAsk)
+	}
 	if src.Worktree != "" {
 		project, err := e.store.GetProject(ctx, src.ProjectID)
 		if err != nil {
@@ -94,6 +99,20 @@ func (e *Engine) ForkSession(ctx context.Context, sid string, seq int64) (ForkRe
 	if err := e.store.CopyEvents(ctx, fork.ID, copied); err != nil {
 		e.store.DeleteSession(ctx, fork.ID)
 		return ForkResult{}, err
+	}
+	// The copied events set the source's title and mode again; the fork
+	// has its own.
+	e.emit(fork.ID, event.SessionInfoUpdate, map[string]string{"title": ses.Title})
+	copiedMode := ""
+	for _, ev := range copied {
+		if ev.Type == event.CurrentModeUpdate {
+			var d event.CurrentModeData
+			json.Unmarshal(ev.Data, &d)
+			copiedMode = d.CurrentModeID
+		}
+	}
+	if copiedMode != "" && copiedMode != ses.Mode {
+		e.emit(fork.ID, event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: ses.Mode})
 	}
 	if environment.IsDir(e.checkpointStore(sid)) {
 		if host, err := e.localEnv(src.WorkRoot(), nil); err == nil {

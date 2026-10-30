@@ -126,3 +126,53 @@ func TestForkWorktreeSession(t *testing.T) {
 		t.Errorf("the fork's worktree has a.txt = %q", b)
 	}
 }
+
+// SES-009, SEC-001: a fork of a session in bypass starts in ask, and keeps
+// its own title when the source was titled from its first message.
+func TestForkResetsBypassAndKeepsItsTitle(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	cfg := e.Config()
+	cfg.Permissions.AllowBypass = true
+	if _, err := e.SaveSettings(cfg); err != nil {
+		t.Fatal(err)
+	}
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	withScript(e, "s", scripted.Step{Text: "one"}, scripted.Step{Text: "two"})
+	root := t.TempDir()
+	if _, err := e.SetProjectTrust(ctx, root, true); err != nil {
+		t.Fatal(err)
+	}
+	src, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProviderID: "s", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.SetMode(ctx, src.ID, "bypass"); err != nil {
+		t.Fatal(err)
+	}
+	e.Prompt(ctx, src.ID, "first message here")
+	waitIdle(t, ch, src.ID)
+	e.Prompt(ctx, src.ID, "second")
+	waitIdle(t, ch, src.ID)
+	titled, _ := e.store.GetSession(ctx, src.ID)
+	evs, _ := e.Events(ctx, src.ID, 0)
+	var at int64
+	for _, ev := range evs {
+		if ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), `"second"`) {
+			at = ev.Seq
+		}
+	}
+	res, err := e.ForkSession(ctx, src.ID, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fork, _ := e.store.GetSession(ctx, res.Session.ID)
+	if fork.Mode != "ask" {
+		t.Errorf("the fork's mode is %s", fork.Mode)
+	}
+	if fork.Title != titled.Title+" (fork)" {
+		t.Errorf("the fork's title is %q, the source's %q", fork.Title, titled.Title)
+	}
+}

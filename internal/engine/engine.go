@@ -96,8 +96,6 @@ type Engine struct {
 	// mcpServers are mcp.yaml's servers; mcp runs them.
 	mcpServers []config.MCPServer
 	presets    []config.HarnessPreset
-	// agentWatch tracks the folders of custom harnesses (HRN-011).
-	agentWatch agentWatch
 	mcp        *mcp.Manager
 	providers  *providerRegistry
 	runtimes   map[string]*runtime
@@ -216,6 +214,7 @@ func (e *Engine) Close() error {
 		r.stop()
 	}
 	e.closeTerminals("")
+	e.terms.pumps.Wait()
 	e.mcp.StopAll()
 	close(e.quit)
 	e.watching.Wait()

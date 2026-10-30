@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -82,38 +83,22 @@ func (e *Engine) ScaffoldHarness(ctx context.Context, req ScaffoldRequest) (Scaf
 	return ScaffoldResult{Preset: p, Dir: dir, Entry: filepath.Join(dir, entry)}, nil
 }
 
-// agentWatch remembers the watched folders' fingerprints.
-type agentWatch struct {
-	seen map[string]string // preset ID -> fingerprint
-}
-
 // watchAgents restarts idle sessions' agents whose preset folder changed;
 // the config watch calls it on every poll.
 func (e *Engine) watchAgents() {
 	e.mu.Lock()
 	presets := slices.Clone(e.presets)
-	if e.agentWatch.seen == nil {
-		e.agentWatch.seen = map[string]string{}
-	}
+	running := maps.Clone(e.runtimes)
 	e.mu.Unlock()
 	for _, p := range presets {
 		if p.Watch == "" {
 			continue
 		}
 		fp := config.DirFingerprint(p.Watch)
-		e.mu.Lock()
-		before, known := e.agentWatch.seen[p.ID]
-		e.agentWatch.seen[p.ID] = fp
-		running := map[string]*runtime{}
-		if known && before != fp {
-			for sid, r := range e.runtimes {
-				running[sid] = r
-			}
-		}
-		e.mu.Unlock()
+		// Each session started with the files as they were then; one that
+		// was busy when they changed restarts once it is idle.
 		for sid, r := range running {
-			ses, err := e.store.GetSession(context.Background(), sid)
-			if err != nil || ses.HarnessID != p.ID {
+			if r.harnessID != p.ID || r.agentFiles == "" || r.agentFiles == fp {
 				continue
 			}
 			r.mu.Lock()

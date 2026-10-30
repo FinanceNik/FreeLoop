@@ -77,6 +77,10 @@ func TestExternalAgentSkills(t *testing.T) {
 		os.MkdirAll(filepath.Join(root, d), 0o755)
 		os.WriteFile(filepath.Join(root, d, "SKILL.md"), skillFile(name, "Project skill."), 0o644)
 	}
+	// A link from a skill to a file outside it is left out of the copy.
+	private := filepath.Join(t.TempDir(), "private.txt")
+	os.WriteFile(private, []byte("not for the container"), 0o600)
+	os.Symlink(private, filepath.Join(root, ".agents/skills/lint/ref.md"))
 	if _, err := e.SetProjectTrust(ctx, root, true); err != nil {
 		t.Fatal(err)
 	}
@@ -108,6 +112,9 @@ func TestExternalAgentSkills(t *testing.T) {
 	}
 	if fi, err := os.Stat(filepath.Join(plugin, "skills", "release-notes", "scripts", "collect.sh")); err != nil || fi.Mode()&0o100 == 0 {
 		t.Errorf("the script = %v, %v", fi, err)
+	}
+	if _, err := os.Stat(filepath.Join(plugin, "skills", "lint", "ref.md")); err == nil {
+		t.Error("a link out of the skill was copied")
 	}
 	if _, err := os.Stat(filepath.Join(plugin, "skills", "release-notes", config.ProvenanceFile)); err == nil {
 		t.Error("the store's bookkeeping went into the plugin")

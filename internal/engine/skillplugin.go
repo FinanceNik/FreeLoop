@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/session"
 	"github.com/FinanceNik/Freeloop/internal/skill"
 )
@@ -55,7 +56,7 @@ func (e *Engine) skillPlugin(sid string, project session.Project, prof config.Pr
 		}
 		one := map[string][]byte{}
 		size := 0
-		if err := copySkillTree(fs, s.Dir, "skills/"+s.Name, one, &size); err != nil {
+		if err := copySkillTree(fs, s.Dir, s.Path, s.Path, "skills/"+s.Name, one, &size); err != nil {
 			log.Printf("engine: skill %s for session %s: %v", s.Name, sid, err)
 			continue
 		}
@@ -83,9 +84,12 @@ func (e *Engine) skillPlugin(sid string, project session.Project, prof config.Pr
 	return config.WriteSessionPlugin(e.dataDir, sid, files)
 }
 
-// copySkillTree reads a skill's folder into files under prefix, leaving out
-// the store's bookkeeping.
-func copySkillTree(fs skill.FS, dir, prefix string, files map[string][]byte, size *int) error {
+// copySkillTree reads a skill's folder (dir in fs, abs on disk, inside the
+// skill at root) into files
+// under prefix, leaving out the store's bookkeeping and anything a symlink
+// leads out of the skill's folder: the copy can reach a container that
+// could not otherwise see it.
+func copySkillTree(fs skill.FS, dir, abs, root, prefix string, files map[string][]byte, size *int) error {
 	entries, err := fs.ReadDir(dir)
 	if err != nil {
 		return err
@@ -94,9 +98,13 @@ func copySkillTree(fs skill.FS, dir, prefix string, files map[string][]byte, siz
 		if de.Name == config.ProvenanceFile || de.Name == ".previous" || de.Name == ".git" {
 			continue
 		}
-		src, dst := path.Join(dir, de.Name), prefix+"/"+de.Name
+		src, srcAbs, dst := path.Join(dir, de.Name), filepath.Join(abs, de.Name), prefix+"/"+de.Name
+		if root != "" && !environment.Within(srcAbs, root) {
+			log.Printf("engine: left %s out of a skill plugin: it leads outside the skill", srcAbs)
+			continue
+		}
 		if de.IsDir {
-			if err := copySkillTree(fs, src, dst, files, size); err != nil {
+			if err := copySkillTree(fs, src, srcAbs, root, dst, files, size); err != nil {
 				return err
 			}
 			continue

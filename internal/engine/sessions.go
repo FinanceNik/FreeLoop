@@ -76,6 +76,14 @@ func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) 
 	}
 	status := session.StatusIdle
 	if archived {
+		// Its subagents go with it, first, since they share its folder.
+		for _, c := range e.subagentsOf(ctx, sid) {
+			if c.Status != session.StatusArchived {
+				e.stopRuntime(c.ID)
+				e.closeTerminals(c.ID)
+				e.emit(c.ID, event.SessionStatus, event.SessionStatusData{Status: string(session.StatusArchived)})
+			}
+		}
 		e.stopRuntime(sid)
 		e.closeTerminals(sid)
 		status = session.StatusArchived
@@ -101,6 +109,12 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {
 		return err
+	}
+	// Its subagents go with it, first, since they share its folder.
+	for _, c := range e.subagentsOf(ctx, sid) {
+		if err := e.DeleteSession(ctx, c.ID); err != nil {
+			log.Printf("engine: delete subagent %s of session %s: %v", c.ID, sid, err)
+		}
 	}
 	e.stopRuntime(sid)
 	e.closeTerminals(sid)

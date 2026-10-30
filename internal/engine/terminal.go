@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
@@ -60,7 +62,14 @@ type terminals struct {
 	subs map[int]chan TerminalOutput
 	next int
 	seq  int
+	// pumps read the shells; apart from the engine's background work,
+	// which deleting a session waits for, since a shell lives on.
+	pumps sync.WaitGroup
 }
+
+// maxKept bounds the terminals kept, ended ones included; the oldest ended
+// one goes first.
+const maxKept = 64
 
 // OpenTerminal starts a shell in the session's environment, starting the
 // session's runtime (and its container) when needed.
@@ -73,7 +82,14 @@ func (e *Engine) OpenTerminal(ctx context.Context, sid string, cols, rows int) (
 		return TerminalInfo{}, errors.New("unarchive the session to open a terminal in it")
 	}
 	e.terms.mu.Lock()
-	n := len(e.terms.open)
+	n := 0
+	for _, t := range e.terms.open {
+		t.mu.Lock()
+		if !t.exited {
+			n++
+		}
+		t.mu.Unlock()
+	}
 	e.terms.mu.Unlock()
 	if n >= maxTerminals {
 		return TerminalInfo{}, fmt.Errorf("%d terminals are open; close one first", n)
@@ -103,8 +119,9 @@ func (e *Engine) OpenTerminal(ctx context.Context, sid string, cols, rows int) (
 		e.terms.open = map[string]*terminal{}
 	}
 	e.terms.open[term.info.ID] = term
+	e.forgetEnded()
 	e.terms.mu.Unlock()
-	e.bg.Go(func() { e.pumpTerminal(term) })
+	e.terms.pumps.Go(func() { e.pumpTerminal(term) })
 	return term.info, nil
 }
 
@@ -254,5 +271,26 @@ func (e *Engine) closeTerminals(sid string) {
 	e.terms.mu.Unlock()
 	for _, t := range closing {
 		t.t.Close()
+	}
+}
+
+// forgetEnded drops the oldest ended terminals beyond maxKept; e.terms.mu
+// is held.
+func (e *Engine) forgetEnded() {
+	for len(e.terms.open) > maxKept {
+		oldest, at := "", 0
+		for id, t := range e.terms.open {
+			t.mu.Lock()
+			exited := t.exited
+			t.mu.Unlock()
+			n, _ := strconv.Atoi(strings.TrimPrefix(id, "term_"))
+			if exited && (oldest == "" || n < at) {
+				oldest, at = id, n
+			}
+		}
+		if oldest == "" {
+			return
+		}
+		delete(e.terms.open, oldest)
 	}
 }

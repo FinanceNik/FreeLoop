@@ -113,6 +113,22 @@ func TestSessionTerminal(t *testing.T) {
 		}
 	}
 
+	// Deleting another session does not wait for this one's shell.
+	other, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProviderID: "s", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted := make(chan error, 1)
+	go func() { deleted <- e.DeleteSession(ctx, other.ID) }()
+	select {
+	case err := <-deleted:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("deleting a session waited for another session's shell")
+	}
+
 	// Archiving the session ends its terminal.
 	if err := e.ArchiveSession(ctx, ses.ID, true); err != nil {
 		t.Fatal(err)

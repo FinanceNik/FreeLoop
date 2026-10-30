@@ -8,6 +8,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/provider"
+	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
 // Subagents (HRN-014): the built-in harness's task tool starts a child
@@ -61,11 +62,29 @@ func (s sessionSubagents) Run(ctx context.Context, description, prompt string) (
 			}
 		}
 	}
+	// The child's work is done: its runtime, and a container it started,
+	// stop until the user prompts it again.
+	e.stopRuntime(child.ID)
 	events, err := e.store.Events(ctx, child.ID, 0)
 	if err != nil {
 		return harness.SubagentResult{SessionID: child.ID}, err
 	}
 	return harness.SubagentResult{SessionID: child.ID, Text: lastReply(events)}, nil
+}
+
+// subagentsOf lists the sessions session sid's task tool started.
+func (e *Engine) subagentsOf(ctx context.Context, sid string) []session.Session {
+	list, err := e.store.ListSessions(ctx)
+	if err != nil {
+		return nil
+	}
+	var out []session.Session
+	for _, s := range list {
+		if s.ParentID == sid {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // lastReply is the subagent's final answer: the text of the last message

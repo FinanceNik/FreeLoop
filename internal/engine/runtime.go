@@ -26,8 +26,12 @@ import (
 type runtime struct {
 	hs        harness.Session
 	sid       string
-	projectID string
-	profileID string
+	harnessID string
+	// agentFiles fingerprints the folder of an agent its preset watches,
+	// as it was when the agent started (HRN-011).
+	agentFiles string
+	projectID  string
+	profileID  string
 	// Tool calls in progress, for post_tool_use hooks (EXT-005).
 	callsMu sync.Mutex
 	calls   map[string]hookCall
@@ -178,7 +182,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
-	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID, profileID: ses.ProfileID, handoff: pendingHandoff(events)}
+	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, harnessID: ses.HarnessID, projectID: ses.ProjectID, profileID: ses.ProfileID, handoff: pendingHandoff(events)}
+	if preset.Watch != "" {
+		r.agentFiles = config.DirFingerprint(preset.Watch)
+	}
 	e.mu.Lock()
 	e.starting[sid] = r
 	e.mu.Unlock()
