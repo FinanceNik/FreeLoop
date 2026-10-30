@@ -50,7 +50,7 @@ While the app runs, the same binary is a command line for it (EXT-004): `Freeloo
 - `Capabilities` says what the loop may rely on per model (`ModelCaps`); return `CapsUnknown` when you do not know, and the capability probe settles it.
 - Use `http.DefaultTransport` (a plain `&http.Client{}` does), so local-only mode covers the adapter (NFR-OFF-003).
 
-Then give it a `provider.Type`, build it in `Engine.provider` and accept the type in `SaveProvider` (`internal/engine/providers.go`), offer it in `ProviderPresets`, and add the form fields it needs to `Providers.tsx`. Test against an `httptest` server: streaming, tool calls, errors and model listing.
+`anthropic`, `openairesponses` and `gemini` are the adapters on official SDKs to copy from. Then give it a `provider.Type`, build it in `Engine.provider` and accept the type in `SaveProvider` (`internal/engine/providers.go`), offer it in `ProviderPresets`, and add the form fields it needs to `Providers.tsx`. Test against an `httptest` server: streaming, tool calls, errors and model listing.
 
 ## Adding a harness preset
 

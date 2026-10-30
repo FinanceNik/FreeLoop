@@ -13,8 +13,10 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/provider/anthropic"
+	"github.com/FinanceNik/Freeloop/internal/provider/gemini"
 	"github.com/FinanceNik/Freeloop/internal/provider/ollama"
 	"github.com/FinanceNik/Freeloop/internal/provider/openaicompat"
+	"github.com/FinanceNik/Freeloop/internal/provider/openairesponses"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -84,6 +86,10 @@ type PresetInfo struct {
 func (e *Engine) ProviderPresets() []PresetInfo {
 	out := []PresetInfo{
 		{ID: "anthropic", Name: "Anthropic", Type: string(provider.TypeAnthropic), BaseURL: anthropic.DefaultBaseURL, NeedsKey: true, DefaultModel: anthropic.DefaultModel},
+		{ID: string(openairesponses.Type), Name: "OpenAI (Responses API)", Type: string(openairesponses.Type), BaseURL: openairesponses.DefaultBaseURL, NeedsKey: true, DefaultModel: openairesponses.DefaultModel,
+			Note: "OpenAI's native API: reasoning summaries and reasoning kept across tool calls. The OpenAI preset below uses Chat Completions."},
+		{ID: string(gemini.Type), Name: "Google Gemini", Type: string(gemini.Type), BaseURL: gemini.DefaultBaseURL, NeedsKey: true, DefaultModel: gemini.DefaultModel,
+			Note: "An API key from Google AI Studio."},
 		{ID: "ollama", Name: "Ollama", Type: string(ollama.Type), BaseURL: ollama.DefaultBaseURL, Local: true,
 			Note: "Pull a model with tool support first, for example `ollama pull qwen3`."},
 	}
@@ -161,6 +167,10 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 	switch provider.Type(cfg.Type) {
 	case provider.TypeAnthropic:
 		p = anthropic.New(anthropic.Options{ID: cfg.ID, BaseURL: cfg.BaseURL, APIKey: key, Headers: cfg.Headers})
+	case openairesponses.Type:
+		p = openairesponses.New(openairesponses.Options{ID: cfg.ID, BaseURL: cfg.BaseURL, APIKey: key, Headers: cfg.Headers})
+	case gemini.Type:
+		p = gemini.New(gemini.Options{ID: cfg.ID, BaseURL: cfg.BaseURL, APIKey: key, Headers: cfg.Headers})
 	case openaicompat.Type:
 		p = openaicompat.New(openaicompat.Options{ID: cfg.ID, Preset: cfg.Preset, BaseURL: cfg.BaseURL, APIKey: key, Headers: cfg.Headers})
 	case ollama.Type:
@@ -202,7 +212,7 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 		return ProviderInfo{}, errors.New("a provider needs a name")
 	}
 	switch provider.Type(req.Type) {
-	case provider.TypeAnthropic, ollama.Type:
+	case provider.TypeAnthropic, ollama.Type, openairesponses.Type, gemini.Type:
 		req.Preset = ""
 	case openaicompat.Type:
 		if req.Preset == "" {

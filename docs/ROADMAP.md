@@ -160,6 +160,14 @@ Left for later because they need the user: signed builds and the update check (S
 2. **Multiple windows (GUI-015).** *Built 2026-10-30; checked in the browser as two tabs, the native windows by the user.* A session opens in a window of its own, streaming alongside the main window.
 3. **Idle memory (NFR-PERF-004).** *Built 2026-10-30; measured 110 MB on this Mac (the app process 38 MB, its three WebKit processes 72 MB); the M1 with 16 GB the requirement names is the user's run.* A repeatable measurement of the app with ten idle sessions against the 300 MB budget.
 
+### Feature order, part 6 (planned 2026-10-30)
+
+The user approved the dependencies these need on 2026-10-30.
+
+1. **Native Gemini and OpenAI Responses providers (PRV-012).** *Built 2026-10-30; tested against recorded stream shapes, real runs are the user's.* Adapters on the official OpenAI and Google Gen AI SDKs.
+2. **Integrated terminal (GUI-012).** A PTY per session in the session's environment, Docker included, shown with xterm.js.
+3. **OAuth for remote MCP servers (MCP-006).** The authorization code flow with PKCE through the MCP SDK's auth package, tokens in the Keychain.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SES-012, SES-013, GUI-016, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

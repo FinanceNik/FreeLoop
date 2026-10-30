@@ -122,13 +122,26 @@ func TestPresets(t *testing.T) {
 	for _, p := range e.ProviderPresets() {
 		ids = append(ids, p.ID)
 	}
-	for _, want := range []string{"anthropic", "ollama", "openai", "openrouter", "lmstudio", "llamacpp", "vllm", "ollama-v1", "custom"} {
+	for _, want := range []string{"anthropic", "openai_responses", "gemini", "ollama", "openai", "openrouter", "lmstudio", "llamacpp", "vllm", "ollama-v1", "custom"} {
 		if !strings.Contains(strings.Join(ids, ","), want) {
 			t.Errorf("preset %s missing from %v", want, ids)
 		}
 	}
 	if _, err := e.SaveProvider(SaveProviderRequest{Name: "X", Type: "openai_compat", Preset: "custom"}); err == nil {
 		t.Error("custom endpoint without a base URL accepted")
+	}
+
+	// PRV-012: the native OpenAI and Gemini providers save and build, and
+	// know their models' capabilities without a probe.
+	for _, c := range []struct{ typ, model string }{{"openai_responses", "gpt-5.5"}, {"gemini", "gemini-3-pro"}} {
+		info, err := e.SaveProvider(SaveProviderRequest{Name: c.typ, Type: c.typ, Preset: "ignored", APIKey: "test-key-" + c.typ})
+		if err != nil || info.Type != c.typ || info.Preset != "" {
+			t.Fatalf("save %s: %+v, %v", c.typ, info, err)
+		}
+		caps, err := e.ModelCapabilities(context.Background(), info.ID, c.model, false)
+		if err != nil || caps.Source != provider.CapsStatic || !caps.Tools || !caps.Effort {
+			t.Errorf("%s caps = %+v, %v", c.typ, caps, err)
+		}
 	}
 }
 
