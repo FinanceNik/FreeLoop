@@ -67,6 +67,9 @@ type Params struct {
 	// MCP are the session's MCP tools (MCP-003), asked at every model call
 	// so servers that start or stop are picked up; nil means none.
 	MCP MCPSource
+	// Subagents runs the task tool's child agents (HRN-014); nil offers no
+	// task tool, as for a subagent itself.
+	Subagents Subagents
 	// MCPServers are passed to an external agent on session creation, so
 	// it uses the same servers (MCP-004). Secrets are resolved.
 	MCPServers []MCPServerSpec
@@ -170,6 +173,18 @@ const (
 type Prompt struct {
 	Text      string
 	Resources []Resource
+}
+
+// Subagents runs a child agent on a task and returns its final reply and
+// the session that holds its transcript.
+type Subagents interface {
+	Run(ctx context.Context, description, prompt string) (SubagentResult, error)
+}
+
+// SubagentResult is a finished subagent.
+type SubagentResult struct {
+	SessionID string
+	Text      string
 }
 
 // Fallback is the model a call goes to when the session's model keeps

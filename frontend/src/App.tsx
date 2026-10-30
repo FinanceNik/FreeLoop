@@ -23,7 +23,7 @@ import { HIT_LABEL, snippetParts } from "./search.ts";
 import { formatCost } from "./cost.ts";
 import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
-import SessionView from "./SessionView.tsx";
+import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
@@ -292,6 +292,15 @@ export default function App() {
   const openRef = useRef(openSession);
   openRef.current = openSession;
   useEffect(() => Events.On(OPEN_SESSION_EVENT_NAME, ({ data }) => openRef.current(String(data))), []);
+  // A link inside a session (a subagent's transcript, HRN-014).
+  useEffect(() => {
+    const open = (e: Event) => {
+      refreshSessions();
+      openRef.current(String((e as CustomEvent).detail));
+    };
+    window.addEventListener(OPEN_SESSION_DOM_EVENT, open);
+    return () => window.removeEventListener(OPEN_SESSION_DOM_EVENT, open);
+  }, []);
 
   const selected = screen.kind === "session" ? (sessions.find((s) => s.id === screen.id) ?? null) : null;
 
@@ -328,8 +337,11 @@ export default function App() {
   // projects existed are grouped by folder.
   const groups: { key: string; name: string; project?: ProjectInfo; sessions: Session[] }[] = [];
   const q = query.trim().toLowerCase();
+  // Subagents are listed under the session that started them (HRN-014).
+  const subagents = (id: string) => sessions.filter((c) => c.parentId === id && (showArchived || c.status !== "archived"));
   const visible = sessions.filter(
     (s) =>
+      !s.parentId &&
       (showArchived ? s.status === "archived" : s.status !== "archived") &&
       (!statusFilter || s.status === statusFilter) &&
       (!q || s.title.toLowerCase().includes(q) || s.projectRoot.toLowerCase().includes(q) || (s.branch ?? "").toLowerCase().includes(q)),
@@ -493,6 +505,22 @@ export default function App() {
                         {s.branch && <span className="muted">{s.branch}</span>}
                       </span>
                     </button>
+                    {subagents(s.id).length > 0 && (
+                      <ul className="subagents" aria-label={`Subagents of ${s.title}`}>
+                        {subagents(s.id).map((c) => (
+                          <li key={c.id}>
+                            <button
+                              className="session-row session-child"
+                              aria-current={screen.kind === "session" && screen.id === c.id ? "true" : undefined}
+                              onClick={() => openSession(c.id)}
+                            >
+                              <span className="session-title">{c.title.replace(/^Subagent: /, "")}</span>
+                              <span className={`badge badge-${c.status}`}>{STATUS_LABEL[c.status] ?? c.status}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </li>
                 ))}
               </ul>

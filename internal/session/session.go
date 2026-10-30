@@ -54,10 +54,13 @@ type Session struct {
 	Worktree string `json:"worktree"`
 	// WorktreeBranch is the branch created with the worktree. Branch
 	// follows the git state and can be empty; this one stays.
-	WorktreeBranch string    `json:"worktreeBranch"`
-	LastSeq        int64     `json:"lastSeq"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	WorktreeBranch string `json:"worktreeBranch"`
+	// ParentID is the session whose task tool started this one, for a
+	// subagent (HRN-014).
+	ParentID  string    `json:"parentId"`
+	LastSeq   int64     `json:"lastSeq"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Project is a repository the user works in (ENV-003). It is identified by

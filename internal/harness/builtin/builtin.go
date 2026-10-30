@@ -59,6 +59,9 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 		if t.spec.Name == "load_skill" && p.Skills == nil {
 			allowed = false
 		}
+		if t.spec.Name == "task" && p.Subagents == nil {
+			allowed = false
+		}
 		if allowed && !slices.Contains(p.DisabledTools, t.spec.Name) {
 			offered = append(offered, t)
 		}

@@ -80,7 +80,7 @@ func decode(input json.RawMessage, v any, required ...string) error {
 }
 
 func tools() []*tool {
-	return []*tool{readFile(), listDir(), globTool(), grepTool(), writeFile(), editFile(), shellTool(), presentPlan(), loadSkill()}
+	return []*tool{readFile(), listDir(), globTool(), grepTool(), writeFile(), editFile(), shellTool(), presentPlan(), loadSkill(), taskTool()}
 }
 
 func readFile() *tool {
@@ -449,6 +449,51 @@ func presentPlan() *tool {
 					}
 					s.SetMode(mode)
 					return result{text: fmt.Sprintf("The user approved the plan. The session is now in %s mode; go ahead.", mode)}, nil
+				},
+			}, nil
+		},
+	}
+}
+
+// taskTool hands a self-contained task to a subagent (HRN-014): a child
+// session with the same folder, profile, model and mode, whose own tool
+// calls go through the permission broker like any session's. The tool
+// itself does nothing but start it, so it needs no approval; the result is
+// the child's final reply, and its transcript stays open to the user.
+func taskTool() *tool {
+	return &tool{
+		spec: provider.ToolSpec{
+			Name:        "task",
+			Description: "Hand a self-contained task to a subagent that works in the same project with the same tools, and get back its final answer. Use it for research or work that would fill your own context, such as surveying a large codebase. The subagent cannot see this conversation: put everything it needs in the prompt.",
+			InputSchema: schema([]string{"description", "prompt"}, map[string]any{
+				"description": str("A short title for the task, three to six words."),
+				"prompt":      str("The full instructions for the subagent, with every detail it needs."),
+			}),
+		},
+		kind: permission.KindThink, readOnly: true,
+		prepare: func(s *session, input json.RawMessage) (*call, error) {
+			var in struct{ Description, Prompt string }
+			if err := decode(input, &in, "description", "prompt"); err != nil {
+				return nil, err
+			}
+			if s.p.Subagents == nil {
+				return nil, errors.New("subagents are not available in this session")
+			}
+			return &call{
+				title: "Subagent: " + in.Description,
+				run: func(ctx context.Context, _ permission.Decision) (result, error) {
+					res, err := s.p.Subagents.Run(ctx, in.Description, in.Prompt)
+					if err != nil {
+						return result{}, err
+					}
+					text := strings.TrimSpace(res.Text)
+					if text == "" {
+						text = "The subagent finished without a reply."
+					}
+					return result{text: text, content: []any{
+						map[string]any{"type": "content", "content": map[string]any{"type": "resource_link", "uri": "freeloop://session/" + res.SessionID, "name": "The subagent's transcript"}},
+						textContent(truncate(text, 4000)),
+					}}, nil
 				},
 			}, nil
 		},

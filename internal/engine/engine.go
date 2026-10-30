@@ -425,8 +425,10 @@ type CreateSessionRequest struct {
 	// Worktree gives the session its own git worktree and branch (SES-010).
 	Worktree bool `json:"worktree"`
 	// shareWorktree puts the session in an existing session's worktree,
-	// for a profile switch (HRN-012).
+	// for a profile switch (HRN-012) or a subagent (HRN-014).
 	shareWorktree *session.Session
+	// parent makes the session a subagent of another (HRN-014).
+	parent string
 }
 
 // CreateSession creates an idle session and records its initial status as
@@ -528,7 +530,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	ses, err := e.store.CreateSession(ctx, session.Session{
 		Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
 		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
-		Worktree: worktree, WorktreeBranch: worktreeBranch,
+		Worktree: worktree, WorktreeBranch: worktreeBranch, ParentID: req.parent,
 	})
 	if err != nil {
 		if worktree != "" {

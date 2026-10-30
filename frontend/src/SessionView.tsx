@@ -497,6 +497,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 <input autoFocus aria-label="Session title" value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
               </form>
             )}
+            {session.parentId && (
+              <p className="muted">
+                A subagent.{" "}
+                <button className="link" onClick={() => openSessionEvent(session.parentId)}>
+                  Open the session that started it
+                </button>
+              </p>
+            )}
             <p className="muted">
               <code title={session.worktree ? `Worktree of ${session.projectRoot}` : undefined}>{session.worktree || session.projectRoot}</code>
               {view.git?.repo && (
@@ -1108,5 +1116,23 @@ function ContentView({ c }: { c: ToolContent }) {
       </pre>
     );
   }
+  // A link to another session, such as a subagent's (HRN-014).
+  if (c.content?.type === "resource_link" && c.content.uri?.startsWith(SESSION_URI)) {
+    const sid = c.content.uri.slice(SESSION_URI.length);
+    return (
+      <button className="link" onClick={() => openSessionEvent(sid)}>
+        {c.content.name || "Open the session"}
+      </button>
+    );
+  }
   return <pre className="tool-output">{c.content?.text}</pre>;
+}
+
+const SESSION_URI = "freeloop://session/";
+
+// openSessionEvent asks the app to open a session, from anywhere in the
+// view.
+export const OPEN_SESSION_DOM_EVENT = "freeloop-open-session";
+function openSessionEvent(sid: string) {
+  window.dispatchEvent(new CustomEvent(OPEN_SESSION_DOM_EVENT, { detail: sid }));
 }

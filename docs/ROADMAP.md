@@ -145,7 +145,7 @@ Left for later because they need the user: signed builds and the update check (S
 2. **Prompt caching (PRV-009).** *Built; the request payload is tested here, a run against the real API is the user's.* Cache breakpoints for the system prompt and tool definitions on Anthropic; checked against the request payload here, against the real API by the user.
 3. **Skill authoring (SKL-007).** *Built 2026-10-30.* Create a skill from a template, validate its frontmatter, open it in the editor.
 4. **File tree and viewer (GUI-013).** *Built 2026-10-30.* A read-only browser of the session's folder with the agent's changes highlighted.
-5. **Subagents (HRN-014, second half).** The built-in agent hands a task to a child agent whose transcript the parent can open.
+5. **Subagents (HRN-014, second half).** *Built 2026-10-30.* The built-in agent hands a task to a child agent whose transcript the parent can open.
 
 ## Later (unscheduled)
 

@@ -1787,3 +1787,18 @@ table.hooks .hook-command {
   color: var(--muted);
   user-select: none;
 }
+
+/* Subagents under their parent (HRN-014) */
+.subagents {
+  list-style: none;
+  margin: 0 0 4px 14px;
+  padding: 0 0 0 6px;
+  border-left: 1px solid var(--border);
+}
+
+.session-child {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}

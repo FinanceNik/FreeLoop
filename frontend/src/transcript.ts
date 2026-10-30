@@ -85,7 +85,7 @@ export interface PermissionState {
 
 export interface ToolContent {
   type: string;
-  content?: { type: string; text?: string };
+  content?: { type: string; text?: string; uri?: string; name?: string };
   path?: string;
   oldText?: string;
   newText?: string;

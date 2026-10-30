@@ -224,6 +224,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 			}
 		},
 	}
+	// A subagent gets no task tool of its own (HRN-014).
+	if ses.ParentID == "" {
+		params.Subagents = sessionSubagents{e: e, sid: sid}
+	}
 	var hs harness.Session
 	if p != nil {
 		params.Provider = e.limit(p, sid)
