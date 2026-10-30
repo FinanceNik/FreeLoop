@@ -176,3 +176,38 @@ func TestDiffPanelRefusesCommandConfig(t *testing.T) {
 		t.Fatal("the filter ran")
 	}
 }
+
+// A filter set in the per-worktree config.worktree, as a command in a
+// container could write it through the bind-mounted .git, is found too:
+// neither the git state nor the diff panel runs it on the host.
+func TestWorktreeConfigFilterIsRefused(t *testing.T) {
+	ctx := context.Background()
+	repo := gitRepo(t)
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	e.SetProjectTrust(ctx, repo, true)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: DemoProviderID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	gitIn(t, repo, "config", "core.repositoryformatversion", "1")
+	gitIn(t, repo, "config", "extensions.worktreeConfig", "true")
+	os.WriteFile(filepath.Join(repo, ".git", "config.worktree"), []byte("[filter \"evil\"]\n\tclean = touch "+marker+"\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, ".gitattributes"), []byte("* filter=evil\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, "a.txt"), []byte("changed"), 0o644)
+
+	env, _ := e.localEnv(repo, nil)
+	if st := gitState(ctx, env, true); st.Dirty != -1 {
+		t.Errorf("git state = %+v; want the file scan skipped", st)
+	}
+	if c, err := e.Changes(ctx, ses.ID); err != nil || c.Blocked == "" {
+		t.Errorf("changes = %+v, %v; want blocked", c, err)
+	}
+	if err := e.StageFiles(ctx, ses.ID, []string{"a.txt"}, true); err == nil {
+		t.Error("staging succeeded")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the filter ran")
+	}
+}

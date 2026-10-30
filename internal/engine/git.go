@@ -41,8 +41,8 @@ func git(ctx context.Context, env environment.Environment, args ...string) (stri
 // git status may run, it reads only branch and HEAD and reports the count as
 // unknown (-1).
 func gitState(ctx context.Context, env environment.Environment, trusted bool) event.GitStateData {
-	filters, _ := git(ctx, env, "config", "--local", "--includes", "--name-only", "--get-regexp", `^filter\.`)
-	if !trusted || strings.TrimSpace(filters) != "" {
+	filters, ok := repoConfigKeys(ctx, env, `^filter\.`)
+	if !trusted || len(filters) > 0 || !ok {
 		if _, ok := git(ctx, env, "rev-parse", "--git-dir"); !ok {
 			return event.GitStateData{}
 		}
@@ -60,6 +60,46 @@ func gitState(ctx context.Context, env environment.Environment, trusted bool) ev
 		return event.GitStateData{}
 	}
 	return parseStatus(out)
+}
+
+// repoConfigKeys lists the keys matching pattern that the repository's own
+// configuration sets: .git/config and what it includes, and, when
+// extensions.worktreeConfig is on, the per-worktree config.worktree, which
+// --local does not read and a command in a container could write. ok is
+// false when git could not answer, which callers treat as a match.
+func repoConfigKeys(ctx context.Context, env environment.Environment, pattern string) (keys []string, ok bool) {
+	scopes := []string{"--local"}
+	if out, _ := git(ctx, env, "config", "--local", "--type=bool", "--get", "extensions.worktreeConfig"); strings.TrimSpace(out) == "true" {
+		scopes = append(scopes, "--worktree")
+	}
+	for _, scope := range scopes {
+		out, code, answered := gitCode(ctx, env, "config", scope, "--includes", "--name-only", "--get-regexp", pattern)
+		switch {
+		case answered && code == 0:
+			keys = append(keys, strings.Fields(out)...)
+		case answered && code == 1: // nothing matches
+		default:
+			if _, isRepo := git(ctx, env, "rev-parse", "--git-dir"); isRepo {
+				return keys, false
+			}
+		}
+	}
+	return keys, true
+}
+
+// gitCode is git that also returns the exit code; answered is false when
+// git did not run to an exit.
+func gitCode(ctx context.Context, env environment.Environment, args ...string) (string, int, bool) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	res, err := env.Exec(ctx, environment.ExecSpec{
+		Argv: append(slices.Clone(safeGit), args...),
+		Env:  map[string]string{"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1"},
+	})
+	if err != nil || res.TimedOut {
+		return "", 0, false
+	}
+	return res.Output, res.ExitCode, true
 }
 
 func parseStatus(out string) event.GitStateData {

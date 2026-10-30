@@ -97,6 +97,9 @@ func TestProtectedPathsHoldInBypass(t *testing.T) {
 		{Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(home, ".ssh", "config")}},
 		{Tool: "read_file", Kind: KindRead, Paths: []string{filepath.Join(home, ".ssh", "id_ed25519")}},
 		{Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(root, ".git", "config")}},
+		// A project's .freeloop/ can add hooks, which run commands.
+		{Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(root, ".freeloop", "hooks.yaml")}},
+		{Tool: "edit_file", Kind: KindEdit, Paths: []string{filepath.Join(root, ".freeloop", "profiles", "p.yaml")}},
 		{Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(home, "elsewhere.txt")}},
 		{Tool: "read_file", Kind: KindRead, Paths: []string{filepath.Join(home, "Library", "Application Support", "freeloop", "config.yaml")}},
 	} {

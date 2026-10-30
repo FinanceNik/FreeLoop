@@ -81,6 +81,11 @@ func ParseDevcontainer(file string, b []byte) (Devcontainer, error) {
 			d.Context = path.Join(dir, raw.Build.Context)
 		}
 	}
+	for _, p := range []string{d.Dockerfile, d.Context} {
+		if p != "" && (path.IsAbs(p) || p == ".." || strings.HasPrefix(p, "../")) {
+			return Devcontainer{}, fmt.Errorf("%s: %s is outside the project", file, p)
+		}
+	}
 	if d.Image == "" && d.Dockerfile == "" {
 		return Devcontainer{}, fmt.Errorf("%s names neither an image nor a Dockerfile; Freeloop does not run Docker Compose devcontainers", file)
 	}

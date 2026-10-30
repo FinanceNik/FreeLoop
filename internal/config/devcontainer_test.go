@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseDevcontainer(t *testing.T) {
 	d, err := ParseDevcontainer(".devcontainer/devcontainer.json", []byte(`{
@@ -19,5 +22,20 @@ func TestParseDevcontainer(t *testing.T) {
 	}
 	if _, err := ParseDevcontainer("x.json", []byte(`{"dockerComposeFile": "c.yml"}`)); err == nil {
 		t.Error("a compose devcontainer was accepted")
+	}
+}
+
+func TestDevcontainerBuildStaysInProject(t *testing.T) {
+	for _, b := range []string{
+		`{"build": {"dockerfile": "Dockerfile", "context": "../../.."}}`,
+		`{"build": {"dockerfile": "../../Dockerfile"}}`,
+	} {
+		if _, err := ParseDevcontainer(".devcontainer/devcontainer.json", []byte(b)); err == nil || !strings.Contains(err.Error(), "outside the project") {
+			t.Errorf("%s: err = %v", b, err)
+		}
+	}
+	d, err := ParseDevcontainer(".devcontainer/devcontainer.json", []byte(`{"build": {"dockerfile": "Dockerfile", "context": ".."}}`))
+	if err != nil || d.Context != "." {
+		t.Errorf("the project root as context = %+v, %v", d, err)
 	}
 }

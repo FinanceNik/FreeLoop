@@ -76,7 +76,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 |---|---|
 | Permission mode for a new session | `ask` |
 | Bypass mode | Disabled until enabled in settings; never in untrusted projects |
-| Writes outside project root, into `.git/`, into app config | Denied in every mode |
+| Writes outside project root, into `.git/`, into the project's `.freeloop/`, into app config | Denied in every mode |
 | Reads outside project root | Prompt, except never-readable locations which are refused |
 | New MCP server | Does not start until confirmed with its full command shown |
 | Project configuration | Not read until the project is trusted |
@@ -84,7 +84,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 
 ## Limitations the user should know
 
-- The local environment is **not a sandbox**. In `bypass` mode an agent can do anything the user can. Use a Docker environment for repositories you do not trust: its commands and external agents run in a container that sees the project folder and the image, not the rest of your files. The container still has network access and runs as the image's user (often root), and it can change anything in the project folder, which is shared with the host.
+- The local environment is **not a sandbox**. In `bypass` mode an agent can do anything the user can. Use a Docker environment for repositories you do not trust: its commands and external agents run in a container that sees the project folder and the image, not the rest of your files. The container still has network access and runs as the image's user (often root), and it can change anything in the project folder, which is shared with the host, except what the host reads and acts on: the project's `.freeloop/` (hooks, rules, profiles; created empty when missing so the container cannot create it) and the devcontainer files are mounted read-only. Values from `devcontainer.json` go into the container on the docker command line and never into the environment of the docker CLI on the host, and its Dockerfile and build context must resolve inside the project. The app's git commands on the host refuse to scan or stage in a repository whose own configuration, `config.worktree` and includes counted, names content filters, signing programs or merge drivers, since a command in the container can write `.git`.
 - **Unknown secrets are not redacted.** Redaction works on values the app knows (stored secrets). A password typed into a prompt is sent to the provider and stored in the transcript.
 - **Approval fatigue is real.** Rules exist to make trusted operations quiet so that prompts stay meaningful. Review rules periodically; the settings UI lists every rule with its source.
 - **Transcripts are plaintext** on disk, protected only by file permissions.

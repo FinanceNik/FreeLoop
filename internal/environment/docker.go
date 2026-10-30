@@ -31,8 +31,19 @@ type DockerOptions struct {
 	Dockerfile   string
 	BuildContext string
 	// Env reaches every command and agent; values are passed through the
-	// docker CLI's own environment, never on its command line.
+	// docker CLI's own environment, never on its command line, except for
+	// names that would steer the CLI itself (hostSensitive), which go on
+	// the command line like PlainEnv.
 	Env map[string]string
+	// PlainEnv also reaches every command, its values on the docker
+	// command line: values from project files (devcontainer.json), which
+	// are not secrets and must not reach the docker CLI's own environment.
+	PlainEnv map[string]string
+	// ReadOnly are paths inside Root mounted read-only in the container,
+	// so a command there cannot change what the app reads and runs on the
+	// host (.freeloop/, the devcontainer files). A missing directory ending
+	// in / is created first; other missing paths are skipped.
+	ReadOnly []string
 	// Setup runs once after the container is created; Health before every
 	// session start (ENV-007).
 	Setup  string
@@ -73,6 +84,14 @@ func FindDocker() (string, error) {
 func NewDocker(opts DockerOptions) (*Docker, error) {
 	if opts.Container == "" || (opts.Image == "" && opts.Dockerfile == "") {
 		return nil, errors.New("environment: a Docker environment needs a container name and an image or Dockerfile")
+	}
+	// A project's devcontainer.json names the Dockerfile and build context;
+	// both must stay inside the project, symlinks resolved, or a build could
+	// send the user's home folder to the image.
+	for _, p := range []string{opts.Dockerfile, opts.BuildContext} {
+		if p != "" && !resolvesInside(opts.Root, p) {
+			return nil, fmt.Errorf("environment: %s is outside the project", p)
+		}
 	}
 	docker, err := FindDocker()
 	if err != nil {
@@ -143,8 +162,25 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 			did = append(did, "built the image")
 		}
 		root := d.Root()
-		if _, err := d.run(ctx, MaxTimeout, nil, "run", "-d", "--init", "--name", d.opts.Container,
-			"--label", "app=freeloop", "-v", root+":"+root, "-w", root, image, "sleep", "infinity"); err != nil {
+		args := []string{"run", "-d", "--init", "--name", d.opts.Container, "--label", "app=freeloop", "-v", root + ":" + root}
+		for _, p := range d.opts.ReadOnly {
+			dir := strings.HasSuffix(p, "/")
+			p = filepath.Clean(p)
+			if !strings.HasPrefix(p, root+string(filepath.Separator)) {
+				continue
+			}
+			if _, err := os.Lstat(p); err != nil {
+				if !dir {
+					continue
+				}
+				if err := os.MkdirAll(p, 0o755); err != nil {
+					return "", fmt.Errorf("prepare %s: %w", p, err)
+				}
+			}
+			args = append(args, "-v", p+":"+p+":ro")
+		}
+		args = append(args, "-w", root, image, "sleep", "infinity")
+		if _, err := d.run(ctx, MaxTimeout, nil, args...); err != nil {
 			return "", err
 		}
 		did = append(did, "created the container from "+image)
@@ -203,10 +239,50 @@ func (d *Docker) execArgs(interactive bool, cwd string, env map[string]string) (
 	all := map[string]string{}
 	maps.Copy(all, d.opts.Env)
 	maps.Copy(all, env)
+	for k, v := range d.opts.PlainEnv {
+		if _, set := all[k]; !set {
+			args = append(args, "-e", k+"="+v)
+		}
+	}
 	for _, k := range slices.Sorted(maps.Keys(all)) {
+		if hostSensitive(k) {
+			args = append(args, "-e", k+"="+all[k])
+			delete(all, k)
+			continue
+		}
 		args = append(args, "-e", k)
 	}
 	return append(args, d.opts.Container), all
+}
+
+// hostSensitive reports names that would change what the docker CLI on
+// the host does if they were in its environment.
+func hostSensitive(name string) bool {
+	switch name {
+	case "PATH", "HOME", "TMPDIR", "SHELL", "USER":
+		return true
+	}
+	for _, p := range []string{"DOCKER_", "DYLD_", "LD_", "XDG_", "BUILDKIT_", "COMPOSE_"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvesInside reports whether p, with symlinks resolved, is root or
+// inside it.
+func resolvesInside(root, p string) bool {
+	r, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	q, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(r, q)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
 // Exec runs a command inside the container. A shell command runs with sh

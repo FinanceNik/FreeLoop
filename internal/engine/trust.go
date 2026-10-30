@@ -23,7 +23,7 @@ import (
 // project's environment, like every project file.
 
 // ProjectDir is the project-level settings folder.
-const ProjectDir = ".freeloop"
+const ProjectDir = permission.ProjectSettingsDir
 
 // projectConfigTTL is how long a project's settings are reused before its
 // files are read again; permission checks read them on every tool call.

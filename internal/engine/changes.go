@@ -108,9 +108,12 @@ func (e *Engine) sessionGit(ctx context.Context, sid string) (environment.Enviro
 // add, checkout) and signing programs (commit). Until projects are trusted
 // (SEC-006) the panel stays off in such a repository.
 func blocked(ctx context.Context, env environment.Environment) string {
-	out, ok := git(ctx, env, "config", "--local", "--includes", "--name-only", "--get-regexp", `^(filter|gpg)\.`)
-	if keys := strings.Fields(out); ok && len(keys) > 0 {
-		return fmt.Sprintf("This repository's own git config sets %s, which can run programs. The diff panel stays off for it until projects can be trusted.", keys[0])
+	keys, ok := repoConfigKeys(ctx, env, `^(filter\.|gpg\.|merge\..*\.driver$)`)
+	if len(keys) > 0 {
+		return fmt.Sprintf("This repository's own git config sets %s, which can run programs. The diff panel stays off for it.", keys[0])
+	}
+	if !ok {
+		return "Freeloop could not read this repository's git config, so the diff panel stays off for it."
 	}
 	return ""
 }

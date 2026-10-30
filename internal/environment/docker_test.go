@@ -120,3 +120,59 @@ func TestDockerEnvironment(t *testing.T) {
 		t.Errorf("restart did %q, %v", did, err)
 	}
 }
+
+// A Dockerfile or build context outside the project is refused, symlinks
+// resolved, before anything runs.
+func TestDockerBuildPathsStayInside(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	os.Symlink(outside, filepath.Join(root, "ctx"))
+	for _, o := range []DockerOptions{
+		{Dockerfile: filepath.Join(outside, "Dockerfile"), BuildContext: root},
+		{Dockerfile: filepath.Join(root, "Dockerfile"), BuildContext: filepath.Join(root, "ctx")},
+	} {
+		o.Container, o.Root, o.Guard = "c", root, denyGuard{}
+		os.WriteFile(filepath.Join(root, "Dockerfile"), nil, 0o644)
+		os.WriteFile(filepath.Join(outside, "Dockerfile"), nil, 0o644)
+		if _, err := NewDocker(o); err == nil || !strings.Contains(err.Error(), "outside the project") {
+			t.Errorf("%+v: err = %v", o, err)
+		}
+	}
+	if hostSensitive("SECRET") || !hostSensitive("DOCKER_HOST") || !hostSensitive("DYLD_INSERT_LIBRARIES") || !hostSensitive("PATH") {
+		t.Error("hostSensitive")
+	}
+}
+
+// What the app reads and runs on the host is read-only in the container,
+// and a project file's variables reach commands without reaching the host
+// docker CLI's environment.
+func TestDockerProtectsHostConfig(t *testing.T) {
+	root := dockerOrSkip(t)
+	ctx := context.Background()
+	var b [3]byte
+	rand.Read(b[:])
+	d, err := NewDocker(DockerOptions{
+		ID: "docker", Container: "freeloop-test-" + hex.EncodeToString(b[:]), Root: root, Image: "alpine:3.20", Guard: denyGuard{},
+		ReadOnly: []string{filepath.Join(root, ".freeloop") + "/"},
+		PlainEnv: map[string]string{"FROM_PROJECT": "plain", "DOCKER_HOST": "tcp://evil:1"},
+		Env:      map[string]string{"SECRET": "s3cr3t"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Remove(ctx)
+	if _, err := d.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	res, _ := d.Exec(ctx, ExecSpec{Command: "touch .freeloop/hooks.yaml 2>&1; echo \"$FROM_PROJECT $SECRET\""})
+	if !strings.Contains(res.Output, "Read-only") || !strings.Contains(res.Output, "plain s3cr3t") {
+		t.Errorf("output = %q", res.Output)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".freeloop", "hooks.yaml")); err == nil {
+		t.Error("the container wrote .freeloop/hooks.yaml")
+	}
+	args, env := d.execArgs(false, "", nil)
+	if _, ok := env["DOCKER_HOST"]; ok || !slices.Contains(args, "DOCKER_HOST=tcp://evil:1") || !slices.Contains(args, "SECRET") {
+		t.Errorf("args = %v, CLI env = %v", args, env)
+	}
+}

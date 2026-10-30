@@ -83,9 +83,18 @@ func (p *Policy) writeRefusal(root, path string) string {
 		if within(path, filepath.Join(r, ".git")) {
 			return fmt.Sprintf("%s is inside .git", path)
 		}
+		// The project's Freeloop settings can add hooks, which run
+		// commands; only the user edits them (EXT-005, SEC-006).
+		if within(path, filepath.Join(r, ProjectSettingsDir)) {
+			return fmt.Sprintf("%s is inside %s, the project's Freeloop settings, which only you edit", path, ProjectSettingsDir)
+		}
 	}
 	return ""
 }
+
+// ProjectSettingsDir is a project's Freeloop settings folder; harnesses may
+// read it but never write it.
+const ProjectSettingsDir = ".freeloop"
 
 func (p *Policy) insideRoot(root, path string) bool {
 	return withinAny(path, canonical(root))

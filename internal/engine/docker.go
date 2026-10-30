@@ -39,6 +39,9 @@ func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project ses
 	opts := environment.DockerOptions{
 		ID: envCfg.ID, Container: containerName(ses.ID), Root: ses.WorkRoot(), Image: envCfg.Image,
 		Env: maps.Clone(vars), Setup: envCfg.Setup, Health: envCfg.Health, Guard: e.broker.Policy().Guard(ses.WorkRoot()),
+		// What the app reads from the project and may run on the host
+		// stays out of the container's reach.
+		ReadOnly: []string{filepath.Join(ses.WorkRoot(), ProjectDir) + "/"},
 	}
 	if envCfg.Devcontainer {
 		// A devcontainer.json is project configuration (SEC-006).
@@ -56,6 +59,11 @@ func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project ses
 				return nil, err
 			}
 			found = true
+			ro := filepath.Join(host.Root(), filepath.FromSlash(f))
+			if strings.Contains(f, "/") {
+				ro = filepath.Dir(ro)
+			}
+			opts.ReadOnly = append(opts.ReadOnly, ro)
 			break
 		}
 		if !found {
@@ -70,14 +78,9 @@ func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project ses
 		if opts.Setup == "" {
 			opts.Setup = dc.PostCreate
 		}
-		if opts.Env == nil {
-			opts.Env = map[string]string{}
-		}
-		for k, v := range dc.Env {
-			if _, set := opts.Env[k]; !set {
-				opts.Env[k] = v
-			}
-		}
+		// The project file's variables go on the command line, never into
+		// the host docker CLI's environment.
+		opts.PlainEnv = dc.Env
 	}
 	d, err := environment.NewDocker(opts)
 	if err != nil {
