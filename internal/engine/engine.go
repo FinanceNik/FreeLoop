@@ -98,6 +98,8 @@ type Engine struct {
 	mcp        *mcp.Manager
 	providers  *providerRegistry
 	runtimes   map[string]*runtime
+	// terms are the open integrated terminals (GUI-012).
+	terms terminals
 	// starting are runtimes being set up, so hooks find them while the
 	// harness starts (an external agent's requests during session/load).
 	starting map[string]*runtime
@@ -195,6 +197,7 @@ func (e *Engine) Close() error {
 	for _, r := range running {
 		r.stop()
 	}
+	e.closeTerminals("")
 	e.mcp.StopAll()
 	close(e.quit)
 	e.watching.Wait()

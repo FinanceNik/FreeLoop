@@ -102,6 +102,33 @@ func (s *EngineService) SuggestCommitMessage(ctx context.Context, sessionID stri
 	return s.eng.SuggestCommitMessage(ctx, sessionID)
 }
 
+// OpenTerminal, SessionTerminals, TerminalScreen, WriteTerminal,
+// ResizeTerminal and CloseTerminal drive the integrated terminal (GUI-012);
+// output arrives on TerminalEventName.
+func (s *EngineService) OpenTerminal(ctx context.Context, sessionID string, cols, rows int) (engine.TerminalInfo, error) {
+	return s.eng.OpenTerminal(ctx, sessionID, cols, rows)
+}
+
+func (s *EngineService) SessionTerminals(sessionID string) []engine.TerminalInfo {
+	return s.eng.SessionTerminals(sessionID)
+}
+
+func (s *EngineService) TerminalScreen(id string) (engine.TerminalOutput, error) {
+	return s.eng.TerminalScreen(id)
+}
+
+func (s *EngineService) WriteTerminal(id, data string) error {
+	return s.eng.WriteTerminal(id, []byte(data))
+}
+
+func (s *EngineService) ResizeTerminal(id string, cols, rows int) error {
+	return s.eng.ResizeTerminal(id, cols, rows)
+}
+
+func (s *EngineService) CloseTerminal(id string) error {
+	return s.eng.CloseTerminal(id)
+}
+
 // PullRequestInfo, SuggestPullRequest and CreatePullRequest open a pull
 // request from the diff panel (SES-011).
 func (s *EngineService) PullRequestInfo(ctx context.Context, sessionID string) (engine.PullRequestInfo, error) {

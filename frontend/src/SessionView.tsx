@@ -459,6 +459,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     act("approvals", "Show approvals", () => showPanel("approvals"), { keywords: "panel decided" }),
     act("diff", "Show changes", () => showPanel("diff"), { keywords: "diff git commit stage panel" }),
     act("files", "Show files", () => showPanel("files"), { keywords: "tree browse viewer open" }),
+    act("terminal", "Show the terminal", () => showPanel("terminal"), { keywords: "shell console pty command line" }),
     act("info", "Show session details", () => showPanel("info"), { keywords: "info panel tokens" }),
     ...(project && !project.trusted && !project.missing
       ? [act("trust", "Trust this project", () => trustProject(true), { detail: trustHooks.length ? `${project.root} · runs ${trustHooks.length} hook${trustHooks.length > 1 ? "s" : ""}` : project.root })]

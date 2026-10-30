@@ -76,6 +76,7 @@ func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) 
 	status := session.StatusIdle
 	if archived {
 		e.stopRuntime(sid)
+		e.closeTerminals(sid)
 		status = session.StatusArchived
 		// A worktree goes with the archive unless it holds uncommitted
 		// work; its branch and commits stay (SES-010).
@@ -101,6 +102,7 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 		return err
 	}
 	e.stopRuntime(sid)
+	e.closeTerminals(sid)
 	// Whatever the environment is now (it may have been deleted or changed
 	// kind), a container the session had, and an image built for it, go.
 	if _, err := environment.FindDocker(); err == nil {

@@ -330,6 +330,20 @@ pre {
   margin: 2px 0 0;
 }
 
+/* The title side and the controls both shrink, and the controls wrap,
+   so nothing in the header spills over the right panel. */
+.session-header > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.session-controls,
+.session-controls > .row {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .session-controls {
   display: flex;
   gap: 12px;
@@ -1865,4 +1879,39 @@ table.hooks .hook-command {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* The integrated terminal (GUI-012). */
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  min-height: 320px;
+}
+
+.terminal-tabs {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.terminal-tab-on button:first-child {
+  font-weight: 600;
+}
+
+.terminal-where {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-box {
+  flex: 1;
+  min-height: 280px;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
 }

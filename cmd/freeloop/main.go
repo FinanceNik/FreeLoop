@@ -40,7 +40,11 @@ func sessionWindowName(sid string) string { return "session:" + sid }
 // data-file-drop-target, such as the skills page's drop zone (SKL-005).
 const FilesDroppedEventName = "freeloop:files-dropped"
 
+// TerminalEventName carries the integrated terminals' output (GUI-012).
+const TerminalEventName = "freeloop:terminal"
+
 func init() {
+	application.RegisterEvent[engine.TerminalOutput](TerminalEventName)
 	application.RegisterEvent[event.Event](EventName)
 	application.RegisterEvent[engine.ConfigChange](ConfigEventName)
 	application.RegisterEvent[string](OpenSessionEventName)
@@ -135,6 +139,15 @@ func main() {
 		default:
 		}
 	})
+	// The terminals' output goes to the UI apart from the events: it is
+	// never recorded.
+	termOut, unsubscribeTerms := eng.SubscribeTerminals()
+	defer unsubscribeTerms()
+	go func() {
+		for out := range termOut {
+			app.Event.Emit(TerminalEventName, out)
+		}
+	}()
 	go func() {
 		for ev := range stream {
 			app.Event.Emit(EventName, ev)

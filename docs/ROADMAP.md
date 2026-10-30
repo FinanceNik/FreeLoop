@@ -165,7 +165,7 @@ Left for later because they need the user: signed builds and the update check (S
 The user approved the dependencies these need on 2026-10-30.
 
 1. **Native Gemini and OpenAI Responses providers (PRV-012).** *Built 2026-10-30; tested against recorded stream shapes, real runs are the user's.* Adapters on the official OpenAI and Google Gen AI SDKs.
-2. **Integrated terminal (GUI-012).** A PTY per session in the session's environment, Docker included, shown with xterm.js.
+2. **Integrated terminal (GUI-012).** *Built 2026-10-30; the Docker acceptance passes in a test against Colima.* A PTY per session in the session's environment, Docker included, shown with xterm.js.
 3. **OAuth for remote MCP servers (MCP-006).** The authorization code flow with PKCE through the MCP SDK's auth package, tokens in the Keychain.
 
 ## Later (unscheduled)

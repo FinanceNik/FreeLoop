@@ -1,15 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
 import { panelData, type SessionView, type ToolItem } from "./transcript.ts";
 import DiffPanel from "./DiffPanel.tsx";
 import FilesPanel from "./FilesPanel.tsx";
+// xterm.js is large; it loads when a terminal is first shown.
+const TerminalPanel = lazy(() => import("./TerminalPanel.tsx"));
 
 // SessionPanel is the right panel of the main window (GUI-001): approvals,
 // the diff against the session's base commit (GUI-005), and the session's
 // details. It reads the same
 // folded transcript as the conversation, so it never disagrees with it.
 
-export type Tab = "approvals" | "diff" | "files" | "info";
+export type Tab = "approvals" | "diff" | "files" | "terminal" | "info";
 
 interface Props {
   session: Session;
@@ -38,7 +40,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
   const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
 
   return (
-    <aside className={tab === "diff" || tab === "files" ? "panel panel-wide" : "panel"} aria-label="Session panel">
+    <aside className={tab === "diff" || tab === "files" || tab === "terminal" ? "panel panel-wide" : "panel"} aria-label="Session panel">
       <div className="panel-tabs" role="tablist">
         <TabButton id="approvals" tab={tab} setTab={setTab}>
           Approvals{data.pending.length > 0 && <span className="badge badge-waiting_permission">{data.pending.length}</span>}
@@ -48,6 +50,9 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
         </TabButton>
         <TabButton id="files" tab={tab} setTab={setTab}>
           Files
+        </TabButton>
+        <TabButton id="terminal" tab={tab} setTab={setTab}>
+          Terminal
         </TabButton>
         <TabButton id="info" tab={tab} setTab={setTab}>
           Info
@@ -60,6 +65,11 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
         {tab === "approvals" && <Approvals pending={data.pending} decided={data.decided} onError={onError} />}
         {tab === "diff" && <DiffPanel session={session} gitKey={JSON.stringify(view.git)} agentEdits={data.changes} onError={onError} />}
         {tab === "files" && <FilesPanel session={session} gitKey={JSON.stringify(view.git) + data.changes.length} agentEdits={data.changes} onError={onError} />}
+        {tab === "terminal" && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <TerminalPanel session={session} onError={onError} />
+          </Suspense>
+        )}
         {tab === "info" && (
           <Info
             session={session}
