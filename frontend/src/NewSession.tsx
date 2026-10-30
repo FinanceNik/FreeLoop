@@ -250,6 +250,19 @@ export default function NewSession({ providers, projects, environments, profiles
               <code>CLAUDE.md</code>, its <code>.freeloop/</code> settings, run its hooks, or run <code>git status</code> in it. Trust only folders whose
               contents you know.
             </p>
+            {(settings.hooks ?? []).length > 0 && (
+              <div>
+                <strong>Trusting it lets it run these commands (hooks):</strong>
+                <ul>
+                  {(settings.hooks ?? []).map((h, n) => (
+                    <li key={n}>
+                      {h.event}
+                      {h.match ? ` (${h.match})` : ""}: <code>{h.command}</code> <span className="muted">{h.source}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="row">
               <button type="button" className="primary" onClick={trust}>
                 Trust this project

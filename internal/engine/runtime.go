@@ -84,6 +84,18 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		e.mu.Unlock()
 		return r, nil
 	}
+	// One start per session at a time: a second caller waits for the
+	// first and then finds its runtime, so a session's container starts
+	// once and its session_start hooks run once.
+	lock, _ := e.startLocks.LoadOrStore(sid, &sync.Mutex{})
+	e.mu.Unlock()
+	lock.(*sync.Mutex).Lock()
+	defer lock.(*sync.Mutex).Unlock()
+	e.mu.Lock()
+	if r, ok := e.runtimes[sid]; ok {
+		e.mu.Unlock()
+		return r, nil
+	}
 	e.mu.Unlock()
 
 	ses, err := e.store.GetSession(ctx, sid)

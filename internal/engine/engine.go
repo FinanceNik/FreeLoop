@@ -95,8 +95,10 @@ type Engine struct {
 	// starting are runtimes being set up, so hooks find them while the
 	// harness starts (an external agent's requests during session/load).
 	starting map[string]*runtime
-	streams  map[string]*streamBuf
-	known    []string // secret values to redact
+	// startLocks holds a *sync.Mutex per session that serialises starts.
+	startLocks sync.Map
+	streams    map[string]*streamBuf
+	known      []string // secret values to redact
 }
 
 // Open loads configuration and opens the store in opts.DataDir. Config

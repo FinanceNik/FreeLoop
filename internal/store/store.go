@@ -53,8 +53,11 @@ type Store struct {
 	now      func() time.Time
 	redact   func(json.RawMessage) json.RawMessage
 
-	mu    sync.Mutex // guards files
+	mu    sync.Mutex // guards files and indexing
 	files map[string]*transcript
+	// indexing are sessions IndexAll is catching up from their files; they
+	// open when it is done (closing the channel).
+	indexing map[string]chan struct{}
 
 	stop    chan struct{}
 	done    chan struct{}
@@ -87,6 +90,7 @@ func Open(opts Options) (*Store, error) {
 		now:      opts.Now,
 		redact:   opts.Redact,
 		files:    map[string]*transcript{},
+		indexing: map[string]chan struct{}{},
 		stop:     make(chan struct{}),
 		done:     make(chan struct{}),
 	}
@@ -274,10 +278,26 @@ func (s *Store) Events(ctx context.Context, sid string, afterSeq int64) ([]event
 // on first use.
 func (s *Store) transcript(ctx context.Context, sid string) (*transcript, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if t, ok := s.files[sid]; ok {
-		return t, nil
+	for {
+		if t, ok := s.files[sid]; ok {
+			s.mu.Unlock()
+			return t, nil
+		}
+		ch := s.indexing[sid]
+		if ch == nil {
+			break
+		}
+		// IndexAll is reading this session's file; wait for it, so the
+		// two do not index the same events.
+		s.mu.Unlock()
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		s.mu.Lock()
 	}
+	defer s.mu.Unlock()
 	ses, err := s.GetSession(ctx, sid)
 	if err != nil {
 		return nil, err

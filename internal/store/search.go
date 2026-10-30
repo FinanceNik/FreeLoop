@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -322,11 +323,16 @@ func (s *Store) catchUp(ctx context.Context, t *transcript, sid string) error {
 	return nil
 }
 
-// IndexAll catches up every session whose transcript is ahead of the index,
-// for transcripts written before the index existed. It runs once after
-// Open, in the background.
+// IndexAll catches up every session whose transcript is ahead of the index
+// (written before the index existed, or by a run that quit in the middle of
+// a turn), most recently used first. It runs once after Open, in the
+// background. Sessions that are not open are caught up straight from their
+// files, without opening them in the store or holding its lock, so live
+// sessions go on streaming meanwhile.
 func (s *Store) IndexAll(ctx context.Context) error {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sessions WHERE indexed_seq < last_seq`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sessions
+		WHERE indexed_seq < last_seq OR status IN ('running', 'queued', 'waiting_permission', 'waiting_input')
+		ORDER BY updated_at DESC`)
 	if err != nil {
 		return err
 	}
@@ -341,20 +347,57 @@ func (s *Store) IndexAll(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		t, err := s.transcript(ctx, id)
-		if err != nil {
-			continue
+		s.mu.Lock()
+		if t, open := s.files[id]; open {
+			s.mu.Unlock()
+			t.mu.Lock()
+			if !t.search.loaded {
+				err = s.catchUp(ctx, t, id)
+			}
+			t.mu.Unlock()
+		} else {
+			ch := make(chan struct{})
+			s.indexing[id] = ch
+			s.mu.Unlock()
+			err = s.catchUpFile(ctx, id)
+			s.mu.Lock()
+			delete(s.indexing, id)
+			close(ch)
+			s.mu.Unlock()
 		}
-		t.mu.Lock()
-		if !t.search.loaded {
-			err = s.catchUp(ctx, t, id)
-		}
-		t.mu.Unlock()
 		if err != nil {
 			log.Printf("store: search index %s: %v", id, err)
 		}
 	}
 	return nil
+}
+
+// catchUpFile indexes the rest of a session's transcript that is not open.
+// Nothing streams into it, so a message it ends in the middle of (the app
+// quit mid-reply) is complete and indexed too.
+func (s *Store) catchUpFile(ctx context.Context, sid string) error {
+	var x indexer
+	var from int64
+	if err := s.db.QueryRowContext(ctx, `SELECT indexed_seq, provider_id, model FROM sessions WHERE id = ?`, sid).Scan(&from, &x.providerID, &x.model); err != nil {
+		return err
+	}
+	events, err := readEvents(filepath.Join(s.sessionDir(sid), "events.jsonl"), from)
+	if err != nil || len(events) == 0 {
+		return err
+	}
+	x.seen = from
+	var b batch
+	done := from
+	for _, ev := range events {
+		r, d := x.feed(ev)
+		b.add(r)
+		done = d
+	}
+	if x.kind != "" {
+		b.rows = append(b.rows, row{seq: x.start, kind: x.kind, body: x.buf.String()})
+		done = x.seen
+	}
+	return s.writeIndex(ctx, sid, b, done, "", nil)
 }
 
 // Search finds sessions' text matching query, best first, at most

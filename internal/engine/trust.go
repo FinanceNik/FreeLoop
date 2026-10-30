@@ -36,7 +36,9 @@ type ProjectSettings struct {
 	Trusted   bool              `json:"trusted"`
 	Profiles  []config.Profile  `json:"profiles"`
 	Rules     []permission.Rule `json:"rules"`
-	// Hooks are the project's .freeloop/hooks.yaml (EXT-005).
+	// Hooks are the commands the project's .freeloop/ defines in
+	// hooks.yaml and its profiles (EXT-005), listed whether or not the
+	// project is trusted so the trust prompt can show them.
 	Hooks  []config.Hook  `json:"hooks"`
 	Issues []config.Issue `json:"issues"`
 }
@@ -131,15 +133,58 @@ func readProjectConfig(e *Engine, p session.Project) projectConfig {
 // project at root, for the new-session form. A folder that is not a project
 // yet is untrusted.
 func (e *Engine) ProjectSettings(ctx context.Context, root string) (ProjectSettings, error) {
-	empty := ProjectSettings{Profiles: []config.Profile{}, Rules: []permission.Rule{}, Issues: []config.Issue{}}
+	empty := ProjectSettings{Profiles: []config.Profile{}, Rules: []permission.Rule{}, Hooks: []config.Hook{}, Issues: []config.Issue{}}
 	if root == "" || !environment.IsDir(root) {
 		return empty, nil
 	}
 	p, err := e.store.ProjectByRoot(ctx, environment.Canonical(root))
 	if err != nil {
+		// Not a project yet: nothing applies, but the trust prompt shows
+		// what trusting would run.
+		empty.Hooks = e.previewHooks(environment.Canonical(root))
 		return empty, nil
 	}
-	return e.projectConfig(p).ProjectSettings, nil
+	s := e.projectConfig(p).ProjectSettings
+	s.Hooks = e.previewHooks(p.Root)
+	return s, nil
+}
+
+// previewHooks lists the hooks a project's .freeloop/ defines, in
+// .freeloop/hooks.yaml and its profiles, for the trust prompt and the
+// new-session form. Reading them shows them; only trust makes them run.
+func (e *Engine) previewHooks(root string) []config.Hook {
+	hooks := []config.Hook{}
+	env, err := e.localEnv(root, nil)
+	if err != nil {
+		return hooks
+	}
+	fs := env.FS()
+	file := path.Join(ProjectDir, config.HooksFileName)
+	if b, err := fs.ReadFile(file); err == nil {
+		h, _ := config.ParseHooks(b, file)
+		hooks = append(hooks, h...)
+	}
+	dir := path.Join(ProjectDir, config.ProfilesDir)
+	entries, _ := fs.ReadDir(dir)
+	for _, de := range entries {
+		id, ok := strings.CutSuffix(de.Name, ".yaml")
+		if !ok || de.IsDir {
+			continue
+		}
+		b, err := fs.ReadFile(path.Join(dir, de.Name))
+		if err != nil {
+			continue
+		}
+		prof, issue := config.ParseProjectProfile(id, b, builtin.ToolNames(), path.Join(dir, de.Name))
+		if issue != nil {
+			continue
+		}
+		for _, h := range prof.Hooks {
+			h.Source = path.Join(dir, de.Name)
+			hooks = append(hooks, h)
+		}
+	}
+	return hooks
 }
 
 // SetProjectTrust trusts or distrusts the project at root, adding it first

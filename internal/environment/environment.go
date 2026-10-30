@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -129,6 +130,13 @@ func Canonical(path string) string {
 		return real
 	}
 	return filepath.Clean(path)
+}
+
+// Within reports whether p is dir or inside it, both resolved like
+// Canonical.
+func Within(p, dir string) bool {
+	rel, err := filepath.Rel(Canonical(dir), Canonical(p))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
 // Spellings returns the clean form of p and, when it differs, its

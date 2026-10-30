@@ -9,6 +9,7 @@ import {
   type HarnessInfo,
   type ProjectInfo,
   type ProviderInfo,
+  type Hook,
   type ResourceRef,
   type Session,
   type SessionMCPContext,
@@ -75,6 +76,22 @@ export default function SessionView({ session, events, focus, prices, provider, 
       return !open;
     });
   const [panelTab, setPanelTab] = useState<PanelTab>("approvals");
+  // The commands an untrusted project's hooks would run, shown before the
+  // user trusts it (EXT-005).
+  const [trustHooks, setTrustHooks] = useState<Hook[]>([]);
+  const untrusted = !!project && !project.trusted && !project.missing;
+  useEffect(() => {
+    if (!untrusted || !project) return setTrustHooks([]);
+    EngineService.ProjectSettings(project.root)
+      .then((s) => setTrustHooks(s.hooks ?? []))
+      .catch(() => setTrustHooks([]));
+  }, [untrusted, project?.root]);
+  const trustProject = (ask: boolean) => {
+    if (!project) return;
+    const list = trustHooks.map((h) => `${h.event}: ${h.command}`).join("\n");
+    if (ask && trustHooks.length > 0 && !confirm(`Trusting ${project.name} lets it run these commands (hooks):\n\n${list}`)) return;
+    EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError);
+  };
   const [renaming, setRenaming] = useState<string | null>(null);
   // The model switch form (PRV-006).
   const [switching, setSwitching] = useState<{ providerId: string; model: string } | null>(null);
@@ -399,7 +416,7 @@ export default function SessionView({ session, events, focus, prices, provider, 
     act("diff", "Show changes", () => showPanel("diff"), { keywords: "diff git commit stage panel" }),
     act("info", "Show session details", () => showPanel("info"), { keywords: "info panel tokens" }),
     ...(project && !project.trusted && !project.missing
-      ? [act("trust", "Trust this project", () => EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError), { detail: project.root })]
+      ? [act("trust", "Trust this project", () => trustProject(true), { detail: trustHooks.length ? `${project.root} · runs ${trustHooks.length} hook${trustHooks.length > 1 ? "s" : ""}` : project.root })]
       : []),
     ...rewindable.map((u, n) =>
       act(`rewind:${u.key}`, n === 0 ? "Rewind to before the last message…" : `Rewind to before “${u.text.slice(0, 60)}”…`, () => {
@@ -525,21 +542,26 @@ export default function SessionView({ session, events, focus, prices, provider, 
             </button>
           </form>
         )}
-        {project && !project.trusted && !project.missing && (
+        {untrusted && (
           <div className="banner warn row" role="status">
             <span>
               Untrusted project: this session uses your global settings only, without the project's <code>AGENTS.md</code>,{" "}
               <code>.freeloop/</code> settings or git status.
+              {trustHooks.length > 0 && (
+                <>
+                  {" "}
+                  Trusting it lets it run these commands (hooks):
+                  <ul>
+                    {trustHooks.map((h, n) => (
+                      <li key={n}>
+                        {h.event}: <code>{h.command}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </span>
-            <button
-              onClick={() =>
-                EngineService.SetProjectTrust(project.root, true)
-                  .then(onProjectsChanged)
-                  .catch(onError)
-              }
-            >
-              Trust project
-            </button>
+            <button onClick={() => trustProject(false)}>Trust project</button>
           </div>
         )}
         {mode === "bypass" && (

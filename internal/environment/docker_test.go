@@ -72,7 +72,7 @@ func TestDockerEnvironment(t *testing.T) {
 	if res.Output != want {
 		t.Errorf("output = %q, want %q", res.Output, want)
 	}
-	args, _ := d.execArgs(false, "", nil)
+	args, _ := d.execArgs(false, "", nil, "x")
 	if slices.ContainsFunc(args, func(a string) bool { return strings.Contains(a, "s3cr3t") }) {
 		t.Errorf("a secret value is on the docker command line: %v", args)
 	}
@@ -171,8 +171,32 @@ func TestDockerProtectsHostConfig(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".freeloop", "hooks.yaml")); err == nil {
 		t.Error("the container wrote .freeloop/hooks.yaml")
 	}
-	args, env := d.execArgs(false, "", nil)
+	args, env := d.execArgs(false, "", nil, "x")
 	if _, ok := env["DOCKER_HOST"]; ok || !slices.Contains(args, "DOCKER_HOST=tcp://evil:1") || !slices.Contains(args, "SECRET") {
 		t.Errorf("args = %v, CLI env = %v", args, env)
+	}
+}
+
+// Stopping a command ends it inside the container too, children included,
+// not just the docker CLI on the host.
+func TestDockerCancelEndsTheCommand(t *testing.T) {
+	root := dockerOrSkip(t)
+	ctx := context.Background()
+	var b [3]byte
+	rand.Read(b[:])
+	d, err := NewDocker(DockerOptions{ID: "docker", Container: "freeloop-test-" + hex.EncodeToString(b[:]), Root: root, Image: "alpine:3.20", Guard: denyGuard{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Remove(ctx)
+	if _, err := d.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	cctx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer cancel()
+	d.Exec(cctx, ExecSpec{Command: "sleep 301 & sleep 302; wait", Timeout: time.Minute})
+	res, _ := d.Exec(ctx, ExecSpec{Command: `for p in /proc/[0-9]*; do tr '\000' ' ' < $p/cmdline 2>/dev/null; echo; done`})
+	if strings.Contains(res.Output, "sleep 30") {
+		t.Errorf("the command still runs in the container:\n%s", res.Output)
 	}
 }

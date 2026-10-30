@@ -2,6 +2,8 @@ package environment
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -10,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,7 +42,11 @@ type DockerOptions struct {
 	// command line: values from project files (devcontainer.json), which
 	// are not secrets and must not reach the docker CLI's own environment.
 	PlainEnv map[string]string
-	// ReadOnly are paths inside Root mounted read-only in the container,
+	// Mounts are more host directories bind-mounted read-write at the same
+	// path: the main checkout's .git for a session in a git worktree, so
+	// git works inside the container.
+	Mounts []string
+	// ReadOnly are paths inside Root or Mounts mounted read-only in the container,
 	// so a command there cannot change what the app reads and runs on the
 	// host (.freeloop/, the devcontainer files). A missing directory ending
 	// in / is created first; other missing paths are skipped.
@@ -163,10 +170,22 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 		}
 		root := d.Root()
 		args := []string{"run", "-d", "--init", "--name", d.opts.Container, "--label", "app=freeloop", "-v", root + ":" + root}
+		for _, m := range d.opts.Mounts {
+			m = filepath.Clean(m)
+			args = append(args, "-v", m+":"+m)
+		}
+		inside := func(p string) bool {
+			for _, base := range append([]string{root}, d.opts.Mounts...) {
+				if strings.HasPrefix(p, filepath.Clean(base)+string(filepath.Separator)) {
+					return true
+				}
+			}
+			return false
+		}
 		for _, p := range d.opts.ReadOnly {
 			dir := strings.HasSuffix(p, "/")
 			p = filepath.Clean(p)
-			if !strings.HasPrefix(p, root+string(filepath.Separator)) {
+			if !inside(p) {
 				continue
 			}
 			if _, err := os.Lstat(p); err != nil {
@@ -225,8 +244,8 @@ func (d *Docker) Remove(ctx context.Context) error {
 
 // execArgs is the docker exec command line: variables by name only, their
 // values in the CLI's own environment.
-func (d *Docker) execArgs(interactive bool, cwd string, env map[string]string) ([]string, map[string]string) {
-	args := []string{"exec"}
+func (d *Docker) execArgs(interactive bool, cwd string, env map[string]string, execID string) ([]string, map[string]string) {
+	args := []string{"exec", "-e", execMarker + "=" + execID}
 	if interactive {
 		args = append(args, "-i")
 	}
@@ -289,7 +308,8 @@ func resolvesInside(root, p string) bool {
 // -lc, under timeout -s KILL so the deadline holds inside the container
 // too, where killing the docker CLI would not reach.
 func (d *Docker) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
-	args, env := d.execArgs(spec.Stdin != nil, spec.Cwd, spec.Env)
+	id := newExecID()
+	args, env := d.execArgs(spec.Stdin != nil, spec.Cwd, spec.Env, id)
 	timeout := spec.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -301,18 +321,70 @@ func (d *Docker) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		secs := fmt.Sprint(int(timeout.Seconds()))
 		args = append(args, "sh", "-c", `if command -v timeout >/dev/null 2>&1; then exec timeout -s KILL "$1" sh -lc "$0"; else exec sh -lc "$0"; fi`, spec.Command, secs)
 	}
-	return d.host.Exec(ctx, ExecSpec{Argv: d.cli(args...), Env: env, Timeout: timeout + 5*time.Second, MaxOutput: spec.MaxOutput,
+	res, err := d.host.Exec(ctx, ExecSpec{Argv: d.cli(args...), Env: env, Timeout: timeout + 5*time.Second, MaxOutput: spec.MaxOutput,
 		Stdin: spec.Stdin, SeparateStderr: spec.SeparateStderr})
+	// Ending the docker CLI on the host leaves the command running in the
+	// container; a cancel or timeout ends it there too.
+	if ctx.Err() != nil || res.TimedOut {
+		d.killExec(id)
+	}
+	return res, err
+}
+
+// execMarker is the variable every command and agent in the container runs
+// with, set to an ID of its own, so killExec finds it and its children.
+const execMarker = "FREELOOP_EXEC"
+
+func newExecID() string {
+	var b [8]byte
+	rand.Read(b[:])
+	return hex.EncodeToString(b[:])
+}
+
+// killScript kills every process in the container whose environment holds
+// the marker with the ID in $1, the command and whatever it started.
+const killScript = `for p in /proc/[0-9]*; do
+  [ "${p#/proc/}" = "$$" ] && continue
+  if tr '\000' '\n' < "$p/environ" 2>/dev/null | grep -qx "` + execMarker + `=$1"; then kill -KILL "${p#/proc/}" 2>/dev/null; fi
+done`
+
+// killExec ends a command or agent started with id inside the container.
+func (d *Docker) killExec(id string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	d.host.Exec(ctx, ExecSpec{Argv: d.cli("exec", d.opts.Container, "sh", "-c", killScript, "sh", id), Timeout: 15 * time.Second})
+}
+
+// containerProcess is an agent in the container; Kill also ends it there.
+type containerProcess struct {
+	Process
+	kill func()
+}
+
+func (p *containerProcess) Kill() {
+	p.Process.Kill()
+	p.kill()
 }
 
 // Spawn starts a long-running process inside the container with stdio
 // pipes, an ACP agent for example (ENV-006).
 func (d *Docker) Spawn(ctx context.Context, spec SpawnSpec) (Process, error) {
-	args, env := d.execArgs(true, spec.Cwd, spec.Env)
+	id := newExecID()
+	args, env := d.execArgs(true, spec.Cwd, spec.Env, id)
 	if spec.LoginShell {
 		args = append(args, "sh", "-lc", `exec "$0" "$@"`)
 	}
-	return d.host.Spawn(ctx, SpawnSpec{Argv: d.cli(append(args, spec.Argv...)...), Env: env})
+	p, err := d.host.Spawn(ctx, SpawnSpec{Argv: d.cli(append(args, spec.Argv...)...), Env: env})
+	if err != nil {
+		return nil, err
+	}
+	var once sync.Once
+	kill := func() { once.Do(func() { d.killExec(id) }) }
+	go func() {
+		<-ctx.Done()
+		kill()
+	}()
+	return &containerProcess{Process: p, kill: kill}, nil
 }
 
 // RemoveContainer deletes a container by name, when Docker is installed;

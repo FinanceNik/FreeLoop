@@ -233,24 +233,67 @@ func TestSearchCapsHitsPerSession(t *testing.T) {
 	}
 }
 
-// A catch-up that ends in the middle of a streamed message keeps
-// streaming into it: the indexer is not copied with text in its buffer.
+// A catch-up of an open session that ends in the middle of a streamed
+// message keeps streaming into it: the indexer is not copied with text in
+// its buffer.
 func TestCatchUpMidMessage(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t, t.TempDir(), nil)
+	defer s.Close()
+	a, _ := s.CreateSession(ctx, session.Session{Title: "a", HarnessID: "builtin"})
+	s.Append(ctx, a.ID, event.TurnStarted, nil)
+	s.Append(ctx, a.ID, event.AgentMessageChunk, text("the wombat "))
+	// As after a failed index write: the next append catches up.
+	s.mu.Lock()
+	tr := s.files[a.ID]
+	s.mu.Unlock()
+	tr.mu.Lock()
+	tr.search.loaded = false
+	tr.mu.Unlock()
+	s.Append(ctx, a.ID, event.AgentMessageChunk, text("burrows "))
+	s.Append(ctx, a.ID, event.AgentMessageChunk, text("deep"))
+	s.Append(ctx, a.ID, event.TurnEnded, nil)
+	if h := searchFor(t, s, `"wombat burrows deep"`); len(h) != 1 {
+		t.Errorf("hits = %+v", h)
+	}
+}
+
+// A run that quit in the middle of a streamed reply leaves it indexed at
+// the next start, and the startup catch-up neither opens the sessions nor
+// keeps them from opening.
+func TestIndexAllAfterACrashMidReply(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	s := openTest(t, dir, nil)
 	a, _ := s.CreateSession(ctx, session.Session{Title: "a", HarnessID: "builtin"})
-	s.Append(ctx, a.ID, event.TurnStarted, nil)
-	s.Append(ctx, a.ID, event.AgentMessageChunk, text("the wombat "))
-	s.db.Exec(`UPDATE sessions SET indexed_seq = 0`)
-	s.db.Exec(`DELETE FROM search`)
+	s.Append(ctx, a.ID, event.SessionStatus, raw(event.SessionStatusData{Status: "running"}))
+	s.Append(ctx, a.ID, event.AgentMessageChunk, text("the platypus "))
+	s.Append(ctx, a.ID, event.AgentThoughtChunk, text("hmm"))
+	s.Append(ctx, a.ID, event.AgentMessageChunk, text("lays eggs"))
 	s.Close()
+
 	s = openTest(t, dir, nil)
 	defer s.Close()
 	s.indexed.Wait()
-	s.Append(ctx, a.ID, event.AgentMessageChunk, text("burrows deep"))
-	s.Append(ctx, a.ID, event.TurnEnded, nil)
-	if h := searchFor(t, s, `"wombat burrows"`); len(h) != 1 {
-		t.Errorf("hits = %+v", h)
+	s.mu.Lock()
+	open := len(s.files)
+	s.mu.Unlock()
+	if open != 0 {
+		t.Errorf("the startup catch-up left %d transcripts open", open)
+	}
+	if h := searchFor(t, s, "eggs"); len(h) != 1 {
+		t.Errorf("the reply the run quit in = %+v", h)
+	}
+	if h := searchFor(t, s, "platypus"); len(h) != 1 {
+		t.Errorf("platypus = %+v", h)
+	}
+	// The session opens and indexes on as usual.
+	s.Append(ctx, a.ID, event.UserMessageChunk, text("and echidnas?"))
+	s.Append(ctx, a.ID, event.TurnStarted, nil)
+	if h := searchFor(t, s, "echidnas"); len(h) != 1 {
+		t.Errorf("echidnas = %+v", h)
+	}
+	if h := searchFor(t, s, "eggs"); len(h) != 1 {
+		t.Errorf("eggs indexed twice: %+v", h)
 	}
 }

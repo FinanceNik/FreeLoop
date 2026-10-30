@@ -122,13 +122,7 @@ With M2's buildable work done, the v1 features come in this order, chosen for wh
 8. **Hooks (EXT-005).** *Built 2026-10-30.* Scripts on session start, before and after tool calls and on permission requests, JSON on stdin, an exit-code contract that can block a call.
 9. **MCP resources and prompts (MCP-007).** *Built 2026-10-30.* Attach a server's resource to a message; run its prompts as slash commands with a form for their arguments.
 
-Review follow-ups (2026-10-30). A review of the nine features above found three security problems and a dozen bugs, fixed in the commits after it. These smaller findings remain open:
-
-- The first start after an upgrade that rebuilds the search index opens every transcript under the store's lock and keeps the files open for the rest of the run; a crash in the middle of a streamed reply can leave that reply out of the index until the session's next event.
-- `session_start` hooks can run twice when a session's first prompt and another action start it at the same moment.
-- A project's hooks are listed only after it is trusted, so the trust prompt cannot show them.
-- Cancelling a command in a container ends the `docker exec` client; the process inside runs on until its own timeout.
-- A worktree session in a Docker environment cannot use git inside the container: the worktree's `.git` file points at the main checkout, which is not mounted.
+Review follow-ups (2026-10-30). A review of the nine features above found three security problems and a dozen bugs, fixed in the commits after it; the five smaller findings left open then (the startup index rebuild holding up live sessions, `session_start` running twice on a concurrent start, project hooks missing from the trust prompt, a stopped command running on in its container, git in a Docker worktree session) were fixed on 2026-10-30 as well.
 
 ## Later (unscheduled)
 

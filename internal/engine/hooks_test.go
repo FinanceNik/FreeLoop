@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -98,6 +99,10 @@ func TestHooks(t *testing.T) {
 	// A project's hooks wait for trust; then one stops the session.
 	os.MkdirAll(filepath.Join(root, ".freeloop"), 0o755)
 	os.WriteFile(filepath.Join(root, ".freeloop", "hooks.yaml"), []byte("version: 1\nhooks:\n  - event: session_start\n    command: echo 'the project needs setup first' >&2; exit 2\n"), 0o644)
+	// The trust prompt shows what trusting would run.
+	if s, _ := e.ProjectSettings(ctx, root); s.Trusted || len(s.Hooks) != 1 || !strings.Contains(s.Hooks[0].Command, "needs setup first") {
+		t.Errorf("settings before trust = %+v", s)
+	}
 	e.stopRuntime(ses.ID)
 	if _, err := e.Prompt(ctx, ses.ID, "again"); err != nil {
 		t.Fatalf("an untrusted project's hook ran: %v", err)
@@ -155,6 +160,43 @@ func TestStopEndsPostToolUseHook(t *testing.T) {
 	for _, d := range hookEvents(t, e, ses.ID) {
 		if d.Error != "" || !d.Stopped {
 			t.Errorf("a hook Stop ended = %+v", d)
+		}
+	}
+}
+
+// A session started from several places at once starts once: its
+// session_start hooks run a single time.
+func TestSessionStartsOnce(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	runs := filepath.Join(t.TempDir(), "runs")
+	c := e.Config()
+	c.Hooks = []config.Hook{{Event: config.HookSessionStart, Command: "sleep 0.2; echo run >> " + runs}}
+	if _, err := e.SaveSettings(c); err != nil {
+		t.Fatal(err)
+	}
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProviderID: DemoProviderID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	got := make([]*runtime, 5)
+	for i := range got {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got[i], _ = e.runtimeFor(ctx, ses.ID)
+		}()
+	}
+	wg.Wait()
+	b, _ := os.ReadFile(runs)
+	if n := strings.Count(string(b), "run"); n != 1 {
+		t.Errorf("session_start ran %d times", n)
+	}
+	for _, r := range got {
+		if r == nil || r != got[0] {
+			t.Fatalf("runtimes = %v", got)
 		}
 	}
 }

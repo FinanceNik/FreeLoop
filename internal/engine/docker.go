@@ -82,6 +82,7 @@ func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project ses
 		// the host docker CLI's environment.
 		opts.PlainEnv = dc.Env
 	}
+	e.gitMounts(ctx, host, &opts)
 	d, err := environment.NewDocker(opts)
 	if err != nil {
 		return nil, err
@@ -100,4 +101,27 @@ func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project ses
 	}
 	e.emit(ses.ID, event.EnvHealth, health)
 	return d, nil
+}
+
+// gitMounts fits a container to the session's repository. A worktree's
+// .git file points into the main checkout's .git, which is mounted too so
+// git works inside the container. The repository's config files and hooks
+// are read-only there: a command in the container could otherwise plant a
+// hook or a filter that the user's own git on the host would run.
+func (e *Engine) gitMounts(ctx context.Context, host *environment.Local, opts *environment.DockerOptions) {
+	common, ok := git(ctx, host, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if !ok {
+		return
+	}
+	common = strings.TrimSpace(common)
+	own, _ := git(ctx, host, "rev-parse", "--path-format=absolute", "--git-dir")
+	own = strings.TrimSpace(own)
+	if !environment.Within(common, opts.Root) {
+		opts.Mounts = append(opts.Mounts, common)
+	}
+	opts.ReadOnly = append(opts.ReadOnly,
+		filepath.Join(common, "config"), filepath.Join(common, "config.worktree"), filepath.Join(common, "hooks")+"/")
+	if own != "" && own != common {
+		opts.ReadOnly = append(opts.ReadOnly, filepath.Join(own, "config.worktree"))
+	}
 }
