@@ -58,6 +58,8 @@ type Profile struct {
 	MCPServers []string `yaml:"mcpServers,omitempty" json:"mcpServers"`
 	// Commands are the profile's slash commands (GUI-004).
 	Commands []Command `yaml:"commands,omitempty" json:"commands"`
+	// Hooks run for the profile's sessions (EXT-005).
+	Hooks []Hook `yaml:"hooks,omitempty" json:"hooks"`
 	// Source is the file the profile came from; empty for the built-in
 	// default.
 	Source string `yaml:"-" json:"source"`
@@ -118,6 +120,11 @@ func (p Profile) Validate() error {
 	for i, r := range p.Rules {
 		if err := r.Validate(); err != nil {
 			return fieldErr(fmt.Sprintf("rules[%d]", i), "%v", err)
+		}
+	}
+	for i, h := range p.Hooks {
+		if err := h.Validate(); err != nil {
+			return fieldErr(fmt.Sprintf("hooks[%d]", i), "%v", err)
 		}
 	}
 	seen := map[string]bool{}

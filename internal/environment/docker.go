@@ -213,7 +213,7 @@ func (d *Docker) execArgs(interactive bool, cwd string, env map[string]string) (
 // -lc, under timeout -s KILL so the deadline holds inside the container
 // too, where killing the docker CLI would not reach.
 func (d *Docker) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
-	args, env := d.execArgs(false, spec.Cwd, spec.Env)
+	args, env := d.execArgs(spec.Stdin != nil, spec.Cwd, spec.Env)
 	timeout := spec.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -225,7 +225,8 @@ func (d *Docker) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		secs := fmt.Sprint(int(timeout.Seconds()))
 		args = append(args, "sh", "-c", `if command -v timeout >/dev/null 2>&1; then exec timeout -s KILL "$1" sh -lc "$0"; else exec sh -lc "$0"; fi`, spec.Command, secs)
 	}
-	return d.host.Exec(ctx, ExecSpec{Argv: d.cli(args...), Env: env, Timeout: timeout + 5*time.Second, MaxOutput: spec.MaxOutput})
+	return d.host.Exec(ctx, ExecSpec{Argv: d.cli(args...), Env: env, Timeout: timeout + 5*time.Second, MaxOutput: spec.MaxOutput,
+		Stdin: spec.Stdin, SeparateStderr: spec.SeparateStderr})
 }
 
 // Spawn starts a long-running process inside the container with stdio

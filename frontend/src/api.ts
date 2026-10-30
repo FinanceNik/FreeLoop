@@ -1,6 +1,6 @@
 // One import point for the generated bindings.
 export { EngineService } from "../bindings/github.com/FinanceNik/Freeloop/cmd/freeloop";
-export type { Command, Config, Issue, MCPServer, Price, Profile } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
+export type { Command, Config, Hook, Issue, MCPServer, Price, Profile } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
 export type { AttentionItem, ChangedFile, Changes, ClaudeImport, DayCost, ImportItem, EnvironmentInfo, FileDiff, HarnessInfo, MCPServerInfo, PresetInfo, ProjectInfo, ProjectSettings, ProviderInfo, SessionHits, SkillCandidate, SkillInfo, SkillList } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
 export type { Request as PermissionRequest, Rule } from "../bindings/github.com/FinanceNik/Freeloop/internal/permission/models";
 export type { ModelCaps, ModelInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/provider/models";

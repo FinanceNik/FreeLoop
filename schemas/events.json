@@ -88,9 +88,32 @@
     {
       "if": { "properties": { "type": { "const": "error" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/error" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "hook_ran" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/hookRan" } } }
     }
   ],
   "$defs": {
+    "hookRan": {
+      "type": "object",
+      "description": "One hook run (EXT-005). Exit code 2 blocked what it ran for; any other non-zero code, a timeout or an error was reported and the session went on.",
+      "required": ["event", "command", "exitCode"],
+      "properties": {
+        "event": { "enum": ["session_start", "pre_tool_use", "permission_request", "post_tool_use"] },
+        "command": { "type": "string" },
+        "source": { "type": "string" },
+        "tool": { "type": "string" },
+        "toolCallId": { "type": "string" },
+        "exitCode": { "type": "integer" },
+        "timedOut": { "type": "boolean" },
+        "durationMs": { "type": "integer" },
+        "stdout": { "type": "string" },
+        "stderr": { "type": "string" },
+        "blocked": { "type": "boolean" },
+        "error": { "type": "string" }
+      }
+    },
     "contentBlock": {
       "type": "object",
       "required": ["type"],

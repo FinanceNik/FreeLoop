@@ -348,3 +348,57 @@ func TestProtectedDirectoryCreatedLaterIsCovered(t *testing.T) {
 		}
 	}
 }
+
+type fakeHooks struct {
+	mu        sync.Mutex
+	pre, perm string // reasons to return
+	preCalls  int
+	permCalls int
+}
+
+func (h *fakeHooks) PreToolUse(_ context.Context, _ Context, _ Request) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.preCalls++
+	return h.pre
+}
+
+func (h *fakeHooks) PermissionRequest(_ context.Context, _ Context, _ Request) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.permCalls++
+	return h.perm
+}
+
+// EXT-005: a pre_tool_use hook blocks even an allowed call; a call already
+// denied runs no hook; the permission_request hook runs only before the
+// user would be asked; hooks never approve.
+func TestHooksBlockButNeverApprove(t *testing.T) {
+	b, _, home, root := setup(t)
+	h := &fakeHooks{pre: "no shell on Fridays"}
+	b.SetHooks(h)
+	write := Request{SessionID: "s", Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(root, "a.go")}}
+	shell := Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "make test"}
+	accept := Context{Mode: ModeAcceptEdits, Root: root}
+
+	if d := decide(t, b, accept, write, ""); d.Outcome != Denied || d.Actor != ActorHook || d.Reason != "no shell on Fridays" {
+		t.Errorf("allowed write with a blocking hook = %+v", d)
+	}
+	protected := Request{SessionID: "s", Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(home, ".ssh", "config")}}
+	before := h.preCalls
+	if d := decide(t, b, accept, protected, ""); d.Actor != ActorProtectedPath || h.preCalls != before {
+		t.Errorf("protected write = %+v, hooks ran %d times", d, h.preCalls-before)
+	}
+
+	h.pre, h.perm = "", "needs review"
+	if d := decide(t, b, accept, write, ""); d.Outcome != Allowed || h.permCalls != 0 {
+		t.Errorf("allowed write = %+v, permission hook ran %d times", d, h.permCalls)
+	}
+	if d := decide(t, b, accept, shell, ""); d.Outcome != Denied || d.Actor != ActorHook || d.Reason != "needs review" {
+		t.Errorf("asked shell with a permission hook = %+v", d)
+	}
+	h.perm = ""
+	if d := decide(t, b, accept, shell, "allow_once"); d.Outcome != Allowed || d.Actor != ActorUser {
+		t.Errorf("hooks that pass still leave the decision to the user: %+v", d)
+	}
+}

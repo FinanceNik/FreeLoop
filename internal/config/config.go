@@ -53,6 +53,8 @@ type Config struct {
 	Skills Skills `yaml:"skills,omitempty" json:"skills"`
 	// Prices estimate what sessions cost (PRV-008).
 	Prices []Price `yaml:"prices,omitempty" json:"prices"`
+	// Hooks run for every session (EXT-005).
+	Hooks []Hook `yaml:"hooks,omitempty" json:"hooks"`
 }
 
 // Skills lists skills turned off everywhere; every other discovered skill
@@ -118,9 +120,10 @@ func (c *Config) Validate() []Issue {
 		issues = append(issues, Issue{Field: "ui.fontSize", Message: fmt.Sprintf("%d is outside 11 to 20", c.UI.FontSize)})
 		c.UI.FontSize = def.UI.FontSize
 	}
-	var priceIssues []Issue
+	var priceIssues, hookIssues []Issue
 	c.Prices, priceIssues = validatePrices(c.Prices)
-	return append(issues, priceIssues...)
+	c.Hooks, hookIssues = validateHooks(c.Hooks, "hooks")
+	return append(append(issues, priceIssues...), hookIssues...)
 }
 
 // Save writes config.yaml.

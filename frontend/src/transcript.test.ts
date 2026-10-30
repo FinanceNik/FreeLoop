@@ -197,3 +197,20 @@ test("buildView records each model call with its model, per turn", () => {
   assert.deepEqual(ends.map((e) => (e.kind === "turn_end" ? e.calls.length : -1)), [2, 1]);
   assert.equal(v.usage.inputTokens, 60);
 });
+
+test("buildView shows hooks that blocked or failed, not those that passed", () => {
+  const v = buildView([
+    at(1, "hook_ran", { event: "pre_tool_use", tool: "shell", command: "./check.sh", exitCode: 0 }),
+    at(2, "hook_ran", { event: "pre_tool_use", tool: "shell", command: "./check.sh", exitCode: 2, blocked: true, stderr: "no curl\n" }),
+    at(3, "hook_ran", { event: "post_tool_use", tool: "write_file", command: "fmt", exitCode: 1 }),
+    at(4, "hook_ran", { event: "session_start", command: "sleep 99", exitCode: -1, timedOut: true }),
+  ]);
+  assert.deepEqual(
+    v.items.map((i) => (i.kind === "notice" ? i.message : i.kind)),
+    [
+      "The pre_tool_use hook for shell blocked it: no curl",
+      "The post_tool_use hook for write_file failed with exit code 1 (fmt).",
+      "The session_start hook timed out (sleep 99).",
+    ],
+  );
+});

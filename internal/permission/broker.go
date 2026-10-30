@@ -106,7 +106,20 @@ const (
 	ActorProtectedPath Actor = "protected_path"
 	ActorPolicy        Actor = "policy"
 	ActorRule          Actor = "rule"
+	// ActorHook is a pre_tool_use or permission_request hook (EXT-005).
+	ActorHook Actor = "hook"
 )
+
+// Hooks runs the user's hooks for a request (EXT-005). Each returns a
+// reason when a hook blocks the call, or "" to go on. Hooks can block but
+// never approve.
+type Hooks interface {
+	// PreToolUse runs for a call the path policy and the deny rules let
+	// through, before it is allowed or asked about.
+	PreToolUse(ctx context.Context, pc Context, req Request) string
+	// PermissionRequest runs before the user is asked.
+	PermissionRequest(ctx context.Context, pc Context, req Request) string
+}
 
 // Decision is the broker's answer.
 type Decision struct {
@@ -131,6 +144,7 @@ type Broker struct {
 	emit   Emitter
 	rules  RuleSource
 	sink   RuleSink
+	hooks  Hooks
 
 	mu      sync.Mutex
 	next    int
@@ -154,6 +168,9 @@ func (b *Broker) SetRules(source RuleSource, sink RuleSink) {
 	b.rules, b.sink = source, sink
 }
 
+// SetHooks connects the hooks. Call it before the first Request.
+func (b *Broker) SetHooks(h Hooks) { b.hooks = h }
+
 // Policy returns the fixed path policy.
 func (b *Broker) Policy() *Policy { return b.policy }
 
@@ -170,6 +187,17 @@ func (b *Broker) Request(ctx context.Context, pc Context, req Request) Decision 
 	req.Created = time.Now().UTC()
 
 	d, settled := b.evaluate(pc, req)
+	// Hooks run only for calls that are not denied already: a deny wins
+	// without running anything.
+	if b.hooks != nil && (!settled || d.Outcome != Denied) {
+		if why := b.hooks.PreToolUse(ctx, pc, req); why != "" {
+			d, settled = Decision{Outcome: Denied, Actor: ActorHook, Reason: why}, true
+		} else if !settled {
+			if why := b.hooks.PermissionRequest(ctx, pc, req); why != "" {
+				d, settled = Decision{Outcome: Denied, Actor: ActorHook, Reason: why}, true
+			}
+		}
+	}
 	if !settled {
 		d = b.ask(ctx, pc, req)
 	}

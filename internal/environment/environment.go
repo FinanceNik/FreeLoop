@@ -49,11 +49,17 @@ type ExecSpec struct {
 	Timeout time.Duration
 	// MaxOutput caps the combined output kept, in bytes. Default 30 KB.
 	MaxOutput int
+	// Stdin, when set, is the command's standard input.
+	Stdin []byte
+	// SeparateStderr keeps standard error apart, in ExecResult.Stderr;
+	// Output then holds standard output only (hooks, EXT-005).
+	SeparateStderr bool
 }
 
 // ExecResult is a finished command.
 type ExecResult struct {
-	Output    string // stdout and stderr interleaved
+	Output    string // stdout and stderr interleaved, unless SeparateStderr
+	Stderr    string
 	ExitCode  int
 	TimedOut  bool
 	Truncated bool

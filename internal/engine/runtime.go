@@ -27,7 +27,11 @@ type runtime struct {
 	hs        harness.Session
 	sid       string
 	projectID string
-	env       environment.Environment
+	profileID string
+	// Tool calls in progress, for post_tool_use hooks (EXT-005).
+	callsMu sync.Mutex
+	calls   map[string]hookCall
+	env     environment.Environment
 	// host is the session's folder on this Mac, where the app's own git
 	// commands run even when env is a container.
 	host *environment.Local
@@ -135,7 +139,12 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
-	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID}
+	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID, profileID: ses.ProfileID}
+	if why := e.runHooks(ctx, r, config.HookSessionStart, "", map[string]any{
+		"harness": ses.HarnessID, "providerId": ses.ProviderID, "model": ses.Model, "profileId": ses.ProfileID, "mode": ses.Mode,
+	}); why != "" {
+		return nil, fmt.Errorf("a session_start hook stopped the session: %s", why)
+	}
 	lastCommands := []byte(`{"availableCommands":[]}`)
 	for _, ev := range events {
 		switch ev.Type {
@@ -169,6 +178,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		Skills:         sessionSkills{e: e, projectID: ses.ProjectID, root: ses.ProjectRoot, profileID: ses.ProfileID},
 		Emit: func(typ event.Type, data any) {
 			e.emit(sid, typ, data)
+			e.toolHooks(r, typ, data)
 			if changesFiles(typ, data) {
 				e.bg.Go(func() { e.refreshGit(r) })
 			}

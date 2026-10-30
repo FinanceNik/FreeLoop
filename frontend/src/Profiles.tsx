@@ -33,6 +33,7 @@ function blank(): Profile {
     commands: [],
     skills: [],
     mcpServers: [],
+    hooks: [],
     source: "",
   };
 }

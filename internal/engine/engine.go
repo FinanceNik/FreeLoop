@@ -132,6 +132,7 @@ func Open(opts Options) (*Engine, error) {
 	e.rules = newRuleStore(opts.DataDir, func(issues []config.Issue) { e.setIssues(issueRules, issues) })
 	e.rules.scopedRules = e.scopedRules
 	e.broker.SetRules(e.rules, e.rules)
+	e.broker.SetHooks(engineHooks{e})
 	e.loadEnvironments()
 	e.loadPresets()
 	e.loadProfiles()

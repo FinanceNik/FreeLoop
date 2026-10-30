@@ -138,7 +138,14 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	out := &capped{limit: limit}
-	cmd.Stdout, cmd.Stderr = out, out
+	errOut := out
+	if spec.SeparateStderr {
+		errOut = &capped{limit: limit}
+	}
+	cmd.Stdout, cmd.Stderr = out, errOut
+	if spec.Stdin != nil {
+		cmd.Stdin = bytes.NewReader(spec.Stdin)
+	}
 	setProcessGroup(cmd)
 	// A descendant that leaves the process group can keep the output pipe
 	// open forever; stop waiting for it shortly after the command exits.
@@ -158,6 +165,9 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		waitErr = <-done
 	}
 	res := ExecResult{Output: out.String(), Truncated: out.truncated, Duration: time.Since(start)}
+	if errOut != out {
+		res.Stderr = errOut.String()
+	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		res.TimedOut = true
 	}

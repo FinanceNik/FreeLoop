@@ -291,3 +291,19 @@ func TestSpawnPipesAndEnvironment(t *testing.T) {
 		t.Fatal("cancel did not kill the process")
 	}
 }
+
+// Hooks (EXT-005) get the event on stdin and report a block on stderr.
+func TestExecStdinAndSeparateStderr(t *testing.T) {
+	l := newTest(t, nil)
+	res, err := l.Exec(context.Background(), ExecSpec{Command: `read line; echo "got $line"; echo "why" >&2; exit 2`, Stdin: []byte("hello\n"), SeparateStderr: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Output != "got hello\n" || res.Stderr != "why\n" || res.ExitCode != 2 {
+		t.Errorf("res = %+v", res)
+	}
+	res, _ = l.Exec(context.Background(), ExecSpec{Command: `echo out; echo err >&2`})
+	if res.Output != "out\nerr\n" || res.Stderr != "" {
+		t.Errorf("interleaved = %+v", res)
+	}
+}

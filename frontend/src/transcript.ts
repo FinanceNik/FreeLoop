@@ -325,6 +325,13 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "notice":
         items.push({ kind: "notice", key, rev, message: d.message ?? "", warn: true });
         break;
+      case "hook_ran": {
+        // Hooks that pass stay quiet; one that blocked or failed says so
+        // (EXT-005).
+        const message = hookMessage(d);
+        if (message) items.push({ kind: "notice", key, rev, message, warn: true });
+        break;
+      }
       case "model_changed":
         if (d.model) current = { providerId: d.providerId ?? current.providerId, model: d.model };
         items.push({ kind: "model", key, rev, model: d.model ?? "", providerId: d.providerId ?? "" });
@@ -432,4 +439,16 @@ export function panelData(view: SessionView): PanelData {
     }
   }
   return { pending, decided: decided.reverse(), changes: [...changes.values()].sort((a, b) => a.path.localeCompare(b.path)), turns };
+}
+
+// hookMessage describes a hook that blocked or failed, or returns "" for
+// one that passed.
+export function hookMessage(d: Record<string, any>): string {
+  const what = `${d.event ?? "A"} hook${d.tool ? ` for ${d.tool}` : ""}`;
+  const said = String(d.stderr || d.stdout || "").trim();
+  if (d.blocked) return `The ${what} blocked it: ${said || d.command}`;
+  if (d.error) return `The ${what} could not run (${d.command}): ${d.error}`;
+  if (d.timedOut) return `The ${what} timed out (${d.command}).`;
+  if (d.exitCode) return `The ${what} failed with exit code ${d.exitCode} (${d.command})${said ? `: ${said}` : "."}`;
+  return "";
 }

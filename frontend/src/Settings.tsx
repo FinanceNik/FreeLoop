@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { PriceTable, UsageTable } from "./Costs.tsx";
+import { HookTable } from "./Hooks.tsx";
 import { EngineService, type Config, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
@@ -171,6 +172,9 @@ export default function Settings({ config, providers, environments, profiles, pr
             ))}
           </fieldset>
         )}
+
+        <h3>Hooks</h3>
+        <HookTable hooks={form.hooks ?? []} onChange={(hooks) => setForm({ ...form, hooks })} />
 
         <h3 id="prices">Prices</h3>
         <PriceTable prices={form.prices ?? []} providers={providers} onChange={(prices) => setForm({ ...form, prices })} />

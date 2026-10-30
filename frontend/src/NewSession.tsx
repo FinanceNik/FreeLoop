@@ -247,8 +247,8 @@ export default function NewSession({ providers, projects, environments, profiles
             <strong>Do you trust this folder?</strong>
             <p>
               Until you do, sessions here use your global settings only: Freeloop does not read its <code>AGENTS.md</code> or{" "}
-              <code>CLAUDE.md</code>, its <code>.freeloop/</code> settings, or run <code>git status</code> in it. Trust only folders whose contents you
-              know.
+              <code>CLAUDE.md</code>, its <code>.freeloop/</code> settings, run its hooks, or run <code>git status</code> in it. Trust only folders whose
+              contents you know.
             </p>
             <div className="row">
               <button type="button" className="primary" onClick={trust}>
@@ -256,6 +256,21 @@ export default function NewSession({ providers, projects, environments, profiles
               </button>
               <span className="muted">or start without trusting it.</span>
             </div>
+          </div>
+        )}
+        {settings?.trusted && (settings.hooks ?? []).length > 0 && (
+          <div className="banner row" role="status">
+            <span>
+              This project runs hooks from <code>.freeloop/hooks.yaml</code>:
+              <ul>
+                {(settings.hooks ?? []).map((h, n) => (
+                  <li key={n}>
+                    {h.event}
+                    {h.match ? ` (${h.match})` : ""}: <code>{h.command}</code>
+                  </li>
+                ))}
+              </ul>
+            </span>
           </div>
         )}
         {settings && (settings.issues ?? []).length > 0 && (

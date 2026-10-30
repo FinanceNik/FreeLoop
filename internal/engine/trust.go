@@ -36,7 +36,9 @@ type ProjectSettings struct {
 	Trusted   bool              `json:"trusted"`
 	Profiles  []config.Profile  `json:"profiles"`
 	Rules     []permission.Rule `json:"rules"`
-	Issues    []config.Issue    `json:"issues"`
+	// Hooks are the project's .freeloop/hooks.yaml (EXT-005).
+	Hooks  []config.Hook  `json:"hooks"`
+	Issues []config.Issue `json:"issues"`
 }
 
 type projectConfig struct {
@@ -56,7 +58,7 @@ type projectCache struct {
 // projectConfigTTL; an untrusted project has none.
 func (e *Engine) projectConfig(p session.Project) projectConfig {
 	if !p.Trusted {
-		return projectConfig{ProjectSettings: ProjectSettings{ProjectID: p.ID, Profiles: []config.Profile{}, Rules: []permission.Rule{}, Issues: []config.Issue{}}}
+		return projectConfig{ProjectSettings: ProjectSettings{ProjectID: p.ID, Profiles: []config.Profile{}, Rules: []permission.Rule{}, Hooks: []config.Hook{}, Issues: []config.Issue{}}}
 	}
 	e.projects.mu.Lock()
 	defer e.projects.mu.Unlock()
@@ -72,7 +74,7 @@ func (e *Engine) projectConfig(p session.Project) projectConfig {
 }
 
 func readProjectConfig(e *Engine, p session.Project) projectConfig {
-	c := projectConfig{ProjectSettings: ProjectSettings{ProjectID: p.ID, Trusted: true, Profiles: []config.Profile{}, Rules: []permission.Rule{}, Issues: []config.Issue{}}, at: time.Now()}
+	c := projectConfig{ProjectSettings: ProjectSettings{ProjectID: p.ID, Trusted: true, Profiles: []config.Profile{}, Rules: []permission.Rule{}, Hooks: []config.Hook{}, Issues: []config.Issue{}}, at: time.Now()}
 	env, err := e.localEnv(p.Root, nil)
 	if err != nil || !environment.IsDir(p.Root) {
 		return c
@@ -92,6 +94,12 @@ func readProjectConfig(e *Engine, p session.Project) projectConfig {
 			}
 			c.Rules = append(c.Rules, r)
 		}
+	}
+	hooksFile := path.Join(ProjectDir, config.HooksFileName)
+	if b, err := fs.ReadFile(hooksFile); err == nil {
+		hooks, issues := config.ParseHooks(b, hooksFile)
+		c.Hooks = append(c.Hooks, hooks...)
+		c.Issues = append(c.Issues, issues...)
 	}
 	dir := path.Join(ProjectDir, config.ProfilesDir)
 	entries, err := fs.ReadDir(dir)

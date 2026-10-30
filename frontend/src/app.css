@@ -1578,3 +1578,8 @@ ul.unpriced {
 .palette-empty {
   padding: 8px 10px;
 }
+
+table.hooks .hook-command {
+  width: 100%;
+  font-family: var(--mono, ui-monospace, monospace);
+}
