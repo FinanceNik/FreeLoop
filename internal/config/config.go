@@ -55,6 +55,15 @@ type Config struct {
 	Prices []Price `yaml:"prices,omitempty" json:"prices"`
 	// Hooks run for every session (EXT-005).
 	Hooks []Hook `yaml:"hooks,omitempty" json:"hooks"`
+	// Network holds the local-only switch (NFR-OFF-003).
+	Network Network `yaml:"network,omitempty" json:"network"`
+}
+
+// Network settings.
+type Network struct {
+	// LocalOnly blocks every connection the app makes to anything but
+	// this Mac.
+	LocalOnly bool `yaml:"localOnly,omitempty" json:"localOnly"`
 }
 
 // Skills lists skills turned off everywhere; every other discovered skill

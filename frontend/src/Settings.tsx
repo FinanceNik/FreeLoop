@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { PriceTable, UsageTable } from "./Costs.tsx";
 import { HookTable } from "./Hooks.tsx";
-import { EngineService, type ConfigRestore, type Config, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
+import { EngineService, type Blocked, type ConfigRestore, type Config, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
   config: Config;
@@ -19,6 +19,13 @@ interface Props {
 export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onProviders, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
+  // Connections local-only mode refused (NFR-OFF-003).
+  const [blocked, setBlocked] = useState<Blocked[]>([]);
+  useEffect(() => {
+    EngineService.BlockedConnections()
+      .then((b) => setBlocked(b ?? []))
+      .catch(onError);
+  }, [config]);
   // Config backup (SET-005).
   const [backup, setBackup] = useState<string | null>(null);
   const [restored, setRestored] = useState<ConfigRestore | null>(null);
@@ -132,6 +139,33 @@ export default function Settings({ config, providers, environments, profiles, pr
               ))}
           </select>
         </label>
+
+        <h3>Network</h3>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={!!form.network?.localOnly}
+            onChange={(e) => setForm({ ...form, network: { ...form.network, localOnly: e.target.checked } })}
+          />
+          Local only: the app connects to nothing but this Mac
+        </label>
+        <p className="muted">
+          Providers and MCP servers elsewhere become unreachable; local ones (Ollama, LM Studio, servers on localhost) keep working. Docker
+          containers created while it is on have no network. Commands, external agents and MCP servers the app starts run as you, outside this
+          switch.
+        </p>
+        {blocked.length > 0 && (
+          <details>
+            <summary>{blocked.length} blocked connection{blocked.length > 1 ? "s" : ""}</summary>
+            <ul>
+              {[...blocked].reverse().map((b, i) => (
+                <li key={i}>
+                  {b.host} <span className="muted">{new Date(b.at).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
 
         <h3>Permissions</h3>
         <label className="row">

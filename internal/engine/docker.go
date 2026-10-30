@@ -12,6 +12,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
@@ -42,6 +43,8 @@ func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project ses
 		// What the app reads from the project and may run on the host
 		// stays out of the container's reach.
 		ReadOnly: []string{filepath.Join(ses.WorkRoot(), ProjectDir) + "/"},
+		// A container created in local-only mode has no network.
+		NoNetwork: netguard.LocalOnly(),
 	}
 	if envCfg.Devcontainer {
 		// A devcontainer.json is project configuration (SEC-006).

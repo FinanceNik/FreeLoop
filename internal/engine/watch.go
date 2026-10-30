@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 )
 
 // watch polls the hand-editable config files and reloads the ones that
@@ -52,6 +53,7 @@ func (e *Engine) reload(changed []string) {
 			if err != nil {
 				issues = append(issues, config.Issue{File: config.FileName, Message: err.Error()})
 			}
+			netguard.SetLocalOnly(cfg.Network.LocalOnly)
 			e.mu.Lock()
 			e.cfg = cfg
 			e.issues[issueConfig] = issues

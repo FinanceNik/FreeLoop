@@ -532,6 +532,11 @@ export default function App() {
             </section>
           )}
         </nav>
+        {config?.network?.localOnly && (
+          <button className="link today" title="The app connects to nothing but this Mac; change it in Settings" onClick={() => setScreen({ kind: "settings" })}>
+            Local only
+          </button>
+        )}
         {today && (today.models ?? []).length > 0 && (
           <button
             className="link today"

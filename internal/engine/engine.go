@@ -19,6 +19,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/mcp"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 	"github.com/FinanceNik/Freeloop/internal/session"
@@ -111,6 +112,10 @@ func Open(opts Options) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Local-only mode applies to every connection the app makes from here
+	// on (NFR-OFF-003).
+	netguard.Install()
+	netguard.SetLocalOnly(cfg.Network.LocalOnly)
 	if opts.Home == "" {
 		if opts.Home, err = os.UserHomeDir(); err != nil {
 			return nil, err
@@ -210,7 +215,14 @@ func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
 	e.mu.Lock()
 	e.cfg = c
 	e.mu.Unlock()
+	netguard.SetLocalOnly(c.Network.LocalOnly)
 	return c, nil
+}
+
+// BlockedConnections lists the connections local-only mode refused, newest
+// last (NFR-OFF-003).
+func (e *Engine) BlockedConnections() []netguard.Blocked {
+	return netguard.Attempts()
 }
 
 // ConfigIssues returns the problems found while loading configuration.

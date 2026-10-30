@@ -8,6 +8,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/engine"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/session"
@@ -350,6 +351,10 @@ func (s *EngineService) Config() config.Config {
 
 func (s *EngineService) ConfigIssues() []config.Issue {
 	return s.eng.ConfigIssues()
+}
+
+func (s *EngineService) BlockedConnections() []netguard.Blocked {
+	return s.eng.BlockedConnections()
 }
 
 // ExportSession asks where to save a session's export (SES-008) and writes

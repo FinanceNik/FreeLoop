@@ -51,6 +51,9 @@ type DockerOptions struct {
 	// host (.freeloop/, the devcontainer files). A missing directory ending
 	// in / is created first; other missing paths are skipped.
 	ReadOnly []string
+	// NoNetwork creates the container without a network (local-only mode,
+	// NFR-OFF-003).
+	NoNetwork bool
 	// Setup runs once after the container is created; Health before every
 	// session start (ENV-007).
 	Setup  string
@@ -170,6 +173,9 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 		}
 		root := d.Root()
 		args := []string{"run", "-d", "--init", "--name", d.opts.Container, "--label", "app=freeloop", "-v", root + ":" + root}
+		if d.opts.NoNetwork {
+			args = append(args, "--network", "none")
+		}
 		for _, m := range d.opts.Mounts {
 			m = filepath.Clean(m)
 			args = append(args, "-v", m+":"+m)

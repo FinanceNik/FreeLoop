@@ -5,6 +5,7 @@ export type { AttentionItem, ChangedFile, Changes, ClaudeImport, ConfigRestore, 
 export type { Request as PermissionRequest, Rule } from "../bindings/github.com/FinanceNik/Freeloop/internal/permission/models";
 export type { ModelCaps, ModelInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/provider/models";
 export type { Project, Session } from "../bindings/github.com/FinanceNik/Freeloop/internal/session/models";
+export type { Blocked } from "../bindings/github.com/FinanceNik/Freeloop/internal/netguard/models";
 
 // Must match EventName, ConfigEventName, OpenSessionEventName and
 // FilesDroppedEventName in
