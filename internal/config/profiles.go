@@ -60,9 +60,18 @@ type Profile struct {
 	Commands []Command `yaml:"commands,omitempty" json:"commands"`
 	// Hooks run for the profile's sessions (EXT-005).
 	Hooks []Hook `yaml:"hooks,omitempty" json:"hooks"`
+	// Fallback takes a model call the profile's model keeps failing with
+	// rate limits or server errors (PRV-010).
+	Fallback *ModelRef `yaml:"fallback,omitempty" json:"fallback"`
 	// Source is the file the profile came from; empty for the built-in
 	// default.
 	Source string `yaml:"-" json:"source"`
+}
+
+// ModelRef names a provider's model.
+type ModelRef struct {
+	Provider string `yaml:"provider" json:"provider"`
+	Model    string `yaml:"model" json:"model"`
 }
 
 // Command is a slash command that sends a prepared prompt.
@@ -121,6 +130,9 @@ func (p Profile) Validate() error {
 		if err := r.Validate(); err != nil {
 			return fieldErr(fmt.Sprintf("rules[%d]", i), "%v", err)
 		}
+	}
+	if f := p.Fallback; f != nil && (strings.TrimSpace(f.Provider) == "" || strings.TrimSpace(f.Model) == "") {
+		return fieldErr("fallback", "a fallback needs a provider and a model")
 	}
 	for i, h := range p.Hooks {
 		if err := h.Validate(); err != nil {

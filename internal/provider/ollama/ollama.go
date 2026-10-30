@@ -104,7 +104,7 @@ func (p *Provider) send(req *http.Request) (*http.Response, error) {
 		if json.Unmarshal(b, &e) == nil && e.Error != "" {
 			msg = e.Error
 		}
-		return nil, fmt.Errorf("Ollama returned %d: %s", resp.StatusCode, msg)
+		return nil, provider.NewHTTPError(resp, fmt.Sprintf("Ollama returned %d: %s", resp.StatusCode, msg))
 	}
 	return resp, nil
 }

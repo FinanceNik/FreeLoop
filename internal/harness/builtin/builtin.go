@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -361,16 +362,74 @@ func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
 }
 
 // call streams one model response, emitting deltas as they arrive.
+// Retries (PRV-010): a model call that fails with a timeout, rate limit or
+// server error before anything streamed is sent again after a growing
+// delay, each retry shown as a notice; when the attempts run out, the
+// profile's fallback model, if it has one, takes the call.
+const maxAttempts = 4
+
+// retryBase is the first retry's delay; it doubles each time, up to
+// retryCap. Tests shorten it.
+var retryBase = time.Second
+
+const retryCap = 30 * time.Second
+
+func retryDelay(attempt int, asked time.Duration) time.Duration {
+	if asked > 0 {
+		return min(asked, 2*retryCap)
+	}
+	d := min(retryBase<<(attempt-1), retryCap)
+	// Up to a fifth more, so sessions sharing a provider do not retry in
+	// step.
+	return d + time.Duration(rand.Int64N(int64(d)/5+1))
+}
+
 func (s *session) call(ctx context.Context, prov provider.Provider, req provider.ChatRequest) (*provider.Message, provider.StopReason, error) {
+	fallback := false
+	for attempt := 1; ; attempt++ {
+		msg, stop, streamed, err := s.callOnce(ctx, prov, req)
+		if err == nil || streamed || ctx.Err() != nil {
+			return msg, stop, err
+		}
+		retry, asked := provider.Retryable(err)
+		if !retry {
+			return nil, "", err
+		}
+		if attempt == maxAttempts {
+			fb := s.p.Fallback
+			if fallback || fb == nil || fb.Provider == nil {
+				return nil, "", fmt.Errorf("%w (gave up after %d attempts)", err, maxAttempts)
+			}
+			s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("%v. This call goes to the fallback model %s.", err, fb.Model)})
+			prov, req.Model, fallback, attempt = fb.Provider, fb.Model, true, 0
+			continue
+		}
+		delay := retryDelay(attempt, asked)
+		s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("%v; retrying in %s (attempt %d of %d).", err, delay.Round(100*time.Millisecond), attempt+1, maxAttempts)})
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		}
+	}
+}
+
+// callOnce makes one model call; streamed says whether any of its text
+// reached the transcript, after which it cannot be retried without
+// repeating it.
+func (s *session) callOnce(ctx context.Context, prov provider.Provider, req provider.ChatRequest) (*provider.Message, provider.StopReason, bool, error) {
+	streamed := false
 	ch, err := prov.Stream(ctx, req)
 	if err != nil {
-		return nil, "", err
+		return nil, "", false, err
 	}
 	for ev := range ch {
 		switch ev.Type {
 		case provider.EventTextDelta:
+			streamed = true
 			s.p.Emit(event.AgentMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: ev.Text}})
 		case provider.EventThinkingDelta:
+			streamed = true
 			s.p.Emit(event.AgentThoughtChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: ev.Text}})
 		case provider.EventDone:
 			u := ev.Usage
@@ -382,15 +441,15 @@ func (s *session) call(ctx context.Context, prov provider.Provider, req provider
 			s.p.Emit(event.UsageUpdate, event.UsageData{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
 				CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, ContextTokens: total, ContextWindow: window,
 				ProviderID: prov.ID(), Model: req.Model})
-			return ev.Message, ev.StopReason, nil
+			return ev.Message, ev.StopReason, streamed, nil
 		case provider.EventError:
-			return nil, "", ev.Err
+			return nil, "", streamed, ev.Err
 		}
 	}
 	if ctx.Err() != nil {
-		return nil, "", ctx.Err()
+		return nil, "", streamed, ctx.Err()
 	}
-	return nil, "", errors.New("the provider stream ended without a response")
+	return nil, "", streamed, errors.New("the provider stream ended without a response")
 }
 
 func (s *session) toolSpecs(mode permission.Mode) []provider.ToolSpec {

@@ -34,6 +34,7 @@ function blank(): Profile {
     skills: [],
     mcpServers: [],
     hooks: [],
+    fallback: null,
     source: "",
   };
 }
@@ -184,6 +185,26 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
               Model
               <input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder={provider?.defaultModel || "Chosen per session"} />
             </label>
+            <label title="Takes a call the model keeps failing with rate limits or server errors, after four tries">
+              Fallback provider
+              <select
+                value={form.fallback?.provider ?? ""}
+                onChange={(e) => set("fallback", e.target.value ? { provider: e.target.value, model: form.fallback?.model ?? "" } : null)}
+              >
+                <option value="">None</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {form.fallback && (
+              <label>
+                Fallback model
+                <input required value={form.fallback.model} onChange={(e) => set("fallback", { provider: form.fallback!.provider, model: e.target.value })} />
+              </label>
+            )}
           </div>
           <div className="row wrap">
             <label>

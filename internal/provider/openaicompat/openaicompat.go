@@ -171,13 +171,15 @@ func statusError(resp *http.Response) error {
 	}
 	switch resp.StatusCode {
 	case http.StatusUnauthorized:
-		return fmt.Errorf("the endpoint rejected the API key (401): %s", msg)
+		msg = fmt.Sprintf("the endpoint rejected the API key (401): %s", msg)
 	case http.StatusNotFound:
-		return fmt.Errorf("not found (404); check the base URL and model ID: %s", msg)
+		msg = fmt.Sprintf("not found (404); check the base URL and model ID: %s", msg)
 	case http.StatusTooManyRequests:
-		return fmt.Errorf("rate limited (429): %s", msg)
+		msg = fmt.Sprintf("rate limited (429): %s", msg)
+	default:
+		msg = fmt.Sprintf("the endpoint returned %d: %s", resp.StatusCode, msg)
 	}
-	return fmt.Errorf("the endpoint returned %d: %s", resp.StatusCode, msg)
+	return provider.NewHTTPError(resp, msg)
 }
 
 func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error) {

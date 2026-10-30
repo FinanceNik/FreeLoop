@@ -39,7 +39,9 @@ type Provider struct {
 
 // New returns a provider for opts.
 func New(opts Options) *Provider {
-	ro := []option.RequestOption{option.WithAPIKey(opts.APIKey)}
+	// The harness retries with its own backoff and tells the user
+	// (PRV-010); the SDK's retries would stack under it.
+	ro := []option.RequestOption{option.WithAPIKey(opts.APIKey), option.WithMaxRetries(0)}
 	if opts.BaseURL != "" {
 		ro = append(ro, option.WithBaseURL(opts.BaseURL))
 	}
@@ -277,19 +279,23 @@ func fromMessage(msg sdk.Message) provider.Message {
 func describe(err error) error {
 	var apiErr *sdk.Error
 	if errors.As(err, &apiErr) {
-		switch apiErr.StatusCode {
-		case http.StatusUnauthorized:
-			return fmt.Errorf("Anthropic rejected the API key (401)")
-		case http.StatusForbidden:
-			return fmt.Errorf("Anthropic refused access (403): %s", apiErr.Error())
-		case http.StatusNotFound:
-			return fmt.Errorf("not found (404); check the base URL and model ID")
-		case http.StatusTooManyRequests:
-			return fmt.Errorf("rate limited by Anthropic (429); try again shortly")
+		msg := apiErr.Error()
+		switch {
+		case apiErr.StatusCode == http.StatusUnauthorized:
+			msg = "Anthropic rejected the API key (401)"
+		case apiErr.StatusCode == http.StatusForbidden:
+			msg = fmt.Sprintf("Anthropic refused access (403): %s", apiErr.Error())
+		case apiErr.StatusCode == http.StatusNotFound:
+			msg = "not found (404); check the base URL and model ID"
+		case apiErr.StatusCode == http.StatusTooManyRequests:
+			msg = "rate limited by Anthropic (429)"
+		case apiErr.StatusCode >= 500:
+			msg = fmt.Sprintf("Anthropic server error (%d)", apiErr.StatusCode)
 		}
-		if apiErr.StatusCode >= 500 {
-			return fmt.Errorf("Anthropic server error (%d); try again shortly", apiErr.StatusCode)
+		if apiErr.Response != nil {
+			return provider.NewHTTPError(apiErr.Response, msg)
 		}
+		return &provider.HTTPError{Status: apiErr.StatusCode, Message: msg}
 	}
 	return err
 }

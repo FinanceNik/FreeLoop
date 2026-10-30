@@ -33,6 +33,9 @@ type Params struct {
 	Broker    *permission.Broker
 	Provider  provider.Provider
 	Model     string
+	// Fallback takes a model call the provider keeps failing with
+	// retryable errors (PRV-010); nil for none.
+	Fallback *Fallback
 	// ContextWindow is the model's context size in tokens; 0 when unknown,
 	// which turns automatic compaction off (HRN-013).
 	ContextWindow int
@@ -166,6 +169,13 @@ const (
 type Prompt struct {
 	Text      string
 	Resources []Resource
+}
+
+// Fallback is the model a call goes to when the session's model keeps
+// failing with retryable errors (PRV-010).
+type Fallback struct {
+	Provider provider.Provider
+	Model    string
 }
 
 // Resource is a file, or an MCP server's resource, embedded in a prompt.

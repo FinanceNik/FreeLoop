@@ -225,6 +225,13 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	var hs harness.Session
 	if p != nil {
 		params.Provider = e.limit(p, sid)
+		if f := prof.Fallback; f != nil {
+			if fp, err := e.provider(f.Provider); err == nil {
+				params.Fallback = &harness.Fallback{Provider: e.limit(fp, sid), Model: f.Model}
+			} else {
+				log.Printf("engine: the fallback of profile %s: %v", prof.ID, err)
+			}
+		}
 		if caps, err := e.ModelCapabilities(ctx, ses.ProviderID, ses.Model, false); err == nil {
 			params.ContextWindow = caps.ContextWindow
 		}
