@@ -139,9 +139,16 @@ func (s *session) discover(paths []string, isDir bool) {
 				break
 			}
 			file := filepath.ToSlash(filepath.Join(rel, "AGENTS.md"))
-			if !slices.Contains(s.nested, file) && len(s.nested) < maxNested && s.env.Contains(file) {
+			s.mu.Lock()
+			known := slices.Contains(s.nested, file) || len(s.nested) >= maxNested
+			s.mu.Unlock()
+			if !known && s.env.Contains(file) {
 				if fi, err := s.env.FS().Stat(file); err == nil && !fi.IsDir {
-					s.nested = append(s.nested, file)
+					s.mu.Lock()
+					if !slices.Contains(s.nested, file) && len(s.nested) < maxNested {
+						s.nested = append(s.nested, file)
+					}
+					s.mu.Unlock()
 				}
 			}
 			dir = filepath.Dir(dir)
@@ -349,11 +356,7 @@ func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
 			return harness.StopEndTurn, nil
 		}
 		// Every tool_use needs a tool_result, even after a cancel.
-		results := make([]provider.Part, 0, len(calls))
-		for _, c := range calls {
-			results = append(results, s.runTool(ctx, c, s.Mode()))
-		}
-		s.appendUser(results...)
+		s.appendUser(s.runTools(ctx, calls)...)
 		if ctx.Err() != nil {
 			return harness.StopCancelled, nil
 		}
@@ -481,6 +484,44 @@ func (s *session) lookup(name string) *tool {
 		}
 	}
 	return nil
+}
+
+// runTools runs a model turn's tool calls and returns their results in
+// order. Neighbouring calls of read-only built-in tools (reads, listings,
+// searches) run at once (HRN-014); the others one after another, in the
+// order the model gave.
+func (s *session) runTools(ctx context.Context, calls []provider.Part) []provider.Part {
+	results := make([]provider.Part, len(calls))
+	for i := 0; i < len(calls); {
+		j := i
+		for j < len(calls) && s.parallelSafe(calls[j]) {
+			j++
+		}
+		if j-i < 2 {
+			results[i] = s.runTool(ctx, calls[i], s.Mode())
+			i++
+			continue
+		}
+		mode := s.Mode()
+		var wg sync.WaitGroup
+		for k := i; k < j; k++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				results[k] = s.runTool(ctx, calls[k], mode)
+			}()
+		}
+		wg.Wait()
+		i = j
+	}
+	return results
+}
+
+// parallelSafe reports whether a call reads only, through a built-in tool,
+// so it can run alongside others.
+func (s *session) parallelSafe(c provider.Part) bool {
+	t := s.lookup(c.ToolName)
+	return t != nil && t.readOnly && (t.kind == permission.KindRead || t.kind == permission.KindSearch)
 }
 
 // runTool takes one tool call through validation, the broker and the
@@ -628,7 +669,10 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 		fmt.Fprintf(&sb, "\n# Project instructions (%s)\n\nThe project's own instructions for agents. Follow them unless they conflict with the user's request or with safety.\n\n<project_instructions file=%q>\n%s\n</project_instructions>\n", name, name, strings.TrimSpace(string(b)))
 		break
 	}
-	for _, file := range s.nested {
+	s.mu.Lock()
+	nested := slices.Clone(s.nested)
+	s.mu.Unlock()
+	for _, file := range nested {
 		b, err := s.env.FS().ReadFile(file)
 		if err != nil || !s.env.Contains(file) {
 			continue
