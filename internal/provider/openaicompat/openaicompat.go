@@ -16,6 +16,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -39,12 +40,17 @@ type Preset struct {
 	StreamUsage bool `json:"-"`
 	// Cloud endpoints whose models all call tools reliably.
 	ToolsKnown bool `json:"-"`
+	// Effort says how the endpoint takes a reasoning effort (PRV-011):
+	// "openai" as reasoning_effort, for its reasoning models only;
+	// "openrouter" as reasoning.effort, which models without reasoning
+	// ignore; empty for not at all.
+	Effort string `json:"-"`
 }
 
 // Presets are the endpoints offered in the provider form (PRV-001).
 var Presets = []Preset{
-	{ID: "openai", Name: "OpenAI", BaseURL: "https://api.openai.com/v1", NeedsKey: true, StreamUsage: true, ToolsKnown: true},
-	{ID: "openrouter", Name: "OpenRouter", BaseURL: "https://openrouter.ai/api/v1", NeedsKey: true, StreamUsage: true, ToolsKnown: true,
+	{ID: "openai", Name: "OpenAI", BaseURL: "https://api.openai.com/v1", NeedsKey: true, StreamUsage: true, ToolsKnown: true, Effort: "openai"},
+	{ID: "openrouter", Name: "OpenRouter", BaseURL: "https://openrouter.ai/api/v1", NeedsKey: true, StreamUsage: true, ToolsKnown: true, Effort: "openrouter",
 		Headers: map[string]string{"HTTP-Referer": "https://github.com/FinanceNik/Freeloop", "X-Title": "Freeloop"},
 		Note:    "Not every OpenRouter model supports tools; pick one that does."},
 	{ID: "lmstudio", Name: "LM Studio", BaseURL: "http://localhost:1234/v1", Local: true, StreamUsage: true},
@@ -112,11 +118,41 @@ func New(opts Options) *Provider {
 func (p *Provider) ID() string          { return p.id }
 func (p *Provider) Type() provider.Type { return Type }
 
-func (p *Provider) Capabilities(string) provider.ModelCaps {
+func (p *Provider) Capabilities(model string) provider.ModelCaps {
 	if p.preset.ToolsKnown {
-		return provider.ModelCaps{Source: provider.CapsStatic, Tools: true, ParallelTools: true, StreamedToolArgs: true, StableToolCallIDs: true}
+		c := provider.ModelCaps{Source: provider.CapsStatic, Tools: true, ParallelTools: true, StreamedToolArgs: true, StableToolCallIDs: true}
+		c.Effort = p.takesEffort(model)
+		c.Reasoning = c.Effort
+		return c
 	}
 	return provider.ModelCaps{Source: provider.CapsUnknown}
+}
+
+// openAIReasoning matches OpenAI's reasoning models, which take
+// reasoning_effort; its other models reject the parameter.
+var openAIReasoning = regexp.MustCompile(`^(o[1-9]|gpt-5)`)
+
+// takesEffort reports whether a request for model carries the effort.
+func (p *Provider) takesEffort(model string) bool {
+	switch p.preset.Effort {
+	case "openai":
+		return openAIReasoning.MatchString(model)
+	case "openrouter":
+		return true
+	}
+	return false
+}
+
+// wireEffort maps the app's efforts (low to max) onto the low, medium and
+// high these endpoints take.
+func wireEffort(e string) string {
+	switch e {
+	case "low", "medium", "high":
+		return e
+	case "xhigh", "max":
+		return "high"
+	}
+	return ""
 }
 
 func (p *Provider) do(ctx context.Context, method, path string, body any) (*http.Response, error) {
@@ -334,6 +370,13 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 	}
 	if req.MaxTokens > 0 {
 		body["max_tokens"] = req.MaxTokens
+	}
+	if e := wireEffort(req.Effort); e != "" && p.takesEffort(req.Model) {
+		if p.preset.Effort == "openrouter" {
+			body["reasoning"] = map[string]any{"effort": e}
+		} else {
+			body["reasoning_effort"] = e
+		}
 	}
 	if len(req.Tools) > 0 {
 		tools := make([]wireTool, 0, len(req.Tools))

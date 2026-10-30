@@ -139,6 +139,14 @@ The next v1 items that need nothing from the user (no accounts, signing, real-pr
 
 Left for later because they need the user: signed builds and the update check (SEC-012, NFR-SEC-004, OQ-009, OQ-015), verified external-agent presets and OAuth against real servers (HRN-007, MCP-006), prompt caching checked against a real provider (PRV-009), and the integrated terminal, which needs a PTY library (GUI-012).
 
+### Feature order, part 3 (planned 2026-10-30)
+
+1. **Reasoning controls (PRV-011).** *Built 2026-10-30.* The profile's effort reaches Anthropic (adaptive thinking with an effort), OpenAI's reasoning models (`reasoning_effort`) and OpenRouter (`reasoning.effort`); thinking is shown collapsed.
+2. **Prompt caching (PRV-009).** Cache breakpoints for the system prompt and tool definitions on Anthropic; checked against the request payload here, against the real API by the user.
+3. **Skill authoring (SKL-007).** Create a skill from a template, validate its frontmatter, open it in the editor.
+4. **File tree and viewer (GUI-013).** A read-only browser of the session's folder with the agent's changes highlighted.
+5. **Subagents (HRN-014, second half).** The built-in agent hands a task to a child agent whose transcript the parent can open.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SES-012, SES-013, GUI-016, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

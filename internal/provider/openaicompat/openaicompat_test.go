@@ -214,3 +214,39 @@ func join(ts []provider.EventType) string {
 	}
 	return strings.Join(s, ",")
 }
+
+// PRV-011: the effort reaches OpenAI's reasoning models as
+// reasoning_effort and OpenRouter as reasoning.effort, mapped onto low,
+// medium and high; models and endpoints that do not take it get none.
+func TestEffortInTheRequest(t *testing.T) {
+	for _, c := range []struct {
+		preset, model, effort string
+		want                  map[string]any
+	}{
+		{"openai", "o3", "max", map[string]any{"reasoning_effort": "high"}},
+		{"openai", "gpt-5-mini", "low", map[string]any{"reasoning_effort": "low"}},
+		{"openai", "gpt-4o", "high", nil},
+		{"openrouter", "anthropic/claude-x", "medium", map[string]any{"reasoning": map[string]any{"effort": "medium"}}},
+		{"vllm", "qwen", "high", nil},
+	} {
+		var sent map[string]any
+		srv := server(t, []string{`{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`}, func(body map[string]any, r *http.Request) { sent = body })
+		p := New(Options{ID: "x", Preset: c.preset, BaseURL: srv.URL + "/v1", APIKey: "k"})
+		r := req
+		r.Model, r.Effort = c.model, c.effort
+		collect(t, p, r)
+		srv.Close()
+		got := map[string]any{}
+		for _, k := range []string{"reasoning_effort", "reasoning"} {
+			if v, ok := sent[k]; ok {
+				got[k] = v
+			}
+		}
+		if len(got) != len(c.want) || fmt.Sprint(got) != fmt.Sprint(c.want) {
+			t.Errorf("%s %s %s: sent %v, want %v", c.preset, c.model, c.effort, got, c.want)
+		}
+		if caps := p.Capabilities(c.model); caps.Effort != (c.want != nil) {
+			t.Errorf("%s %s: caps.Effort = %v", c.preset, c.model, caps.Effort)
+		}
+	}
+}
