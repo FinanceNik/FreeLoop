@@ -14,8 +14,8 @@ import (
 )
 
 // EngineService exposes the engine to the frontend. It is a thin adapter:
-// each method forwards to the engine and adds nothing, except ChooseFolder
-// and ExportSession, which show native dialogs.
+// each method forwards to the engine and adds nothing, except ChooseFolder,
+// ExportSession, ExportConfig and ImportConfig, which show native dialogs.
 type EngineService struct {
 	eng *engine.Engine
 	app *application.App
@@ -368,6 +368,39 @@ func (s *EngineService) ExportSession(ctx context.Context, sessionID, format str
 		return "", err
 	}
 	return path, s.eng.ExportSession(ctx, sessionID, format, path)
+}
+
+// ExportConfig asks where to save a config backup (SET-005) and writes it;
+// it returns the path, or "" when the user cancels.
+func (s *EngineService) ExportConfig(ctx context.Context) (string, error) {
+	path, err := s.app.Dialog.SaveFile().
+		SetMessage("Back up Freeloop's configuration").
+		SetFilename("freeloop-config.json").
+		CanCreateDirectories(true).
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return "", err
+	}
+	return path, s.eng.ExportConfig(ctx, path)
+}
+
+// ImportConfig asks for a config backup and restores it; nil when the user
+// cancels.
+func (s *EngineService) ImportConfig(ctx context.Context) (*engine.ConfigRestore, error) {
+	path, err := s.app.Dialog.OpenFile().
+		SetTitle("Restore Freeloop's configuration").
+		CanChooseFiles(true).
+		CanChooseDirectories(false).
+		AddFilter("Freeloop config backup", "*.json").
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return nil, err
+	}
+	res, err := s.eng.ImportConfig(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
 
 // ChooseFolder shows a native folder picker and returns the chosen path, or

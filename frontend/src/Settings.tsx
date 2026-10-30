@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { PriceTable, UsageTable } from "./Costs.tsx";
 import { HookTable } from "./Hooks.tsx";
-import { EngineService, type Config, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
+import { EngineService, type ConfigRestore, type Config, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
   config: Config;
@@ -11,13 +11,27 @@ interface Props {
   projects: ProjectInfo[];
   onProjectsChanged: () => void;
   onImport: () => void;
+  onProviders: () => void;
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
 }
 
-export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onSaved, onError }: Props) {
+export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onProviders, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
+  // Config backup (SET-005).
+  const [backup, setBackup] = useState<string | null>(null);
+  const [restored, setRestored] = useState<ConfigRestore | null>(null);
+  const backUp = () =>
+    EngineService.ExportConfig()
+      .then((path) => path && setBackup(path))
+      .catch(onError);
+  const restore = () => {
+    if (!confirm("Restore a config backup? Its settings, providers, profiles, environments, rules and MCP servers replace the current ones; the replaced files are kept in the data folder's backups folder.")) return;
+    EngineService.ImportConfig()
+      .then((r) => r && setRestored(r))
+      .catch(onError);
+  };
   useEffect(() => setForm(config), [config]);
 
   const save = (e: FormEvent) => {
@@ -186,6 +200,37 @@ export default function Settings({ config, providers, environments, profiles, pr
           {saved && <span className="ok">Saved</span>}
         </div>
       </form>
+
+      <div className="card">
+        <h3>Backup</h3>
+        <p className="muted">
+          Settings, providers, profiles, environments, rules, MCP servers and harness presets in one file. API keys and other secrets stay in the
+          Keychain and are not included; values you typed into config files as plain text are.
+        </p>
+        <div className="row">
+          <button type="button" onClick={backUp}>
+            Back up configuration…
+          </button>
+          <button type="button" onClick={restore}>
+            Restore from a backup…
+          </button>
+          {backup && <span className="ok">Saved to {backup}</span>}
+        </div>
+        {restored && (
+          <div className="banner" role="status">
+            Restored {restored.files?.length ?? 0} files. {restored.backupNote}
+            {(restored.needKeys ?? []).length > 0 && (
+              <p>
+                Enter the API keys for {(restored.needKeys ?? []).join(", ")} under{" "}
+                <button type="button" className="link" onClick={onProviders}>
+                  Providers
+                </button>
+                .
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="card">
         <h3>Usage and estimated cost</h3>

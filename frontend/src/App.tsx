@@ -367,6 +367,7 @@ export default function App() {
       page("settings", "Settings", () => setScreen({ kind: "settings" }), { keywords: "preferences theme notifications prices" }),
       page("usage", "Usage and prices", () => setScreen({ kind: "settings" }), { keywords: "cost tokens", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
       page("import", "Import from Claude Code", () => setScreen({ kind: "import" })),
+      page("backup", "Back up or restore the configuration", () => setScreen({ kind: "settings" }), { keywords: "export import settings providers profiles" }),
       page("guide", "Setup guide", () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
       {
         id: "app:find",
@@ -634,6 +635,7 @@ export default function App() {
             projects={projects}
             onProjectsChanged={refreshProjects}
             onImport={() => setScreen({ kind: "import" })}
+            onProviders={() => setScreen({ kind: "providers" })}
             onSaved={setConfig} onError={report} />
         )}
         {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
