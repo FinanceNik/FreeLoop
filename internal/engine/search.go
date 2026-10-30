@@ -18,7 +18,7 @@ const hitsPerSession = 3
 // Search finds query in every session's messages and tool calls and groups
 // the results by session, sessions with the best match first.
 func (e *Engine) Search(ctx context.Context, query string) ([]SessionHits, error) {
-	hits, err := e.store.Search(ctx, query, 200)
+	hits, err := e.store.Search(ctx, query, 150, hitsPerSession)
 	if err != nil {
 		return nil, err
 	}

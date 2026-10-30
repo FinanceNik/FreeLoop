@@ -159,12 +159,32 @@ func (e *Engine) RunMCPPrompt(ctx context.Context, sid, server, name string, arg
 	if err != nil {
 		return PromptResult{}, fmt.Errorf("the prompt %s of %s: %w", name, server, err)
 	}
-	q := queued{text: p.Text}
+	// The server wrote this text, so its @ words attach nothing, and what
+	// it embeds is held to the limits of the user's own attachments.
+	q := queued{text: p.Text, noMentions: true}
 	if q.text == "" {
 		q.text = "/" + mcpToolName(server, name)
 	}
+	if len(q.text) > maxMentionTotal {
+		return PromptResult{}, fmt.Errorf("the prompt %s of %s is larger than 1 MB", name, server)
+	}
+	total := len(q.text)
+	var skipped []string
 	for _, r := range p.Resources {
-		q.inline = append(q.inline, harness.Resource{Path: server + ": " + r.URI, URI: r.URI, Text: r.Text, Server: server})
+		switch {
+		case len(q.inline) == maxMentions:
+			skipped = append(skipped, r.URI+" (too many attachments)")
+		case len(r.Text) > maxMentionBytes:
+			skipped = append(skipped, r.URI+" ("+mentionTooLarge+")")
+		case total+len(r.Text) > maxMentionTotal:
+			skipped = append(skipped, r.URI+" ("+mentionOverTotal+")")
+		default:
+			total += len(r.Text)
+			q.inline = append(q.inline, harness.Resource{Path: server + ": " + r.URI, URI: r.URI, Text: r.Text, Server: server})
+		}
+	}
+	if len(skipped) > 0 {
+		e.emit(sid, event.Notice, map[string]string{"message": "Not attached from the prompt: " + strings.Join(skipped, ", ")})
 	}
 	return e.enqueue(ctx, sid, q)
 }

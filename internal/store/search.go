@@ -148,7 +148,13 @@ func (x *indexer) feed(ev event.Event) (batch, int64) {
 		b.rows = rows
 		return b, x.start - 1
 	}
-	if body, id := eventText(ev); strings.TrimSpace(body) != "" || id != "" {
+	if ev.Type == event.CompactionUpdate {
+		var d event.CompactionData
+		json.Unmarshal(ev.Data, &d)
+		if d.Status == "completed" && strings.TrimSpace(d.Summary) != "" {
+			rows = append(rows, row{seq: ev.Seq, kind: HitSummary, body: capIndexed(d.Summary)})
+		}
+	} else if body, id := eventText(ev); strings.TrimSpace(body) != "" || id != "" {
 		seq := ev.Seq
 		if ev.Type == event.ToolCall {
 			if x.calls == nil {
@@ -168,6 +174,13 @@ func (x *indexer) feed(ev event.Event) (batch, int64) {
 
 // eventText is the searchable text of a tool call (its title, command and
 // paths) or a tool call update (its output and diffs), and the call's ID.
+func capIndexed(s string) string {
+	if len(s) > maxIndexed {
+		return s[:maxIndexed]
+	}
+	return s
+}
+
 func eventText(ev event.Event) (string, string) {
 	var d struct {
 		ToolCallID string `json:"toolCallId"`
@@ -280,8 +293,11 @@ func (s *Store) writeIndex(ctx context.Context, sid string, b batch, done int64,
 // catchUp indexes the part of a session's transcript the index is missing
 // and leaves the indexer ready for the next event. Callers hold t.mu.
 func (s *Store) catchUp(ctx context.Context, t *transcript, sid string) error {
+	// The indexer is built in place: it holds a strings.Builder, which
+	// must not be copied once written to.
+	t.search = indexer{}
+	x := &t.search
 	var from int64
-	x := indexer{loaded: true}
 	if err := s.db.QueryRowContext(ctx, `SELECT indexed_seq, provider_id, model FROM sessions WHERE id = ?`, sid).Scan(&from, &x.providerID, &x.model); err != nil {
 		return err
 	}
@@ -302,7 +318,7 @@ func (s *Store) catchUp(ctx context.Context, t *transcript, sid string) error {
 			return err
 		}
 	}
-	t.search = x
+	x.loaded = true
 	return nil
 }
 
@@ -341,10 +357,11 @@ func (s *Store) IndexAll(ctx context.Context) error {
 	return nil
 }
 
-// Search finds sessions' text matching query, best first. Words match
-// anywhere and in any order, the last one also as a prefix; a "quoted
-// phrase" matches as a phrase.
-func (s *Store) Search(ctx context.Context, query string, limit int) ([]Hit, error) {
+// Search finds sessions' text matching query, best first, at most
+// perSession hits of each session (0 for no cap), so one long session does
+// not crowd out the others. Words match anywhere and in any order, the last
+// one also as a prefix; a "quoted phrase" matches as a phrase.
+func (s *Store) Search(ctx context.Context, query string, limit, perSession int) ([]Hit, error) {
 	match := matchExpr(query)
 	if match == "" {
 		return []Hit{}, nil
@@ -352,24 +369,37 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]Hit, err
 	if limit <= 0 {
 		limit = 50
 	}
+	if perSession <= 0 {
+		perSession = limit
+	}
+	// One pass over the best rows, snippets built in the same scan (much
+	// cheaper than looking rows up again), keeping perSession of each.
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT session_id, seq, kind, snippet(search, 0, ?, ?, '…', 16), bm25(search)
-		 FROM search WHERE search MATCH ? ORDER BY bm25(search) LIMIT ?`,
-		SnippetOpen, SnippetClose, match, limit)
+		`SELECT session_id, seq, kind, snippet(search, 0, ?, ?, '…', 16), rank
+		 FROM search WHERE search MATCH ? ORDER BY rank LIMIT ?`,
+		SnippetOpen, SnippetClose, match, searchScan)
 	if err != nil {
 		return nil, fmt.Errorf("store: search: %w", err)
 	}
 	defer rows.Close()
 	hits := []Hit{}
-	for rows.Next() {
+	per := map[string]int{}
+	for rows.Next() && len(hits) < limit {
 		var h Hit
 		if err := rows.Scan(&h.SessionID, &h.Seq, &h.Kind, &h.Snippet, &h.Rank); err != nil {
 			return nil, err
 		}
-		hits = append(hits, h)
+		if per[h.SessionID] < perSession {
+			per[h.SessionID]++
+			hits = append(hits, h)
+		}
 	}
 	return hits, rows.Err()
 }
+
+// searchScan bounds how many ranked rows a search looks through to fill its
+// per-session caps.
+const searchScan = 1000
 
 // matchExpr turns what the user typed into an FTS5 query: every word and
 // quoted phrase becomes a quoted string, so FTS5's operators and syntax

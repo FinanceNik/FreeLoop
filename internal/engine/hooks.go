@@ -142,6 +142,9 @@ type engineHooks struct{ e *Engine }
 func (h engineHooks) request(ctx context.Context, ev string, pc permission.Context, req permission.Request) string {
 	h.e.mu.Lock()
 	r := h.e.runtimes[req.SessionID]
+	if r == nil {
+		r = h.e.starting[req.SessionID]
+	}
 	h.e.mu.Unlock()
 	if r == nil {
 		return ""

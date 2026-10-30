@@ -25,7 +25,7 @@ func toolOutput(id, out string) json.RawMessage {
 
 func searchFor(t *testing.T, s *Store, q string) []Hit {
 	t.Helper()
-	hits, err := s.Search(context.Background(), q, 0)
+	hits, err := s.Search(context.Background(), q, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +79,12 @@ func TestSearchIndexesAsItAppends(t *testing.T) {
 	if h := searchFor(t, s, "zanzibar"); len(h) != 1 {
 		t.Errorf("a finished message was not indexed: %+v", h)
 	}
+	sum, _ := s.Append(ctx, a.ID, event.CompactionUpdate, raw(event.CompactionData{Status: "completed", Reason: "auto", Summary: "We traced the leak to the quokka cache."}))
+	if h := searchFor(t, s, "quokka"); len(h) != 1 || h[0].Kind != HitSummary || h[0].Seq != sum.Seq {
+		t.Errorf("a compaction summary = %+v", h)
+	}
 	for _, q := range []string{"", `"`, "AND OR NOT", "NEAR(", "*", "col:umn", `a"b`} {
-		if _, err := s.Search(ctx, q, 0); err != nil {
+		if _, err := s.Search(ctx, q, 0, 0); err != nil {
 			t.Errorf("Search(%q) = %v", q, err)
 		}
 	}
@@ -151,7 +155,7 @@ func TestSearchIsFast(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	hits, err := s.Search(ctx, `"`+needle+`"`, 0)
+	hits, err := s.Search(ctx, `"`+needle+`"`, 0, 0)
 	took := time.Since(start)
 	if err != nil || len(hits) != 1 || hits[0].SessionID != "s120" || hits[0].Seq != 78 {
 		t.Fatalf("hits = %+v, %v", hits, err)
@@ -162,7 +166,7 @@ func TestSearchIsFast(t *testing.T) {
 	t.Logf("a phrase among %d rows: %v", sessions*rows, took)
 	// A common word is still quick, ranked and capped.
 	start = time.Now()
-	hits, _ = s.Search(ctx, "timeout", 0)
+	hits, _ = s.Search(ctx, "timeout", 0, 0)
 	if took := time.Since(start); len(hits) != 50 || took > time.Second {
 		t.Errorf("a common word: %d hits in %v", len(hits), took)
 	}
@@ -204,5 +208,49 @@ func TestSearchRecoversFromAFailedWrite(t *testing.T) {
 	}
 	if u, _ := s.UsageSince(ctx, "2000-01-01"); len(u) != 1 || u[0].InputTokens != 5 {
 		t.Errorf("usage = %+v", u)
+	}
+}
+
+// One session with many matches does not crowd out another.
+func TestSearchCapsHitsPerSession(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t, t.TempDir(), nil)
+	defer s.Close()
+	for i := range 40 {
+		s.db.Exec(`INSERT INTO search (body, session_id, seq, kind) VALUES (?, 'long', ?, 'tool')`, "kiwi kiwi kiwi kiwi", i+1)
+	}
+	s.db.Exec(`INSERT INTO search (body, session_id, seq, kind) VALUES ('a kiwi and much else besides, said once', 'short', 1, 'agent')`)
+	hits, err := s.Search(ctx, "kiwi", 10, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	per := map[string]int{}
+	for _, h := range hits {
+		per[h.SessionID]++
+	}
+	if per["long"] != 3 || per["short"] != 1 || !strings.Contains(hits[0].Snippet, SnippetOpen) {
+		t.Errorf("hits per session = %v", per)
+	}
+}
+
+// A catch-up that ends in the middle of a streamed message keeps
+// streaming into it: the indexer is not copied with text in its buffer.
+func TestCatchUpMidMessage(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	s := openTest(t, dir, nil)
+	a, _ := s.CreateSession(ctx, session.Session{Title: "a", HarnessID: "builtin"})
+	s.Append(ctx, a.ID, event.TurnStarted, nil)
+	s.Append(ctx, a.ID, event.AgentMessageChunk, text("the wombat "))
+	s.db.Exec(`UPDATE sessions SET indexed_seq = 0`)
+	s.db.Exec(`DELETE FROM search`)
+	s.Close()
+	s = openTest(t, dir, nil)
+	defer s.Close()
+	s.indexed.Wait()
+	s.Append(ctx, a.ID, event.AgentMessageChunk, text("burrows deep"))
+	s.Append(ctx, a.ID, event.TurnEnded, nil)
+	if h := searchFor(t, s, `"wombat burrows"`); len(h) != 1 {
+		t.Errorf("hits = %+v", h)
 	}
 }

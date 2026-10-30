@@ -92,8 +92,11 @@ type Engine struct {
 	mcp        *mcp.Manager
 	providers  *providerRegistry
 	runtimes   map[string]*runtime
-	streams    map[string]*streamBuf
-	known      []string // secret values to redact
+	// starting are runtimes being set up, so hooks find them while the
+	// harness starts (an external agent's requests during session/load).
+	starting map[string]*runtime
+	streams  map[string]*streamBuf
+	known    []string // secret values to redact
 }
 
 // Open loads configuration and opens the store in opts.DataDir. Config
@@ -122,6 +125,7 @@ func Open(opts Options) (*Engine, error) {
 		onChange: opts.OnConfigChange,
 		quit:     make(chan struct{}),
 		runtimes: map[string]*runtime{},
+		starting: map[string]*runtime{},
 		streams:  map[string]*streamBuf{},
 	}
 	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: e.bus.publish, Redact: e.redact})

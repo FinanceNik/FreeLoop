@@ -480,7 +480,9 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 	case permission.Cancelled:
 		return fail("Cancelled by the user before it ran.", "failed")
 	case permission.Denied:
-		if c.ToolName == "present_plan" {
+		// Only the user's own "keep planning" is their feedback; a rule or
+		// hook that denies the plan is reported as such below.
+		if c.ToolName == "present_plan" && d.Actor == permission.ActorUser {
 			msg := "The user wants to keep planning."
 			if d.Reason != "" {
 				msg += " Their feedback: " + d.Reason

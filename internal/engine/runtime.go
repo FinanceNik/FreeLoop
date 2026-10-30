@@ -137,12 +137,35 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 			return nil, err
 		}
 	}
+	// A container started for a runtime that then fails to start stops
+	// again instead of running on.
+	ready := false
+	defer func() {
+		e.mu.Lock()
+		inUse := e.runtimes[sid] != nil
+		e.mu.Unlock()
+		if d, ok := env.(*environment.Docker); ok && !ready && !inUse {
+			sctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			d.Stop(sctx)
+		}
+	}()
 	events, err := e.store.Events(ctx, sid, 0)
 	if err != nil {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
 	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, projectID: ses.ProjectID, profileID: ses.ProfileID}
+	e.mu.Lock()
+	e.starting[sid] = r
+	e.mu.Unlock()
+	defer func() {
+		e.mu.Lock()
+		if e.starting[sid] == r {
+			delete(e.starting, sid)
+		}
+		e.mu.Unlock()
+	}()
 	if why := e.runHooks(ctx, r, config.HookSessionStart, "", map[string]any{
 		"harness": ses.HarnessID, "providerId": ses.ProviderID, "model": ses.Model, "profileId": ses.ProfileID, "mode": ses.Mode,
 	}); why != "" {
@@ -210,6 +233,9 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// The container is in use either way: by this runtime, or by the one
+	// that won the race, which shares it.
+	ready = true
 	if existing, ok := e.runtimes[sid]; ok { // another caller won the race
 		hs.Close()
 		return existing, nil
@@ -269,6 +295,9 @@ type queued struct {
 	text   string
 	refs   []ResourceRef
 	inline []harness.Resource
+	// noMentions is set for text the user did not type (an MCP prompt's):
+	// its @ words attach no files.
+	noMentions bool
 }
 
 // PromptWith sends a message with attached resources; see Prompt.
@@ -312,7 +341,10 @@ func (e *Engine) enqueue(ctx context.Context, sid string, q queued) (PromptResul
 func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 	for {
 		e.checkpoint(r)
-		p := e.embedMentions(r.sid, r.env, q.text)
+		p := harness.Prompt{Text: q.text}
+		if !q.noMentions {
+			p = e.embedMentions(r.sid, r.env, q.text)
+		}
 		p.Resources = append(p.Resources, q.inline...)
 		p.Resources = append(p.Resources, e.readResources(ctx, r, q.refs)...)
 		if _, err := r.hs.Prompt(ctx, p); err != nil {

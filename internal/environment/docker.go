@@ -328,5 +328,9 @@ func RemoveContainer(ctx context.Context, name string) error {
 	if err != nil && !strings.Contains(string(out), "No such container") {
 		return fmt.Errorf("docker rm: %s", lastLines(string(out), 2))
 	}
+	// The image Start built for the container from a Dockerfile, if any.
+	img := exec.CommandContext(ctx, docker, "image", "rm", "freeloop-"+name)
+	img.Env = baseEnv()
+	img.Run()
 	return nil
 }

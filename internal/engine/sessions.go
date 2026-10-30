@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -102,7 +101,9 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 		return err
 	}
 	e.stopRuntime(sid)
-	if envCfg, err := e.environment(cmp.Or(ses.EnvironmentID, DefaultEnvironmentID)); err == nil && envCfg.Kind == string(environment.KindDocker) {
+	// Whatever the environment is now (it may have been deleted or changed
+	// kind), a container the session had, and an image built for it, go.
+	if _, err := environment.FindDocker(); err == nil {
 		if err := environment.RemoveContainer(ctx, containerName(sid)); err != nil {
 			log.Printf("engine: remove the container of deleted session %s: %v", sid, err)
 		}

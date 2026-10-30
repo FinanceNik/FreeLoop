@@ -64,6 +64,8 @@ func TestCheckpointsAndRewind(t *testing.T) {
 	e.mu.Unlock()
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, ".gitignore"), []byte("ignored.txt\n"), 0o644)
+	os.MkdirAll(filepath.Join(root, ".claude"), 0o755)
+	os.WriteFile(filepath.Join(root, ".claude", "settings.json"), []byte("{}\n"), 0o644)
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProviderID: "bp", Model: "m", Mode: "accept_edits"})
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +83,8 @@ func TestCheckpointsAndRewind(t *testing.T) {
 	waitIdle(t, ch, ses.ID)
 	os.WriteFile(filepath.Join(root, "a.txt"), []byte("edited by hand\n"), 0o644)
 	os.WriteFile(filepath.Join(root, "ignored.txt"), []byte("keep me\n"), 0o644)
+	// A change the user makes in .claude/ after the checkpoint stays.
+	os.WriteFile(filepath.Join(root, ".claude", "settings.json"), []byte("{\"mine\": true}\n"), 0o644)
 
 	evs, _ := e.Events(ctx, ses.ID, 0)
 	var cps []event.Event
@@ -94,6 +98,9 @@ func TestCheckpointsAndRewind(t *testing.T) {
 	}
 	if err := e.Rewind(ctx, ses.ID, cps[1].Seq); err != nil {
 		t.Fatal(err)
+	}
+	if read(".claude/settings.json") != "{\"mine\": true}\n" {
+		t.Errorf("the rewind changed .claude/: %q", read(".claude/settings.json"))
 	}
 	if read("a.txt") != "one\n" || read("b.txt") != "<missing>" || read("ignored.txt") != "keep me\n" {
 		t.Fatalf("after rewind: a = %q, b = %q, ignored = %q", read("a.txt"), read("b.txt"), read("ignored.txt"))

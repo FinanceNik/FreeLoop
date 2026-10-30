@@ -60,7 +60,13 @@ func (e *Engine) snapshot(ctx context.Context, host *environment.Local, sid, mes
 			return "", err
 		}
 	}
-	if _, err := e.shadowGit(ctx, host, sid, checkpointTimeout, "add", "-A", "."); err != nil {
+	// The project's .claude/ is never written (a hard rule) and .freeloop/
+	// holds the user's own settings and deny rules: snapshots leave both out,
+	// so a rewind never changes them.
+	if _, err := e.shadowGit(ctx, host, sid, checkpointTimeout, "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", ".claude", ProjectDir); err != nil {
+		return "", err
+	}
+	if _, err := e.shadowGit(ctx, host, sid, checkpointTimeout, "add", "-A", "--", ".", ":(exclude).claude", ":(exclude)"+ProjectDir); err != nil {
 		return "", err
 	}
 	if _, err := e.shadowGit(ctx, host, sid, 30*time.Second, "commit", "-q", "--allow-empty", "--no-verify", "-m", message); err != nil {
