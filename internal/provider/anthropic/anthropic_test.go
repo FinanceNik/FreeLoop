@@ -98,6 +98,12 @@ func TestStreamToolUse(t *testing.T) {
 	// The request carried adaptive thinking, effort, eager tool streaming
 	// and the system prompt.
 	b := bodies[0]
+	// PRV-009: automatic prompt caching marks the request, so the system
+	// prompt, tools and the conversation so far are read from the cache on
+	// the next call.
+	if cc, _ := b["cache_control"].(map[string]any); cc["type"] != "ephemeral" {
+		t.Errorf("cache_control = %v", b["cache_control"])
+	}
 	if th, _ := b["thinking"].(map[string]any); th["type"] != "adaptive" || th["display"] != "summarized" {
 		t.Errorf("thinking = %v", b["thinking"])
 	}
