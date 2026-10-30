@@ -158,7 +158,7 @@ Left for later because they need the user: signed builds and the update check (S
 
 1. **Pull requests (SES-011).** *Built 2026-10-30.* The Diff tab pushes the session's branch and opens a pull request with the GitHub CLI, its description drafted by the model and edited by the user; the URL is recorded in the session.
 2. **Multiple windows (GUI-015).** *Built 2026-10-30; checked in the browser as two tabs, the native windows by the user.* A session opens in a window of its own, streaming alongside the main window.
-3. **Idle memory (NFR-PERF-004).** A repeatable measurement of the app with ten idle sessions against the 300 MB budget.
+3. **Idle memory (NFR-PERF-004).** *Built 2026-10-30; measured 110 MB on this Mac (the app process 38 MB, its three WebKit processes 72 MB); the M1 with 16 GB the requirement names is the user's run.* A repeatable measurement of the app with ten idle sessions against the 300 MB budget.
 
 ## Later (unscheduled)
 

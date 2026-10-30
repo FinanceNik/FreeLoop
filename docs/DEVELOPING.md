@@ -32,6 +32,7 @@ Rules the lint enforces (`internal/archtest`): no `os/exec` or file I/O in the e
 - `make lint` runs gofmt, `go vet`, the architecture test and `tsc`. Both pass before every commit.
 - A UI change is checked in the running app: build the frontend, `go build -tags server ./cmd/freeloop`, run it with `FREELOOP_DEV=1 FREELOOP_HOME=<scratch> WAILS_SERVER_PORT=<port>` and open it in a browser.
 - Docker tests need a running daemon (Colima or Docker Desktop) and skip without one.
+- `make memcheck` packages the app, starts it on a scratch data folder, runs a demo turn in ten sessions through the command line and checks the idle footprint of the app and its WebKit processes against the 300 MB of NFR-PERF-004 (`scripts/memcheck.sh`; the window opens while it runs). `TestIdleSessionsMemory` guards the engine's share in `make test`.
 
 ## The command line
 
