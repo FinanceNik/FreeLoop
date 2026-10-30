@@ -34,6 +34,14 @@ func TestMain(m *testing.M) {
 			func(ctx context.Context, req *sdk.CallToolRequest, in echoIn) (*sdk.CallToolResult, struct{}, error) {
 				return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "echo: " + in.Text + " " + os.Getenv("TOKEN")}}}, struct{}{}, nil
 			})
+		s.AddResource(&sdk.Resource{URI: "notes://readme", Name: "readme"},
+			func(ctx context.Context, req *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
+				return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{URI: req.Params.URI, Text: "Deploys go out on Tuesdays."}}}, nil
+			})
+		s.AddPrompt(&sdk.Prompt{Name: "review", Arguments: []*sdk.PromptArgument{{Name: "file", Required: true}}},
+			func(ctx context.Context, req *sdk.GetPromptRequest) (*sdk.GetPromptResult, error) {
+				return &sdk.GetPromptResult{Messages: []*sdk.PromptMessage{{Role: "user", Content: &sdk.TextContent{Text: "Review " + req.Params.Arguments["file"] + " carefully."}}}}, nil
+			})
 		s.Run(context.Background(), &sdk.StdioTransport{})
 		return
 	}

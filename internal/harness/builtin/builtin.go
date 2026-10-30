@@ -235,7 +235,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	parts := []provider.Part{{Type: provider.PartText, Text: s.expand(p.Text)}}
 	for _, r := range p.Resources {
 		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "resource_link", URI: r.URI, Name: r.Path}})
-		parts = append(parts, provider.Part{Type: provider.PartText, Text: fmt.Sprintf("<file path=%q>\n%s\n</file>", r.Path, r.Text)})
+		parts = append(parts, provider.Part{Type: provider.PartText, Text: harness.ResourceText(r)})
 	}
 	s.appendUser(parts...)
 

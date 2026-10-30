@@ -7,6 +7,7 @@ package harness
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -167,12 +168,15 @@ type Prompt struct {
 	Resources []Resource
 }
 
-// Resource is a file embedded in a prompt.
+// Resource is a file, or an MCP server's resource, embedded in a prompt.
 type Resource struct {
-	// Path is relative to the project root; URI is its file:// form.
+	// Path is relative to the project root, or a label for an MCP
+	// resource; URI is the file's file:// form or the resource's URI.
 	Path string
 	URI  string
 	Text string
+	// Server is the MCP server an attached resource came from (MCP-007).
+	Server string
 }
 
 // Session is one running conversation.
@@ -184,4 +188,13 @@ type Session interface {
 	SetMode(m permission.Mode)
 	// Close ends the session and any process it runs.
 	Close() error
+}
+
+// ResourceText is a resource as text for a model: a file by its path, an
+// MCP resource by its server and URI.
+func ResourceText(r Resource) string {
+	if r.Server != "" {
+		return fmt.Sprintf("<resource server=%q uri=%q>\n%s\n</resource>", r.Server, r.URI, r.Text)
+	}
+	return fmt.Sprintf("<file path=%q>\n%s\n</file>", r.Path, r.Text)
 }

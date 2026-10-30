@@ -46,7 +46,7 @@ type runtime struct {
 	mu     sync.Mutex
 	busy   bool
 	cancel context.CancelFunc
-	queue  []string
+	queue  []queued
 	done   chan struct{} // closed when the current prompt and queue finish
 }
 
@@ -251,6 +251,30 @@ type PromptResult struct {
 // Prompt sends a user message to a session. It returns at once; the turn
 // runs in the background and reports through events.
 func (e *Engine) Prompt(ctx context.Context, sid, text string) (PromptResult, error) {
+	return e.PromptWith(ctx, sid, PromptRequest{Text: text})
+}
+
+// PromptRequest is a message with MCP resources attached (MCP-007).
+type PromptRequest struct {
+	Text      string        `json:"text"`
+	Resources []ResourceRef `json:"resources"`
+}
+
+// queued is a prompt waiting for its turn. Resources are read when it
+// runs; inline ones came with an MCP prompt.
+type queued struct {
+	text   string
+	refs   []ResourceRef
+	inline []harness.Resource
+}
+
+// PromptWith sends a message with attached resources; see Prompt.
+func (e *Engine) PromptWith(ctx context.Context, sid string, req PromptRequest) (PromptResult, error) {
+	return e.enqueue(ctx, sid, queued{text: req.Text, refs: req.Resources})
+}
+
+func (e *Engine) enqueue(ctx context.Context, sid string, q queued) (PromptResult, error) {
+	text := q.text
 	if text == "" {
 		return PromptResult{}, errors.New("empty message")
 	}
@@ -268,24 +292,27 @@ func (e *Engine) Prompt(ctx context.Context, sid, text string) (PromptResult, er
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.busy {
-		r.queue = append(r.queue, text)
+		r.queue = append(r.queue, q)
 		return PromptResult{Queued: true}, nil
 	}
 	r.busy = true
 	r.done = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
-	go e.run(r, text, ctx)
+	go e.run(r, q, ctx)
 	return PromptResult{}, nil
 }
 
 // run works through a prompt and then the queue. Each prompt's cancel
 // function is installed under r.mu together with taking the prompt, so a
 // Cancel can never fall between the two.
-func (e *Engine) run(r *runtime, text string, ctx context.Context) {
+func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 	for {
 		e.checkpoint(r)
-		if _, err := r.hs.Prompt(ctx, e.embedMentions(r.sid, r.env, text)); err != nil {
+		p := e.embedMentions(r.sid, r.env, q.text)
+		p.Resources = append(p.Resources, q.inline...)
+		p.Resources = append(p.Resources, e.readResources(ctx, r, q.refs)...)
+		if _, err := r.hs.Prompt(ctx, p); err != nil {
 			log.Printf("engine: prompt: %v", err)
 		}
 		r.mu.Lock()
@@ -297,7 +324,7 @@ func (e *Engine) run(r *runtime, text string, ctx context.Context) {
 			r.mu.Unlock()
 			return
 		}
-		text, r.queue = r.queue[0], r.queue[1:]
+		q, r.queue = r.queue[0], r.queue[1:]
 		ctx, r.cancel = context.WithCancel(context.Background())
 		r.mu.Unlock()
 	}

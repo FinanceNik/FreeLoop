@@ -120,7 +120,7 @@ With M2's buildable work done, the v1 features come in this order, chosen for wh
 6. **Cost estimates (PRV-008, OQ-023).** *Built 2026-10-30.* A price table per model, cost per turn, session and day.
 7. **Command palette (GUI-014).** *Built 2026-10-30.* ⌘K for sessions, profiles, pages, actions and slash commands.
 8. **Hooks (EXT-005).** *Built 2026-10-30.* Scripts on session start, before and after tool calls and on permission requests, JSON on stdin, an exit-code contract that can block a call.
-9. **MCP resources and prompts (MCP-007).** Attach a server's resource to a message; run its prompts as slash commands with a form for their arguments.
+9. **MCP resources and prompts (MCP-007).** *Built 2026-10-30.* Attach a server's resource to a message; run its prompts as slash commands with a form for their arguments.
 
 ## Later (unscheduled)
 

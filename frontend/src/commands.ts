@@ -8,6 +8,16 @@ export interface SlashCommand {
   description: string;
   // Set for the app's mode commands.
   mode?: string;
+  // Set for an MCP server's prompt (MCP-007), which runs through the
+  // engine with a form for its arguments.
+  prompt?: { server: string; name: string; arguments: PromptArgument[] };
+}
+
+export interface PromptArgument {
+  name: string;
+  title?: string;
+  description?: string;
+  required: boolean;
 }
 
 export const MODE_COMMANDS: SlashCommand[] = [

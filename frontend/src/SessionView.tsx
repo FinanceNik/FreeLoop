@@ -2,7 +2,17 @@ import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
 import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
-import { EngineService, MODES, type EnvironmentInfo, type HarnessInfo, type ProjectInfo, type ProviderInfo, type Session } from "./api.ts";
+import {
+  EngineService,
+  MODES,
+  type EnvironmentInfo,
+  type HarnessInfo,
+  type ProjectInfo,
+  type ProviderInfo,
+  type ResourceRef,
+  type Session,
+  type SessionMCPContext,
+} from "./api.ts";
 import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
@@ -146,10 +156,47 @@ export default function SessionView({ session, events, focus, prices, provider, 
   // session's harness advertises.
   const [slash, setSlash] = useState<string | null>(null);
   const [slashDismissed, setSlashDismissed] = useState(false);
+  // The resources and prompts of the session's MCP servers (MCP-007), read
+  // when the session opens and again when a picker opens, since servers
+  // start in the background.
+  const [mcp, setMcp] = useState<SessionMCPContext | null>(null);
+  const refreshMcp = () =>
+    EngineService.SessionMCP(session.id)
+      .then(setMcp)
+      .catch(() => setMcp(null));
+  useEffect(() => {
+    refreshMcp();
+  }, [session.id, view.running]);
+  useEffect(() => {
+    if (slash !== null) refreshMcp();
+  }, [slash === null]);
   const commands = useMemo<SlashCommand[]>(
-    () => [...MODE_COMMANDS.filter((c) => c.mode !== "bypass" || allowBypass), ...view.commands.map((c) => ({ name: c.name, description: c.description }))],
-    [view.commands, allowBypass],
+    () => [
+      ...MODE_COMMANDS.filter((c) => c.mode !== "bypass" || allowBypass),
+      ...view.commands.map((c) => ({ name: c.name, description: c.description })),
+      ...(mcp?.prompts ?? []).map((p) => ({
+        name: p.command,
+        description: p.description || p.title || `Prompt from ${p.server}`,
+        prompt: { server: p.server, name: p.name, arguments: p.arguments ?? [] },
+      })),
+    ],
+    [view.commands, allowBypass, mcp],
   );
+  // Resources attached to the next message, and the open prompt form.
+  const [attached, setAttached] = useState<ResourceRef[]>([]);
+  const [attaching, setAttaching] = useState<string | null>(null);
+  const [promptForm, setPromptForm] = useState<{ command: SlashCommand; values: Record<string, string> } | null>(null);
+  const runPrompt = (c: SlashCommand, values: Record<string, string>) => {
+    if (!c.prompt) return;
+    holdBottom.current = false;
+    EngineService.RunMCPPrompt(session.id, c.prompt.server, c.prompt.name, values)
+      .then((r) => {
+        setPromptForm(null);
+        setDraft("");
+        if (r.queued) setQueued((n) => n + 1);
+      })
+      .catch(onError);
+  };
   const slashMatches = useMemo(() => (slash === null ? [] : matchCommands(slash, commands)), [slash, commands]);
   const syncSlash = (el: HTMLTextAreaElement) => {
     const q = el.selectionStart === el.selectionEnd ? slashQuery(el.value, el.selectionStart) : null;
@@ -162,6 +209,11 @@ export default function SessionView({ session, events, focus, prices, provider, 
     if (c.mode) {
       setDraft("");
       setMode(c.mode);
+      return;
+    }
+    if (c.prompt) {
+      if (c.prompt.arguments.length > 0) setPromptForm({ command: c, values: {} });
+      else runPrompt(c, {});
       return;
     }
     const text = `/${c.name} `;
@@ -221,10 +273,18 @@ export default function SessionView({ session, events, focus, prices, provider, 
       setMode(m);
       return;
     }
+    // A message that is just an MCP prompt's command runs the prompt.
+    const prompt = commands.find((c) => c.prompt && text === `/${c.name}`);
+    if (prompt) {
+      chooseCommand(prompt);
+      return;
+    }
     holdBottom.current = false;
-    EngineService.Prompt(session.id, text)
+    const sending = attached;
+    (sending.length > 0 ? EngineService.PromptWith(session.id, { text, resources: sending }) : EngineService.Prompt(session.id, text))
       .then((r) => {
         setDraft("");
+        setAttached([]);
         if (r.queued) setQueued((n) => n + 1);
       })
       .catch(onError);
@@ -321,14 +381,17 @@ export default function SessionView({ session, events, focus, prices, provider, 
     ...(view.running ? [act("stop", "Stop the turn", () => EngineService.Cancel(session.id).catch(onError), { keywords: "cancel interrupt" })] : []),
     act("compose", "Write a message", () => input.current?.focus(), { keywords: "composer prompt focus" }),
     ...commands.map((c) =>
-      act(`cmd:${c.name}`, `/${c.name}`, () => {
-        if (c.mode) setMode(c.mode);
-        else {
-          setDraft(`/${c.name} `);
-          setTimeout(() => input.current?.focus(), 0);
-        }
-      }, { group: "Command", detail: c.description, keywords: "slash" }),
+      act(`cmd:${c.name}`, `/${c.name}`, () => chooseCommand(c), { group: "Command", detail: c.description, keywords: c.prompt ? "slash mcp prompt" : "slash" }),
     ),
+    ...(mcp?.resources ?? [])
+      .filter((r) => !attached.some((a) => a.server === r.server && a.uri === r.uri))
+      .map((r) =>
+        act(`attach:${r.server}:${r.uri}`, `Attach ${r.title || r.name}`, () => setAttached((list) => [...list, { server: r.server, uri: r.uri, name: r.title || r.name }]), {
+          group: "Resource",
+          detail: `${r.server} · ${r.uri}`,
+          keywords: `mcp ${r.description ?? ""}`,
+        }),
+      ),
     ...MODES.filter((m) => m.id !== mode && (m.id !== "bypass" || allowBypass)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
     ...(session.providerId ? [act("model", "Switch model…", () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
     act("panel", panelOpen ? "Hide the panel" : "Show the panel", togglePanel, { keywords: "right sidebar" }),
@@ -499,7 +562,86 @@ export default function SessionView({ session, events, focus, prices, provider, 
           <div ref={bottom} />
         </div>
 
+        {promptForm && promptForm.command.prompt && (
+          <form
+            className="banner prompt-form"
+            aria-label={`Arguments of /${promptForm.command.name}`}
+            onSubmit={(e) => {
+              e.preventDefault();
+              runPrompt(promptForm.command, promptForm.values);
+            }}
+          >
+            <strong>/{promptForm.command.name}</strong> <span className="muted">{promptForm.command.description}</span>
+            {promptForm.command.prompt.arguments.map((a, i) => (
+              <label key={a.name}>
+                {a.title || a.name}
+                {a.required ? " *" : ""} {a.description && <span className="muted">{a.description}</span>}
+                <input
+                  autoFocus={i === 0}
+                  required={a.required}
+                  value={promptForm.values[a.name] ?? ""}
+                  onChange={(e) => setPromptForm({ ...promptForm, values: { ...promptForm.values, [a.name]: e.target.value } })}
+                />
+              </label>
+            ))}
+            <div className="row">
+              <button type="submit" className="primary">
+                Run prompt
+              </button>
+              <button type="button" onClick={() => setPromptForm(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
         <div className="composer">
+          {attaching !== null && (
+            <div className="mention-picker attach-picker" role="dialog" aria-label="Attach a resource">
+              <input
+                autoFocus
+                aria-label="Find a resource"
+                placeholder="Find a resource"
+                value={attaching}
+                onChange={(e) => setAttaching(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && (e.preventDefault(), setAttaching(null))}
+              />
+              <ul role="listbox" aria-label="Resources">
+                {mcp === null && <li className="muted">Asking the servers…</li>}
+                {mcp !== null && (mcp.resources ?? []).length === 0 && (
+                  <li className="muted">None of this session's MCP servers offers resources{(mcp.problems ?? []).length ? ` (${(mcp.problems ?? []).join("; ")})` : ""}.</li>
+                )}
+                {(mcp?.resources ?? [])
+                  .filter((r) => `${r.server} ${r.name} ${r.title ?? ""} ${r.uri} ${r.description ?? ""}`.toLowerCase().includes(attaching.trim().toLowerCase()))
+                  .map((r) => (
+                    <li
+                      key={`${r.server} ${r.uri}`}
+                      role="option"
+                      aria-selected={false}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        if (!attached.some((a) => a.server === r.server && a.uri === r.uri)) setAttached([...attached, { server: r.server, uri: r.uri, name: r.title || r.name }]);
+                        setAttaching(null);
+                        input.current?.focus();
+                      }}
+                    >
+                      <span>{r.title || r.name}</span> <span className="muted">{r.server} · {r.description || r.uri}</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+          {attached.length > 0 && (
+            <ul className="attachments" aria-label="Attached resources">
+              {attached.map((a) => (
+                <li key={`${a.server} ${a.uri}`} className="chip" title={a.uri}>
+                  {a.server}: {a.name || a.uri}
+                  <button className="link" aria-label={`Remove ${a.name || a.uri}`} onClick={() => setAttached(attached.filter((x) => x !== a))}>
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {slash !== null && slashMatches.length > 0 && (
             <ul className="mention-picker" role="listbox" aria-label="Commands">
               {slashMatches.map((c, i) => (
@@ -514,7 +656,7 @@ export default function SessionView({ session, events, focus, prices, provider, 
                   }}
                   onMouseEnter={() => setPick(i)}
                 >
-                  <span>/{c.name}</span> <span className="muted">{c.mode ? `Mode: ${c.description}` : c.description}</span>
+                  <span>/{c.name}</span> <span className="muted">{c.mode ? `Mode: ${c.description}` : c.prompt ? `MCP prompt · ${c.description}` : c.description}</span>
                 </li>
               ))}
             </ul>
@@ -565,6 +707,17 @@ export default function SessionView({ session, events, focus, prices, provider, 
           />
           <div className="composer-actions">
             {queued > 0 && <span className="muted">{queued} queued</span>}
+            {(mcp?.resources ?? []).length > 0 && (
+              <button
+                title="Attach a resource of one of the session's MCP servers"
+                onClick={() => {
+                  refreshMcp();
+                  setAttaching(attaching === null ? "" : null);
+                }}
+              >
+                Attach…
+              </button>
+            )}
             {view.running && (
               <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger">
                 Stop

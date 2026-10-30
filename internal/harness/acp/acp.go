@@ -245,7 +245,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		if s.caps.PromptCapabilities.EmbeddedContext {
 			blocks = append(blocks, sdk.ResourceBlock(sdk.EmbeddedResourceResource{TextResourceContents: &sdk.TextResourceContents{Uri: r.URI, Text: r.Text}}))
 		} else {
-			blocks = append(blocks, sdk.TextBlock(fmt.Sprintf("<file path=%q>\n%s\n</file>", r.Path, r.Text)))
+			blocks = append(blocks, sdk.TextBlock(harness.ResourceText(r)))
 		}
 	}
 	type answer struct {

@@ -231,6 +231,18 @@ func (s *EngineService) Usage(ctx context.Context, days int) ([]engine.DayCost, 
 	return s.eng.Usage(ctx, days)
 }
 
+func (s *EngineService) PromptWith(ctx context.Context, sessionID string, req engine.PromptRequest) (engine.PromptResult, error) {
+	return s.eng.PromptWith(ctx, sessionID, req)
+}
+
+func (s *EngineService) SessionMCP(ctx context.Context, sessionID string) (engine.SessionMCPContext, error) {
+	return s.eng.SessionMCP(ctx, sessionID)
+}
+
+func (s *EngineService) RunMCPPrompt(ctx context.Context, sessionID, server, name string, args map[string]string) (engine.PromptResult, error) {
+	return s.eng.RunMCPPrompt(ctx, sessionID, server, name, args)
+}
+
 func (s *EngineService) ListProviders() []engine.ProviderInfo {
 	return s.eng.ListProviders()
 }

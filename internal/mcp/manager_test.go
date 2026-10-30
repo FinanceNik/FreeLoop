@@ -21,9 +21,21 @@ type echoIn struct {
 
 type echoOut struct{}
 
-// testServer offers echo, which repeats its text and the TOKEN variable.
+// testServer offers echo, which repeats its text and the TOKEN variable,
+// a notes://readme resource and a review prompt (MCP-007).
 func testServer() *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "test", Version: "1"}, nil)
+	s.AddResource(&sdk.Resource{URI: "notes://readme", Name: "readme", Description: "The team's notes.", MIMEType: "text/plain"},
+		func(ctx context.Context, req *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
+			return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{URI: req.Params.URI, MIMEType: "text/plain", Text: "Deploys go out on Tuesdays."}}}, nil
+		})
+	s.AddPrompt(&sdk.Prompt{Name: "review", Description: "Review a file.", Arguments: []*sdk.PromptArgument{{Name: "file", Description: "The file to review", Required: true}, {Name: "focus"}}},
+		func(ctx context.Context, req *sdk.GetPromptRequest) (*sdk.GetPromptResult, error) {
+			return &sdk.GetPromptResult{Messages: []*sdk.PromptMessage{
+				{Role: "user", Content: &sdk.TextContent{Text: "Review " + req.Params.Arguments["file"] + " for " + req.Params.Arguments["focus"] + "."}},
+				{Role: "user", Content: &sdk.EmbeddedResource{Resource: &sdk.ResourceContents{URI: "notes://style", Text: "Prefer small functions."}}},
+			}}, nil
+		})
 	sdk.AddTool(s, &sdk.Tool{Name: "echo", Description: "Echo text.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}},
 		func(ctx context.Context, req *sdk.CallToolRequest, in echoIn) (*sdk.CallToolResult, echoOut, error) {
 			return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: in.Text + " " + os.Getenv("TOKEN")}}}, echoOut{}, nil
@@ -126,5 +138,40 @@ func TestWarning(t *testing.T) {
 		if got := Warning(c.s) != ""; got != c.warn {
 			t.Errorf("Warning(%s %v) = %v", c.s.Command, c.s.Args, got)
 		}
+	}
+}
+
+// MCP-007: a server's resources and prompts are listed, a resource is
+// read as text and a prompt renders with its arguments.
+func TestResourcesAndPrompts(t *testing.T) {
+	env, err := environment.NewLocal(environment.LocalOptions{Root: t.TempDir(), Guard: allow{}, Shell: []string{"sh", "-c"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(env)
+	defer m.StopAll()
+	exe, _ := os.Executable()
+	ctx := context.Background()
+	if err := m.Start(ctx, Launch{Config: config.MCPServer{ID: "test", Transport: "stdio", Command: exe, Env: map[string]string{"FREELOOP_MCP_TEST_SERVER": "1"}}}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := m.Resources(ctx, "test")
+	if err != nil || len(res) != 1 || res[0].URI != "notes://readme" || res[0].Description != "The team's notes." {
+		t.Fatalf("resources = %+v, %v", res, err)
+	}
+	text, err := m.ReadResource(ctx, "test", "notes://readme")
+	if err != nil || text != "Deploys go out on Tuesdays." {
+		t.Errorf("read = %q, %v", text, err)
+	}
+	prompts, err := m.Prompts(ctx, "test")
+	if err != nil || len(prompts) != 1 || len(prompts[0].Arguments) != 2 || !prompts[0].Arguments[0].Required || prompts[0].Arguments[1].Required {
+		t.Fatalf("prompts = %+v, %v", prompts, err)
+	}
+	p, err := m.GetPrompt(ctx, "test", "review", map[string]string{"file": "a.go", "focus": "errors"})
+	if err != nil || p.Text != "Review a.go for errors." || len(p.Resources) != 1 || p.Resources[0].Text != "Prefer small functions." {
+		t.Errorf("prompt = %+v, %v", p, err)
+	}
+	if _, err := m.Resources(ctx, "nope"); err == nil {
+		t.Error("a server that does not run listed resources")
 	}
 }
