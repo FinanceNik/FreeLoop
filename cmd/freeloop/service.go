@@ -18,7 +18,7 @@ import (
 // EngineService exposes the engine to the frontend. It is a thin adapter:
 // each method forwards to the engine and adds nothing, except ChooseFolder,
 // ExportSession, ExportConfig and ImportConfig, which show native dialogs,
-// and OpenSkill, which opens a file in another app.
+// and OpenSkill and OpenFile, which open a file in another app.
 type EngineService struct {
 	eng *engine.Engine
 	app *application.App
@@ -424,6 +424,24 @@ func (s *EngineService) OpenSkill(name string) error {
 	path := s.eng.SkillFile(name)
 	if path == "" {
 		return fmt.Errorf("the skill %s is not in Freeloop's skill folder", name)
+	}
+	return s.app.Browser.OpenFile(path)
+}
+
+func (s *EngineService) ListFolder(ctx context.Context, sessionID, rel string) ([]engine.FileEntry, error) {
+	return s.eng.ListFolder(ctx, sessionID, rel)
+}
+
+func (s *EngineService) ViewFile(ctx context.Context, sessionID, rel string) (engine.FileView, error) {
+	return s.eng.ViewFile(ctx, sessionID, rel)
+}
+
+// OpenFile opens a file of a session's folder in the app the user opens
+// that kind of file with (GUI-013).
+func (s *EngineService) OpenFile(ctx context.Context, sessionID, rel string) error {
+	path, err := s.eng.FileOnHost(ctx, sessionID, rel)
+	if err != nil {
+		return err
 	}
 	return s.app.Browser.OpenFile(path)
 }

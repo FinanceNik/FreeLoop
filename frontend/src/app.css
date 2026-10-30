@@ -1701,3 +1701,89 @@ table.hooks .hook-command {
   flex-direction: column;
   gap: 2px;
 }
+
+/* File tree and viewer (GUI-013) */
+.files-panel {
+  display: grid;
+  grid-template-columns: minmax(140px, 2fr) 3fr;
+  gap: 8px;
+  min-height: 0;
+  height: 100%;
+}
+
+.file-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  font-size: 13px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 6px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-row:hover,
+.file-on {
+  background: var(--bg-card);
+}
+
+.file-icon {
+  display: inline-block;
+  width: 1em;
+  color: var(--muted);
+}
+
+.file-agent {
+  font-weight: 600;
+}
+
+.file-mark {
+  width: 7px;
+  height: 7px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+
+.file-git .file-mark {
+  background: var(--muted);
+}
+
+.file-view {
+  min-width: 0;
+  overflow: auto;
+}
+
+.file-view-head {
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.file-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.file-line {
+  display: inline-block;
+  min-width: 3em;
+  margin-right: 10px;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
