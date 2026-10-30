@@ -100,3 +100,42 @@ func TestHeadless(t *testing.T) {
 		t.Error("an unknown method answered")
 	}
 }
+
+// Closing the server ends connected clients, one waiting for events
+// included, so quitting the app never hangs on them.
+func TestCloseEndsClients(t *testing.T) {
+	e, err := engine.Open(engine.Options{DataDir: t.TempDir(), Secrets: secrets.NewMemory(), Home: t.TempDir(), Dev: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	sock := filepath.Join(t.TempDir(), "s.sock")
+	srv, err := Listen(e, sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go srv.Serve()
+	idle, err := Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idle.Close()
+	waiting, err := Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer waiting.Close()
+	var ses session.Session
+	if err := waiting.Call("sessions.create", engine.CreateSessionRequest{ProjectRoot: t.TempDir(), ProviderID: engine.DemoProviderID}, &ses); err != nil {
+		t.Fatal(err)
+	}
+	go waiting.Call("sessions.wait", map[string]any{"id": ses.ID, "after": 1 << 30, "timeoutMs": 300000}, nil)
+	time.Sleep(100 * time.Millisecond)
+	closed := make(chan error, 1)
+	go func() { closed <- srv.Close() }()
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close waited for connected clients")
+	}
+}

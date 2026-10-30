@@ -31,6 +31,12 @@ func TestLocalOnly(t *testing.T) {
 		t.Fatalf("loopback: %v", err)
 	}
 	resp.Body.Close()
+	// A name under .localhost reaches this Mac without a lookup.
+	resp, err = http.Get(strings.Replace(srv.URL, "127.0.0.1", "some-app.localhost", 1))
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf(".localhost: %v", err)
+	}
+	resp.Body.Close()
 	if a := Attempts(); len(a) != 2 || len(told) != 2 || told[0] != "api.example.invalid" {
 		t.Errorf("attempts = %+v, told = %v", a, told)
 	}

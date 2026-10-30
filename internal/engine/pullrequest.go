@@ -11,6 +11,7 @@ import (
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 )
 
 // Pull requests (SES-011): the diff panel pushes the session's branch and
@@ -219,12 +220,18 @@ func (e *Engine) CreatePullRequest(ctx context.Context, req CreatePullRequestReq
 	if base != "" && (!branchName.MatchString(base) || strings.HasPrefix(base, "-")) {
 		return event.PullRequestData{}, fmt.Errorf("%q is not a branch name", base)
 	}
+	if netguard.LocalOnly() {
+		return event.PullRequestData{}, errors.New("the app is set to connect to nothing but this Mac; turn local-only off in Settings to push and open a pull request")
+	}
 	info, env, err := e.pullRequestInfo(ctx, req.SessionID, base)
 	if err != nil {
 		return event.PullRequestData{}, err
 	}
 	if info.Blocked != "" {
 		return event.PullRequestData{}, errors.New(info.Blocked)
+	}
+	if why := pushBlocked(ctx, env); why != "" {
+		return event.PullRequestData{}, errors.New(why)
 	}
 	if !branchName.MatchString(info.Branch) || strings.HasPrefix(info.Branch, "-") {
 		return event.PullRequestData{}, fmt.Errorf("the branch name %q cannot be passed to gh", info.Branch)
@@ -286,4 +293,20 @@ func prURL(out string) string {
 		return ""
 	}
 	return m[len(m)-1]
+}
+
+// pushBlocked says why the push and gh must not run in env, or "": beyond
+// what the diff panel refuses, a repository's own config can name programs
+// that a push (ssh, credential helpers, a local remote's receive-pack) or
+// gh's own git calls (fsmonitor) run. Those come from the user's global
+// config only.
+func pushBlocked(ctx context.Context, env environment.Environment) string {
+	keys, ok := repoConfigKeys(ctx, env, `^(core\.(sshcommand|gitproxy|askpass|fsmonitor)|credential\..*helper|remote\..*\.(receivepack|uploadpack))$`)
+	if len(keys) > 0 {
+		return fmt.Sprintf("This repository's own git config sets %s, which can run a program when pushing. Push from a terminal instead.", keys[0])
+	}
+	if !ok {
+		return "Freeloop could not read this repository's git config, so it does not push from here."
+	}
+	return ""
 }

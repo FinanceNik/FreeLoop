@@ -85,6 +85,11 @@ func (e *Engine) CheckForUpdate(ctx context.Context) (UpdateInfo, error) {
 	}
 	e.mu.Unlock()
 	if err != nil {
+		// A failed check waits a day too, keeping what the last good one
+		// found; "Check now" asks again at once.
+		st := config.LoadUpdateState(e.dataDir)
+		st.CheckedAt = time.Now().UTC()
+		config.SaveUpdateState(e.dataDir, st)
 		return e.updateInfo(), err
 	}
 	if err := config.SaveUpdateState(e.dataDir, config.UpdateState{CheckedAt: time.Now().UTC(), Latest: latest, URL: url}); err != nil {

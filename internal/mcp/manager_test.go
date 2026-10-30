@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -173,5 +174,29 @@ func TestResourcesAndPrompts(t *testing.T) {
 	}
 	if _, err := m.Resources(ctx, "nope"); err == nil {
 		t.Error("a server that does not run listed resources")
+	}
+}
+
+// A server's configured headers, which can hold secrets, go to its own host
+// only, not to one it redirects to.
+func TestHeadersStayOnTheServersHost(t *testing.T) {
+	var leaked atomic.Value
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leaked.Store(r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer other.Close()
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/mcp", http.StatusTemporaryRedirect)
+	}))
+	defer first.Close()
+	client := &http.Client{Transport: headers{set: map[string]string{"Authorization": "Bearer secret"}, host: hostOf(first.URL), next: http.DefaultTransport}}
+	resp, err := client.Get(first.URL + "/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if v, _ := leaked.Load().(string); v != "" {
+		t.Errorf("the redirect target got %q", v)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 )
 
@@ -127,5 +128,19 @@ func TestPullRequests(t *testing.T) {
 	}
 	if md, _ := e.RenderExport(ctx, ses.ID, ExportMarkdown); !strings.Contains(md, pr.URL) {
 		t.Error("the export leaves out the pull request")
+	}
+
+	// A repository whose own config names a program a push would run is
+	// refused, and so is everything in local-only mode.
+	gitIn(t, repo, "config", "core.sshCommand", "ssh -o ProxyCommand=evil")
+	if _, err := e.CreatePullRequest(ctx, CreatePullRequestRequest{SessionID: ses.ID, Title: "x"}); err == nil || !strings.Contains(err.Error(), "core.sshcommand") {
+		t.Errorf("with core.sshCommand: %v", err)
+	}
+	gitIn(t, repo, "config", "--unset", "core.sshCommand")
+	netguard.SetLocalOnly(true)
+	_, err = e.CreatePullRequest(ctx, CreatePullRequestRequest{SessionID: ses.ID, Title: "x"})
+	netguard.SetLocalOnly(false)
+	if err == nil || !strings.Contains(err.Error(), "local-only") {
+		t.Errorf("local-only: %v", err)
 	}
 }

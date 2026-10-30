@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -139,7 +140,7 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 	case "http":
 		transport = &sdk.StreamableClientTransport{
 			Endpoint:             l.Config.URL,
-			HTTPClient:           &http.Client{Transport: headers{set: merge(l.Config.Headers, l.Headers), next: http.DefaultTransport}},
+			HTTPClient:           &http.Client{Transport: headers{set: merge(l.Config.Headers, l.Headers), host: hostOf(l.Config.URL), next: http.DefaultTransport}},
 			DisableStandaloneSSE: true,
 			MaxRetries:           2,
 			OAuthHandler:         l.OAuth,
@@ -164,6 +165,9 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 	}
 	cctx, ccancel := context.WithTimeout(ctx, timeout)
 	defer ccancel()
+	// Stop ends a start in progress too, a sign-in waiting on the browser
+	// included.
+	defer context.AfterFunc(runCtx, ccancel)()
 	client := sdk.NewClient(&sdk.Implementation{Name: "freeloop", Version: "0.1"}, &sdk.ClientOptions{ElicitationHandler: m.elicit(id)})
 	cs, err := client.Connect(cctx, transport, nil)
 	if err != nil {
@@ -175,6 +179,12 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 		return fail(fmt.Errorf("list tools: %w", err))
 	}
 	m.mu.Lock()
+	if m.servers[id] != s || runCtx.Err() != nil {
+		// Stopped or replaced while it started.
+		m.mu.Unlock()
+		cs.Close()
+		return errors.New("the server was stopped while it started")
+	}
 	s.session = cs
 	s.status.State, s.status.Tools, s.status.Started, s.status.Error = Running, tools, time.Now().UTC(), ""
 	if ir := cs.InitializeResult(); ir != nil {
@@ -362,11 +372,17 @@ func lastLines(s string, n int) string {
 
 // headers adds configured headers, secret ones included, to every request.
 type headers struct {
-	set  map[string]string
+	set map[string]string
+	// host is the server's; a redirect elsewhere gets none of the headers,
+	// which can hold secrets.
+	host string
 	next http.RoundTripper
 }
 
 func (h headers) RoundTrip(r *http.Request) (*http.Response, error) {
+	if !strings.EqualFold(r.URL.Host, h.host) {
+		return h.next.RoundTrip(r)
+	}
 	r = r.Clone(r.Context())
 	for k, v := range h.set {
 		r.Header.Set(k, v)
@@ -402,4 +418,12 @@ func Warning(s config.MCPServer) string {
 		}
 	}
 	return ""
+}
+
+func hostOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }

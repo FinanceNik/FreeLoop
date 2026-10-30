@@ -20,6 +20,7 @@ import (
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/mcp"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
@@ -50,6 +51,9 @@ func isSigningIn(ctx context.Context) bool {
 
 // oauthRecord is what the Keychain keeps for a server.
 type oauthRecord struct {
+	// Server is the URL the sign-in was for; a server whose URL changed
+	// signs in again rather than hand its tokens to the new address.
+	Server       string           `json:"server"`
 	ClientID     string           `json:"clientId"`
 	ClientSecret string           `json:"clientSecret,omitempty"`
 	AuthURL      string           `json:"authUrl"`
@@ -70,13 +74,17 @@ func oauthRef(serverID string) secrets.Ref {
 	return secrets.Ref{Service: "freeloop", Account: "mcp-oauth/" + serverID}
 }
 
-func (e *Engine) loadOAuth(serverID string) (oauthRecord, bool) {
-	v, err := e.secrets.Get(oauthRef(serverID))
+func (e *Engine) loadOAuth(s config.MCPServer) (oauthRecord, bool) {
+	v, err := e.secrets.Get(oauthRef(s.ID))
 	if err != nil {
 		return oauthRecord{}, false
 	}
 	var r oauthRecord
 	if json.Unmarshal([]byte(v), &r) != nil || r.Token == nil {
+		return oauthRecord{}, false
+	}
+	if r.Server != s.URL {
+		e.secrets.Delete(oauthRef(s.ID))
 		return oauthRecord{}, false
 	}
 	return r, true
@@ -147,7 +155,7 @@ func (e *Engine) oauthHandler(s config.MCPServer) (auth.OAuthHandler, error) {
 		RequestRefreshToken:      true,
 		Client:                   client,
 		NewTokenSource: func(ctx context.Context, c *oauth2.Config, t *oauth2.Token) (oauth2.TokenSource, error) {
-			rec := oauthRecord{ClientID: c.ClientID, ClientSecret: c.ClientSecret, AuthURL: c.Endpoint.AuthURL, TokenURL: c.Endpoint.TokenURL,
+			rec := oauthRecord{Server: s.URL, ClientID: c.ClientID, ClientSecret: c.ClientSecret, AuthURL: c.Endpoint.AuthURL, TokenURL: c.Endpoint.TokenURL,
 				AuthStyle: c.Endpoint.AuthStyle, Scopes: c.Scopes, Token: t}
 			e.saveOAuth(s.ID, rec)
 			return saving(context.Background(), rec), nil
@@ -156,7 +164,7 @@ func (e *Engine) oauthHandler(s config.MCPServer) (auth.OAuthHandler, error) {
 	if s.OAuthClientID != "" {
 		cfg.PreregisteredClient = &oauthex.ClientCredentials{ClientID: s.OAuthClientID}
 	}
-	if rec, ok := e.loadOAuth(s.ID); ok {
+	if rec, ok := e.loadOAuth(s); ok {
 		e.remember(rec.Token.AccessToken)
 		e.remember(rec.Token.RefreshToken)
 		cfg.InitialTokenSource = saving(context.Background(), rec)
@@ -293,8 +301,10 @@ func freeLoopbackPort() (int, error) {
 // oauthClient is the HTTP client for a server's OAuth requests. It goes
 // through http.DefaultTransport, so the local-only switch covers it
 // (NFR-OFF-003), and refuses private and loopback addresses unless the
-// server itself is on one, so a server's metadata cannot point the app at
-// services on this Mac or its network.
+// server itself is on one (by address or by what its name resolves to), so
+// a server's metadata cannot point the app at services on this Mac or its
+// network. Every request's host is checked before it is sent, proxied ones
+// too, and a direct connection's address once more after it is made.
 func oauthClient(serverURL string) *http.Client {
 	base, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
@@ -302,30 +312,67 @@ func oauthClient(serverURL string) *http.Client {
 	}
 	t := base.Clone()
 	u, _ := url.Parse(serverURL)
-	if u == nil || !privateHost(u.Hostname()) {
-		dial := t.DialContext
-		if dial == nil {
-			dial = (&net.Dialer{Timeout: 30 * time.Second}).DialContext
+	if u != nil && hostIsPrivate(u.Hostname()) {
+		return &http.Client{Transport: t, Timeout: 30 * time.Second}
+	}
+	dial := t.DialContext
+	if dial == nil {
+		dial = (&net.Dialer{Timeout: 30 * time.Second}).DialContext
+	}
+	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		c, err := dial(ctx, network, addr)
+		if err != nil {
+			return nil, err
 		}
-		proxied := false
-		if t.Proxy != nil && u != nil {
-			if p, err := t.Proxy(&http.Request{URL: u}); err == nil && p != nil {
-				proxied = true // the connection is to the proxy
+		// Through a proxy the connection is the proxy's; the request's
+		// host was checked before it was sent.
+		if t.Proxy != nil {
+			if p, perr := t.Proxy(&http.Request{URL: &url.URL{Scheme: "https", Host: addr}}); perr == nil && p != nil {
+				return c, nil
 			}
 		}
-		t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			c, err := dial(ctx, network, addr)
-			if err != nil || proxied {
-				return c, err
-			}
-			if ap, err := netip.ParseAddrPort(c.RemoteAddr().String()); err == nil && privateAddr(ap.Addr()) {
-				c.Close()
-				return nil, fmt.Errorf("refused %s: a remote server's sign-in may not reach a private address", addr)
-			}
-			return c, nil
+		if ap, err := netip.ParseAddrPort(c.RemoteAddr().String()); err == nil && privateAddr(ap.Addr()) {
+			c.Close()
+			return nil, fmt.Errorf("refused %s: a remote server's sign-in may not reach a private address", addr)
+		}
+		return c, nil
+	}
+	return &http.Client{Transport: publicOnly{t}, Timeout: 30 * time.Second}
+}
+
+// publicOnly refuses a request whose host is private or resolves to a
+// private address.
+type publicOnly struct{ next http.RoundTripper }
+
+func (p publicOnly) RoundTrip(r *http.Request) (*http.Response, error) {
+	if hostIsPrivate(r.URL.Hostname()) {
+		return nil, fmt.Errorf("refused %s: a remote server's sign-in may not reach a private address", r.URL.Host)
+	}
+	return p.next.RoundTrip(r)
+}
+
+// hostIsPrivate reports a host that is, or whose name resolves to, a
+// private or loopback address. In local-only mode no name is looked up:
+// the connection is refused anyway, and the name must not leave the Mac.
+func hostIsPrivate(host string) bool {
+	if privateHost(host) {
+		return true
+	}
+	if _, err := netip.ParseAddr(host); err == nil || netguard.LocalOnly() {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if privateAddr(ip) {
+			return true
 		}
 	}
-	return &http.Client{Transport: t, Timeout: 30 * time.Second}
+	return false
 }
 
 func privateHost(host string) bool {

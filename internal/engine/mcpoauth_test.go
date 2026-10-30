@@ -191,7 +191,7 @@ func TestMCPOAuthSignIn(t *testing.T) {
 	if err != nil || res.Text != "signed in" {
 		t.Fatalf("call = %+v, %v", res, err)
 	}
-	rec, ok := e.loadOAuth("remote")
+	rec, ok := e.loadOAuth(server(e))
 	if !ok || rec.Token.AccessToken != "access-1" || rec.ClientID != "client-1" || rec.TokenURL != f.srv.URL+"/token" {
 		t.Fatalf("keychain = %+v", rec)
 	}
@@ -206,15 +206,30 @@ func TestMCPOAuthSignIn(t *testing.T) {
 	if opened != 1 || f.refreshes != 1 {
 		t.Errorf("restart: browser opened %d, refreshes %d", opened, f.refreshes)
 	}
-	if rec, _ := e.loadOAuth("remote"); rec.Token.AccessToken != "access-2" {
+	if rec, _ := e.loadOAuth(server(e)); rec.Token.AccessToken != "access-2" {
 		t.Errorf("the refreshed token was not kept: %+v", rec.Token)
 	}
+
+	// A new URL does not inherit the sign-in: its first request carries no
+	// token, and the server waits for a sign-in of its own.
+	moved, _ := e.mcpServer("remote")
+	moved.URL = f.srv.URL + "/mcp?moved=1"
+	info, err = e.SaveMCPServer(SaveMCPServerRequest{Server: moved})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err = e.ApproveMCPServer(ctx, "remote", info.Fingerprint); err != nil || info.Status.State != mcp.SignIn || info.SignedIn {
+		t.Fatalf("after a URL change: %+v, %v", info.Status, err)
+	}
+	moved.URL = f.srv.URL + "/mcp"
+	info, _ = e.SaveMCPServer(SaveMCPServerRequest{Server: moved})
+	e.ApproveMCPServer(ctx, "remote", info.Fingerprint)
 
 	// Signing out forgets the tokens; the next start waits for a sign-in.
 	if err := e.SignOutMCPServer("remote"); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := e.loadOAuth("remote"); ok {
+	if _, ok := e.loadOAuth(server(e)); ok {
 		t.Error("the sign-in is still in the Keychain")
 	}
 	if err := e.StartMCPServer(ctx, "remote"); err != nil || e.mcp.Status("remote").State != mcp.SignIn {
@@ -229,6 +244,10 @@ func TestOAuthClientRefusesPrivateAddresses(t *testing.T) {
 	defer local.Close()
 	if _, err := oauthClient("https://mcp.example.com/mcp").Get(local.URL); err == nil || !strings.Contains(err.Error(), "private address") {
 		t.Errorf("a remote server reached %s: %v", local.URL, err)
+	}
+	byName := strings.Replace(local.URL, "127.0.0.1", "localhost", 1)
+	if _, err := oauthClient("https://mcp.example.com/mcp").Get(byName); err == nil || !strings.Contains(err.Error(), "private address") {
+		t.Errorf("a remote server reached %s by name: %v", byName, err)
 	}
 	resp, err := oauthClient(local.URL + "/mcp").Get(local.URL)
 	if err != nil {
@@ -245,5 +264,49 @@ func TestSignInPageScheme(t *testing.T) {
 		if got := webPage(raw); got != want {
 			t.Errorf("webPage(%q) = %v", raw, got)
 		}
+	}
+}
+
+// server returns the test's "remote" server configuration.
+func server(e *Engine) config.MCPServer {
+	s, _ := e.mcpServer("remote")
+	return s
+}
+
+// Signing out while a sign-in waits on the browser ends the wait: nothing
+// is kept and the server does not come up afterwards.
+func TestSignOutEndsAWaitingSignIn(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeOAuth(t)
+	defer f.srv.Close()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	opened := make(chan struct{}, 1)
+	e.SetOpenURL(func(string) error { opened <- struct{}{}; return nil }) // the user never finishes
+	info, err := e.SaveMCPServer(SaveMCPServerRequest{Server: config.MCPServer{ID: "remote", Name: "Remote", Transport: "http", URL: f.srv.URL + "/mcp", Enabled: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.ApproveMCPServer(ctx, "remote", info.Fingerprint)
+	done := make(chan error, 1)
+	go func() { _, err := e.SignInMCPServer(ctx, "remote"); done <- err }()
+	select {
+	case <-opened:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the sign-in page did not open")
+	}
+	if err := e.SignOutMCPServer("remote"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("the sign-in succeeded after the sign-out")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the sign-in kept waiting after the sign-out")
+	}
+	if _, ok := e.loadOAuth(server(e)); ok || e.mcp.Status("remote").State == mcp.Running {
+		t.Errorf("after the sign-out: kept %v, %+v", ok, e.mcp.Status("remote"))
 	}
 }

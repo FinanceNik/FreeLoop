@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -51,7 +52,24 @@ func Install() {
 			if err := Check(addr); err != nil {
 				return nil, err
 			}
-			return dial(ctx, network, addr)
+			if !localOnly.Load() {
+				return dial(ctx, network, addr)
+			}
+			// A name under .localhost goes to the loopback address without
+			// a lookup, which could leave the Mac; and whatever a name
+			// resolved to, the connection must end up on this Mac.
+			if host, port, err := net.SplitHostPort(addr); err == nil && strings.HasSuffix(strings.ToLower(strings.TrimSuffix(host, ".")), ".localhost") {
+				addr = net.JoinHostPort("127.0.0.1", port)
+			}
+			c, err := dial(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			if ap, err := netip.ParseAddrPort(c.RemoteAddr().String()); err == nil && !ap.Addr().Unmap().IsLoopback() {
+				c.Close()
+				return nil, fmt.Errorf("local-only mode blocks the connection to %s: it resolved to %s", addr, ap.Addr())
+			}
+			return c, nil
 		}
 		proxy := t.Proxy
 		t.Proxy = func(r *http.Request) (*url.URL, error) {

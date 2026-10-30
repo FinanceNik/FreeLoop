@@ -49,6 +49,12 @@ type Server struct {
 	e  *engine.Engine
 	ln net.Listener
 	wg sync.WaitGroup
+	// ctx ends with Close, and with it a call that waits (sessions.wait);
+	// conns are the open connections, which Close ends too.
+	ctx    context.Context
+	cancel context.CancelFunc
+	mu     sync.Mutex
+	conns  map[net.Conn]struct{}
 }
 
 // Listen opens the socket at path. Another running app on the same data
@@ -65,7 +71,8 @@ func Listen(e *engine.Engine, path string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{e: e, ln: ln}, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Server{e: e, ln: ln, ctx: ctx, cancel: cancel, conns: map[net.Conn]struct{}{}}, nil
 }
 
 // Serve accepts connections until Close.
@@ -75,17 +82,37 @@ func (s *Server) Serve() {
 		if err != nil {
 			return
 		}
+		s.mu.Lock()
+		if s.ctx.Err() != nil {
+			s.mu.Unlock()
+			c.Close()
+			return
+		}
+		s.conns[c] = struct{}{}
+		s.mu.Unlock()
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer func() {
+				s.mu.Lock()
+				delete(s.conns, c)
+				s.mu.Unlock()
+			}()
 			s.conn(c)
 		}()
 	}
 }
 
-// Close stops serving and removes the socket.
+// Close stops serving, ends the open connections and the calls waiting on
+// them, and removes the socket.
 func (s *Server) Close() error {
 	err := s.ln.Close()
+	s.mu.Lock()
+	s.cancel()
+	for c := range s.conns {
+		c.Close()
+	}
+	s.mu.Unlock()
 	s.wg.Wait()
 	return err
 }
@@ -103,7 +130,7 @@ func (s *Server) conn(c net.Conn) {
 			resp.Error = &Error{Code: -32700, Message: "parse error: " + err.Error()}
 		} else {
 			resp.ID = req.ID
-			res, err := s.call(context.Background(), req.Method, req.Params)
+			res, err := s.call(s.ctx, req.Method, req.Params)
 			if err != nil {
 				var re *Error
 				if !errors.As(err, &re) {
@@ -231,6 +258,8 @@ func (s *Server) wait(ctx context.Context, p waitP) ([]event.Event, error) {
 			if ev.SID == p.ID && ev.Seq > p.After {
 				return s.e.Events(ctx, p.ID, p.After)
 			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case <-deadline:
 			return []event.Event{}, nil
 		}

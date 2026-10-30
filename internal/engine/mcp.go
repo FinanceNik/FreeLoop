@@ -95,7 +95,7 @@ func (e *Engine) mcpInfo(s config.MCPServer) MCPServerInfo {
 		SignInURL: e.signInURL(s.ID),
 	}
 	if s.Transport == "http" {
-		_, info.SignedIn = e.loadOAuth(s.ID)
+		_, info.SignedIn = e.loadOAuth(s)
 	}
 	return info
 }

@@ -109,6 +109,10 @@ func TestUpdateCheckFailures(t *testing.T) {
 		e := openTest(t, t.TempDir())
 		e.releaseAPI = srv.URL
 		info, err := e.CheckForUpdate(context.Background())
+		// A failure waits a day like a success.
+		if want != "" && time.Since(e.updateInfo().Checked) > time.Minute {
+			t.Errorf("%s: the failed check was not recorded", body)
+		}
 		switch {
 		case want == "" && (err != nil || info.URL != "https://github.com/FinanceNik/Freeloop/releases"):
 			t.Errorf("%s: %+v, %v", body, info, err)
