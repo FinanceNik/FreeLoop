@@ -119,7 +119,7 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 			return s, nil
 		}
 	}
-	ns, err := s.conn.NewSession(ctx, sdk.NewSessionRequest{Cwd: s.env.Root(), McpServers: s.mcpServers()})
+	ns, err := s.conn.NewSession(ctx, sdk.NewSessionRequest{Cwd: s.env.Root(), McpServers: s.mcpServers(), Meta: s.sessionMeta()})
 	if err != nil {
 		if len(init.AuthMethods) > 0 {
 			err = fmt.Errorf("%w; sign in with the agent's own command first (Freeloop does not handle its login)", err)
@@ -140,7 +140,7 @@ func (s *session) load(ctx context.Context, id string) bool {
 		s.mu.Lock()
 		s.loading = true
 		s.mu.Unlock()
-		_, err := s.conn.LoadSession(ctx, sdk.LoadSessionRequest{SessionId: sdk.SessionId(id), Cwd: s.env.Root(), McpServers: s.mcpServers()})
+		_, err := s.conn.LoadSession(ctx, sdk.LoadSessionRequest{SessionId: sdk.SessionId(id), Cwd: s.env.Root(), McpServers: s.mcpServers(), Meta: s.sessionMeta()})
 		s.mu.Lock()
 		s.loading = false
 		s.mu.Unlock()
@@ -610,4 +610,17 @@ func (s *session) ReleaseTerminal(_ context.Context, r sdk.ReleaseTerminalReques
 func lastLine(s string) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	return lines[len(lines)-1]
+}
+
+// sessionMeta is what session/new and session/load carry beyond the
+// protocol: the session's skills as a local plugin, for an agent whose
+// preset takes them that way (SKL-008). The plugin brings no MCP servers;
+// the session's own reach the agent through the protocol.
+func (s *session) sessionMeta() map[string]any {
+	if s.preset.Skills != config.SkillsClaudePlugin || s.p.SkillPlugin == "" {
+		return nil
+	}
+	return map[string]any{"claudeCode": map[string]any{"options": map[string]any{
+		"plugins": []map[string]any{{"type": "local", "path": s.p.SkillPlugin, "skipMcpDiscovery": true}},
+	}}}
 }

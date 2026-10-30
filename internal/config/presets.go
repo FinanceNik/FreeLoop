@@ -38,12 +38,21 @@ type HarnessPreset struct {
 	// Watch is a folder whose changes restart the agent for idle sessions
 	// on their next message: the source of a custom harness (HRN-011).
 	Watch string `yaml:"watch,omitempty" json:"watch"`
+	// Skills says how the agent is given the skills enabled in the app
+	// (SKL-008): SkillsClaudePlugin passes them as a local plugin folder in
+	// session/new's _meta.claudeCode.options.plugins; empty, not at all.
+	Skills string `yaml:"skills,omitempty" json:"skills"`
 	// Builtin is set for presets that ship with the app.
 	Builtin bool `yaml:"-" json:"builtin"`
 }
 
 // ClaudeCodePresetID is the preset for Claude Code (HRN-006).
 const ClaudeCodePresetID = "claude-code"
+
+// SkillsClaudePlugin is the HarnessPreset.Skills way of agents built on the
+// Claude Agent SDK, whose ACP adapter passes _meta.claudeCode.options on to
+// the SDK.
+const SkillsClaudePlugin = "claude-plugin"
 
 // BuiltinPresets ship with the app; a file with the same ID replaces one.
 // The Claude Code preset runs the ACP adapter for Claude Code (first
@@ -60,6 +69,7 @@ func BuiltinPresets() []HarnessPreset {
 		Args:        []string{"-y", "@agentclientprotocol/claude-agent-acp@0.99.1"},
 		Modes:       map[string]string{"ask": "default", "accept_edits": "acceptEdits", "plan": "plan", "bypass": "bypassPermissions"},
 		Notes:       "Needs Node.js. Sign in once with the claude command in a terminal; Freeloop never sees or stores the login.",
+		Skills:      SkillsClaudePlugin,
 		Builtin:     true,
 	}}
 }
@@ -73,6 +83,8 @@ func (p HarnessPreset) Validate() error {
 		return fieldErr("name", "a name is required")
 	case strings.TrimSpace(p.Command) == "":
 		return fieldErr("command", "a command is required")
+	case p.Skills != "" && p.Skills != SkillsClaudePlugin:
+		return fieldErr("skills", "%q is not a way to give the agent skills; use %s or leave it out", p.Skills, SkillsClaudePlugin)
 	}
 	for k := range p.Env {
 		if !varName.MatchString(k) {

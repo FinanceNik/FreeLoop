@@ -68,6 +68,7 @@ modes:                            # the app's modes to the agent's session modes
   accept_edits: acceptEdits
   plan: plan
 notes: Sign in once with `my-agent login` in a terminal.
+skills: claude-plugin             # optional: the agent takes the session's skills as a Claude Code plugin (SKL-008)
 ```
 
 The agent runs in the session's environment, its file and terminal requests go through the environment and the permission broker like everything else, and it signs in on its own: Freeloop never reads, stores or forwards a vendor's tokens (HRN-008). Presets that ship with the app are in `config.BuiltinPresets`; a file with the same ID replaces one. To test a preset, run the HRN-005 scenario from REQUIREMENTS.md against it; `internal/harness/acp/acptest` is a reference agent for the client's own tests.

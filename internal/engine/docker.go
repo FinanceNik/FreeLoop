@@ -36,7 +36,7 @@ var devcontainerFiles = []string{".devcontainer/devcontainer.json", ".devcontain
 
 // dockerEnv builds and starts the container a session of envCfg runs in,
 // and records what it did and whether the environment is healthy.
-func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project session.Project, envCfg config.Environment, vars map[string]string, host *environment.Local) (*environment.Docker, error) {
+func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project session.Project, envCfg config.Environment, vars map[string]string, host *environment.Local, plugin string) (*environment.Docker, error) {
 	opts := environment.DockerOptions{
 		ID: envCfg.ID, Container: containerName(ses.ID), Root: ses.WorkRoot(), Image: envCfg.Image,
 		Env: maps.Clone(vars), Setup: envCfg.Setup, Health: envCfg.Health, Guard: e.broker.Policy().Guard(ses.WorkRoot()),
@@ -86,6 +86,12 @@ func (e *Engine) dockerEnv(ctx context.Context, ses session.Session, project ses
 		opts.PlainEnv = dc.Env
 	}
 	e.gitMounts(ctx, host, &opts)
+	// The folder of the session's skill plugin (SKL-008), at the same
+	// path, read-only; mounted even while empty, since the container
+	// outlives the agent and keeps its mounts.
+	if plugin != "" {
+		opts.ReadOnlyMounts = append(opts.ReadOnlyMounts, plugin)
+	}
 	d, err := environment.NewDocker(opts)
 	if err != nil {
 		return nil, err

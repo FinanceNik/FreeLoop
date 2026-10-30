@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
@@ -103,6 +104,9 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 	}
 	e.stopRuntime(sid)
 	e.closeTerminals(sid)
+	if err := config.RemoveSessionPlugin(e.dataDir, sid); err != nil {
+		log.Printf("engine: remove the skills of deleted session %s: %v", sid, err)
+	}
 	// Whatever the environment is now (it may have been deleted or changed
 	// kind), a container the session had, and an image built for it, go.
 	if _, err := environment.FindDocker(); err == nil {

@@ -40,6 +40,23 @@ type agent struct {
 	conn   *sdk.AgentSideConnection
 	mcp    []string
 	loaded string
+	// plugin is the local plugin folder session/new or session/load passed
+	// in _meta.claudeCode.options.plugins (SKL-008).
+	plugin string
+}
+
+// pluginOf returns the path of the first local plugin in a request's _meta.
+func pluginOf(meta map[string]any) string {
+	cc, _ := meta["claudeCode"].(map[string]any)
+	opts, _ := cc["options"].(map[string]any)
+	plugins, _ := opts["plugins"].([]any)
+	for _, p := range plugins {
+		if m, _ := p.(map[string]any); m["type"] == "local" && m["skipMcpDiscovery"] == true {
+			path, _ := m["path"].(string)
+			return path
+		}
+	}
+	return ""
 }
 
 func (a *agent) Initialize(context.Context, sdk.InitializeRequest) (sdk.InitializeResponse, error) {
@@ -48,6 +65,7 @@ func (a *agent) Initialize(context.Context, sdk.InitializeRequest) (sdk.Initiali
 }
 
 func (a *agent) NewSession(_ context.Context, r sdk.NewSessionRequest) (sdk.NewSessionResponse, error) {
+	a.plugin = pluginOf(r.Meta)
 	for _, m := range r.McpServers {
 		switch {
 		case m.Stdio != nil:
@@ -68,6 +86,9 @@ func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResp
 		say("loaded: " + a.loaded)
 	}
 	say("mcp: " + strings.Join(a.mcp, ","))
+	if a.plugin != "" {
+		say("plugin: " + a.plugin)
+	}
 	cwd, _ := os.Getwd()
 	path := filepath.Join(cwd, "notes.txt")
 	a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: r.SessionId, Update: sdk.StartToolCall("t1", "Edit notes.txt",
@@ -129,6 +150,7 @@ func (a *agent) SetSessionConfigOption(context.Context, sdk.SetSessionConfigOpti
 
 func (a *agent) LoadSession(ctx context.Context, r sdk.LoadSessionRequest) (sdk.LoadSessionResponse, error) {
 	a.loaded = string(r.SessionId)
+	a.plugin = pluginOf(r.Meta)
 	a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: r.SessionId, Update: sdk.UpdateAgentMessageText("replayed history")})
 	return sdk.LoadSessionResponse{}, nil
 }

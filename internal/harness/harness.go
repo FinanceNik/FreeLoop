@@ -64,6 +64,10 @@ type Params struct {
 	// Skills are the session's enabled skills, asked at every model call
 	// so toggles apply at once (SKL-002, SKL-004); nil means none.
 	Skills SkillSource
+	// SkillPlugin is a folder, as the session's environment sees it, laid
+	// out as a Claude Code plugin with the session's enabled skills, for an
+	// external agent whose preset takes one (SKL-008); "" for none.
+	SkillPlugin string
 	// MCP are the session's MCP tools (MCP-003), asked at every model call
 	// so servers that start or stop are picked up; nil means none.
 	MCP MCPSource

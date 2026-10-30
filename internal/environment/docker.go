@@ -46,6 +46,9 @@ type DockerOptions struct {
 	// path: the main checkout's .git for a session in a git worktree, so
 	// git works inside the container.
 	Mounts []string
+	// ReadOnlyMounts are host directories bind-mounted read-only at the
+	// same path, such as a session's skill plugin (SKL-008).
+	ReadOnlyMounts []string
 	// ReadOnly are paths inside Root or Mounts mounted read-only in the container,
 	// so a command there cannot change what the app reads and runs on the
 	// host (.freeloop/, the devcontainer files). A missing directory ending
@@ -179,6 +182,10 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 		for _, m := range d.opts.Mounts {
 			m = filepath.Clean(m)
 			args = append(args, "-v", m+":"+m)
+		}
+		for _, m := range d.opts.ReadOnlyMounts {
+			m = filepath.Clean(m)
+			args = append(args, "-v", m+":"+m+":ro")
 		}
 		inside := func(p string) bool {
 			for _, base := range append([]string{root}, d.opts.Mounts...) {
