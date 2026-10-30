@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Events } from "@wailsio/runtime";
-import { EngineService, FILES_DROPPED_EVENT_NAME, type ProjectInfo, type SkillCandidate, type SkillList } from "./api.ts";
+import { EngineService, FILES_DROPPED_EVENT_NAME, type ProjectInfo, type ProviderInfo, type SkillCandidate, type SkillList, type SkillTest } from "./api.ts";
 
 // Skills (SKL-002): every skill the app found, where it came from, and
 // switches globally and per project. The model sees only the names and
@@ -8,6 +8,7 @@ import { EngineService, FILES_DROPPED_EVENT_NAME, type ProjectInfo, type SkillCa
 
 interface Props {
   projects: ProjectInfo[];
+  providers: ProviderInfo[];
   configVersion: number;
   onConfigChanged: () => void;
   onProjectsChanged: () => void;
@@ -23,7 +24,7 @@ const SOURCE: Record<string, string> = {
   ".claude": "Project .claude/skills",
 };
 
-export default function Skills({ projects, configVersion, onConfigChanged, onProjectsChanged, onError }: Props) {
+export default function Skills({ projects, providers, configVersion, onConfigChanged, onProjectsChanged, onError }: Props) {
   const trusted = projects.filter((p) => p.trusted && !p.missing);
   const [root, setRoot] = useState(trusted[0]?.root ?? "");
   const [list, setList] = useState<SkillList | null>(null);
@@ -87,6 +88,33 @@ export default function Skills({ projects, configVersion, onConfigChanged, onPro
     EngineService.RemoveSkill(name).then(load).catch(onError);
   };
 
+  // Authoring (SKL-007): a new skill from the template, opened in the
+  // editor, and a test run against a model.
+  const [creating, setCreating] = useState<{ name: string; description: string } | null>(null);
+  const create = () => {
+    if (!creating) return;
+    EngineService.CreateSkill(creating.name.trim(), creating.description)
+      .then(() => {
+        const name = creating.name.trim();
+        setCreating(null);
+        load();
+        return EngineService.OpenSkill(name);
+      })
+      .catch(onError);
+  };
+  const [testing, setTesting] = useState<{ name: string; providerId: string; model: string; prompt: string; result?: SkillTest; busy?: boolean } | null>(null);
+  const runTest = () => {
+    if (!testing) return;
+    setTesting({ ...testing, busy: true, result: undefined });
+    EngineService.TestSkill({ name: testing.name, providerId: testing.providerId, model: testing.model, prompt: testing.prompt, root })
+      .then((result) => setTesting((t) => (t ? { ...t, result, busy: false } : t)))
+      .catch((err) => {
+        setTesting((t) => (t ? { ...t, busy: false } : t));
+        onError(err);
+      });
+  };
+  const testable = providers.filter((p) => p.hasKey || p.type === "ollama" || p.builtin || p.baseUrl.startsWith("http://localhost"));
+
   const skills = list?.skills ?? [];
   return (
     <section className="page">
@@ -98,6 +126,7 @@ export default function Skills({ projects, configVersion, onConfigChanged, onPro
       </p>
       <div className="card skill-install" data-file-drop-target="skills">
         <div className="row wrap">
+          <button onClick={() => setCreating(creating ? null : { name: "", description: "" })}>New skill…</button>
           <button onClick={importClaude}>Import from Claude Code</button>
           <button onClick={chooseFolder}>Install from a folder…</button>
           <span className="muted">or drop a skill folder or .zip here. Skills are copied into the store; the source is not changed.</span>
@@ -114,6 +143,39 @@ export default function Skills({ projects, configVersion, onConfigChanged, onPro
             Preview
           </button>
         </form>
+        {creating && (
+          <form
+            className="skill-create"
+            onSubmit={(e) => {
+              e.preventDefault();
+              create();
+            }}
+          >
+            <label>
+              Name <span className="muted">(lowercase letters, digits and hyphens; the folder's name)</span>
+              <input
+                autoFocus
+                required
+                pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                maxLength={64}
+                value={creating.name}
+                onChange={(e) => setCreating({ ...creating, name: e.target.value })}
+              />
+            </label>
+            <label>
+              Description <span className="muted">(what it does and when to use it; models pick skills by this)</span>
+              <textarea required rows={2} maxLength={1024} value={creating.description} onChange={(e) => setCreating({ ...creating, description: e.target.value })} />
+            </label>
+            <div className="row">
+              <button type="submit" className="primary">
+                Create and open
+              </button>
+              <button type="button" onClick={() => setCreating(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
         {installed && <p className="ok">{installed}</p>}
         {preview && (
           <div className="skill-preview">
@@ -195,10 +257,67 @@ export default function Skills({ projects, configVersion, onConfigChanged, onPro
                 </label>
               )}
             </div>
-            {s.source === "app" && (
-              <button className="link" onClick={() => remove(s.name)}>
-                Remove
+            <div className="row">
+              {s.source === "app" && (
+                <button className="link" onClick={() => EngineService.OpenSkill(s.name).catch(onError)}>
+                  Edit
+                </button>
+              )}
+              <button
+                className="link"
+                onClick={() =>
+                  setTesting(testing?.name === s.name ? null : { name: s.name, providerId: testable[0]?.id ?? "", model: testable[0]?.defaultModel ?? "", prompt: "" })
+                }
+              >
+                Test…
               </button>
+              {s.source === "app" && (
+                <button className="link" onClick={() => remove(s.name)}>
+                  Remove
+                </button>
+              )}
+            </div>
+            {testing?.name === s.name && (
+              <form
+                className="skill-test"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  runTest();
+                }}
+              >
+                <label>
+                  A prompt that should use this skill
+                  <input required value={testing.prompt} onChange={(e) => setTesting({ ...testing, prompt: e.target.value })} />
+                </label>
+                <div className="row wrap">
+                  <select
+                    aria-label="Provider"
+                    value={testing.providerId}
+                    onChange={(e) => setTesting({ ...testing, providerId: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? "" })}
+                  >
+                    {providers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input aria-label="Model" placeholder="Model" value={testing.model} onChange={(e) => setTesting({ ...testing, model: e.target.value })} />
+                  <button type="submit" disabled={testing.busy || !testing.providerId}>
+                    {testing.busy ? "Asking the model…" : "Run the test"}
+                  </button>
+                </div>
+                {testing.result && (
+                  <p className={testing.result.picked ? "ok" : "banner warn"}>
+                    {testing.result.picked
+                      ? "The model loaded the skill."
+                      : testing.result.loaded
+                        ? `The model loaded ${testing.result.loaded} instead.`
+                        : "The model did not load the skill. Try a description that names the task and when to use it."}
+                    {testing.result.reply && <span className="muted"> It said: {testing.result.reply.slice(0, 300)}</span>}
+                  </p>
+                )}
+                <p className="muted">One model call with the skills a session lists; it uses tokens.</p>
+              </form>
             )}
           </li>
         ))}

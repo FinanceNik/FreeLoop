@@ -665,7 +665,7 @@ export default function App() {
           </section>
         )}
         {screen.kind === "skills" && (
-          <Skills projects={projects} configVersion={configVersion} onConfigChanged={refreshConfig} onProjectsChanged={refreshProjects} onError={report} />
+          <Skills projects={projects} providers={providers} configVersion={configVersion} onConfigChanged={refreshConfig} onProjectsChanged={refreshProjects} onError={report} />
         )}
         {screen.kind === "profiles" && (
           <Profiles

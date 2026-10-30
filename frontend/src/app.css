@@ -1685,3 +1685,19 @@ table.hooks .hook-command {
   overflow: auto;
   white-space: pre-wrap;
 }
+
+/* Skill authoring (SKL-007) */
+.skill-create,
+.skill-test {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.skill-create label,
+.skill-test label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

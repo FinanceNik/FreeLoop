@@ -486,6 +486,27 @@ func (s *session) lookup(name string) *tool {
 	return nil
 }
 
+// SkillsIndex is the system prompt's list of skills, as a session's model
+// sees it; empty without skills. The skill test run uses it too (SKL-007).
+func SkillsIndex(list []harness.SkillEntry) string {
+	if len(list) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("\n# Skills\n\nSkills are folders of instructions and scripts for particular tasks. When a task matches a skill's description, call load_skill with its name before starting, then follow it.\n\n")
+	for _, sk := range list {
+		desc := strings.Join(strings.Fields(sk.Description), " ")
+		if len(desc) > maxSkillDescription {
+			desc = strings.ToValidUTF8(desc[:maxSkillDescription], "") + "…"
+		}
+		fmt.Fprintf(&sb, "- %s: %s\n", sk.Name, desc)
+	}
+	return sb.String()
+}
+
+// LoadSkillSpec is the load_skill tool as models see it.
+func LoadSkillSpec() provider.ToolSpec { return loadSkill().spec }
+
 // runTools runs a model turn's tool calls and returns their results in
 // order. Neighbouring calls of read-only built-in tools (reads, listings,
 // searches) run at once (HRN-014); the others one after another, in the
@@ -640,16 +661,7 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 		sb.WriteString("\n# Mode: bypass\n\nTool calls run without asking the user. Be careful with destructive commands.\n")
 	}
 	if s.p.Skills != nil {
-		if list := s.p.Skills.Enabled(); len(list) > 0 {
-			sb.WriteString("\n# Skills\n\nSkills are folders of instructions and scripts for particular tasks. When a task matches a skill's description, call load_skill with its name before starting, then follow it.\n\n")
-			for _, sk := range list {
-				desc := strings.Join(strings.Fields(sk.Description), " ")
-				if len(desc) > maxSkillDescription {
-					desc = strings.ToValidUTF8(desc[:maxSkillDescription], "") + "…"
-				}
-				fmt.Fprintf(&sb, "- %s: %s\n", sk.Name, desc)
-			}
-		}
+		sb.WriteString(SkillsIndex(s.p.Skills.Enabled()))
 	}
 	if s.p.SystemPrompt != "" {
 		fmt.Fprintf(&sb, "\n# Profile instructions\n\n%s\n", strings.TrimSpace(s.p.SystemPrompt))

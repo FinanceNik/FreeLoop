@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -16,7 +17,8 @@ import (
 
 // EngineService exposes the engine to the frontend. It is a thin adapter:
 // each method forwards to the engine and adds nothing, except ChooseFolder,
-// ExportSession, ExportConfig and ImportConfig, which show native dialogs.
+// ExportSession, ExportConfig and ImportConfig, which show native dialogs,
+// and OpenSkill, which opens a file in another app.
 type EngineService struct {
 	eng *engine.Engine
 	app *application.App
@@ -406,6 +408,24 @@ func (s *EngineService) ImportConfig(ctx context.Context) (*engine.ConfigRestore
 		return nil, err
 	}
 	return &res, nil
+}
+
+func (s *EngineService) CreateSkill(name, description string) (string, error) {
+	return s.eng.CreateSkill(name, description)
+}
+
+func (s *EngineService) TestSkill(ctx context.Context, req engine.SkillTestRequest) (engine.SkillTest, error) {
+	return s.eng.TestSkill(ctx, req)
+}
+
+// OpenSkill opens a skill's SKILL.md in the app the user opens Markdown
+// with (SKL-007).
+func (s *EngineService) OpenSkill(name string) error {
+	path := s.eng.SkillFile(name)
+	if path == "" {
+		return fmt.Errorf("the skill %s is not in Freeloop's skill folder", name)
+	}
+	return s.app.Browser.OpenFile(path)
 }
 
 // ChooseFolder shows a native folder picker and returns the chosen path, or
