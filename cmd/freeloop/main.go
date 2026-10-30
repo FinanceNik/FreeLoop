@@ -16,6 +16,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/engine"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/platform/darwin"
+	"github.com/FinanceNik/Freeloop/internal/rpc"
 )
 
 // EventName is the Wails event every persisted session event is emitted on.
@@ -45,6 +46,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// With a command, the binary is the command line for a running app
+	// (EXT-004).
+	if len(os.Args) > 1 && isCommand(os.Args[1]) {
+		os.Exit(runCLI(config.SocketPath(dataDir), os.Args[1:], os.Stdout, os.Stderr))
+	}
 	// FREELOOP_DEV=1 (set by `make dev`) offers the scripted demo provider.
 	// Reloads can happen before the app exists; they wait here.
 	configChanges := make(chan engine.ConfigChange, 16)
@@ -68,6 +74,14 @@ func main() {
 		log.Fatal(err)
 	}
 	defer eng.Close()
+	// The headless API (EXT-004); the app runs without it when the socket
+	// cannot be served, as when another copy has the data folder.
+	if srv, err := rpc.Listen(eng, config.SocketPath(dataDir)); err != nil {
+		log.Printf("freeloop: headless API: %v", err)
+	} else {
+		go srv.Serve()
+		defer srv.Close()
+	}
 
 	svc := &EngineService{eng: eng}
 	desk := newDesktop(eng)

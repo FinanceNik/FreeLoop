@@ -6,6 +6,8 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -186,4 +188,37 @@ func parse(b []byte) (Config, []Issue) {
 	}
 	issues := cfg.Validate()
 	return cfg, issues
+}
+
+// SocketFileName is the headless API's Unix socket in the data folder
+// (EXT-004); the folder is the user's alone (0700), so only they reach it.
+const SocketFileName = "freeloop.sock"
+
+// SocketPath is the headless API's socket. A Unix socket's path must be
+// short (104 bytes on macOS); for a data folder too deep for that, the
+// socket goes in the user's own temporary folder ($TMPDIR, which only they
+// can enter), named after the data folder.
+func SocketPath(dir string) string {
+	p := filepath.Join(dir, SocketFileName)
+	if len(p) < 100 {
+		return p
+	}
+	sum := sha256.Sum256([]byte(dir))
+	return filepath.Join(os.TempDir(), "freeloop-"+hex.EncodeToString(sum[:6])+".sock")
+}
+
+// ClearSocket removes a socket file a previous run left behind; anything
+// that is not a socket is left alone.
+func ClearSocket(path string) error {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if fi.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("%s is not a socket", path)
+	}
+	return os.Remove(path)
 }

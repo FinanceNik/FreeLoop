@@ -33,6 +33,10 @@ Rules the lint enforces (`internal/archtest`): no `os/exec` or file I/O in the e
 - A UI change is checked in the running app: build the frontend, `go build -tags server ./cmd/freeloop`, run it with `FREELOOP_DEV=1 FREELOOP_HOME=<scratch> WAILS_SERVER_PORT=<port>` and open it in a browser.
 - Docker tests need a running daemon (Colima or Docker Desktop) and skip without one.
 
+## The command line
+
+While the app runs, the same binary is a command line for it (EXT-004): `Freeloop.app/Contents/MacOS/Freeloop help` lists the commands (link it as `freeloop` on your PATH). `freeloop new ~/code/app -provider work -model claude-x` starts a session and prints its ID, `freeloop prompt <id> "fix the failing test"` streams the reply, and `freeloop approvals` / `freeloop approve <request>` answer what waits. Scripts can speak the JSON-RPC directly; `internal/rpc` has the methods.
+
 ## Adding a provider
 
 **An OpenAI-compatible endpoint** needs no new code beyond a preset: add a `Preset` to `openaicompat.Presets` (`internal/provider/openaicompat`) with its base URL, whether it needs a key, whether it is local, any fixed headers, `StreamUsage` when it honours `stream_options.include_usage`, `ToolsKnown` when its models are known to call tools, and a `Note` for setup the user must do (a server flag, for example). Cover anything unusual in `openaicompat_test.go` against an `httptest` server.
