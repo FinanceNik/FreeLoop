@@ -497,7 +497,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	// visible after unrelated commits (SES-006).
 	root, worktree, worktreeBranch := project.Root, "", ""
 	if req.Worktree {
-		path, branch, err := e.addWorktree(ctx, project, title)
+		path, branch, err := e.addWorktree(ctx, project, title, "")
 		if err != nil {
 			return session.Session{}, err
 		}

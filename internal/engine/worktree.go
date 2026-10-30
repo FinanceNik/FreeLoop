@@ -70,8 +70,9 @@ func (e *Engine) projectGit(ctx context.Context, p session.Project) (environment
 	return env, nil
 }
 
-// addWorktree creates a worktree on a new branch from the project's HEAD.
-func (e *Engine) addWorktree(ctx context.Context, p session.Project, title string) (path, branch string, err error) {
+// addWorktree creates a worktree on a new branch from start (the
+// project's HEAD when empty).
+func (e *Engine) addWorktree(ctx context.Context, p session.Project, title, start string) (path, branch string, err error) {
 	env, err := e.projectGit(ctx, p)
 	if err != nil {
 		return "", "", err
@@ -81,7 +82,10 @@ func (e *Engine) addWorktree(ctx context.Context, p session.Project, title strin
 	name := slug(title) + "-" + hex.EncodeToString(b[:])
 	branch = BranchPrefix + name
 	path = filepath.Join(e.worktreesRoot(), slug(p.Name), name)
-	if _, err := gitOK(ctx, env, "worktree", "add", "--quiet", "-b", branch, path, "HEAD"); err != nil {
+	if start == "" {
+		start = "HEAD"
+	}
+	if _, err := gitOK(ctx, env, "worktree", "add", "--quiet", "-b", branch, path, start); err != nil {
 		return "", "", fmt.Errorf("create the worktree: %w", err)
 	}
 	return environment.Canonical(path), branch, nil

@@ -29,6 +29,9 @@ interface Props {
   focus?: { seq: number; n: number };
   // The price table for cost estimates (PRV-008).
   prices: PriceEntry[];
+  // Text for the composer, as after a fork (SES-009).
+  initialDraft?: string;
+  onForked: (sessionId: string, text: string) => void;
   provider?: ProviderInfo;
   providers: ProviderInfo[];
   environment?: EnvironmentInfo;
@@ -64,7 +67,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -142,7 +145,7 @@ export default function SessionView({ session, events, focus, prices, provider, 
     else if (before.running && !view.running) setAnnouncement(view.status === "error" ? "The turn stopped with an error" : "Turn finished");
     heard.current = { waiting: waitingTools.length, running: view.running };
   }, [waitingTools.length, view.running]);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft ?? "");
   const [queued, setQueued] = useState(0);
   const bottom = useRef<HTMLDivElement>(null);
   const mode = view.mode ?? session.mode;
@@ -367,6 +370,10 @@ export default function SessionView({ session, events, focus, prices, provider, 
 
   const setMode = (m: string) => EngineService.SetMode(session.id, m).catch(onError);
   // The rewound message comes back to the composer for editing (SES-014).
+  const fork = (seq: number) =>
+    EngineService.ForkSession(session.id, seq)
+      .then((r) => onForked(r.session.id, r.text))
+      .catch(onError);
   const rewind = (seq: number, text: string) =>
     EngineService.Rewind(session.id, seq)
       .then(() => {
@@ -433,6 +440,19 @@ export default function SessionView({ session, events, focus, prices, provider, 
         if (confirm("Restore the files to before this message and continue from there?")) rewind(u.checkpointSeq!, u.text);
       }, { keywords: `undo checkpoint restore ${n === 0 ? u.text.slice(0, 60) : ""}` }),
     ),
+    ...(view.items.some((i) => i.kind === "user")
+      ? [
+          act(
+            "fork",
+            "Fork before the last message",
+            () => {
+              const last = [...view.items].reverse().find((i) => i.kind === "user");
+              if (last) fork(Number(last.key));
+            },
+            { keywords: "branch copy new session" },
+          ),
+        ]
+      : []),
     act("export-md", "Export as Markdown…", () => exportAs("markdown"), { keywords: "save share download" }),
     act("export-json", "Export as JSON…", () => exportAs("json"), { keywords: "save download events" }),
     act("rename", "Rename session", () => setRenaming(session.title), { keywords: "title" }),
@@ -600,7 +620,7 @@ export default function SessionView({ session, events, focus, prices, provider, 
         <div className="conversation" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {view.items.map((item) => (
-            <ItemView key={item.key} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} onError={onError} onRewind={rewind} />
+            <ItemView key={item.key} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} onError={onError} onRewind={rewind} onFork={fork} />
           ))}
           {view.running && (
             <p className="muted working">{view.status === "queued" ? "Waiting for a free slot on the provider…" : "Working…"}</p>
@@ -800,28 +820,47 @@ const ItemView = memo(
     cost,
     onError,
     onRewind,
+    onFork,
   }: {
     item: Item;
     focused: boolean;
     cost?: string;
     onError: (err: unknown) => void;
     onRewind: (seq: number, text: string) => void;
+    onFork: (seq: number) => void;
   }) {
     const cls = [item.rewound && "rewound", focused && "found"].filter(Boolean).join(" ");
     return (
       <div data-item={item.key} className={cls || undefined}>
-        <ItemBody item={item} cost={cost} onError={onError} onRewind={onRewind} />
+        <ItemBody item={item} cost={cost} onError={onError} onRewind={onRewind} onFork={onFork} />
       </div>
     );
   },
   (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused && a.cost === b.cost,
 );
 
-function ItemBody({ item, cost, onError, onRewind }: { item: Item; cost?: string; onError: (err: unknown) => void; onRewind: (seq: number, text: string) => void }) {
+function ItemBody({
+  item,
+  cost,
+  onError,
+  onRewind,
+  onFork,
+}: {
+  item: Item;
+  cost?: string;
+  onError: (err: unknown) => void;
+  onRewind: (seq: number, text: string) => void;
+  onFork: (seq: number) => void;
+}) {
   switch (item.kind) {
     case "user":
       return (
         <div className="msg msg-user">
+          {!item.rewound && (
+            <button className="link rewind" onClick={() => onFork(Number(item.key))} title="Start a new session with the conversation up to this message">
+              Fork
+            </button>
+          )}
           {item.checkpointSeq && !item.rewound && <RewindButton filesOnly={!!item.filesOnly} onRewind={() => onRewind(item.checkpointSeq!, item.text)} />}
           {item.text}
           {item.files.length > 0 && (

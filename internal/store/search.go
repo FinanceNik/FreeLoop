@@ -93,6 +93,9 @@ type indexer struct {
 	calls map[string]int64
 	// The session's model, for usage events that do not name theirs.
 	providerID, model string
+	// copied is the last seq copied from another session, whose usage
+	// was counted there.
+	copied int64
 }
 
 func chunkKind(t event.Type) string {
@@ -124,7 +127,7 @@ func (x *indexer) feed(ev event.Event) (batch, int64) {
 	case event.UsageUpdate:
 		var d event.UsageData
 		json.Unmarshal(ev.Data, &d)
-		if d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens > 0 {
+		if ev.Seq > x.copied && d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens > 0 {
 			b.usage = append(b.usage, usage{day: ev.TS.In(time.Local).Format(time.DateOnly),
 				providerID: cmp.Or(d.ProviderID, x.providerID), model: cmp.Or(d.Model, x.model),
 				input: d.InputTokens, output: d.OutputTokens, cacheRead: d.CacheReadTokens, cacheWrite: d.CacheWriteTokens, calls: 1})
@@ -299,7 +302,7 @@ func (s *Store) catchUp(ctx context.Context, t *transcript, sid string) error {
 	t.search = indexer{}
 	x := &t.search
 	var from int64
-	if err := s.db.QueryRowContext(ctx, `SELECT indexed_seq, provider_id, model FROM sessions WHERE id = ?`, sid).Scan(&from, &x.providerID, &x.model); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT indexed_seq, provider_id, model, copied_seq FROM sessions WHERE id = ?`, sid).Scan(&from, &x.providerID, &x.model, &x.copied); err != nil {
 		return err
 	}
 	x.seen = from
@@ -378,7 +381,7 @@ func (s *Store) IndexAll(ctx context.Context) error {
 func (s *Store) catchUpFile(ctx context.Context, sid string) error {
 	var x indexer
 	var from int64
-	if err := s.db.QueryRowContext(ctx, `SELECT indexed_seq, provider_id, model FROM sessions WHERE id = ?`, sid).Scan(&from, &x.providerID, &x.model); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT indexed_seq, provider_id, model, copied_seq FROM sessions WHERE id = ?`, sid).Scan(&from, &x.providerID, &x.model, &x.copied); err != nil {
 		return err
 	}
 	events, err := readEvents(filepath.Join(s.sessionDir(sid), "events.jsonl"), from)

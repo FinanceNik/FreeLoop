@@ -185,6 +185,39 @@ func (s *Store) GetSession(ctx context.Context, id string) (session.Session, err
 // Append assigns the next seq to an event, writes it to the session's
 // transcript, updates the session record and then calls OnAppend.
 func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data json.RawMessage) (event.Event, error) {
+	return s.appendAt(ctx, sid, typ, data, time.Time{}, true)
+}
+
+// CopyEvents starts an empty session's transcript with events copied from
+// another session (SES-009): same seqs, types, data and times, so
+// references between them (a rewind's checkpoint) still hold. Model calls
+// among them are not counted again in the usage per day, and they are not
+// published: they are history, not news for notifications or the
+// attention view; a viewer reads them with Events.
+func (s *Store) CopyEvents(ctx context.Context, sid string, events []event.Event) error {
+	if len(events) == 0 {
+		return nil
+	}
+	if events[0].Seq != 1 {
+		return errors.New("store: copied events must start at seq 1")
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE sessions SET copied_seq = ? WHERE id = ? AND last_seq = 0`, events[len(events)-1].Seq, sid); err != nil {
+		return err
+	}
+	for i, ev := range events {
+		if ev.Seq != int64(i+1) {
+			return fmt.Errorf("store: copied event %d has seq %d", i, ev.Seq)
+		}
+		if _, err := s.appendAt(ctx, sid, ev.Type, ev.Data, ev.TS, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// appendAt is Append with the event's time given, or now when ts is zero;
+// publish says whether OnAppend sees it.
+func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data json.RawMessage, ts time.Time, publish bool) (event.Event, error) {
 	if !typ.Valid() {
 		return event.Event{}, fmt.Errorf("store: unknown event type %q", typ)
 	}
@@ -206,7 +239,10 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	ev := event.Event{V: event.Version, Seq: t.lastSeq + 1, TS: s.now().UTC(), SID: sid, Type: typ, Data: data}
+	if ts.IsZero() {
+		ts = s.now()
+	}
+	ev := event.Event{V: event.Version, Seq: t.lastSeq + 1, TS: ts.UTC(), SID: sid, Type: typ, Data: data}
 	if err := t.write(ev); err != nil {
 		return event.Event{}, err
 	}
@@ -250,7 +286,7 @@ func (s *Store) Append(ctx context.Context, sid string, typ event.Type, data jso
 	} else {
 		s.index(ctx, t, sid, ev, "", nil)
 	}
-	if s.onAppend != nil {
+	if s.onAppend != nil && publish {
 		s.onAppend(ev)
 	}
 	return ev, nil
@@ -414,6 +450,9 @@ var migrations = []string{
 	// reports (SES-010). Existing sessions keep the branch last seen.
 	`ALTER TABLE sessions ADD COLUMN worktree_branch TEXT NOT NULL DEFAULT '';
 	UPDATE sessions SET worktree_branch = branch WHERE worktree != '';`,
+	// A fork's transcript starts with events copied from its source
+	// (SES-009); usage up to copied_seq was counted there already.
+	`ALTER TABLE sessions ADD COLUMN copied_seq INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

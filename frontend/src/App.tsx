@@ -91,6 +91,8 @@ export default function App() {
   const [palette, setPalette] = useState<PaletteItem[] | null>(null);
   const { registry, collect } = useRegistry();
   const searchInput = useRef<HTMLInputElement>(null);
+  // The message a fork was made before, for its composer (SES-009).
+  const [forkDraft, setForkDraft] = useState<{ sid: string; text: string } | null>(null);
 
   // The reducer state lives in a ref so event callbacks always see the latest
   // transcripts; React state mirrors it for rendering.
@@ -577,6 +579,12 @@ export default function App() {
             key={selected.id}
             session={selected}
             focus={screen.focus}
+            initialDraft={forkDraft?.sid === selected.id ? forkDraft.text : undefined}
+            onForked={(sid, text) => {
+              setForkDraft({ sid, text });
+              refreshSessions();
+              openSession(sid);
+            }}
             prices={config?.prices ?? []}
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
