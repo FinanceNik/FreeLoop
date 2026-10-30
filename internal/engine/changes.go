@@ -421,11 +421,14 @@ func (e *Engine) complete(ctx context.Context, ses session.Session, system, prom
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
+	// Little reasoning for a short text, and room for the reasoning there
+	// is: models that reason count it against the output limit.
 	ch, err := p.p.Stream(ctx, provider.ChatRequest{
 		Model:     ses.Model,
 		System:    system,
 		Messages:  []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: prompt}}}},
-		MaxTokens: maxTokens,
+		MaxTokens: max(maxTokens, 4000),
+		Effort:    "low",
 	})
 	if err != nil {
 		return "", err

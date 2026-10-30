@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"google.golang.org/genai"
 
@@ -43,6 +44,9 @@ type Provider struct {
 	id     string
 	client *genai.Client
 	err    error
+	// turns numbers responses, so IDs made up for calls are unique in a
+	// session's history.
+	turns atomic.Int64
 }
 
 // New returns a provider for opts. Without an API key every call fails: the
@@ -125,7 +129,12 @@ func thinking(model, effort string) *genai.ThinkingConfig {
 		return tc
 	}
 	if strings.HasPrefix(model, "gemini-2.5") {
-		budget := map[string]int32{"low": 1024, "medium": 8192, "high": 24576, "xhigh": 32768, "max": -1}[effort]
+		// Flash models take at most 24576 tokens, Pro 32768.
+		top := int32(24576)
+		if strings.Contains(model, "-pro") {
+			top = 32768
+		}
+		budget := map[string]int32{"low": 1024, "medium": 8192, "high": min(24576, top), "xhigh": top, "max": top}[effort]
 		if budget != 0 {
 			tc.ThinkingBudget = &budget
 		}
@@ -275,6 +284,7 @@ func (p *Provider) run(seq iter.Seq2[*genai.GenerateContentResponse, error], sen
 	var usage provider.Usage
 	var finish genai.FinishReason
 	calls := 0
+	turn := p.turns.Add(1)
 	// add appends text to the last part when it is of the same kind, so a
 	// streamed reply becomes one part; a signature stays with its part.
 	add := func(typ provider.PartType, text string, sig []byte) {
@@ -319,7 +329,7 @@ func (p *Provider) run(seq iter.Seq2[*genai.GenerateContentResponse, error], sen
 				fc := part.FunctionCall
 				id := fc.ID
 				if id == "" {
-					id = fmt.Sprintf("%s%d", madeUp, calls)
+					id = fmt.Sprintf("%s%d-%d", madeUp, turn, calls)
 				}
 				args, _ := json.Marshal(fc.Args)
 				if fc.Args == nil {

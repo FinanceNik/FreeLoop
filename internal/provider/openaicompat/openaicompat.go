@@ -136,7 +136,7 @@ var openAIReasoning = regexp.MustCompile(`^(o[1-9]|gpt-5)`)
 func (p *Provider) takesEffort(model string) bool {
 	switch p.preset.Effort {
 	case "openai":
-		return openAIReasoning.MatchString(model)
+		return openAIReasoning.MatchString(model) && !strings.Contains(model, "-chat")
 	case "openrouter":
 		return true
 	}

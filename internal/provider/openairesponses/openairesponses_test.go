@@ -90,7 +90,7 @@ func TestStreamToolUse(t *testing.T) {
 	if body["instructions"] != "sys" || body["store"] != false || body["model"] != "gpt-5.5" {
 		t.Errorf("body = %v", body)
 	}
-	if r, _ := body["reasoning"].(map[string]any); r["effort"] != "xhigh" || r["summary"] != "auto" {
+	if r, _ := body["reasoning"].(map[string]any); r["effort"] != "high" || r["summary"] != "auto" {
 		t.Errorf("reasoning = %v", body["reasoning"])
 	}
 	if inc, _ := body["include"].([]any); !slices.Contains(inc, any("reasoning.encrypted_content")) {
@@ -192,5 +192,30 @@ func TestListModels(t *testing.T) {
 	}
 	if !slices.Equal(ids, []string{"gpt-5.5", "o4-mini"}) {
 		t.Errorf("models = %v", ids)
+	}
+}
+
+// An error inside a stream is retried like its HTTP kind; a chat model
+// gets no effort.
+func TestStreamErrorsAndChatModels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sse(w, []string{
+			`{"type":"response.created","sequence_number":0,"response":{"id":"r","object":"response","status":"in_progress","output":[]}}`,
+			`{"type":"response.failed","sequence_number":1,"response":{"id":"r","object":"response","status":"failed","output":[],"error":{"code":"server_error","message":"The server had an error"}}}`,
+		})
+	}))
+	defer srv.Close()
+	ch, _ := New(Options{BaseURL: srv.URL, APIKey: "k"}).Stream(context.Background(), provider.ChatRequest{Model: "gpt-5.5",
+		Messages: []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: "hi"}}}}})
+	var last provider.Event
+	for ev := range ch {
+		last = ev
+	}
+	if retry, _ := provider.Retryable(last.Err); last.Type != provider.EventError || !retry {
+		t.Errorf("server_error: %+v", last)
+	}
+	p := New(Options{APIKey: "k"})
+	if p.Capabilities("gpt-5-chat-latest").Effort || !p.Capabilities("gpt-5.5").Effort {
+		t.Error("effort offered to a chat model, or not to a reasoning one")
 	}
 }

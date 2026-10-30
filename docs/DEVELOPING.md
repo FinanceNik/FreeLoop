@@ -46,7 +46,7 @@ While the app runs, the same binary is a command line for it (EXT-004): `Freeloo
 
 - `Stream` returns a channel that ends with exactly one `EventDone` (the whole message, its stop reason and usage) or `EventError`. Text and thinking arrive as deltas before it.
 - Normalize inside the adapter: tool-call IDs (make them up when the endpoint has none), tool arguments buffered to complete JSON, reasoning fields. The harness only ever sees `provider` types (PRV-004).
-- Report HTTP failures as `*provider.HTTPError` (`provider.NewHTTPError(resp, message)`), so the loop retries timeouts, rate limits and server errors and honours `Retry-After` (PRV-010). Name the cause in the message ("rejected the API key (401)"); never put a key in it.
+- Report HTTP failures as `*provider.HTTPError` (`provider.NewHTTPError(resp, message)`), so the loop retries timeouts, rate limits and server errors and honours `Retry-After` (PRV-010). An error event inside a stream that began fine is reported the same way, with the status its kind stands for (an overload as 529, a rate limit as 429). Dropped connections and timeouts are retried without one. Name the cause in the message ("rejected the API key (401)"); never put a key in it.
 - `Capabilities` says what the loop may rely on per model (`ModelCaps`); return `CapsUnknown` when you do not know, and the capability probe settles it.
 - Use `http.DefaultTransport` (a plain `&http.Client{}` does), so local-only mode covers the adapter (NFR-OFF-003).
 

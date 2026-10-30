@@ -278,6 +278,11 @@ func fromMessage(msg sdk.Message) provider.Message {
 // describe turns an API error into a readable one naming the cause (PRV-002).
 func describe(err error) error {
 	var apiErr *sdk.Error
+	if errors.As(err, &apiErr) && apiErr.StatusCode < 400 {
+		// An error event inside a stream that began fine: the status is the
+		// stream's 200, the kind is in the event.
+		return streamError("Anthropic", apiErr.Error())
+	}
 	if errors.As(err, &apiErr) {
 		msg := apiErr.Error()
 		switch {
@@ -298,4 +303,22 @@ func describe(err error) error {
 		return &provider.HTTPError{Status: apiErr.StatusCode, Message: msg}
 	}
 	return err
+}
+
+// streamError classifies an error event inside a stream, so the harness
+// retries an overload or a rate limit like the same HTTP status.
+func streamError(vendor, msg string) error {
+	status := 0
+	switch {
+	case strings.Contains(msg, "overloaded"):
+		status = 529
+	case strings.Contains(msg, "rate_limit"):
+		status = http.StatusTooManyRequests
+	case strings.Contains(msg, "api_error"), strings.Contains(msg, "server_error"), strings.Contains(msg, "timeout"):
+		status = http.StatusInternalServerError
+	}
+	if status == 0 {
+		return fmt.Errorf("%s: %s", vendor, msg)
+	}
+	return &provider.HTTPError{Status: status, Message: fmt.Sprintf("%s: %s", vendor, msg)}
 }

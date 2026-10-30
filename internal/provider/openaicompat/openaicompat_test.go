@@ -226,6 +226,7 @@ func TestEffortInTheRequest(t *testing.T) {
 		{"openai", "o3", "max", map[string]any{"reasoning_effort": "high"}},
 		{"openai", "gpt-5-mini", "low", map[string]any{"reasoning_effort": "low"}},
 		{"openai", "gpt-4o", "high", nil},
+		{"openai", "gpt-5-chat-latest", "high", nil},
 		{"openrouter", "anthropic/claude-x", "medium", map[string]any{"reasoning": map[string]any{"effort": "medium"}}},
 		{"vllm", "qwen", "high", nil},
 	} {

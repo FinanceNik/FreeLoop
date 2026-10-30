@@ -192,3 +192,27 @@ func TestInvalidToolInputInHistoryIsSanitized(t *testing.T) {
 		t.Fatalf("request cannot be built: %v", err)
 	}
 }
+
+// PRV-010: an overload reported inside a stream that began fine is retried
+// like a 529.
+func TestStreamErrorIsRetried(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sse(w, []string{
+			`{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`,
+			`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`,
+		})
+	}))
+	defer srv.Close()
+	ch, err := New(Options{BaseURL: srv.URL, APIKey: "k"}).Stream(context.Background(), provider.ChatRequest{Model: "claude-opus-5-5",
+		Messages: []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: "hi"}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var last provider.Event
+	for ev := range ch {
+		last = ev
+	}
+	if retry, _ := provider.Retryable(last.Err); last.Type != provider.EventError || !retry {
+		t.Errorf("overloaded in the stream: %+v", last)
+	}
+}

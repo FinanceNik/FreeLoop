@@ -2,8 +2,11 @@ package provider
 
 import (
 	"errors"
+	"io"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -36,7 +39,7 @@ func NewHTTPError(resp *http.Response, message string) *HTTPError {
 func Retryable(err error) (bool, time.Duration) {
 	var h *HTTPError
 	if !errors.As(err, &h) {
-		return false, 0
+		return transient(err), 0
 	}
 	switch {
 	case h.Status == http.StatusRequestTimeout, h.Status == http.StatusTooManyRequests:
@@ -45,4 +48,20 @@ func Retryable(err error) (bool, time.Duration) {
 		return true, h.RetryAfter
 	}
 	return false, 0
+}
+
+// transient reports a failure of the connection rather than of the
+// request: a timeout, a connection the server or network dropped, or a
+// response cut off before it began. (Local-only refusals and cancellations
+// are not: the harness checks the context first.)
+func transient(err error) bool {
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "connection reset by peer") || strings.Contains(msg, "broken pipe")
 }

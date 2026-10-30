@@ -189,3 +189,37 @@ func TestListModels(t *testing.T) {
 		t.Errorf("models = %v", ids)
 	}
 }
+
+// Calls without an ID get one unique across responses, so a session's
+// history never repeats one; thinking budgets stay in each model's range.
+func TestMadeUpIDsAndBudgets(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: %s\n\n", `{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"read_file","args":{}}}]},"finishReason":"STOP"}]}`)
+	}))
+	defer srv.Close()
+	p := New(Options{BaseURL: srv.URL, APIKey: "k"})
+	req := provider.ChatRequest{Model: "gemini-3-pro", Messages: []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: "hi"}}}}}
+	var ids []string
+	for range 2 {
+		ch, err := p.Stream(context.Background(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for ev := range ch {
+			if ev.Type == provider.EventDone {
+				ids = append(ids, ev.Message.Parts[0].ToolCallID)
+			}
+		}
+	}
+	if len(ids) != 2 || ids[0] == ids[1] {
+		t.Errorf("ids = %v", ids)
+	}
+	for model, want := range map[string]int32{"gemini-2.5-flash": 24576, "gemini-2.5-pro": 32768} {
+		for _, e := range []string{"xhigh", "max"} {
+			if b := thinking(model, e).ThinkingBudget; b == nil || *b != want {
+				t.Errorf("%s %s budget = %v", model, e, b)
+			}
+		}
+	}
+}

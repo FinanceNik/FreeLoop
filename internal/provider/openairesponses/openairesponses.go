@@ -90,8 +90,13 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error)
 	return out, nil
 }
 
-// reasoningModel matches the models that reason and take an effort.
+// reasoningModel matches the models that reason and take an effort; the
+// -chat ones under gpt-5 do not.
 var reasoningModel = regexp.MustCompile(`^(o[1-9]|gpt-5|codex-)`)
+
+func reasons(model string) bool {
+	return reasoningModel.MatchString(model) && !strings.Contains(model, "-chat")
+}
 
 func (p *Provider) Capabilities(model string) provider.ModelCaps {
 	c := provider.ModelCaps{
@@ -99,20 +104,21 @@ func (p *Provider) Capabilities(model string) provider.ModelCaps {
 		Tools:  true, ParallelTools: true, StreamedToolArgs: true, StableToolCallIDs: true,
 		PromptCaching: true,
 	}
-	if reasoningModel.MatchString(model) {
+	if reasons(model) {
 		c.Reasoning, c.Effort = true, true
 	}
 	return c
 }
 
-// effort maps the app's efforts onto the API's; max is the API's xhigh
-// where the model has no max.
+// effort maps the app's efforts onto the API's: low, medium and high, which
+// every reasoning model takes; xhigh and max become high, as on the
+// OpenAI-compatible path, since most models refuse more.
 func effort(e string) shared.ReasoningEffort {
 	switch e {
-	case "low", "medium", "high", "xhigh":
+	case "low", "medium", "high":
 		return shared.ReasoningEffort(e)
-	case "max":
-		return shared.ReasoningEffortXhigh
+	case "xhigh", "max":
+		return shared.ReasoningEffortHigh
 	}
 	return ""
 }
@@ -141,7 +147,7 @@ func (p *Provider) params(req provider.ChatRequest) responses.ResponseNewParams 
 			Strict: param.NewOpt(false),
 		}})
 	}
-	if reasoningModel.MatchString(req.Model) {
+	if reasons(req.Model) {
 		params.Reasoning = shared.ReasoningParam{Summary: shared.ReasoningSummaryAuto}
 		if e := effort(req.Effort); e != "" {
 			params.Reasoning.Effort = e
@@ -236,14 +242,11 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 				r := ev.Response
 				final = &r
 			case "response.failed":
-				msg := ev.Response.Error.Message
-				if msg == "" {
-					msg = "the response failed"
-				}
-				send(provider.Event{Type: provider.EventError, Err: fmt.Errorf("OpenAI: %s", msg)})
+				msg := cmpOr(ev.Response.Error.Message, "the response failed")
+				send(provider.Event{Type: provider.EventError, Err: streamError(string(ev.Response.Error.Code), msg)})
 				return
 			case "error":
-				send(provider.Event{Type: provider.EventError, Err: fmt.Errorf("OpenAI: %s", cmpOr(ev.Message, ev.Code, "stream error"))})
+				send(provider.Event{Type: provider.EventError, Err: streamError(ev.Code, cmpOr(ev.Message, ev.Code, "stream error"))})
 				return
 			}
 			if out.Type != "" && !send(out) {
@@ -367,4 +370,20 @@ func describe(err error) error {
 		return &provider.HTTPError{Status: apiErr.StatusCode, Message: msg}
 	}
 	return err
+}
+
+// streamError classifies an error event inside a stream by its code, so
+// the harness retries a rate limit or a server error.
+func streamError(code, msg string) error {
+	status := 0
+	switch {
+	case strings.Contains(code, "rate_limit"):
+		status = http.StatusTooManyRequests
+	case strings.Contains(code, "server_error"), strings.Contains(code, "overloaded"), strings.Contains(code, "timeout"):
+		status = http.StatusInternalServerError
+	}
+	if status == 0 {
+		return fmt.Errorf("OpenAI: %s", msg)
+	}
+	return &provider.HTTPError{Status: status, Message: "OpenAI: " + msg}
 }

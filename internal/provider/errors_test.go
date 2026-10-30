@@ -2,7 +2,10 @@ package provider
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -21,3 +24,25 @@ func TestRetryable(t *testing.T) {
 		t.Error("a plain error is retryable")
 	}
 }
+
+// A dropped connection or a response cut off before it began is retried;
+// any other plain error is not.
+func TestTransientFailures(t *testing.T) {
+	for err, want := range map[error]bool{
+		fmt.Errorf("read: %w", io.ErrUnexpectedEOF):                  true,
+		&url.Error{Op: "Post", URL: "u", Err: timeoutErr{}}:          true,
+		errors.New("read tcp 1.2.3.4:443: connection reset by peer"): true,
+		errors.New("local-only mode blocks the connection to x"):     false,
+		errors.New("invalid model"):                                  false,
+	} {
+		if got, _ := Retryable(err); got != want {
+			t.Errorf("Retryable(%v) = %v", err, got)
+		}
+	}
+}
+
+type timeoutErr struct{}
+
+func (timeoutErr) Error() string   { return "i/o timeout" }
+func (timeoutErr) Timeout() bool   { return true }
+func (timeoutErr) Temporary() bool { return true }
