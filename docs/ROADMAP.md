@@ -135,7 +135,7 @@ The next v1 items that need nothing from the user (no accounts, signing, real-pr
 5. **Config backup (SET-005).** *Built 2026-10-30.* Export and restore providers, profiles, environments, rules and settings without secrets.
 6. **Parallel read-only tool calls (HRN-014, first half).** *Built 2026-10-30.* Independent reads in one model turn run concurrently.
 7. **Local-only switch (NFR-OFF-003).** *Built 2026-10-30.* Block every non-loopback connection the app would make and report attempts.
-8. **Contributor documentation (NFR-REL-004).** Architecture overview, adding a provider, a harness preset, an environment.
+8. **Contributor documentation (NFR-REL-004).** *Built 2026-10-30, as [DEVELOPING.md](DEVELOPING.md).* Architecture overview, adding a provider, a harness preset, an environment.
 
 Left for later because they need the user: signed builds and the update check (SEC-012, NFR-SEC-004, OQ-009, OQ-015), verified external-agent presets and OAuth against real servers (HRN-007, MCP-006), prompt caching checked against a real provider (PRV-009), and the integrated terminal, which needs a PTY library (GUI-012).
 

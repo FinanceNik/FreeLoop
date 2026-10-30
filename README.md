@@ -62,4 +62,4 @@ make test      # Go tests with the race detector, then frontend tests
 make lint      # formatting, vet, architecture boundaries, TypeScript
 ```
 
-Start with [CLAUDE.md](CLAUDE.md) for the layout and the rules the code follows, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+Start with [docs/DEVELOPING.md](docs/DEVELOPING.md) for how the code fits together and how to extend it, [CLAUDE.md](CLAUDE.md) for the rules the code follows, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).

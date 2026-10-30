@@ -12,6 +12,8 @@ When contributions open, the policy (a Developer Certificate of Origin sign-off 
 
 ## For the record: how the code is worked on
 
+[docs/DEVELOPING.md](docs/DEVELOPING.md) explains how the code fits together and how to add a provider, a harness preset, an environment or an event type.
+
 - Requirements have stable IDs (`PRV-001`, `SEC-003`…) in [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md); commit messages and pull request titles name the IDs they deliver.
 - When the implementation proves a document wrong, the document changes in the same commit. Decisions the documents do not settle go to [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) with options and a recommendation.
 - `make test` and `make lint` pass before every commit. The lint includes an architecture test: no process or file access outside `internal/environment` (and the store, config and platform packages), Wails only in `cmd/freeloop`, macOS-only code only in `internal/platform/darwin`.
