@@ -624,7 +624,7 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 	}
 
 	s.p.Emit(event.ToolCallUpdate, map[string]any{"toolCallId": c.ToolCallID, "status": "in_progress"})
-	res, err := prepared.run(ctx, d)
+	res, err := prepared.run(harness.WithToolCall(ctx, c.ToolCallID), d)
 	if err != nil {
 		if ctx.Err() != nil {
 			return fail("Cancelled while running.", "failed")

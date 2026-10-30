@@ -63,6 +63,10 @@ type Launch struct {
 }
 
 type server struct {
+	// asker is the call in flight on the server just now, which an
+	// older server's elicitation/create goes to (MCP-008); with calls
+	// from several sessions at once, the latest.
+	asker       *Asker
 	fingerprint string
 	status      Status
 	session     *sdk.ClientSession
@@ -141,7 +145,7 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 
 	cctx, ccancel := context.WithTimeout(ctx, ConnectTimeout)
 	defer ccancel()
-	client := sdk.NewClient(&sdk.Implementation{Name: "freeloop", Version: "0.1"}, nil)
+	client := sdk.NewClient(&sdk.Implementation{Name: "freeloop", Version: "0.1"}, &sdk.ClientOptions{ElicitationHandler: m.elicit(id)})
 	cs, err := client.Connect(cctx, transport, nil)
 	if err != nil {
 		return fail(fmt.Errorf("connect: %w", err))
@@ -264,6 +268,21 @@ func (m *Manager) Call(ctx context.Context, id, tool string, args json.RawMessag
 	var arguments any = map[string]any{}
 	if len(args) > 0 && string(args) != "null" {
 		arguments = args
+	}
+	if a := askerFrom(ctx); a != nil {
+		// The request arrives on the server's own context; answer it on
+		// the call's, which names the tool call and ends with it.
+		bound := Asker(func(_ context.Context, server string, e Elicitation) (Answer, error) { return a(ctx, server, e) })
+		m.mu.Lock()
+		s.asker = &bound
+		m.mu.Unlock()
+		defer func() {
+			m.mu.Lock()
+			if s.asker == &bound {
+				s.asker = nil
+			}
+			m.mu.Unlock()
+		}()
 	}
 	res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: tool, Arguments: arguments})
 	if err != nil {

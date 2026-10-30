@@ -227,3 +227,17 @@ func ResourceText(r Resource) string {
 	}
 	return fmt.Sprintf("<file path=%q>\n%s\n</file>", r.Path, r.Text)
 }
+
+type toolCallKey struct{}
+
+// WithToolCall marks ctx as running the tool call id, so what the call
+// asks of the user (an MCP server's input request, MCP-008) shows on it.
+func WithToolCall(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, toolCallKey{}, id)
+}
+
+// ToolCall returns the tool call ctx runs, or "".
+func ToolCall(ctx context.Context) string {
+	id, _ := ctx.Value(toolCallKey{}).(string)
+	return id
+}

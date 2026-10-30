@@ -74,6 +74,8 @@ export interface PermissionState {
   options: PermissionOption[];
   command?: string;
   paths?: string[];
+  // An MCP server's request for input (MCP-008), asked as a form.
+  form?: { server: string; message: string; schema?: unknown; url?: string };
   decided?: {
     outcome: string;
     actor: string;
@@ -265,6 +267,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           options: d.options ?? [],
           command: d.command,
           paths: d.paths ?? undefined,
+          form: d.form ?? undefined,
         };
         if (item) replaceTool(items, tools, { ...item, rev, permission });
         break;

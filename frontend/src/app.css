@@ -571,6 +571,29 @@ pre {
   gap: 8px;
 }
 
+.mcp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mcp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 420px;
+}
+
+.mcp-field-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.mcp-field .muted {
+  font-size: 12px;
+}
+
 .turn-end {
   color: var(--muted);
   font-size: 12px;

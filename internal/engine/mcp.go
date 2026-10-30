@@ -18,6 +18,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/mcp"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
@@ -305,6 +306,7 @@ func mcpToolName(server, tool string) string {
 // the servers' state at every call.
 type sessionMCP struct {
 	e         *Engine
+	sid       string
 	projectID string
 	root      string
 	profileID string
@@ -348,9 +350,31 @@ func (s sessionMCP) Tools() []harness.MCPTool {
 func (s sessionMCP) Call(ctx context.Context, name string, input json.RawMessage) (string, bool, error) {
 	for _, t := range s.Tools() {
 		if t.Name == name {
-			res, err := s.e.mcp.Call(ctx, t.Server, t.Tool, input)
+			res, err := s.e.mcp.Call(mcp.WithAsker(ctx, s.ask), t.Server, t.Tool, input)
 			return res.Text, res.IsError, err
 		}
 	}
 	return "", false, fmt.Errorf("the MCP tool %s is not available", strings.TrimSpace(name))
+}
+
+// ask puts an MCP server's request for input to the user (MCP-008): a form
+// on the tool call that caused it, always asked, whatever the mode or
+// rules; Stop cancels it like any request.
+func (s sessionMCP) ask(ctx context.Context, server string, req mcp.Elicitation) (mcp.Answer, error) {
+	title := server + " asks: " + req.Message
+	if len(title) > 200 {
+		title = title[:200] + "…"
+	}
+	d := s.e.broker.Request(ctx, permission.Context{Root: s.root}, permission.Request{
+		SessionID: s.sid, ToolCallID: harness.ToolCall(ctx), Tool: mcpToolName(server, "input"), Kind: permission.KindOther,
+		Title: title, Options: permission.FormOptions,
+		Form: &permission.Form{Server: server, Message: req.Message, Schema: req.Schema, URL: req.URL},
+	})
+	switch {
+	case d.Outcome == permission.Cancelled:
+		return mcp.Answer{Action: "cancel"}, nil
+	case d.Outcome == permission.Allowed:
+		return mcp.Answer{Action: "accept", Content: d.Answers}, nil
+	}
+	return mcp.Answer{Action: "decline"}, nil
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { EngineService, type AttentionItem, type PermissionRequest } from "./api.ts";
+import { McpFormView, useMcpForm } from "./McpForm.tsx";
 
 // Attention is the list of every session that needs the user, across
 // projects (GUI-002): pending approvals answered inline, failed turns with
@@ -66,9 +67,10 @@ function RequestView({ req, onError }: { req: PermissionRequest; onError: (err: 
   // buttons stay disabled so a double click cannot answer a later request.
   const [busy, setBusy] = useState(false);
   const options = req.options ?? [];
-  const decide = (optionId: string) => {
+  const mcpForm = useMcpForm(req.form, req.requestId);
+  const decide = (optionId: string, answers?: Record<string, unknown>) => {
     setBusy(true);
-    EngineService.Decide({ requestId: req.requestId, optionId, reason: "", scope: "session" }).catch((err) => {
+    EngineService.Decide({ requestId: req.requestId, optionId, reason: "", scope: "session", answers }).catch((err) => {
       setBusy(false);
       onError(err);
     });
@@ -90,6 +92,7 @@ function RequestView({ req, onError }: { req: PermissionRequest; onError: (err: 
           <pre className="tool-input">{JSON.stringify(req.input, null, 2)}</pre>
         </details>
       )}
+      {req.form && <McpFormView form={req.form} state={mcpForm} idPrefix={`form-${req.requestId}`} />}
       <div className="approval-buttons">
         {options.map((o) => (
           <button
@@ -97,7 +100,7 @@ function RequestView({ req, onError }: { req: PermissionRequest; onError: (err: 
             disabled={busy}
             className={o.kind.startsWith("allow") ? "primary" : "danger"}
             title={o.kind === "allow_always" ? "Saves a rule for this session" : undefined}
-            onClick={() => decide(o.optionId)}
+            onClick={() => mcpForm.choose(o.optionId, o.kind, decide)}
           >
             {o.kind === "allow_always" ? `${o.name} (this session)` : o.name}
           </button>

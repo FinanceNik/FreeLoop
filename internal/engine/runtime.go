@@ -214,7 +214,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		NoInstructions: prof.Instructions == "none",
 		Commands:       commands,
 		Trusted:        func() bool { return e.trusted(ses.ProjectID) },
-		MCP:            sessionMCP{e: e, projectID: ses.ProjectID, root: ses.ProjectRoot, profileID: ses.ProfileID},
+		MCP:            sessionMCP{e: e, sid: sid, projectID: ses.ProjectID, root: ses.ProjectRoot, profileID: ses.ProfileID},
 		Skills:         sessionSkills{e: e, projectID: ses.ProjectID, root: ses.ProjectRoot, profileID: ses.ProfileID},
 		Emit: func(typ event.Type, data any) {
 			e.emit(sid, typ, data)
@@ -465,11 +465,13 @@ type DecideRequest struct {
 	Reason    string `json:"reason"`
 	// Scope for "Allow always": session (default) or global.
 	Scope string `json:"scope"`
+	// Answers fill in a form request (MCP-008).
+	Answers map[string]any `json:"answers,omitempty"`
 }
 
 // Decide answers a pending permission request.
 func (e *Engine) Decide(req DecideRequest) error {
-	return e.broker.Decide(req.RequestID, req.OptionID, req.Reason, permission.Scope(req.Scope))
+	return e.broker.DecideWith(req.RequestID, req.OptionID, req.Reason, permission.Scope(req.Scope), req.Answers)
 }
 
 // PendingPermissions returns every request waiting for the user, across

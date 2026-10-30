@@ -15,7 +15,16 @@ import {
   type Session,
   type SessionMCPContext,
 } from "./api.ts";
-import { awaitingDecision, buildView, lineDiff, type Item, type ToolContent, type TranscriptEvent } from "./transcript.ts";
+import {
+  awaitingDecision,
+  buildView,
+  lineDiff,
+  type Item,
+  type PermissionOption,
+  type ToolContent,
+  type TranscriptEvent,
+} from "./transcript.ts";
+import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
 import { usePaletteActions } from "./Palette.tsx";
@@ -412,7 +421,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
     ...extra,
   });
   const decideFirst = (t: Item, kind: "allow_once" | "reject") => {
-    if (t.kind !== "tool" || !t.permission) return;
+    // A form is sent from its card, with its answers.
+    if (t.kind !== "tool" || !t.permission || (t.permission.form && kind !== "reject")) return;
     const opt = t.permission.options.find((o) => (kind === "reject" ? o.kind.startsWith("reject") : o.kind === kind));
     if (opt) EngineService.Decide({ requestId: t.permission.requestId, optionId: opt.optionId, reason: "", scope: "session" }).catch(onError);
   };
@@ -994,15 +1004,19 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
   const decided = item.permission?.decided;
   const shownDecision = decided && decided.actor !== "policy" && !(decided.actor === "mode" && decided.outcome === "allowed");
 
-  const decide = (optionId: string) =>
-    EngineService.Decide({ requestId: item.permission!.requestId, optionId, reason, scope }).catch(onError);
+  const form = item.permission?.form;
+  const decide = (optionId: string, answers?: Record<string, unknown>) =>
+    EngineService.Decide({ requestId: item.permission!.requestId, optionId, reason, scope, answers }).catch(onError);
+  const mcpForm = useMcpForm(form, item.permission?.requestId);
+  const choose = (o: PermissionOption) => mcpForm.choose(o.optionId, o.kind, decide);
   const offersAlways = item.permission?.options.some((o) => o.kind === "allow_always");
 
   // Shortcuts (GUI-006) go to the first waiting card on screen only.
   const box = useRef<HTMLDivElement>(null);
   const shownAt = useRef(0);
   useEffect(() => {
-    if (!waiting) return;
+    // A keypress never sends a form.
+    if (!waiting || form) return;
     shownAt.current = Date.now();
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.repeat || e.defaultPrevented || e.isComposing) return;
@@ -1051,7 +1065,8 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
         </p>
       )}
       {waiting && (
-        <div className="approval" role="group" aria-label="Approve this tool call" ref={box}>
+        <div className="approval" role="group" aria-label={form ? `${form.server} asks for input` : "Approve this tool call"} ref={box}>
+          {form && <McpFormView form={form} state={mcpForm} />}
           {item.permission?.command && (
             <p>
               Run <code>{item.permission.command}</code>?
@@ -1062,7 +1077,7 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
               <code>{p}</code>
             </p>
           ))}
-          <input placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />
+          {!form && <input placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />}
           <div className="approval-buttons">
             {offersAlways && (
               <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Allow always applies to">
@@ -1077,11 +1092,11 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
                 <button
                   key={o.optionId}
                   className={o.kind.startsWith("allow") ? "primary" : "danger"}
-                  onClick={() => decide(o.optionId)}
-                  title={hint ? `Shortcut: ${hint}` : undefined}
+                  onClick={() => choose(o)}
+                  title={hint && !form ? `Shortcut: ${hint}` : undefined}
                 >
                   {o.name}
-                  {hint && <kbd>{hint.split(" ")[0]}</kbd>}
+                  {hint && !form && <kbd>{hint.split(" ")[0]}</kbd>}
                 </button>
               );
             })}

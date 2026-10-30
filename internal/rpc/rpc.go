@@ -138,6 +138,8 @@ type (
 		RequestID string
 		OptionID  string
 		Reason    string
+		// Answers fill in a form request (MCP-008).
+		Answers map[string]any
 	}
 )
 
@@ -203,7 +205,7 @@ func (s *Server) call(ctx context.Context, method string, raw json.RawMessage) (
 		if err := decode(raw, &p); err != nil {
 			return nil, err
 		}
-		return struct{}{}, e.Decide(engine.DecideRequest{RequestID: p.RequestID, OptionID: p.OptionID, Reason: p.Reason})
+		return struct{}{}, e.Decide(engine.DecideRequest{RequestID: p.RequestID, OptionID: p.OptionID, Reason: p.Reason, Answers: p.Answers})
 	}
 	return nil, &Error{Code: -32601, Message: fmt.Sprintf("no method %q", method)}
 }

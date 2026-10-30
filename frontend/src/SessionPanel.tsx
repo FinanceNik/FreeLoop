@@ -89,7 +89,8 @@ function Approvals({ pending, decided, onError }: { pending: ToolItem[]; decided
   // scope for "Allow always" and the keyboard shortcuts.
   const decide = (t: ToolItem, kind: string) => {
     const opt = t.permission?.options.find((o) => (kind === "reject" ? o.kind.startsWith("reject") : o.kind === kind));
-    if (!opt) return;
+    // A form is sent from its card, with its answers.
+    if (!opt || (t.permission?.form && kind !== "reject")) return;
     EngineService.Decide({ requestId: t.permission!.requestId, optionId: opt.optionId, reason: "", scope: "session" }).catch(onError);
   };
   return (
@@ -107,13 +108,19 @@ function Approvals({ pending, decided, onError }: { pending: ToolItem[]; decided
               <code key={p}>{p}</code>
             ))}
             <div className="row">
-              <button className="primary" onClick={() => decide(t, "allow_once")}>
-                Allow once
-              </button>
+              {t.permission?.form ? (
+                <button className="primary" onClick={() => showTool(t.toolCallId)}>
+                  Answer…
+                </button>
+              ) : (
+                <button className="primary" onClick={() => decide(t, "allow_once")}>
+                  Allow once
+                </button>
+              )}
               <button className="danger" onClick={() => decide(t, "reject")}>
-                Deny
+                {t.permission?.form ? "Decline" : "Deny"}
               </button>
-              <button onClick={() => showTool(t.toolCallId)}>More…</button>
+              {!t.permission?.form && <button onClick={() => showTool(t.toolCallId)}>More…</button>}
             </div>
           </li>
         ))}

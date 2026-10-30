@@ -59,6 +59,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 | 12 | Runaway loop burns API credit | Financial | Max turns and tokens per session (HRN-002); per-provider concurrency cap; cost display (PRV-008) |
 | 13 | A compromised dependency of Freeloop itself | Everything | Pinned modules and lockfiles, SBOM, signed and notarized builds (SEC-012); minimal npm surface |
 | 14 | The app leaks vendor sign-in tokens | Legal exposure and account compromise | The app never reads, stores or forwards them; vendor binaries own their login (HRN-008) |
+| 15 | An MCP server's input request asks for a password or a key, or links to a phishing page | Credential theft | The form always asks the user, in every mode and whatever the rules (MCP-008); it names the server, shows its message and any link in full as plain text, and never fills itself in; the answers go only to the server that asked and are not written to the transcript |
 
 ## Design rules that follow
 

@@ -80,6 +80,25 @@ type Request struct {
 	Command string    `json:"command,omitempty"`
 	Options []Option  `json:"options"`
 	Created time.Time `json:"createdAt"`
+	// Form is set when the request asks the user for input rather than
+	// for permission: an MCP server's elicitation (MCP-008). It is always
+	// put to the user; no rule, mode or hook answers it.
+	Form *Form `json:"form,omitempty"`
+}
+
+// Form is an MCP server's request for input: fields described by a JSON
+// schema, or a URL for the user to open.
+type Form struct {
+	Server  string          `json:"server"`
+	Message string          `json:"message"`
+	Schema  json.RawMessage `json:"schema,omitempty"`
+	URL     string          `json:"url,omitempty"`
+}
+
+// FormOptions answer a form: send the answers, or decline.
+var FormOptions = []Option{
+	{ID: "accept", Name: "Send", Kind: "allow_once"},
+	{ID: "decline", Name: "Decline", Kind: "reject_once"},
 }
 
 // Context is the session state a request is judged in.
@@ -133,6 +152,9 @@ type Decision struct {
 	Rule *Rule `json:"rule,omitempty"`
 	// Persisted is the rule "Allow always" created.
 	Persisted *Rule `json:"persisted,omitempty"`
+	// Answers are a form's values (MCP-008). They go back to the asker but
+	// not into the transcript, which records only the decision.
+	Answers map[string]any `json:"-"`
 }
 
 // Emitter records an event in a session's transcript.
@@ -187,9 +209,13 @@ func (b *Broker) Request(ctx context.Context, pc Context, req Request) Decision 
 	req.Created = time.Now().UTC()
 
 	d, settled := b.evaluate(pc, req)
+	if req.Form != nil {
+		// Input only the user can give.
+		d, settled = Decision{}, false
+	}
 	// Hooks run only for calls that are not denied already: a deny wins
 	// without running anything.
-	if b.hooks != nil && (!settled || d.Outcome != Denied) {
+	if b.hooks != nil && req.Form == nil && (!settled || d.Outcome != Denied) {
 		if why := b.hooks.PreToolUse(ctx, pc, req); why != "" {
 			d, settled = Decision{Outcome: Denied, Actor: ActorHook, Reason: why}, true
 		} else if !settled {
@@ -321,6 +347,11 @@ var ErrUnknownRequest = errors.New("permission: no pending request with that ID"
 // allow_always option the broker stores a rule for the call in scope
 // (default session) before the call runs.
 func (b *Broker) Decide(requestID, optionID, reason string, scope Scope) error {
+	return b.DecideWith(requestID, optionID, reason, scope, nil)
+}
+
+// DecideWith is Decide with a form's answers, for a request with a Form.
+func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, answers map[string]any) error {
 	b.mu.Lock()
 	p, ok := b.pending[requestID]
 	b.mu.Unlock()
@@ -332,6 +363,9 @@ func (b *Broker) Decide(requestID, optionID, reason string, scope Scope) error {
 		return fmt.Errorf("permission: request %s has no option %q", requestID, optionID)
 	}
 	d := Decision{Outcome: Denied, OptionID: optionID, Actor: ActorUser, Reason: reason}
+	if p.req.Form != nil && p.req.Options[i].Kind == "allow_once" {
+		d.Answers = answers
+	}
 	switch p.req.Options[i].Kind {
 	case "allow_once":
 		d.Outcome = Allowed
