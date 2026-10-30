@@ -214,3 +214,15 @@ test("buildView shows hooks that blocked or failed, not those that passed", () =
     ],
   );
 });
+
+test("buildView marks messages a rewind can no longer cut the context back to", () => {
+  const v = buildView([
+    at(1, "checkpoint", { commit: "a", historyLen: 0 }),
+    at(2, "user_message_chunk", { content: { type: "text", text: "first" } }),
+    at(3, "history_message", { index: 0, reset: true, message: {} }),
+    at(4, "checkpoint", { commit: "b", historyLen: 1 }),
+    at(5, "user_message_chunk", { content: { type: "text", text: "second" } }),
+  ]);
+  const users = v.items.filter((i) => i.kind === "user");
+  assert.deepEqual(users.map((u) => u.kind === "user" && !!u.filesOnly), [true, false]);
+});

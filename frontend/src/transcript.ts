@@ -99,7 +99,18 @@ export interface ToolContent {
 export type Item = ItemKinds & { rewound?: boolean };
 
 type ItemKinds =
-  | { kind: "user"; key: string; rev: number; text: string; ts: string; files: string[]; checkpointSeq?: number }
+  | {
+      kind: "user";
+      key: string;
+      rev: number;
+      text: string;
+      ts: string;
+      files: string[];
+      checkpointSeq?: number;
+      // The context was replaced after the checkpoint (a compaction or an
+      // earlier rewind): rewinding restores the files only.
+      filesOnly?: boolean;
+    }
   | { kind: "agent"; key: string; rev: number; text: string }
   | { kind: "thought"; key: string; rev: number; text: string }
   | {
@@ -173,6 +184,8 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   // of events a rewind undid.
   let checkpoint: number | null = null;
   const rewound: { from: number; to: number }[] = [];
+  // Seqs where the harness's context was replaced (history reset).
+  const resets: number[] = [];
   let contextTokens = 0;
   let contextWindow = 0;
   // Model calls, all and since the last turn ended, and the model a call
@@ -211,6 +224,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         }
         break;
       }
+      case "history_message":
+        if (d.reset) resets.push(ev.seq);
+        break;
       case "available_commands_update":
         commands = Array.isArray(d.availableCommands) ? d.availableCommands : [];
         break;
@@ -297,6 +313,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "rewind":
         rewound.push({ from: d.checkpointSeq ?? 0, to: ev.seq });
+        resets.push(ev.seq);
         items.push({
           kind: "notice",
           key,
@@ -348,6 +365,10 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
     }
   }
   const context = contextTokens > 0 ? { tokens: contextTokens, window: contextWindow } : null;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.kind === "user" && it.checkpointSeq && resets.some((s) => s > it.checkpointSeq!)) items[i] = { ...it, filesOnly: true, rev: Math.max(it.rev, resets[resets.length - 1]) };
+  }
   for (const r of rewound) {
     for (let i = 0; i < items.length; i++) {
       const seq = Number(items[i].key);
@@ -446,6 +467,7 @@ export function panelData(view: SessionView): PanelData {
 export function hookMessage(d: Record<string, any>): string {
   const what = `${d.event ?? "A"} hook${d.tool ? ` for ${d.tool}` : ""}`;
   const said = String(d.stderr || d.stdout || "").trim();
+  if (d.stopped) return "";
   if (d.blocked) return `The ${what} blocked it: ${said || d.command}`;
   if (d.error) return `The ${what} could not run (${d.command}): ${d.error}`;
   if (d.timedOut) return `The ${what} timed out (${d.command}).`;

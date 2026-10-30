@@ -41,6 +41,8 @@ type HookRanData struct {
 	Blocked bool `json:"blocked,omitempty"`
 	// Error is set when the hook could not run at all.
 	Error string `json:"error,omitempty"`
+	// Stopped is set when the user stopped the turn while the hook ran.
+	Stopped bool `json:"stopped,omitempty"`
 }
 
 // hookCall is what a post_tool_use hook learns about the call; started
@@ -109,12 +111,18 @@ func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payl
 		d := HookRanData{Event: ev, Command: h.Command, Source: h.Source, Tool: tool, ToolCallID: callID,
 			ExitCode: res.ExitCode, TimedOut: res.TimedOut, DurationMs: res.Duration.Milliseconds(),
 			Stdout: capText(res.Output), Stderr: capText(res.Stderr)}
-		if err != nil {
+		switch {
+		case err != nil && ctx.Err() != nil:
+			d.Stopped = true
+		case err != nil:
 			d.Error = err.Error()
 		}
 		// A timed-out hook is killed; its exit code says nothing.
 		d.Blocked = err == nil && !res.TimedOut && res.ExitCode == 2
 		e.emit(r.sid, event.HookRan, d)
+		if d.Stopped {
+			return ""
+		}
 		if d.Blocked {
 			why := strings.TrimSpace(res.Stderr)
 			if why == "" {

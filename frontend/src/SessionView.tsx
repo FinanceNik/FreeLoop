@@ -776,7 +776,7 @@ function ItemBody({ item, cost, onError, onRewind }: { item: Item; cost?: string
     case "user":
       return (
         <div className="msg msg-user">
-          {item.checkpointSeq && !item.rewound && <RewindButton onRewind={() => onRewind(item.checkpointSeq!, item.text)} />}
+          {item.checkpointSeq && !item.rewound && <RewindButton filesOnly={!!item.filesOnly} onRewind={() => onRewind(item.checkpointSeq!, item.text)} />}
           {item.text}
           {item.files.length > 0 && (
             <div className="attached" aria-label="Attached files">
@@ -834,12 +834,16 @@ function ItemBody({ item, cost, onError, onRewind }: { item: Item; cost?: string
 }
 
 // RewindButton asks once more before rewinding (SES-014).
-function RewindButton({ onRewind }: { onRewind: () => void }) {
+function RewindButton({ filesOnly, onRewind }: { filesOnly: boolean; onRewind: () => void }) {
   const [sure, setSure] = useState(false);
   return sure ? (
     <span className="rewind">
-      <button className="danger" onClick={onRewind}>
-        Rewind files and conversation
+      <button
+        className="danger"
+        onClick={onRewind}
+        title={filesOnly ? "The conversation was compacted or rewound since this message, so the agent keeps its context" : undefined}
+      >
+        {filesOnly ? "Rewind files only" : "Rewind files and conversation"}
       </button>
       <button onClick={() => setSure(false)}>Keep</button>
     </span>

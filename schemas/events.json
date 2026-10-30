@@ -111,7 +111,8 @@
         "stdout": { "type": "string" },
         "stderr": { "type": "string" },
         "blocked": { "type": "boolean" },
-        "error": { "type": "string" }
+        "error": { "type": "string" },
+        "stopped": { "type": "boolean" }
       }
     },
     "contentBlock": {

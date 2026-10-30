@@ -152,4 +152,9 @@ func TestStopEndsPostToolUseHook(t *testing.T) {
 	if took := time.Since(stopped); took > 10*time.Second {
 		t.Errorf("the turn ended %s after Stop", took)
 	}
+	for _, d := range hookEvents(t, e, ses.ID) {
+		if d.Error != "" || !d.Stopped {
+			t.Errorf("a hook Stop ended = %+v", d)
+		}
+	}
 }
