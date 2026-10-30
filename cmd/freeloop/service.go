@@ -20,8 +20,19 @@ import (
 // ExportSession, ExportConfig and ImportConfig, which show native dialogs,
 // and OpenSkill, OpenFile and OpenHarness, which open a file in another app.
 type EngineService struct {
-	eng *engine.Engine
-	app *application.App
+	eng  *engine.Engine
+	app  *application.App
+	desk *desktop
+}
+
+// OpenSessionWindow opens a session in a window of its own, or brings that
+// window forward (GUI-015).
+func (s *EngineService) OpenSessionWindow(ctx context.Context, sessionID string) error {
+	ses, err := s.eng.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	return s.desk.openWindow(ses.ID, ses.Title)
 }
 
 func (s *EngineService) ListSessions(ctx context.Context) ([]session.Session, error) {

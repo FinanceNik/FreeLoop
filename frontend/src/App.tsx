@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Events } from "@wailsio/runtime";
+import { Events, Window } from "@wailsio/runtime";
 import {
   CONFIG_EVENT_NAME,
   EngineService,
@@ -21,6 +21,7 @@ import {
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
 import { HIT_LABEL, snippetParts } from "./search.ts";
 import { formatCost } from "./cost.ts";
+import { windowSession } from "./windows.ts";
 import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
@@ -59,6 +60,10 @@ const STATUS_LABEL: Record<string, string> = {
   idle: "Idle",
   error: "Error",
 };
+
+// A session's own window (GUI-015) shows that session alone; every window
+// receives every engine event.
+const STANDALONE = windowSession(window.location.search);
 
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -220,6 +225,7 @@ export default function App() {
     refreshConfig();
     refreshAttention();
     refreshProfiles();
+    if (STANDALONE) openSession(STANDALONE);
 
     return Events.On(EVENT_NAME, ({ data: ev }) => {
       ingest(ev.sid, [ev]);
@@ -258,7 +264,7 @@ export default function App() {
   const listedRef = useRef<Session[]>([]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || !/^[0-9]$/.test(e.key)) return;
+      if (STANDALONE || !e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || !/^[0-9]$/.test(e.key)) return;
       e.preventDefault();
       if (e.key === "0") {
         setScreen({ kind: "attention" });
@@ -285,24 +291,40 @@ export default function App() {
 
   // The first-run guide (GUI-010) opens once, before the first session.
   useEffect(() => {
-    if (config && sessionsLoaded && !config.ui.onboarded && sessions.length === 0 && screen.kind === "none") setScreen({ kind: "onboarding" });
+    if (!STANDALONE && config && sessionsLoaded && !config.ui.onboarded && sessions.length === 0 && screen.kind === "none") setScreen({ kind: "onboarding" });
   }, [config, sessionsLoaded]);
 
   // A clicked notification opens its session (GUI-008).
   const openRef = useRef(openSession);
   openRef.current = openSession;
-  useEffect(() => Events.On(OPEN_SESSION_EVENT_NAME, ({ data }) => openRef.current(String(data))), []);
+  useEffect(() => (STANDALONE ? undefined : Events.On(OPEN_SESSION_EVENT_NAME, ({ data }) => openRef.current(String(data)))), []);
   // A link inside a session (a subagent's transcript, HRN-014).
   useEffect(() => {
     const open = (e: Event) => {
+      const sid = String((e as CustomEvent).detail);
+      // A session window keeps its session; another opens in its own.
+      if (STANDALONE) {
+        if (sid !== STANDALONE) openWindow(sid);
+        return;
+      }
       refreshSessions();
-      openRef.current(String((e as CustomEvent).detail));
+      openRef.current(sid);
     };
     window.addEventListener(OPEN_SESSION_DOM_EVENT, open);
     return () => window.removeEventListener(OPEN_SESSION_DOM_EVENT, open);
   }, []);
 
   const selected = screen.kind === "session" ? (sessions.find((s) => s.id === screen.id) ?? null) : null;
+
+  const openWindow = (sid: string) => EngineService.OpenSessionWindow(sid).catch(report);
+  // The window's title follows its session's (a fork made here opens here).
+  const standaloneTitle = STANDALONE ? selected?.title : undefined;
+  useEffect(() => {
+    if (standaloneTitle) {
+      document.title = standaloneTitle;
+      Window.SetTitle(standaloneTitle).catch(() => {});
+    }
+  }, [standaloneTitle]);
 
   const relink = (p: ProjectInfo) =>
     EngineService.ChooseFolder()
@@ -435,157 +457,159 @@ export default function App() {
 
   return (
     <PaletteContext.Provider value={registry}>
-    <div className="app">
-      <aside className="sidebar">
-        <header>
-          <h1>Freeloop</h1>
-          <button className="primary" onClick={() => setScreen({ kind: "new" })}>
-            New session
-          </button>
-        </header>
-        <button
-          className={`attention-link ${attentionCount > 0 ? "attention-link-on" : ""}`}
-          aria-current={screen.kind === "attention" ? "page" : undefined}
-          aria-keyshortcuts="Meta+0"
-          title="⌘0"
-          onClick={() => {
-            refreshAttention();
-            setScreen({ kind: "attention" });
-          }}
-        >
-          Needs attention
-          {attentionCount > 0 && <span className="badge badge-waiting_permission">{attentionCount}</span>}
-        </button>
-        <div className="filters">
-          <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <div className="row">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-              <option value="">Any status</option>
-              <option value="waiting_permission">Needs you</option>
-              <option value="running">Running</option>
-              <option value="idle">Idle</option>
-              <option value="error">Error</option>
-            </select>
-            <label className="row muted">
-              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Archived
-            </label>
-          </div>
-        </div>
-        <nav aria-label="Projects and sessions">
-          {groups.map((g) => (
-            <section key={g.key} className="project-group">
-              <h2 className="project-name" title={g.project?.root ?? g.key}>
-                {g.name}
-                {g.project && !g.project.trusted && !g.project.missing && (
-                  <span className="muted untrusted" title="Untrusted: global settings only">
-                    untrusted
-                  </span>
-                )}
-                {g.project?.missing && (
-                  <>
-                    <span className="badge badge-error">missing</span>
-                    <button className="link" onClick={() => relink(g.project!)}>
-                      Relink…
-                    </button>
-                  </>
-                )}
-              </h2>
-              <ul>
-                {g.sessions.map((s) => (
-                  <li key={s.id}>
-                    <button
-                      className="session-row"
-                      aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
-                      aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
-                      onClick={() => openSession(s.id)}
-                    >
-                      <span className="session-title">{s.title}</span>
-                      <span className="session-meta">
-                        <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
-                        {s.branch && <span className="muted">{s.branch}</span>}
-                      </span>
-                    </button>
-                    {subagents(s.id).length > 0 && (
-                      <ul className="subagents" aria-label={`Subagents of ${s.title}`}>
-                        {subagents(s.id).map((c) => (
-                          <li key={c.id}>
-                            <button
-                              className="session-row session-child"
-                              aria-current={screen.kind === "session" && screen.id === c.id ? "true" : undefined}
-                              onClick={() => openSession(c.id)}
-                            >
-                              <span className="session-title">{c.title.replace(/^Subagent: /, "")}</span>
-                              <span className={`badge badge-${c.status}`}>{STATUS_LABEL[c.status] ?? c.status}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-          {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
-          {sessions.length > 0 && visible.length === 0 && !found?.results.length && <p className="muted">No sessions match.</p>}
-          {found && found.query === query.trim() && found.results.length > 0 && (
-            <section className="project-group search-results" aria-label="Found in transcripts">
-              <h2 className="project-name">In transcripts</h2>
-              <ul>
-                {found.results.map((r) => {
-                  const s = sessions.find((x) => x.id === r.sessionId);
-                  if (!s) return null;
-                  return (
-                    <li key={r.sessionId}>
-                      <span className="session-title search-session" title={s.projectRoot}>
-                        {s.title}
-                        {s.status === "archived" && <span className="muted"> · archived</span>}
-                      </span>
-                      <ul>
-                        {(r.hits ?? []).map((h, i) => (
-                          <li key={i}>
-                            <button className="search-hit" onClick={() => openSession(s.id, h.seq)}>
-                              <span className="muted search-kind">{HIT_LABEL[h.kind] ?? h.kind}</span>
-                              <span className="search-snippet">
-                                {snippetParts(h.snippet).map((p, j) => (p.mark ? <mark key={j}>{p.text}</mark> : <span key={j}>{p.text}</span>))}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
-        </nav>
-        {config?.network?.localOnly && (
-          <button className="link today" title="The app connects to nothing but this Mac; change it in Settings" onClick={() => setScreen({ kind: "settings" })}>
-            Local only
-          </button>
-        )}
-        {today && (today.models ?? []).length > 0 && (
+    <div className={STANDALONE ? "app standalone" : "app"}>
+      {!STANDALONE && (
+        <aside className="sidebar">
+          <header>
+            <h1>Freeloop</h1>
+            <button className="primary" onClick={() => setScreen({ kind: "new" })}>
+              New session
+            </button>
+          </header>
           <button
-            className="link today"
-            title="Estimated from the price table in Settings; calls to models without a price are left out"
-            onClick={() => setScreen({ kind: "settings" })}
+            className={`attention-link ${attentionCount > 0 ? "attention-link-on" : ""}`}
+            aria-current={screen.kind === "attention" ? "page" : undefined}
+            aria-keyshortcuts="Meta+0"
+            title="⌘0"
+            onClick={() => {
+              refreshAttention();
+              setScreen({ kind: "attention" });
+            }}
           >
-            {(today.models ?? []).some((m) => m.priced)
-              ? `Today ≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`
-              : "Today: no prices set"}
+            Needs attention
+            {attentionCount > 0 && <span className="badge badge-waiting_permission">{attentionCount}</span>}
           </button>
-        )}
-        <footer className="row">
-          <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
-          <button onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
-          <button onClick={() => setScreen({ kind: "skills" })}>Skills</button>
-          <button onClick={() => setScreen({ kind: "mcp" })}>MCP</button>
-          <button onClick={() => setScreen({ kind: "environments" })}>Environments</button>
-          <button onClick={() => setScreen({ kind: "rules" })}>Rules</button>
-          <button onClick={() => setScreen({ kind: "settings" })}>Settings</button>
-        </footer>
-      </aside>
+          <div className="filters">
+            <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <div className="row">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+                <option value="">Any status</option>
+                <option value="waiting_permission">Needs you</option>
+                <option value="running">Running</option>
+                <option value="idle">Idle</option>
+                <option value="error">Error</option>
+              </select>
+              <label className="row muted">
+                <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Archived
+              </label>
+            </div>
+          </div>
+          <nav aria-label="Projects and sessions">
+            {groups.map((g) => (
+              <section key={g.key} className="project-group">
+                <h2 className="project-name" title={g.project?.root ?? g.key}>
+                  {g.name}
+                  {g.project && !g.project.trusted && !g.project.missing && (
+                    <span className="muted untrusted" title="Untrusted: global settings only">
+                      untrusted
+                    </span>
+                  )}
+                  {g.project?.missing && (
+                    <>
+                      <span className="badge badge-error">missing</span>
+                      <button className="link" onClick={() => relink(g.project!)}>
+                        Relink…
+                      </button>
+                    </>
+                  )}
+                </h2>
+                <ul>
+                  {g.sessions.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        className="session-row"
+                        aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
+                        aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
+                        onClick={() => openSession(s.id)}
+                      >
+                        <span className="session-title">{s.title}</span>
+                        <span className="session-meta">
+                          <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
+                          {s.branch && <span className="muted">{s.branch}</span>}
+                        </span>
+                      </button>
+                      {subagents(s.id).length > 0 && (
+                        <ul className="subagents" aria-label={`Subagents of ${s.title}`}>
+                          {subagents(s.id).map((c) => (
+                            <li key={c.id}>
+                              <button
+                                className="session-row session-child"
+                                aria-current={screen.kind === "session" && screen.id === c.id ? "true" : undefined}
+                                onClick={() => openSession(c.id)}
+                              >
+                                <span className="session-title">{c.title.replace(/^Subagent: /, "")}</span>
+                                <span className={`badge badge-${c.status}`}>{STATUS_LABEL[c.status] ?? c.status}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
+            {sessions.length > 0 && visible.length === 0 && !found?.results.length && <p className="muted">No sessions match.</p>}
+            {found && found.query === query.trim() && found.results.length > 0 && (
+              <section className="project-group search-results" aria-label="Found in transcripts">
+                <h2 className="project-name">In transcripts</h2>
+                <ul>
+                  {found.results.map((r) => {
+                    const s = sessions.find((x) => x.id === r.sessionId);
+                    if (!s) return null;
+                    return (
+                      <li key={r.sessionId}>
+                        <span className="session-title search-session" title={s.projectRoot}>
+                          {s.title}
+                          {s.status === "archived" && <span className="muted"> · archived</span>}
+                        </span>
+                        <ul>
+                          {(r.hits ?? []).map((h, i) => (
+                            <li key={i}>
+                              <button className="search-hit" onClick={() => openSession(s.id, h.seq)}>
+                                <span className="muted search-kind">{HIT_LABEL[h.kind] ?? h.kind}</span>
+                                <span className="search-snippet">
+                                  {snippetParts(h.snippet).map((p, j) => (p.mark ? <mark key={j}>{p.text}</mark> : <span key={j}>{p.text}</span>))}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+          </nav>
+          {config?.network?.localOnly && (
+            <button className="link today" title="The app connects to nothing but this Mac; change it in Settings" onClick={() => setScreen({ kind: "settings" })}>
+              Local only
+            </button>
+          )}
+          {today && (today.models ?? []).length > 0 && (
+            <button
+              className="link today"
+              title="Estimated from the price table in Settings; calls to models without a price are left out"
+              onClick={() => setScreen({ kind: "settings" })}
+            >
+              {(today.models ?? []).some((m) => m.priced)
+                ? `Today ≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`
+                : "Today: no prices set"}
+            </button>
+          )}
+          <footer className="row">
+            <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
+            <button onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
+            <button onClick={() => setScreen({ kind: "skills" })}>Skills</button>
+            <button onClick={() => setScreen({ kind: "mcp" })}>MCP</button>
+            <button onClick={() => setScreen({ kind: "environments" })}>Environments</button>
+            <button onClick={() => setScreen({ kind: "rules" })}>Rules</button>
+            <button onClick={() => setScreen({ kind: "settings" })}>Settings</button>
+          </footer>
+        </aside>
+      )}
 
       <main className="main">
         {issues.length > 0 && (
@@ -631,7 +655,12 @@ export default function App() {
             configVersion={configVersion}
             allowBypass={config?.permissions.allowBypass ?? false}
             onError={report}
+            onOpenWindow={STANDALONE ? undefined : () => openWindow(selected.id)}
             onDeleted={() => {
+              if (STANDALONE) {
+                Window.Close().catch(() => {});
+                return;
+              }
               setScreen({ kind: "none" });
               refreshSessions();
             }}
@@ -708,7 +737,8 @@ export default function App() {
           />
         )}
         {screen.kind === "attention" && <Attention items={attention} onOpen={openSession} onChanged={refreshAttention} onError={report} />}
-        {screen.kind === "none" && (
+        {STANDALONE && screen.kind === "session" && !selected && sessionsLoaded && <div className="empty">This session no longer exists.</div>}
+        {!STANDALONE && screen.kind === "none" && (
           <div className="empty">
             <p>Select a session or create a new one.</p>
             <button className="link" onClick={() => setScreen({ kind: "onboarding" })}>

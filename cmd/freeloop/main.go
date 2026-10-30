@@ -30,6 +30,12 @@ const ConfigEventName = "freeloop:config"
 // for it was clicked (GUI-008).
 const OpenSessionEventName = "freeloop:open-session"
 
+// mainWindowName names the main window; a session's own window (GUI-015)
+// is named by sessionWindowName and loads the page with ?session=<id>.
+const mainWindowName = "main"
+
+func sessionWindowName(sid string) string { return "session:" + sid }
+
 // FilesDroppedEventName carries the paths dropped onto an element marked
 // data-file-drop-target, such as the skills page's drop zone (SKL-005).
 const FilesDroppedEventName = "freeloop:files-dropped"
@@ -97,9 +103,10 @@ func main() {
 		},
 	})
 
-	svc.app = app
+	svc.app, svc.desk = app, desk
 
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:      mainWindowName,
 		Title:     "Freeloop",
 		Width:     1200,
 		Height:    780,

@@ -55,6 +55,8 @@ interface Props {
   configVersion: number;
   onError: (err: unknown) => void;
   onDeleted: () => void;
+  // Opens the session in a window of its own (GUI-015); absent in that window.
+  onOpenWindow?: () => void;
 }
 
 const STOP_LABEL: Record<string, string> = {
@@ -80,7 +82,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -482,6 +484,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     ...otherProfiles.map((p) =>
       act(`continue:${p.id}`, `Continue with ${p.name}`, () => continueWith(p), { keywords: "switch profile harness handoff", detail: p.description || undefined }),
     ),
+    ...(onOpenWindow ? [act("window", "Open in a new window", onOpenWindow, { keywords: "window separate detach" })] : []),
     act("export-md", "Export as Markdown…", () => exportAs("markdown"), { keywords: "save share download" }),
     act("export-json", "Export as JSON…", () => exportAs("json"), { keywords: "save download events" }),
     act("rename", "Rename session", () => setRenaming(session.title), { keywords: "title" }),
@@ -555,6 +558,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   <button onClick={() => exportAs("json")}>JSON…</button>
                 </div>
               </details>
+              {onOpenWindow && (
+                <button onClick={onOpenWindow} title="Open this session in a window of its own">
+                  New window
+                </button>
+              )}
               <button onClick={togglePanel} aria-pressed={panelOpen} title="Show or hide the right panel">
                 Panel
               </button>

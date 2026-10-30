@@ -137,6 +137,11 @@ pre {
   height: 100%;
 }
 
+/* A session's own window (GUI-015) has no sidebar. */
+.app.standalone {
+  grid-template-columns: 1fr;
+}
+
 /* Sidebar */
 .sidebar {
   display: flex;

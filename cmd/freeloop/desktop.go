@@ -3,7 +3,9 @@
 package main
 
 import (
+	"errors"
 	"log"
+	"net/url"
 	"strconv"
 	"sync"
 
@@ -44,6 +46,12 @@ func (d *desktop) start(app *application.App, win *application.WebviewWindow) {
 			return
 		}
 		sid, _ := r.Response.UserInfo["sessionId"].(string)
+		// A session in a window of its own comes forward there.
+		if w, ok := app.Window.GetByName(sessionWindowName(sid)); ok && sid != "" {
+			w.Show()
+			w.Focus()
+			return
+		}
 		win.Show()
 		win.Focus()
 		if sid != "" {
@@ -53,7 +61,7 @@ func (d *desktop) start(app *application.App, win *application.WebviewWindow) {
 }
 
 func (d *desktop) notice(n engine.Notice) {
-	if d.win == nil || d.win.IsFocused() {
+	if d.win == nil || d.focused() {
 		return
 	}
 	// Asked on the first notice rather than at launch, so a user who never
@@ -78,6 +86,40 @@ func (d *desktop) notice(n engine.Notice) {
 	if err != nil {
 		log.Printf("notifications: %v", err)
 	}
+}
+
+// focused reports whether any of the app's windows has the focus.
+func (d *desktop) focused() bool {
+	for _, w := range d.app.Window.GetAll() {
+		if w.IsFocused() {
+			return true
+		}
+	}
+	return false
+}
+
+// openWindow opens session sid in a window of its own (GUI-015), or brings
+// its window forward. Every window gets every engine event, so both stream.
+func (d *desktop) openWindow(sid, title string) error {
+	if d.app == nil {
+		return errors.New("the app is not running yet")
+	}
+	name := sessionWindowName(sid)
+	if w, ok := d.app.Window.GetByName(name); ok {
+		w.Show()
+		w.Focus()
+		return nil
+	}
+	d.app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:      name,
+		Title:     title,
+		Width:     900,
+		Height:    760,
+		MinWidth:  520,
+		MinHeight: 400,
+		URL:       "/?session=" + url.QueryEscape(sid),
+	}).Show()
+	return nil
 }
 
 func (d *desktop) badge(count int) {
