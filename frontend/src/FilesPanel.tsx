@@ -32,8 +32,10 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
     EngineService.ListFolder(session.id, rel)
       .then((list) => setFolders((f) => ({ ...f, [rel]: list ?? [] })))
       .catch(onError);
-  // The open folders reload when the agent changes something.
+  // The open folders reload when the agent changes something; closed ones
+  // are forgotten, so they load afresh when opened again.
   useEffect(() => {
+    setFolders((f) => Object.fromEntries(Object.entries(f).filter(([rel]) => open.has(rel))));
     for (const rel of open) load(rel);
     EngineService.Changes(session.id)
       .then((c) => setGitChanged(c.repo && !c.blocked ? (c.files ?? []).map((f) => f.path) : []))

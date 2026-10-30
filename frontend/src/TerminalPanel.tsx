@@ -29,15 +29,21 @@ export default function TerminalPanel({ session, onError }: Props) {
       })
       .catch(onError);
 
+  // Read again after an archive, which ends the session's shells.
   useEffect(() => {
+    if (archived) {
+      setTerms(null);
+      setCurrent("");
+      return;
+    }
     EngineService.SessionTerminals(session.id)
       .then((list) => {
         setTerms(list ?? []);
         if (list?.length) setCurrent(list[list.length - 1].id);
-        else if (!archived) open();
+        else open();
       })
       .catch(onError);
-  }, [session.id]);
+  }, [session.id, archived]);
 
   const close = (id: string) => {
     EngineService.CloseTerminal(id).catch(() => {});

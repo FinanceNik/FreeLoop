@@ -413,7 +413,13 @@ func (s *EngineService) ArchiveSession(ctx context.Context, sessionID string, ar
 }
 
 func (s *EngineService) DeleteSession(ctx context.Context, sessionID string) error {
-	return s.eng.DeleteSession(ctx, sessionID)
+	err := s.eng.DeleteSession(ctx, sessionID)
+	// The session's own window, and its subagents', go with it.
+	s.desk.closeGone(func(sid string) bool {
+		_, err := s.eng.GetSession(context.Background(), sid)
+		return err == nil
+	})
+	return err
 }
 
 func (s *EngineService) Config() config.Config {

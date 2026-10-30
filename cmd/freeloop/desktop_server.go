@@ -20,6 +20,8 @@ func (*desktop) start(*application.App, *application.WebviewWindow) {}
 func (*desktop) notice(engine.Notice)                               {}
 func (*desktop) badge(int)                                          {}
 
+func (*desktop) closeGone(func(string) bool) {}
+
 // In server mode a session opens in a browser tab of its own at
 // /?session=<id>; the app has no windows to open.
 func (*desktop) openWindow(string, string) error {

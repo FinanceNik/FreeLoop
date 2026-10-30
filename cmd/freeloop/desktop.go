@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -120,6 +121,19 @@ func (d *desktop) openWindow(sid, title string) error {
 		URL:       "/?session=" + url.QueryEscape(sid),
 	}).Show()
 	return nil
+}
+
+// closeGone closes the own windows of sessions that no longer exist, after
+// a delete, which takes a session's subagents along (GUI-015).
+func (d *desktop) closeGone(exists func(sid string) bool) {
+	if d.app == nil {
+		return
+	}
+	for _, w := range d.app.Window.GetAll() {
+		if sid, ok := strings.CutPrefix(w.Name(), sessionWindowName("")); ok && !exists(sid) {
+			w.Close()
+		}
+	}
 }
 
 func (d *desktop) badge(count int) {
