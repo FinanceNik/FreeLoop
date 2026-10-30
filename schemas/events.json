@@ -40,7 +40,8 @@
         "history_message",
         "checkpoint",
         "rewind",
-        "handoff"
+        "handoff",
+        "pull_request"
       ],
       "x-acp-types": [
         "user_message_chunk",

@@ -321,7 +321,9 @@ func (d *Docker) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		timeout = DefaultTimeout
 	}
 	timeout = min(timeout, MaxTimeout)
-	if len(spec.Argv) > 0 {
+	if len(spec.Argv) > 0 && spec.LoginShell {
+		args = append(append(args, "sh", "-lc", `exec "$0" "$@"`), spec.Argv...)
+	} else if len(spec.Argv) > 0 {
 		args = append(args, spec.Argv...)
 	} else {
 		secs := fmt.Sprint(int(timeout.Seconds()))

@@ -134,7 +134,8 @@ type ItemKinds =
   | { kind: "model"; key: string; rev: number; model: string; providerId: string }
   | { kind: "notice"; key: string; rev: number; message: string; warn: boolean }
   | { kind: "compaction"; key: string; rev: number; reason: string; before: number; after: number; summary: string }
-  | { kind: "handoff"; key: string; rev: number; fromTitle: string; summary: string; generated: boolean };
+  | { kind: "handoff"; key: string; rev: number; fromTitle: string; summary: string; generated: boolean }
+  | { kind: "pull_request"; key: string; rev: number; url: string; title: string; base: string; head: string; draft: boolean };
 
 export interface Usage {
   inputTokens: number;
@@ -227,6 +228,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         }
         break;
       }
+      case "pull_request":
+        items.push({ kind: "pull_request", key, rev, url: d.url ?? "", title: d.title ?? "", base: d.base ?? "", head: d.head ?? "", draft: !!d.draft });
+        break;
       case "handoff":
         items.push({ kind: "handoff", key, rev, fromTitle: d.fromTitle ?? "", summary: d.summary ?? "", generated: !!d.generated });
         break;

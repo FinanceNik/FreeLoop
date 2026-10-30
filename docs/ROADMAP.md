@@ -154,6 +154,12 @@ Left for later because they need the user: signed builds and the update check (S
 3. **Headless control (EXT-004).** *Built 2026-10-30.* A JSON-RPC API on a Unix socket and a small CLI.
 4. **MCP input-required round trips (MCP-008).** *Built 2026-10-30.* A server's request for more input shown as a form, the call retried with the answers.
 
+### Feature order, part 5 (planned 2026-10-30)
+
+1. **Pull requests (SES-011).** *Built 2026-10-30.* The Diff tab pushes the session's branch and opens a pull request with the GitHub CLI, its description drafted by the model and edited by the user; the URL is recorded in the session.
+2. **Multiple windows (GUI-015).** A session opens in a window of its own, streaming alongside the main window.
+3. **Idle memory (NFR-PERF-004).** A repeatable measurement of the app with ten idle sessions against the 300 MB budget.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SES-012, SES-013, GUI-016, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

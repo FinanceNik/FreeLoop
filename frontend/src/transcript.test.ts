@@ -226,3 +226,13 @@ test("buildView marks messages a rewind can no longer cut the context back to", 
   const users = v.items.filter((i) => i.kind === "user");
   assert.deepEqual(users.map((u) => u.kind === "user" && !!u.filesOnly), [true, false]);
 });
+
+test("an opened pull request shows in the conversation (SES-011)", () => {
+  const v = buildView([
+    { ...ev(1, { url: "https://github.com/acme/app/pull/7", title: "Add the feature", base: "main", head: "feature", draft: true }), type: "pull_request" },
+  ]);
+  assert.deepEqual(
+    v.items.map((i) => (i.kind === "pull_request" ? [i.url, i.title, i.base, i.head, i.draft] : i.kind)),
+    [["https://github.com/acme/app/pull/7", "Add the feature", "main", "feature", true]],
+  );
+});

@@ -42,6 +42,10 @@ type ExecSpec struct {
 	// Argv, when set, runs a program directly instead of Command through the
 	// shell; the app uses it for its own git queries.
 	Argv []string
+	// LoginShell runs Argv through the environment's shell as
+	// `exec "$0" "$@"`, so a program the user installed, such as gh,
+	// resolves on their login PATH while the arguments stay as given.
+	LoginShell bool
 	// Cwd defaults to Root.
 	Cwd string
 	// Env adds variables to the environment's own.

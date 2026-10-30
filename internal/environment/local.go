@@ -123,7 +123,10 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var cmd *exec.Cmd
-	if len(spec.Argv) > 0 {
+	if len(spec.Argv) > 0 && spec.LoginShell {
+		args := append(append(append([]string{}, l.shell[1:]...), `exec "$0" "$@"`), spec.Argv...)
+		cmd = exec.Command(l.shell[0], args...)
+	} else if len(spec.Argv) > 0 {
 		cmd = exec.Command(spec.Argv[0], spec.Argv[1:]...)
 	} else {
 		args := append(append([]string{}, l.shell[1:]...), spec.Command)

@@ -1,3 +1,4 @@
+import { Browser } from "@wailsio/runtime";
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
@@ -952,6 +953,27 @@ function ItemBody({
       return <div className="turn-end">Model changed to {item.model}</div>;
     case "notice":
       return <div className={item.warn ? "turn-end turn-end-warn" : "turn-end"}>{item.message}</div>;
+    case "pull_request":
+      return (
+        <div className="turn-end pr-opened">
+          Opened {item.draft ? "draft " : ""}pull request{" "}
+          {item.url.startsWith("https://") ? (
+            <a
+              href={item.url}
+              title={item.url}
+              onClick={(e) => {
+                e.preventDefault();
+                Browser.OpenURL(item.url).catch(() => {});
+              }}
+            >
+              {item.title}
+            </a>
+          ) : (
+            <strong>{item.title}</strong>
+          )}{" "}
+          ({item.head} into {item.base})
+        </div>
+      );
     case "handoff":
       return (
         <details className="handoff">

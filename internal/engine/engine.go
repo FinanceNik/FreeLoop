@@ -58,6 +58,9 @@ type Engine struct {
 	dataDir string
 	home    string
 	dev     bool
+	// gh is the GitHub CLI pull requests are opened with (SES-011); tests
+	// point it at a fake.
+	gh      string
 	store   *store.Store
 	bus     *bus
 	secrets secrets.Store
@@ -124,6 +127,7 @@ func Open(opts Options) (*Engine, error) {
 		}
 	}
 	e := &Engine{
+		gh:       "gh",
 		dataDir:  opts.DataDir,
 		home:     opts.Home,
 		dev:      opts.Dev,

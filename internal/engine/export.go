@@ -199,6 +199,10 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 			note("Model changed to " + str("model") + ".")
 		case event.Rewind:
 			note("Rewound to an earlier checkpoint; the turns after it were undone.")
+		case event.PullRequest:
+			var pr event.PullRequestData
+			json.Unmarshal(ev.Data, &pr)
+			note(fmt.Sprintf("Opened pull request [%s](%s) (%s into %s).", strings.ReplaceAll(pr.Title, "]", "\\]"), pr.URL, pr.Head, pr.Base))
 		case event.Error:
 			note("**Error:** " + str("message"))
 		case event.Notice:

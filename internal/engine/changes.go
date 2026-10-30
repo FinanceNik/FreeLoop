@@ -402,6 +402,19 @@ func (e *Engine) SuggestCommitMessage(ctx context.Context, sid string) (string, 
 	if len(diff) > maxSuggestDiff {
 		diff = diff[:maxSuggestDiff] + "\n[diff truncated]"
 	}
+	msg, err := e.complete(ctx, ses,
+		"You write git commit messages. Reply with the message only: a summary line of at most 72 characters "+
+			"in the imperative mood, then, if the change needs it, a blank line and a short body. No code fences, no quotes.",
+		"Write a commit message for this diff:\n\n"+diff, 400)
+	if err != nil {
+		return "", err
+	}
+	return msg, nil
+}
+
+// complete asks the session's model for one reply to prompt, for the
+// panel's suggestions; the user asked for it, so no tools and no transcript.
+func (e *Engine) complete(ctx context.Context, ses session.Session, system, prompt string, maxTokens int) (string, error) {
 	p, err := e.provider(ses.ProviderID)
 	if err != nil {
 		return "", err
@@ -409,11 +422,10 @@ func (e *Engine) SuggestCommitMessage(ctx context.Context, sid string) (string, 
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	ch, err := p.p.Stream(ctx, provider.ChatRequest{
-		Model: ses.Model,
-		System: "You write git commit messages. Reply with the message only: a summary line of at most 72 characters " +
-			"in the imperative mood, then, if the change needs it, a blank line and a short body. No code fences, no quotes.",
-		Messages:  []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: "Write a commit message for this diff:\n\n" + diff}}}},
-		MaxTokens: 400,
+		Model:     ses.Model,
+		System:    system,
+		Messages:  []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: prompt}}}},
+		MaxTokens: maxTokens,
 	})
 	if err != nil {
 		return "", err

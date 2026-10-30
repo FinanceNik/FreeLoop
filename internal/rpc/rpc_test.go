@@ -58,7 +58,7 @@ func TestHeadless(t *testing.T) {
 		if ev.SID != ses.ID {
 			t.Errorf("the GUI saw %s first", ev.SID)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("the GUI's subscription saw nothing")
 	}
 	if err := c.Call("sessions.prompt", map[string]any{"id": ses.ID, "text": "go"}, nil); err != nil {

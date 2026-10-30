@@ -59,6 +59,8 @@ const (
 	// Handoff starts a session that continues another with a different
 	// profile or harness (HRN-012).
 	Handoff Type = "handoff"
+	// PullRequest records a pull request opened from the session (SES-011).
+	PullRequest Type = "pull_request"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -72,6 +74,7 @@ var ACPTypes = []Type{
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
+	PullRequest,
 }
 
 // AllTypes returns every known variant.
@@ -214,6 +217,16 @@ type AvailableCommand struct {
 type ErrorData struct {
 	Message string `json:"message"`
 	Code    string `json:"code,omitempty"`
+}
+
+// PullRequestData is the payload of pull_request: where the pull request
+// is and what it proposes.
+type PullRequestData struct {
+	URL   string `json:"url"`
+	Title string `json:"title"`
+	Base  string `json:"base"`
+	Head  string `json:"head"`
+	Draft bool   `json:"draft,omitempty"`
 }
 
 // HandoffData is the payload of handoff: the session continued from and

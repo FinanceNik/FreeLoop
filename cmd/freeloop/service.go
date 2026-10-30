@@ -91,6 +91,20 @@ func (s *EngineService) SuggestCommitMessage(ctx context.Context, sessionID stri
 	return s.eng.SuggestCommitMessage(ctx, sessionID)
 }
 
+// PullRequestInfo, SuggestPullRequest and CreatePullRequest open a pull
+// request from the diff panel (SES-011).
+func (s *EngineService) PullRequestInfo(ctx context.Context, sessionID string) (engine.PullRequestInfo, error) {
+	return s.eng.PullRequestInfo(ctx, sessionID)
+}
+
+func (s *EngineService) SuggestPullRequest(ctx context.Context, sessionID string) (engine.PullRequestText, error) {
+	return s.eng.SuggestPullRequest(ctx, sessionID)
+}
+
+func (s *EngineService) CreatePullRequest(ctx context.Context, req engine.CreatePullRequestRequest) (event.PullRequestData, error) {
+	return s.eng.CreatePullRequest(ctx, req)
+}
+
 // ListProfiles, SaveProfile, DeleteProfile and SetProjectProfile manage
 // harness profiles (HRN-003, HRN-004).
 func (s *EngineService) ListProfiles() []config.Profile {
