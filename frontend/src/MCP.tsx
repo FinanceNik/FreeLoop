@@ -1,9 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Browser } from "@wailsio/runtime";
 import { EngineService, type MCPServer, type MCPServerInfo } from "./api.ts";
 
 // MCP servers (MCP-001, MCP-005): stdio commands and Streamable HTTP
 // endpoints in mcp.yaml. A server runs only after the user approves exactly
-// what it runs; any change asks again. Secrets go to the Keychain.
+// what it runs; any change asks again. Secrets go to the Keychain. A remote
+// server that wants OAuth waits for "Sign in", which opens the server's
+// sign-in page in the browser (MCP-006).
 
 interface Props {
   configVersion: number;
@@ -20,6 +23,7 @@ interface Form {
   args: string; // one per line
   env: string; // KEY=value per line
   url: string;
+  oauthClientId: string;
   headers: string; // Name: value per line
   enabled: boolean;
   secretNames: string[];
@@ -39,6 +43,7 @@ function toForm(s?: MCPServerInfo): Form {
       .map(([k, v]) => `${k}=${v}`)
       .join("\n"),
     url: s?.url ?? "",
+    oauthClientId: s?.oauthClientId ?? "",
     headers: Object.entries(s?.headers ?? {})
       .map(([k, v]) => `${k}: ${v}`)
       .join("\n"),
@@ -113,6 +118,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
       args: form.transport === "stdio" ? form.args.split("\n").filter((a) => a.trim() !== "") : [],
       env,
       url: form.transport === "http" ? form.url.trim() : "",
+      oauthClientId: form.transport === "http" ? form.oauthClientId.trim() : "",
       headers,
       enabled: form.enabled,
       source: "",
@@ -168,6 +174,10 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
               <label>
                 URL
                 <input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://example.com/mcp" required />
+              </label>
+              <label>
+                OAuth client ID <span className="muted">(optional; only for servers that want a pre-registered client)</span>
+                <input value={form.oauthClientId} onChange={(e) => set("oauthClientId", e.target.value)} />
               </label>
               <label>
                 Headers <span className="muted">(Name: value per line; use secrets for tokens)</span>
@@ -241,7 +251,10 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
             <div className="mcp-main">
               <div>
                 <strong>{s.name || s.id}</strong> <span className="muted">{s.id}</span>{" "}
-                <span className={`badge mcp-${s.needsApproval ? "approval" : s.status.state}`}>{s.needsApproval ? "needs approval" : s.status.state}</span>
+                <span className={`badge mcp-${s.needsApproval ? "approval" : s.status.state}`}>
+                  {s.needsApproval ? "needs approval" : s.status.state === "sign_in" ? "needs sign-in" : s.status.state}
+                </span>
+                {s.signedIn && <span className="muted"> · signed in</span>}
                 {!s.enabled && <span className="muted"> · off by default</span>}
               </div>
               <code className="mcp-cmd">{s.transport === "http" ? s.url : commandLine(s)}</code>
@@ -260,7 +273,22 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
                   </ul>
                 </details>
               )}
-              {s.status.error && <div className="error-text">{s.status.error}</div>}
+              {s.status.error && s.status.state !== "sign_in" && <div className="error-text">{s.status.error}</div>}
+              {s.status.state === "sign_in" && busy !== s.id && <div className="muted">This server wants you to sign in. Sign in opens its page in your browser.</div>}
+              {s.signInUrl && (
+                <div className="muted">
+                  Waiting for the sign-in in your browser.{" "}
+                  <a
+                    href={s.signInUrl}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      Browser.OpenURL(s.signInUrl!).catch(onError);
+                    }}
+                  >
+                    Open the page again
+                  </a>
+                </div>
+              )}
               {s.needsApproval && (
                 <div className="banner warn mcp-approve">
                   <strong>Approve before it runs.</strong> It will {s.transport === "http" ? "connect to" : "run"}:
@@ -278,9 +306,21 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
               )}
             </div>
             <div className="mcp-actions">
-              {!s.needsApproval && s.status.state !== "running" && (
+              {!s.needsApproval && s.status.state === "sign_in" && (
+                <button className="primary" disabled={busy === s.id} onClick={() => run(s.id, EngineService.SignInMCPServer(s.id))}>
+                  {busy === s.id ? "Signing in…" : "Sign in…"}
+                </button>
+              )}
+              {!s.needsApproval && s.status.state !== "running" && s.status.state !== "sign_in" && (
                 <button disabled={busy === s.id} onClick={() => run(s.id, EngineService.StartMCPServer(s.id))}>
                   {busy === s.id ? "Starting…" : "Start"}
+                </button>
+              )}
+              {s.signedIn && (
+                <button
+                  onClick={() => confirm(`Sign out of ${s.name || s.id}? Its tokens are removed from the Keychain.`) && run(s.id, EngineService.SignOutMCPServer(s.id))}
+                >
+                  Sign out
                 </button>
               )}
               {s.status.state === "running" && (

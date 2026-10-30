@@ -100,6 +100,10 @@ type Engine struct {
 	runtimes   map[string]*runtime
 	// terms are the open integrated terminals (GUI-012).
 	terms terminals
+	// openURL shows a page in the user's browser, for MCP sign-ins;
+	// signIns are the sign-in pages being waited on, by server (MCP-006).
+	openURL func(string) error
+	signIns map[string]string
 	// starting are runtimes being set up, so hooks find them while the
 	// harness starts (an external agent's requests during session/load).
 	starting map[string]*runtime
@@ -186,6 +190,9 @@ func Open(opts Options) (*Engine, error) {
 }
 
 // Close cancels running turns, closes every subscription and the store.
+// SetOpenURL sets how the engine shows a page in the user's browser.
+func (e *Engine) SetOpenURL(f func(string) error) { e.openURL = f }
+
 func (e *Engine) Close() error {
 	e.mu.Lock()
 	running := make([]*runtime, 0, len(e.runtimes))

@@ -1293,6 +1293,12 @@ fieldset {
   border-color: var(--warn);
 }
 
+.badge.mcp-sign_in {
+  color: var(--accent-text);
+  background: var(--warn);
+  border-color: var(--warn);
+}
+
 /* Import from Claude Code (MCP-002, SET-003) */
 .import-list {
   list-style: none;

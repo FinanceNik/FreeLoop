@@ -36,6 +36,9 @@ type MCPServer struct {
 	Secrets map[string]string `yaml:"secrets,omitempty" json:"-"`
 	URL     string            `yaml:"url,omitempty" json:"url"`
 	Headers map[string]string `yaml:"headers,omitempty" json:"headers"`
+	// OAuthClientID is a client the server's authorization server knows
+	// this app by; without one the app registers itself (MCP-006).
+	OAuthClientID string `yaml:"oauthClientId,omitempty" json:"oauthClientId"`
 	// Enabled offers the server's tools to every session; a profile can add
 	// servers that are off here.
 	Enabled bool `yaml:"enabled" json:"enabled"`
@@ -61,6 +64,11 @@ func (s MCPServer) Fingerprint() string {
 			fmt.Fprintf(h, "%s=%s\x01", k, m[k])
 		}
 		h.Write([]byte{0})
+	}
+	// Only when set, so servers approved before the field existed keep
+	// their fingerprints.
+	if s.OAuthClientID != "" {
+		fmt.Fprintf(h, "oauth=%s\x00", s.OAuthClientID)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }

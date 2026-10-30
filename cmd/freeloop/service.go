@@ -224,6 +224,16 @@ func (s *EngineService) StartMCPServer(ctx context.Context, id string) error {
 	return s.eng.StartMCPServer(ctx, id)
 }
 
+// SignInMCPServer and SignOutMCPServer run and forget a remote server's
+// OAuth sign-in (MCP-006).
+func (s *EngineService) SignInMCPServer(ctx context.Context, id string) (engine.MCPServerInfo, error) {
+	return s.eng.SignInMCPServer(ctx, id)
+}
+
+func (s *EngineService) SignOutMCPServer(id string) error {
+	return s.eng.SignOutMCPServer(id)
+}
+
 func (s *EngineService) StopMCPServer(id string) {
 	s.eng.StopMCPServer(id)
 }

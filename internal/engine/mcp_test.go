@@ -31,6 +31,10 @@ func TestMain(m *testing.M) {
 	if acptest.Serve() {
 		return
 	}
+	if os.Getenv("FREELOOP_OAUTH_TEST_SERVER") != "" {
+		newFakeOAuth(nil)
+		select {}
+	}
 	if os.Getenv("FREELOOP_MCP_TEST_SERVER") == "1" {
 		s := sdk.NewServer(&sdk.Implementation{Name: "test", Version: "1"}, nil)
 		sdk.AddTool(s, &sdk.Tool{Name: "echo", Description: "Echo text."},

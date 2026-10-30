@@ -108,6 +108,8 @@ func main() {
 	})
 
 	svc.app, svc.desk = app, desk
+	// MCP sign-ins open in the user's browser (MCP-006).
+	eng.SetOpenURL(func(u string) error { return app.Browser.OpenURL(u) })
 
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:      mainWindowName,

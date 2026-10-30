@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -30,6 +31,8 @@ const (
 	Starting State = "starting"
 	Running  State = "running"
 	Failed   State = "error"
+	// SignIn: the server wants the user to sign in (MCP-006).
+	SignIn State = "sign_in"
 )
 
 // ConnectTimeout bounds starting a server and listing its tools; MCP-001
@@ -60,7 +63,15 @@ type Launch struct {
 	Config  config.MCPServer
 	Env     map[string]string
 	Headers map[string]string
+	// OAuth signs an HTTP server's requests (MCP-006).
+	OAuth auth.OAuthHandler
+	// Timeout replaces ConnectTimeout, for a start that waits on the user.
+	Timeout time.Duration
 }
+
+// ErrSignIn is what an OAuth handler returns when a server needs the user
+// to sign in and nobody asked for it now.
+var ErrSignIn = errors.New("sign in to use this server")
 
 type server struct {
 	// asker is the call in flight on the server just now, which an
@@ -116,6 +127,9 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 		}
 		m.mu.Lock()
 		s.status.State, s.status.Error = Failed, msg
+		if errors.Is(err, ErrSignIn) || strings.Contains(msg, ErrSignIn.Error()) {
+			s.status.State, s.status.Error = SignIn, ErrSignIn.Error()
+		}
 		m.mu.Unlock()
 		return errors.New(msg)
 	}
@@ -128,6 +142,7 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 			HTTPClient:           &http.Client{Transport: headers{set: merge(l.Config.Headers, l.Headers), next: http.DefaultTransport}},
 			DisableStandaloneSSE: true,
 			MaxRetries:           2,
+			OAuthHandler:         l.OAuth,
 		}
 	default:
 		if m.spawner == nil {
@@ -143,7 +158,11 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 		transport = &sdk.IOTransport{Reader: p.Stdout(), Writer: p.Stdin()}
 	}
 
-	cctx, ccancel := context.WithTimeout(ctx, ConnectTimeout)
+	timeout := ConnectTimeout
+	if l.Timeout > 0 {
+		timeout = l.Timeout
+	}
+	cctx, ccancel := context.WithTimeout(ctx, timeout)
 	defer ccancel()
 	client := sdk.NewClient(&sdk.Implementation{Name: "freeloop", Version: "0.1"}, &sdk.ClientOptions{ElicitationHandler: m.elicit(id)})
 	cs, err := client.Connect(cctx, transport, nil)

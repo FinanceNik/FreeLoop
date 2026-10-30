@@ -42,6 +42,10 @@ type MCPServerInfo struct {
 	NeedsApproval bool   `json:"needsApproval"`
 	Fingerprint   string `json:"fingerprint"`
 	Warning       string `json:"warning,omitempty"`
+	// SignedIn says the Keychain holds a sign-in for the server; SignInURL
+	// is the page a sign-in in progress waits on (MCP-006).
+	SignedIn  bool   `json:"signedIn"`
+	SignInURL string `json:"signInUrl,omitempty"`
 }
 
 func (e *Engine) loadMCP() {
@@ -85,10 +89,15 @@ func (e *Engine) mcpInfo(s config.MCPServer) MCPServerInfo {
 	if s.Args == nil {
 		s.Args = []string{}
 	}
-	return MCPServerInfo{
+	info := MCPServerInfo{
 		MCPServer: s, SecretNames: slices.Sorted(maps.Keys(s.Secrets)), Status: e.mcp.Status(s.ID),
 		NeedsApproval: s.Approved != s.Fingerprint(), Fingerprint: s.Fingerprint(), Warning: mcp.Warning(s),
+		SignInURL: e.signInURL(s.ID),
 	}
+	if s.Transport == "http" {
+		_, info.SignedIn = e.loadOAuth(s.ID)
+	}
+	return info
 }
 
 // ListMCPServers returns every configured server with its state.
@@ -171,6 +180,7 @@ func (e *Engine) DeleteMCPServer(id string) error {
 	for name := range s.Secrets {
 		e.secrets.Delete(mcpSecretRef(id, name))
 	}
+	e.secrets.Delete(oauthRef(id))
 	e.mu.Lock()
 	list := slices.DeleteFunc(slices.Clone(e.mcpServers), func(x config.MCPServer) bool { return x.ID == id })
 	e.mu.Unlock()
@@ -222,7 +232,16 @@ func (e *Engine) StartMCPServer(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	return e.mcp.Start(ctx, l)
+	if isSigningIn(ctx) {
+		l.Timeout = signInTimeout + time.Minute
+	}
+	err = e.mcp.Start(ctx, l)
+	// Waiting for the user's sign-in is a state the server shows, not a
+	// failure of the start.
+	if err != nil && e.mcp.Status(id).State == mcp.SignIn {
+		return nil
+	}
+	return err
 }
 
 // StopMCPServer stops a server.
@@ -247,6 +266,13 @@ func (e *Engine) mcpLaunch(s config.MCPServer) (mcp.Launch, error) {
 		} else {
 			l.Env[name] = v
 		}
+	}
+	if s.Transport == "http" {
+		h, err := e.oauthHandler(s)
+		if err != nil {
+			return l, fmt.Errorf("%s: sign-in: %w", s.ID, err)
+		}
+		l.OAuth = h
 	}
 	return l, nil
 }
