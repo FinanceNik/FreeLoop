@@ -1802,3 +1802,18 @@ table.hooks .hook-command {
   justify-content: space-between;
   font-size: 12px;
 }
+
+/* Skills from git (SKL-006) */
+.skill-diff {
+  max-height: 20em;
+  overflow: auto;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.skill-update {
+  margin-top: 6px;
+}

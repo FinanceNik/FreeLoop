@@ -26,7 +26,15 @@ type SkillProvenance struct {
 	// Digest is a hash of the skill's files as installed, to tell an
 	// unchanged source from a changed one on the next import.
 	Digest string `yaml:"digest" json:"digest"`
+	// Ref and Commit are set for a skill installed from a git repository
+	// (Source is its URL): the ref asked for and the commit it was pinned
+	// to (SKL-006).
+	Ref    string `yaml:"ref,omitempty" json:"ref"`
+	Commit string `yaml:"commit,omitempty" json:"commit"`
 }
+
+// previousDir keeps the version an install replaced, for a rollback.
+const previousDir = ".previous"
 
 var skillName = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
@@ -102,9 +110,67 @@ func InstallSkill(dir, name string, files map[string][]byte, prov SkillProvenanc
 		return fmt.Errorf("config: %w", err)
 	}
 	if old != "" {
-		os.RemoveAll(old)
+		// The replaced version stays for a rollback (SKL-006).
+		prev := filepath.Join(store, previousDir, name)
+		os.RemoveAll(prev)
+		if err := os.MkdirAll(filepath.Dir(prev), 0o700); err != nil || os.Rename(old, prev) != nil {
+			os.RemoveAll(old)
+		}
 	}
 	return nil
+}
+
+// HasPreviousSkill reports whether an install kept a version to roll back to.
+func HasPreviousSkill(dir, name string) bool {
+	if !skillName.MatchString(name) {
+		return false
+	}
+	fi, err := os.Stat(filepath.Join(dir, SkillsDir, previousDir, name, "SKILL.md"))
+	return err == nil && fi.Mode().IsRegular()
+}
+
+// RollbackSkill swaps a skill with the version its last install replaced;
+// doing it again undoes it.
+func RollbackSkill(dir, name string) error {
+	if !HasPreviousSkill(dir, name) {
+		return fmt.Errorf("there is no earlier version of %s", name)
+	}
+	store := filepath.Join(dir, SkillsDir)
+	final, prev := filepath.Join(store, name), filepath.Join(store, previousDir, name)
+	swap := filepath.Join(store, fmt.Sprintf(".swap-%s-%d", name, time.Now().UnixNano()))
+	if err := os.Rename(final, swap); err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	if err := os.Rename(prev, final); err != nil {
+		os.Rename(swap, final)
+		return fmt.Errorf("config: %w", err)
+	}
+	if err := os.Rename(swap, prev); err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	return nil
+}
+
+// cloneDir holds temporary checkouts of skill repositories.
+const cloneDir = ".clones"
+
+// NewSkillClone returns a fresh path, not yet created, for a checkout of a
+// skill repository; RemoveSkillClone deletes it.
+func NewSkillClone(dir string) (string, error) {
+	base := filepath.Join(dir, SkillsDir, cloneDir)
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		return "", fmt.Errorf("config: %w", err)
+	}
+	return filepath.Join(base, fmt.Sprintf("c%d", time.Now().UnixNano())), nil
+}
+
+// RemoveSkillClone deletes a checkout NewSkillClone named.
+func RemoveSkillClone(dir, path string) error {
+	base := filepath.Join(dir, SkillsDir, cloneDir) + string(filepath.Separator)
+	if !strings.HasPrefix(filepath.Clean(path), base) {
+		return fmt.Errorf("config: %s is not a skill checkout", path)
+	}
+	return os.RemoveAll(path)
 }
 
 // RemoveSkill deletes skills/<name>/ from the store.

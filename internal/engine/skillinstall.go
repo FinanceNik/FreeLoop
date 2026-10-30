@@ -49,11 +49,16 @@ type SkillCandidate struct {
 	Changes []string `json:"changes"`
 	// Installed is set when a skill of this name is in the store.
 	Installed *config.SkillProvenance `json:"installed,omitempty"`
+	// Diff shows the text changes of a changed skill against the
+	// installed copy, file by file (SKL-006).
+	Diff string `json:"diff,omitempty"`
 }
 
 type bundle struct {
 	cand  SkillCandidate
 	files map[string][]byte
+	// git is set for a skill read from a git repository (SKL-006).
+	git *gitSource
 }
 
 // memFS serves a bundle's files to skill.Parse.
@@ -103,6 +108,9 @@ func readOnlyEnv(root string) (*environment.Local, error) {
 // skills, or a .zip of either.
 func (e *Engine) readSource(src string) ([]bundle, error) {
 	src = strings.TrimSpace(src)
+	if g, ok := parseGitSource(src); ok {
+		return e.readGit(g)
+	}
 	if strings.HasPrefix(src, "~/") {
 		src = filepath.Join(e.home, src[2:])
 	}
@@ -334,6 +342,9 @@ func (e *Engine) compare(b *bundle) {
 			b.cand.Changes = append(b.cand.Changes, "+ "+p)
 		case !bytes.Equal(old, data):
 			b.cand.Changes = append(b.cand.Changes, "~ "+p)
+			if len(b.cand.Diff) < maxSkillDiff && bytes.IndexByte(old, 0) < 0 && bytes.IndexByte(data, 0) < 0 {
+				b.cand.Diff += renderDiff(p, string(old), string(data)) + "\n"
+			}
 		}
 	}
 	for p := range have {
@@ -381,6 +392,9 @@ func (e *Engine) InstallSkills(ctx context.Context, src string, names []string) 
 			continue
 		}
 		prov := config.SkillProvenance{Source: b.cand.Source, ImportedAt: time.Now().UTC(), Digest: digest(b.files)}
+		if b.git != nil {
+			prov.Source, prov.Ref, prov.Commit = b.git.URL, b.git.Ref, b.git.Commit
+		}
 		if err := config.InstallSkill(e.dataDir, b.cand.Name, b.files, prov); err != nil {
 			return done, err
 		}

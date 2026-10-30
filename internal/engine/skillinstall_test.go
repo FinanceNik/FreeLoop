@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -103,9 +104,15 @@ func TestImportAndInstallSkills(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(installed, "references", "a")); !os.IsNotExist(err) {
 		t.Error("a file removed upstream stayed in the store")
 	}
+	// One skill, plus the version the update replaced kept for a rollback
+	// (SKL-006); no temporary folders left behind.
 	entries, _ := os.ReadDir(filepath.Join(dir, SkillsDir))
-	if len(entries) != 1 {
-		t.Errorf("store holds %d entries, want 1 (no duplicates or leftovers)", len(entries))
+	var names []string
+	for _, en := range entries {
+		names = append(names, en.Name())
+	}
+	if strings.Join(names, ",") != ".previous,commit-msg" {
+		t.Errorf("store holds %v, want the skill and .previous (no duplicates or leftovers)", names)
 	}
 
 	// Zips: a skill at the top, named by its frontmatter; paths that leave

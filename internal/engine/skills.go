@@ -44,6 +44,10 @@ type SkillInfo struct {
 	// On globally and, for a project, in the project.
 	Global  bool `json:"global"`
 	Project bool `json:"project"`
+	// For a store skill: where it was installed from, and whether an
+	// install kept an earlier version to roll back to (SKL-006).
+	Installed   *config.SkillProvenance `json:"installed,omitempty"`
+	CanRollBack bool                    `json:"canRollBack"`
 }
 
 // SkillList is what ListSkills returns.
@@ -190,7 +194,14 @@ func (e *Engine) ListSkills(ctx context.Context, root string) (SkillList, error)
 		out.ProjectID = project.ID
 	}
 	for _, s := range d.skills {
-		out.Skills = append(out.Skills, SkillInfo{Skill: s, Global: !slices.Contains(off, s.Name), Project: !slices.Contains(project.DisabledSkills, s.Name)})
+		info := SkillInfo{Skill: s, Global: !slices.Contains(off, s.Name), Project: !slices.Contains(project.DisabledSkills, s.Name)}
+		if s.Source == skill.SourceApp {
+			if prov, ok := config.ReadSkillProvenance(e.dataDir, s.Name); ok {
+				info.Installed = &prov
+			}
+			info.CanRollBack = config.HasPreviousSkill(e.dataDir, s.Name)
+		}
+		out.Skills = append(out.Skills, info)
 	}
 	return out, nil
 }

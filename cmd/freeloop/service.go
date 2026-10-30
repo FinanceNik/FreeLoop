@@ -446,6 +446,18 @@ func (s *EngineService) OpenFile(ctx context.Context, sessionID, rel string) err
 	return s.app.Browser.OpenFile(path)
 }
 
+func (s *EngineService) CheckSkillUpdate(ctx context.Context, name string) (engine.SkillCandidate, error) {
+	return s.eng.CheckSkillUpdate(ctx, name)
+}
+
+func (s *EngineService) UpdateSkill(ctx context.Context, name string) error {
+	return s.eng.UpdateSkill(ctx, name)
+}
+
+func (s *EngineService) RollbackSkill(name string) error {
+	return s.eng.RollbackSkill(name)
+}
+
 // ChooseFolder shows a native folder picker and returns the chosen path, or
 // "" when the user cancels.
 func (s *EngineService) ChooseFolder() (string, error) {

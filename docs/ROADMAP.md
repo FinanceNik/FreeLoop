@@ -147,6 +147,13 @@ Left for later because they need the user: signed builds and the update check (S
 4. **File tree and viewer (GUI-013).** *Built 2026-10-30.* A read-only browser of the session's folder with the agent's changes highlighted.
 5. **Subagents (HRN-014, second half).** *Built 2026-10-30.* The built-in agent hands a task to a child agent whose transcript the parent can open.
 
+### Feature order, part 4 (planned 2026-10-30)
+
+1. **Skills from git (SKL-006).** *Built 2026-10-30.* Install from a repository URL pinned to a commit, check for updates with a diff, update and roll back.
+2. **Harness templates (EXT-003, HRN-011).** Python and Go ACP agent templates with a test harness, and "New harness" registering one as a preset.
+3. **Headless control (EXT-004).** A JSON-RPC API on a Unix socket and a small CLI.
+4. **MCP input-required round trips (MCP-008).** A server's request for more input shown as a form, the call retried with the answers.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SES-012, SES-013, GUI-016, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

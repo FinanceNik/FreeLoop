@@ -113,6 +113,28 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
         onError(err);
       });
   };
+  // Git-installed skills (SKL-006): check for updates, update, roll back.
+  const [update, setUpdate] = useState<{ name: string; cand?: SkillCandidate; busy: boolean } | null>(null);
+  const checkUpdate = (name: string) => {
+    setUpdate({ name, busy: true });
+    EngineService.CheckSkillUpdate(name)
+      .then((cand) => setUpdate({ name, cand, busy: false }))
+      .catch((err) => {
+        setUpdate(null);
+        onError(err);
+      });
+  };
+  const applyUpdate = (name: string) =>
+    EngineService.UpdateSkill(name)
+      .then(() => {
+        setUpdate(null);
+        load();
+      })
+      .catch(onError);
+  const rollBack = (name: string) => {
+    if (!confirm(`Put back the version of ${name} its last install replaced? You can undo this the same way.`)) return;
+    EngineService.RollbackSkill(name).then(load).catch(onError);
+  };
   const testable = providers.filter((p) => p.hasKey || p.type === "ollama" || p.builtin || p.baseUrl.startsWith("http://localhost"));
 
   const skills = list?.skills ?? [];
@@ -138,7 +160,12 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
             open(path.trim());
           }}
         >
-          <input value={path} onChange={(e) => setPath(e.target.value)} placeholder="Or paste the path of a skill folder or .zip" aria-label="Skill source path" />
+          <input
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            placeholder="Or paste a skill folder or .zip path, or a git URL (add #branch, #tag or #commit to pin it)"
+            aria-label="Skill source path or git URL"
+          />
           <button type="submit" disabled={!path.trim()}>
             Preview
           </button>
@@ -205,6 +232,7 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
                 {(c.changes ?? []).length > 0 && (
                   <pre className="skill-changes">{(c.changes ?? []).join("\n")}</pre>
                 )}
+                {c.diff && <pre className="skill-diff">{c.diff}</pre>}
                 {c.installed && c.status !== "new" && (
                   <div className="muted">
                     Installed from <code>{c.installed.source}</code>
@@ -243,6 +271,7 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
               <div className="muted">
                 <code>{s.path}</code>
                 {s.lines > 500 && ` · ${s.lines} lines (the spec recommends under 500)`}
+                {s.installed?.commit && ` · from ${s.installed.source} at ${s.installed.commit.slice(0, 8)}${s.installed.ref ? ` (${s.installed.ref})` : ""}`}
                 {(s.allowedTools ?? []).length > 0 && ` · suggests tools: ${(s.allowedTools ?? []).join(", ")}`}
               </div>
             </div>
@@ -271,12 +300,43 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
               >
                 Test…
               </button>
+              {s.installed?.commit && (
+                <button className="link" disabled={update?.busy} onClick={() => checkUpdate(s.name)}>
+                  {update?.name === s.name && update.busy ? "Checking…" : "Check for updates"}
+                </button>
+              )}
+              {s.canRollBack && (
+                <button className="link" onClick={() => rollBack(s.name)}>
+                  Roll back
+                </button>
+              )}
               {s.source === "app" && (
                 <button className="link" onClick={() => remove(s.name)}>
                   Remove
                 </button>
               )}
             </div>
+            {update?.name === s.name && update.cand && (
+              <div className="skill-update">
+                {update.cand.status === "same" ? (
+                  <p className="ok">Up to date with {update.cand.source}.</p>
+                ) : (
+                  <>
+                    <p>
+                      {update.cand.source} has changes: {(update.cand.changes ?? []).join(", ")}
+                    </p>
+                    {update.cand.diff && <pre className="skill-diff">{update.cand.diff}</pre>}
+                    <div className="row">
+                      <button className="primary" disabled={update.cand.status === "invalid"} onClick={() => applyUpdate(s.name)}>
+                        Update
+                      </button>
+                      <button onClick={() => setUpdate(null)}>Not now</button>
+                    </div>
+                    {update.cand.issue && <p className="error-text">{update.cand.issue}</p>}
+                  </>
+                )}
+              </div>
+            )}
             {testing?.name === s.name && (
               <form
                 className="skill-test"
