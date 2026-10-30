@@ -150,7 +150,7 @@ Left for later because they need the user: signed builds and the update check (S
 ### Feature order, part 4 (planned 2026-10-30)
 
 1. **Skills from git (SKL-006).** *Built 2026-10-30.* Install from a repository URL pinned to a commit, check for updates with a diff, update and roll back.
-2. **Harness templates (EXT-003, HRN-011).** Python and Go ACP agent templates with a test harness, and "New harness" registering one as a preset.
+2. **Harness templates (EXT-003, HRN-011).** *Built 2026-10-30.* Python and Go ACP agent templates with a test harness, and "New harness" registering one as a preset.
 3. **Headless control (EXT-004).** A JSON-RPC API on a Unix socket and a small CLI.
 4. **MCP input-required round trips (MCP-008).** A server's request for more input shown as a form, the call retried with the answers.
 

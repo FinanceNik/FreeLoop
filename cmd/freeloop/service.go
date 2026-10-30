@@ -18,7 +18,7 @@ import (
 // EngineService exposes the engine to the frontend. It is a thin adapter:
 // each method forwards to the engine and adds nothing, except ChooseFolder,
 // ExportSession, ExportConfig and ImportConfig, which show native dialogs,
-// and OpenSkill and OpenFile, which open a file in another app.
+// and OpenSkill, OpenFile and OpenHarness, which open a file in another app.
 type EngineService struct {
 	eng *engine.Engine
 	app *application.App
@@ -456,6 +456,20 @@ func (s *EngineService) UpdateSkill(ctx context.Context, name string) error {
 
 func (s *EngineService) RollbackSkill(name string) error {
 	return s.eng.RollbackSkill(name)
+}
+
+func (s *EngineService) ScaffoldHarness(ctx context.Context, req engine.ScaffoldRequest) (engine.ScaffoldResult, error) {
+	return s.eng.ScaffoldHarness(ctx, req)
+}
+
+// OpenHarness opens a custom harness's agent file in the user's editor
+// (HRN-011).
+func (s *EngineService) OpenHarness(id string) error {
+	path := s.eng.HarnessEntry(id)
+	if path == "" {
+		return fmt.Errorf("the harness %s has no source folder", id)
+	}
+	return s.app.Browser.OpenFile(path)
 }
 
 // ChooseFolder shows a native folder picker and returns the chosen path, or

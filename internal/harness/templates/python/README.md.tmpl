@@ -1,0 +1,9 @@
+# AGENT_NAME
+
+An ACP agent for Freeloop, from the Python template. Freeloop registered it as a harness preset; pick it in the new-session form.
+
+- `agent.py` is the agent. As written it echoes the prompt, and `read <path>` shows a tool call that asks Freeloop for a file. Replace `respond` with your own: call a model, use tools through `self.request(...)` (`fs/read_text_file`, `fs/write_text_file`, `terminal/create`, `session/request_permission`), stream text with `self.say(...)`.
+- `python3 test_agent.py` runs the agent the way Freeloop does and checks a prompt round trip.
+- When a file in this folder changes, Freeloop restarts the agent for idle sessions on their next message.
+
+The protocol is at https://agentclientprotocol.com. Every file, command and permission request goes through Freeloop's permission broker, like any agent's.

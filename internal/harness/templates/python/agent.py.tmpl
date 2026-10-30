@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""AGENT_NAME: an ACP agent for Freeloop, started from the Python template.
+
+It speaks the Agent Client Protocol (https://agentclientprotocol.com) over
+stdin and stdout: one JSON-RPC message per line. Freeloop starts it for each
+session, sends the user's prompts, and answers the agent's own requests to
+read or write files, run commands or ask the user for permission, each
+through Freeloop's permission broker.
+
+As written it echoes the prompt, and `read <path>` shows a tool call that
+asks Freeloop for a file. Replace `respond` with your own agent: call a
+model, use tools through `self.request(...)`, stream text with `self.say`.
+Only the standard library is used.
+"""
+
+import itertools
+import json
+import os
+import sys
+import threading
+
+PROTOCOL_VERSION = 1
+
+
+class Agent:
+    def __init__(self):
+        self.ids = itertools.count(1)
+        self.waiting = {}  # request id -> [event, response]
+        self.lock = threading.Lock()
+        self.cwd = os.getcwd()
+        self.cancelled = set()
+
+    # Transport ----------------------------------------------------------
+
+    def send(self, message):
+        with self.lock:
+            sys.stdout.write(json.dumps(message) + "\n")
+            sys.stdout.flush()
+
+    def request(self, method, params):
+        """Sends a request to Freeloop and waits for its answer."""
+        rid = next(self.ids)
+        done = threading.Event()
+        self.waiting[rid] = [done, None]
+        self.send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
+        done.wait()
+        response = self.waiting.pop(rid)[1]
+        if "error" in response:
+            raise RuntimeError(response["error"].get("message", "error"))
+        return response.get("result")
+
+    def notify(self, method, params):
+        self.send({"jsonrpc": "2.0", "method": method, "params": params})
+
+    def say(self, session_id, text):
+        """Streams text to the conversation."""
+        self.notify("session/update", {"sessionId": session_id, "update": {
+            "sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": text}}})
+
+    def run(self):
+        for line in sys.stdin:
+            if not line.strip():
+                continue
+            message = json.loads(line)
+            if "method" not in message:
+                # A response to one of our requests.
+                entry = self.waiting.get(message.get("id"))
+                if entry:
+                    entry[1] = message
+                    entry[0].set()
+                continue
+            # Requests run on their own thread, so a prompt can wait for
+            # Freeloop's answers while this loop keeps reading.
+            threading.Thread(target=self.dispatch, args=(message,), daemon=True).start()
+
+    def dispatch(self, message):
+        method, params, rid = message["method"], message.get("params") or {}, message.get("id")
+        handler = {
+            "initialize": self.initialize,
+            "session/new": self.new_session,
+            "session/prompt": self.prompt,
+            "session/set_mode": lambda p: {},
+            "session/cancel": self.cancel,
+        }.get(method)
+        if rid is None:  # a notification
+            if handler:
+                handler(params)
+            return
+        if handler is None:
+            self.send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": "method not found: " + method}})
+            return
+        try:
+            self.send({"jsonrpc": "2.0", "id": rid, "result": handler(params)})
+        except Exception as err:  # report, do not crash the agent
+            self.send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32603, "message": str(err)}})
+
+    # Protocol -----------------------------------------------------------
+
+    def initialize(self, params):
+        return {"protocolVersion": PROTOCOL_VERSION, "authMethods": [],
+                "agentCapabilities": {"loadSession": False, "promptCapabilities": {"embeddedContext": True}}}
+
+    def new_session(self, params):
+        self.cwd = params.get("cwd") or self.cwd
+        return {"sessionId": "s%d" % next(self.ids)}
+
+    def cancel(self, params):
+        self.cancelled.add(params.get("sessionId"))
+
+    def prompt(self, params):
+        session_id = params["sessionId"]
+        self.cancelled.discard(session_id)
+        text = " ".join(block.get("text", "") for block in params.get("prompt", []) if block.get("type") == "text")
+        self.respond(session_id, text.strip())
+        stop = "cancelled" if session_id in self.cancelled else "end_turn"
+        return {"stopReason": stop}
+
+    # Your agent ---------------------------------------------------------
+
+    def respond(self, session_id, text):
+        if text.startswith("read "):
+            self.read_file(session_id, text[5:].strip())
+            return
+        self.say(session_id, "You said: " + text)
+
+    def read_file(self, session_id, path):
+        """A tool call: shown in the conversation, the file read through
+        Freeloop, which applies its protected paths and rules."""
+        path = os.path.join(self.cwd, path)
+        update = lambda u: self.notify("session/update", {"sessionId": session_id, "update": u})
+        update({"sessionUpdate": "tool_call", "toolCallId": "read-1", "title": "Read " + path,
+                "kind": "read", "status": "in_progress", "locations": [{"path": path}]})
+        try:
+            content = self.request("fs/read_text_file", {"sessionId": session_id, "path": path})["content"]
+        except RuntimeError as err:
+            update({"sessionUpdate": "tool_call_update", "toolCallId": "read-1", "status": "failed"})
+            self.say(session_id, "I could not read it: %s" % err)
+            return
+        update({"sessionUpdate": "tool_call_update", "toolCallId": "read-1", "status": "completed"})
+        first = content.splitlines()[:3]
+        self.say(session_id, "%s has %d lines; it starts with:\n%s" % (path, len(content.splitlines()), "\n".join(first)))
+
+
+if __name__ == "__main__":
+    Agent().run()

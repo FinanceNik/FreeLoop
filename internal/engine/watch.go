@@ -27,6 +27,7 @@ func (e *Engine) watch(interval time.Duration) {
 			return
 		case <-t.C:
 		}
+		e.watchAgents()
 		now := config.Fingerprint(e.dataDir)
 		changed := config.Changed(last, now)
 		last = now

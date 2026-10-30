@@ -40,6 +40,18 @@ function blank(): Profile {
 }
 
 export default function Profiles({ profiles, harnesses, providers, onChanged, onError }: Props) {
+  // A custom harness from a template (HRN-011).
+  const [scaffold, setScaffold] = useState<{ name: string; language: string; folder: string; made?: string } | null>(null);
+  const makeHarness = () => {
+    if (!scaffold) return;
+    EngineService.ScaffoldHarness({ name: scaffold.name, language: scaffold.language, folder: scaffold.folder })
+      .then((r) => {
+        setScaffold({ ...scaffold, made: r.dir });
+        onChanged();
+        return EngineService.OpenHarness(r.preset.id);
+      })
+      .catch(onError);
+  };
   const [form, setForm] = useState<Profile | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -347,6 +359,81 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
         A profile sets the model, tools, prompt, rules and slash commands a session runs with. Each is a YAML file in <code>profiles/</code> of the app's
         data folder; edits to the files apply to new sessions, and their rules at once.
       </p>
+      <div className="card">
+        <h3>Your own agent</h3>
+        <p className="muted">
+          Start an agent of your own from a Python or Go template that already speaks the Agent Client Protocol. Freeloop registers it as a harness;
+          when you change its files, sessions start it again with your code. See docs/DEVELOPING.md.
+        </p>
+        {!scaffold && (
+          <button onClick={() => setScaffold({ name: "", language: "python", folder: "" })}>New harness…</button>
+        )}
+        {scaffold && !scaffold.made && (
+          <form
+            className="skill-create"
+            onSubmit={(e) => {
+              e.preventDefault();
+              makeHarness();
+            }}
+          >
+            <label>
+              Name
+              <input required autoFocus value={scaffold.name} onChange={(e) => setScaffold({ ...scaffold, name: e.target.value })} />
+            </label>
+            <label>
+              Template
+              <select value={scaffold.language} onChange={(e) => setScaffold({ ...scaffold, language: e.target.value })}>
+                <option value="python">Python (standard library only)</option>
+                <option value="go">Go (github.com/coder/acp-go-sdk)</option>
+              </select>
+            </label>
+            <div className="row">
+              <button
+                type="button"
+                onClick={() =>
+                  EngineService.ChooseFolder()
+                    .then((f) => f && setScaffold({ ...scaffold, folder: f }))
+                    .catch(onError)
+                }
+              >
+                Choose a folder…
+              </button>
+              <code>{scaffold.folder || "No folder chosen"}</code>
+            </div>
+            <div className="row">
+              <button type="submit" className="primary" disabled={!scaffold.folder || !scaffold.name.trim()}>
+                Create and open
+              </button>
+              <button type="button" onClick={() => setScaffold(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+        {scaffold?.made && (
+          <p className="ok">
+            Created in <code>{scaffold.made}</code>. Pick it in the new-session form; it answers with what you said until you change it.{" "}
+            <button className="link" onClick={() => setScaffold(null)}>
+              Done
+            </button>
+          </p>
+        )}
+        {harnesses.filter((h) => h.custom).length > 0 && (
+          <ul>
+            {harnesses
+              .filter((h) => h.custom)
+              .map((h) => (
+                <li key={h.id}>
+                  {h.name}{" "}
+                  <button className="link" onClick={() => EngineService.OpenHarness(h.id).catch(onError)}>
+                    Edit
+                  </button>
+                  {h.missing && <span className="error-text"> {h.missing}</span>}
+                </li>
+              ))}
+          </ul>
+        )}
+      </div>
       <ul className="provider-list">
         {profiles.map((p) => (
           <li key={p.id} className="card">

@@ -32,6 +32,9 @@ type HarnessInfo struct {
 	// Missing says why the agent cannot start here, such as its command
 	// not being on the login PATH (Node.js for npx); empty when it can.
 	Missing string `json:"missing,omitempty"`
+	// Custom marks a harness made from a template, whose source the user
+	// edits (HRN-011).
+	Custom bool `json:"custom"`
 }
 
 func (e *Engine) loadPresets() {
@@ -60,7 +63,7 @@ func (e *Engine) ListHarnesses() []HarnessInfo {
 	presets := slices.Clone(e.presets)
 	e.mu.Unlock()
 	for _, p := range presets {
-		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: e.missingCommand(p.Command)})
+		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: e.missingCommand(p.Command), Custom: p.Watch != ""})
 	}
 	return out
 }

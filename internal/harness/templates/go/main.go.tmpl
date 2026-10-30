@@ -1,0 +1,116 @@
+// AGENT_NAME: an ACP agent for Freeloop, started from the Go template.
+//
+// It speaks the Agent Client Protocol (https://agentclientprotocol.com) over
+// stdin and stdout through github.com/coder/acp-go-sdk. Freeloop starts it
+// for each session, sends the user's prompts, and answers the agent's own
+// requests to read or write files, run commands or ask the user for
+// permission, each through Freeloop's permission broker.
+//
+// As written it echoes the prompt, and "read <path>" shows a tool call that
+// asks Freeloop for a file. Replace respond with your own agent: call a
+// model, use the client's methods on a.conn, stream text with a.say.
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	acp "github.com/coder/acp-go-sdk"
+)
+
+func main() {
+	a := &agent{}
+	a.conn = acp.NewAgentSideConnection(a, os.Stdout, os.Stdin)
+	<-a.conn.Done()
+}
+
+type agent struct {
+	conn *acp.AgentSideConnection
+	cwd  string
+}
+
+func (a *agent) Initialize(context.Context, acp.InitializeRequest) (acp.InitializeResponse, error) {
+	return acp.InitializeResponse{ProtocolVersion: acp.ProtocolVersionNumber, AuthMethods: []acp.AuthMethod{},
+		AgentCapabilities: acp.AgentCapabilities{PromptCapabilities: acp.PromptCapabilities{EmbeddedContext: true}}}, nil
+}
+
+func (a *agent) NewSession(_ context.Context, r acp.NewSessionRequest) (acp.NewSessionResponse, error) {
+	a.cwd = r.Cwd
+	return acp.NewSessionResponse{SessionId: "s1"}, nil
+}
+
+func (a *agent) Prompt(ctx context.Context, r acp.PromptRequest) (acp.PromptResponse, error) {
+	var text []string
+	for _, b := range r.Prompt {
+		if b.Text != nil {
+			text = append(text, b.Text.Text)
+		}
+	}
+	a.respond(ctx, r.SessionId, strings.TrimSpace(strings.Join(text, " ")))
+	if ctx.Err() != nil {
+		return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
+	}
+	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+}
+
+// say streams text to the conversation.
+func (a *agent) say(ctx context.Context, sid acp.SessionId, text string) {
+	a.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: sid, Update: acp.UpdateAgentMessageText(text)})
+}
+
+// respond is your agent. Replace it.
+func (a *agent) respond(ctx context.Context, sid acp.SessionId, text string) {
+	if path, ok := strings.CutPrefix(text, "read "); ok {
+		a.readFile(ctx, sid, strings.TrimSpace(path))
+		return
+	}
+	a.say(ctx, sid, "You said: "+text)
+}
+
+// readFile is a tool call: shown in the conversation, the file read through
+// Freeloop, which applies its protected paths and rules.
+func (a *agent) readFile(ctx context.Context, sid acp.SessionId, path string) {
+	path = filepath.Join(a.cwd, path)
+	a.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: sid, Update: acp.StartToolCall("read-1", "Read "+path,
+		acp.WithStartKind(acp.ToolKindRead), acp.WithStartStatus(acp.ToolCallStatusInProgress), acp.WithStartLocations([]acp.ToolCallLocation{{Path: path}}))})
+	res, err := a.conn.ReadTextFile(ctx, acp.ReadTextFileRequest{SessionId: sid, Path: path})
+	if err != nil {
+		a.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: sid, Update: acp.UpdateToolCall("read-1", acp.WithUpdateStatus(acp.ToolCallStatusFailed))})
+		a.say(ctx, sid, "I could not read it: "+err.Error())
+		return
+	}
+	a.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: sid, Update: acp.UpdateToolCall("read-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted))})
+	lines := strings.Split(strings.TrimRight(res.Content, "\n"), "\n")
+	a.say(ctx, sid, fmt.Sprintf("%s has %d lines; it starts with:\n%s", path, len(lines), strings.Join(lines[:min(3, len(lines))], "\n")))
+}
+
+// The rest of the protocol, which this agent does not use.
+
+func (a *agent) Cancel(context.Context, acp.CancelNotification) error { return nil }
+func (a *agent) SetSessionMode(context.Context, acp.SetSessionModeRequest) (acp.SetSessionModeResponse, error) {
+	return acp.SetSessionModeResponse{}, nil
+}
+func (a *agent) Authenticate(context.Context, acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
+	return acp.AuthenticateResponse{}, nil
+}
+func (a *agent) Logout(context.Context, acp.LogoutRequest) (acp.LogoutResponse, error) {
+	return acp.LogoutResponse{}, nil
+}
+func (a *agent) CloseSession(context.Context, acp.CloseSessionRequest) (acp.CloseSessionResponse, error) {
+	return acp.CloseSessionResponse{}, nil
+}
+func (a *agent) ListSessions(context.Context, acp.ListSessionsRequest) (acp.ListSessionsResponse, error) {
+	return acp.ListSessionsResponse{}, nil
+}
+func (a *agent) ResumeSession(context.Context, acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
+	return acp.ResumeSessionResponse{}, nil
+}
+func (a *agent) SetSessionConfigOption(context.Context, acp.SetSessionConfigOptionRequest) (acp.SetSessionConfigOptionResponse, error) {
+	return acp.SetSessionConfigOptionResponse{}, nil
+}
+func (a *agent) LoadSession(context.Context, acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
+	return acp.LoadSessionResponse{}, fmt.Errorf("loading sessions is not supported")
+}

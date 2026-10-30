@@ -1,0 +1,9 @@
+# AGENT_NAME
+
+An ACP agent for Freeloop, from the Go template, on github.com/coder/acp-go-sdk. Freeloop registered it as a harness preset; pick it in the new-session form.
+
+- `main.go` is the agent. As written it echoes the prompt, and `read <path>` shows a tool call that asks Freeloop for a file. Replace `respond` with your own: call a model, use the client's methods on `a.conn` (`ReadTextFile`, `WriteTextFile`, `CreateTerminal`, `RequestPermission`), stream text with `a.say`.
+- `go test ./...` runs the agent over the protocol the way Freeloop does.
+- Freeloop runs it with `go -C <this folder> run .`, so each session starts your latest code; when a file here changes, idle sessions restart the agent on their next message.
+
+The protocol is at https://agentclientprotocol.com. Every file, command and permission request goes through Freeloop's permission broker, like any agent's.

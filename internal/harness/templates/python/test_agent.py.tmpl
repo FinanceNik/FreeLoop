@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Runs agent.py the way Freeloop does and checks a prompt round trip.
+
+    python3 test_agent.py
+
+It plays the client: initialize, a new session and two prompts, answering
+the agent's file read itself.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def main():
+    work = tempfile.mkdtemp()
+    with open(os.path.join(work, "notes.txt"), "w") as f:
+        f.write("first line\nsecond line\n")
+    agent = subprocess.Popen([sys.executable, os.path.join(HERE, "agent.py")], cwd=work,
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+
+    def send(message):
+        agent.stdin.write(json.dumps(message) + "\n")
+        agent.stdin.flush()
+
+    def call(rid, method, params):
+        """Sends a request; collects updates and answers file reads until
+        the response arrives."""
+        send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
+        said = []
+        for line in agent.stdout:
+            message = json.loads(line)
+            if message.get("id") == rid and "method" not in message:
+                return message, "".join(said)
+            if message.get("method") == "session/update":
+                content = message["params"]["update"].get("content")
+                if isinstance(content, dict) and content.get("type") == "text":
+                    said.append(content["text"])
+            elif message.get("method") == "fs/read_text_file":
+                with open(message["params"]["path"]) as f:
+                    send({"jsonrpc": "2.0", "id": message["id"], "result": {"content": f.read()}})
+        raise SystemExit("the agent stopped")
+
+    init, _ = call(1, "initialize", {"protocolVersion": 1, "clientCapabilities": {"fs": {"readTextFile": True}}})
+    assert init["result"]["protocolVersion"] == 1, init
+    new, _ = call(2, "session/new", {"cwd": work, "mcpServers": []})
+    session = new["result"]["sessionId"]
+    reply, said = call(3, "session/prompt", {"sessionId": session, "prompt": [{"type": "text", "text": "hello"}]})
+    assert reply["result"]["stopReason"] == "end_turn" and said == "You said: hello", (reply, said)
+    reply, said = call(4, "session/prompt", {"sessionId": session, "prompt": [{"type": "text", "text": "read notes.txt"}]})
+    assert "first line" in said, said
+    agent.stdin.close()
+    agent.wait(timeout=5)
+    print("ok")
+
+
+if __name__ == "__main__":
+    main()

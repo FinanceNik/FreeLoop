@@ -67,6 +67,17 @@ notes: Sign in once with `my-agent login` in a terminal.
 
 The agent runs in the session's environment, its file and terminal requests go through the environment and the permission broker like everything else, and it signs in on its own: Freeloop never reads, stores or forwards a vendor's tokens (HRN-008). Presets that ship with the app are in `config.BuiltinPresets`; a file with the same ID replaces one. To test a preset, run the HRN-005 scenario from REQUIREMENTS.md against it; `internal/harness/acp/acptest` is a reference agent for the client's own tests.
 
+## Writing your own harness
+
+To build an agent of your own rather than wrap an existing one (HRN-011, EXT-003), start from a template: Profiles → "New harness…", give it a name, pick Python (standard library only) or Go (on `github.com/coder/acp-go-sdk`) and a folder. Freeloop writes the agent into `<folder>/<name>/`, registers a preset that runs it (`python3 <dir>/agent.py`, or `go -C <dir> run .`) and opens the agent file in your editor. Then:
+
+1. Start a session with it from the new-session form. As written the agent says "You said: …" back, and `read <path>` shows a tool call that asks Freeloop for a file.
+2. Replace `respond` in `agent.py` or `main.go` with your agent: call a model, use the client's methods for files, commands and permission requests (each goes through Freeloop's broker), stream text with `say`.
+3. Run its test (`python3 test_agent.py` or `go test ./...`), which plays the client over the protocol the way Freeloop does.
+4. Save and send the next message: the preset watches the folder (`watch:`), so an idle session starts the agent again with your code.
+
+The templates live in `internal/harness/templates` as `.tmpl` files; their tests run in `make test`.
+
 ## Adding an environment
 
 **A configuration** of an existing kind is a file `environments/<id>.yaml` (`config.Environment`): `kind` (`local` or `docker`), variables in `env`, `secrets` as `keychain://` references, `disabledTools`, `defaultMode`, environment-scope `rules`, and for Docker `image` or `devcontainer: true`, `setup` and `health`. The Environments page edits the same file.

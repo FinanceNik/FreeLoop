@@ -3,7 +3,9 @@ package config
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -33,6 +35,9 @@ type HarnessPreset struct {
 	Modes map[string]string `yaml:"modes,omitempty" json:"modes"`
 	// Notes are shown where the preset is chosen, such as how to sign in.
 	Notes string `yaml:"notes,omitempty" json:"notes"`
+	// Watch is a folder whose changes restart the agent for idle sessions
+	// on their next message: the source of a custom harness (HRN-011).
+	Watch string `yaml:"watch,omitempty" json:"watch"`
 	// Builtin is set for presets that ship with the app.
 	Builtin bool `yaml:"-" json:"builtin"`
 }
@@ -126,4 +131,39 @@ func LoadPresets(dir string) ([]HarnessPreset, []Issue) {
 // chosen in the new-session form without writing a profile first.
 func PresetProfile(p HarnessPreset) Profile {
 	return Profile{ID: p.ID, Name: p.Name, Description: p.Description, Harness: p.ID}
+}
+
+// SavePreset writes presets/harnesses/<id>.yaml.
+func SavePreset(dir string, p HarnessPreset) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+	b, err := yaml.Marshal(p)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(dir, PresetsDir), 0o700); err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	return writeAtomic(filepath.Join(dir, PresetsDir, p.ID+".yaml"), b)
+}
+
+// DirFingerprint describes the files below dir by path, size and
+// modification time, skipping dot folders, so a poll can tell a change;
+// "" when dir cannot be read.
+func DirFingerprint(dir string) string {
+	var sb strings.Builder
+	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() && p != dir && strings.HasPrefix(d.Name(), ".") {
+			return filepath.SkipDir
+		}
+		if fi, err := d.Info(); err == nil && fi.Mode().IsRegular() {
+			fmt.Fprintf(&sb, "%s/%d/%d\n", p, fi.Size(), fi.ModTime().UnixNano())
+		}
+		return nil
+	})
+	return sb.String()
 }
