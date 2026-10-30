@@ -82,7 +82,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 | Reads outside project root | Prompt, except never-readable locations which are refused |
 | New MCP server | Does not start until confirmed with its full command shown |
 | Project configuration | Not read until the project is trusted |
-| Outbound connections | Providers, MCP servers and harness endpoints the user configured; update check opt-in |
+| Outbound connections | Providers, MCP servers and harness endpoints the user configured; update check opt-in (off by default; once a day to GitHub's API, sending nothing about the app) |
 
 ## Limitations the user should know
 

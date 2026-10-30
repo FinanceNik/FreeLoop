@@ -224,6 +224,13 @@ func (s *EngineService) StartMCPServer(ctx context.Context, id string) error {
 	return s.eng.StartMCPServer(ctx, id)
 }
 
+// UpdateStatus and CheckForUpdate are the opt-in update check (OQ-015).
+func (s *EngineService) UpdateStatus() engine.UpdateInfo { return s.eng.UpdateStatus() }
+
+func (s *EngineService) CheckForUpdate(ctx context.Context) (engine.UpdateInfo, error) {
+	return s.eng.CheckForUpdate(ctx)
+}
+
 // SignInMCPServer and SignOutMCPServer run and forget a remote server's
 // OAuth sign-in (MCP-006).
 func (s *EngineService) SignInMCPServer(ctx context.Context, id string) (engine.MCPServerInfo, error) {

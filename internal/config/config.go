@@ -59,6 +59,15 @@ type Config struct {
 	Hooks []Hook `yaml:"hooks,omitempty" json:"hooks"`
 	// Network holds the local-only switch (NFR-OFF-003).
 	Network Network `yaml:"network,omitempty" json:"network"`
+	// Updates holds the opt-in update check (SEC-009, OQ-015).
+	Updates Updates `yaml:"updates,omitempty" json:"updates"`
+}
+
+// Updates settings.
+type Updates struct {
+	// Check looks for a newer release on GitHub once a day; off unless the
+	// user turns it on.
+	Check bool `yaml:"check,omitempty" json:"check"`
 }
 
 // Network settings.

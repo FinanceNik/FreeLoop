@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Events, Window } from "@wailsio/runtime";
+import { Browser, Events, Window } from "@wailsio/runtime";
 import {
   CONFIG_EVENT_NAME,
   EngineService,
@@ -16,6 +16,7 @@ import {
   type ProjectInfo,
   type ProviderInfo,
   type Session,
+  type UpdateInfo,
   type SessionHits,
 } from "./api.ts";
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
@@ -317,6 +318,23 @@ export default function App() {
   const selected = screen.kind === "session" ? (sessions.find((s) => s.id === screen.id) ?? null) : null;
 
   const openWindow = (sid: string) => EngineService.OpenSessionWindow(sid).catch(report);
+  // A newer release, when the user turned the update check on (OQ-015).
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  useEffect(() => {
+    if (STANDALONE) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const ask = (again: boolean) =>
+      EngineService.UpdateStatus()
+        .then((u) => {
+          setUpdate(u);
+          // A check due now runs in the background; look once more after it.
+          const due = u.enabled && Date.now() - new Date(u.checked).getTime() > 24 * 3600 * 1000;
+          if (due && again) timer = setTimeout(() => ask(false), 5000);
+        })
+        .catch(() => {});
+    ask(true);
+    return () => clearTimeout(timer);
+  }, [config]);
   // The window's title follows its session's (a fork made here opens here).
   const standaloneTitle = STANDALONE ? selected?.title : undefined;
   useEffect(() => {
@@ -583,7 +601,12 @@ export default function App() {
               </section>
             )}
           </nav>
-          {config?.network?.localOnly && (
+          {update?.newer && update.url && (
+          <button className="link today" title={update.url} onClick={() => Browser.OpenURL(update.url!).catch(report)}>
+            Version {update.latest} is available
+          </button>
+        )}
+        {config?.network?.localOnly && (
             <button className="link today" title="The app connects to nothing but this Mac; change it in Settings" onClick={() => setScreen({ kind: "settings" })}>
               Local only
             </button>

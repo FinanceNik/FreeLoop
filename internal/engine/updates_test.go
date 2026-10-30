@@ -1,0 +1,121 @@
+package engine
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/FinanceNik/Freeloop/internal/netguard"
+)
+
+// The version the app reports is the one the build files give it.
+func TestAppVersionMatchesTheBuild(t *testing.T) {
+	b, err := os.ReadFile("../../build/config.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `version: "`+AppVersion+`"`) {
+		t.Errorf("build/config.yml does not give version %s", AppVersion)
+	}
+}
+
+func TestVersionOrder(t *testing.T) {
+	for _, c := range []struct {
+		a, b  string
+		newer bool
+	}{{"0.1.0", "0.0.1", true}, {"0.0.1", "0.0.1", false}, {"0.0.10", "0.0.9", true}, {"1.0.0", "0.99.99", true}, {"0.0.1", "0.1.0", false}, {"1.0", "0.0.1", false}, {"x.y.z", "0.0.1", false}} {
+		if got := newerVersion(c.a, c.b); got != c.newer {
+			t.Errorf("newerVersion(%s, %s) = %v", c.a, c.b, got)
+		}
+	}
+}
+
+// SEC-009, OQ-015: nothing is checked until the user turns the check on;
+// then the app asks once a day, without saying anything about itself, and
+// reports a newer release; local-only mode stops it.
+func TestUpdateCheck(t *testing.T) {
+	var hits atomic.Int32
+	var ua atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		ua.Store(r.Header.Get("User-Agent") + "|" + r.URL.RawQuery)
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"tag_name":"v0.2.0","html_url":"https://github.com/FinanceNik/Freeloop/releases/tag/v0.2.0","draft":false,"prerelease":false}`)
+	}))
+	defer srv.Close()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	e.releaseAPI = srv.URL
+
+	if info := e.UpdateStatus(); info.Enabled || info.Newer || info.Current != AppVersion {
+		t.Errorf("off: %+v", info)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if hits.Load() != 0 {
+		t.Fatal("the app checked for updates while the check was off")
+	}
+
+	cfg := e.Config()
+	cfg.Updates.Check = true
+	if _, err := e.SaveSettings(cfg); err != nil {
+		t.Fatal(err)
+	}
+	e.UpdateStatus()
+	deadline := time.Now().Add(5 * time.Second)
+	for !e.UpdateStatus().Newer && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	info := e.UpdateStatus()
+	if !info.Newer || info.Latest != "0.2.0" || info.URL != "https://github.com/FinanceNik/Freeloop/releases/tag/v0.2.0" {
+		t.Fatalf("on: %+v", info)
+	}
+	if got := ua.Load().(string); got != "Freeloop-update-check|" {
+		t.Errorf("the request said %q about the app", got)
+	}
+	// Within the day, no second request.
+	e.UpdateStatus()
+	time.Sleep(100 * time.Millisecond)
+	if n := hits.Load(); n != 1 {
+		t.Errorf("%d checks within a day", n)
+	}
+
+	netguard.SetLocalOnly(true)
+	defer netguard.SetLocalOnly(false)
+	if _, err := e.CheckForUpdate(context.Background()); err == nil || hits.Load() != 1 {
+		t.Errorf("local-only: %v, %d requests", err, hits.Load())
+	}
+}
+
+// A failing or odd answer leaves the app as it was, with the reason in
+// Settings.
+func TestUpdateCheckFailures(t *testing.T) {
+	for body, want := range map[string]string{
+		"404": "no release yet", `{"tag_name":"nightly","html_url":"https://github.com/x"}`: "not a version",
+		`{"tag_name":"v9.0.0","html_url":"file:///etc/passwd"}`: "",
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if body == "404" {
+				http.NotFound(w, r)
+				return
+			}
+			io.WriteString(w, body)
+		}))
+		e := openTest(t, t.TempDir())
+		e.releaseAPI = srv.URL
+		info, err := e.CheckForUpdate(context.Background())
+		switch {
+		case want == "" && (err != nil || info.URL != "https://github.com/FinanceNik/Freeloop/releases"):
+			t.Errorf("%s: %+v, %v", body, info, err)
+		case want != "" && (err == nil || !strings.Contains(err.Error(), want) || info.Newer || !strings.Contains(e.UpdateStatus().Error, want)):
+			t.Errorf("%s: %+v, %v", body, info, err)
+		}
+		e.Close()
+		srv.Close()
+	}
+}

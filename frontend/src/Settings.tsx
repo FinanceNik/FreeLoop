@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Browser } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
 import { HookTable } from "./Hooks.tsx";
-import { EngineService, type Blocked, type ConfigRestore, type Config, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
+import { EngineService, type Blocked, type ConfigRestore, type Config, type UpdateInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
   config: Config;
@@ -40,6 +41,19 @@ export default function Settings({ config, providers, environments, profiles, pr
       .catch(onError);
   };
   useEffect(() => setForm(config), [config]);
+  // The opt-in update check (OQ-015).
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [checking, setChecking] = useState(false);
+  useEffect(() => {
+    EngineService.UpdateStatus().then(setUpdate).catch(onError);
+  }, [config]);
+  const checkNow = () => {
+    setChecking(true);
+    EngineService.CheckForUpdate()
+      .then(setUpdate)
+      .catch(() => EngineService.UpdateStatus().then(setUpdate))
+      .finally(() => setChecking(false));
+  };
 
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -166,6 +180,41 @@ export default function Settings({ config, providers, environments, profiles, pr
             </ul>
           </details>
         )}
+
+        <h3>Updates</h3>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={!!form.updates?.check}
+            onChange={(e) => setForm({ ...form, updates: { ...form.updates, check: e.target.checked } })}
+          />
+          Check for a newer version once a day
+        </label>
+        <p className="muted">
+          Asks GitHub for the project's latest release and says when it is newer than {update?.current ?? "this version"}. The request carries
+          nothing about this copy of the app, and nothing is downloaded or installed. Off unless you turn it on.
+        </p>
+        <div className="row">
+          <button type="button" disabled={checking || !!form.network?.localOnly} onClick={checkNow}>
+            {checking ? "Checking…" : "Check now"}
+          </button>
+          {update?.newer && update.url && (
+            <span>
+              Version {update.latest} is available.{" "}
+              <a
+                href={update.url}
+                onClick={(e) => {
+                  e.preventDefault();
+                  Browser.OpenURL(update.url!).catch(onError);
+                }}
+              >
+                See the release
+              </a>
+            </span>
+          )}
+          {update && !update.newer && update.latest && <span className="muted">Up to date ({update.current}).</span>}
+          {update?.error && <span className="muted">{update.error}</span>}
+        </div>
 
         <h3>Permissions</h3>
         <label className="row">

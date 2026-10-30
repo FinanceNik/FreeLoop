@@ -67,6 +67,8 @@ func main() {
 	notices := make(chan engine.Notice, 64)
 	eng, err := engine.Open(engine.Options{
 		DataDir: dataDir, Secrets: darwin.Keychain{}, Dev: os.Getenv("FREELOOP_DEV") == "1",
+		// A fake release server for trying the update check (OQ-015).
+		ReleaseAPI: os.Getenv("FREELOOP_RELEASE_API"),
 		OnConfigChange: func(c engine.ConfigChange) {
 			select {
 			case configChanges <- c:

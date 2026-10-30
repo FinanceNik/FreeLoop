@@ -45,6 +45,9 @@ type Options struct {
 	OnConfigChange func(ConfigChange)
 	// OnNotice receives notices (GUI-008) from a goroutine of its own.
 	OnNotice func(Notice)
+	// ReleaseAPI replaces GitHub's latest-release address for the update
+	// check, in development builds only (OQ-015).
+	ReleaseAPI string
 }
 
 // ConfigChange lists the config files that were reloaded, relative to the
@@ -104,6 +107,11 @@ type Engine struct {
 	// signIns are the sign-in pages being waited on, by server (MCP-006).
 	openURL func(string) error
 	signIns map[string]string
+	// updates runs one background update check at a time; updateErr is
+	// the last one's failure; releaseAPI replaces GitHub in tests.
+	updates    onceReset
+	updateErr  string
+	releaseAPI string
 	// starting are runtimes being set up, so hooks find them while the
 	// harness starts (an external agent's requests during session/load).
 	starting map[string]*runtime
@@ -146,6 +154,9 @@ func Open(opts Options) (*Engine, error) {
 		runtimes: map[string]*runtime{},
 		starting: map[string]*runtime{},
 		streams:  map[string]*streamBuf{},
+	}
+	if opts.Dev {
+		e.releaseAPI = opts.ReleaseAPI
 	}
 	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: e.bus.publish, Redact: e.redact})
 	if err != nil {
