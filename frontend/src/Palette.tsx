@@ -42,12 +42,14 @@ export function useRegistry(): { registry: PaletteRegistry; collect: () => Palet
 
 export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () => void }) {
   const [query, setQuery] = useState("");
-  const [pick, setPick] = useState(0);
+  // Nothing is picked until the user types or moves, so ⌘K then a reflex
+  // Enter runs nothing, an approval least of all.
+  const [pick, setPick] = useState(-1);
   const shown = useMemo(() => rank(items, query), [items, query]);
   const list = useRef<HTMLUListElement>(null);
   const opener = useRef(document.activeElement as HTMLElement | null);
 
-  useEffect(() => setPick(0), [query]);
+  useEffect(() => setPick(query.trim() ? 0 : -1), [query]);
   useEffect(() => {
     list.current?.querySelector(`[data-index="${pick}"]`)?.scrollIntoView({ block: "nearest" });
   }, [pick]);
@@ -72,7 +74,7 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
       if (n) setPick((p) => (p + 1) % n);
     } else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) {
       e.preventDefault();
-      if (n) setPick((p) => (p + n - 1) % n);
+      if (n) setPick((p) => (p < 0 ? n - 1 : (p + n - 1) % n));
     } else if (e.key === "Enter" && !e.nativeEvent.isComposing) {
       e.preventDefault();
       run(shown[pick]);

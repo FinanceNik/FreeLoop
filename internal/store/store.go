@@ -138,10 +138,10 @@ func (s *Store) CreateSession(ctx context.Context, tmpl session.Session) (sessio
 		return session.Session{}, fmt.Errorf("store: %w", err)
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, worktree, last_seq, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, worktree, worktree_branch, last_seq, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 		ses.ID, ses.Title, ses.Status, ses.HarnessID, ses.ProjectID, ses.ProjectRoot, ses.EnvironmentID, ses.BaseCommit, ses.Branch,
-		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.Worktree, now.UnixMilli(), now.UnixMilli())
+		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.Worktree, ses.WorktreeBranch, now.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return session.Session{}, fmt.Errorf("store: insert session: %w", err)
 	}
@@ -319,7 +319,7 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
-const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, last_seq, created_at, updated_at`
+const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, last_seq, created_at, updated_at`
 
 type scanner interface{ Scan(...any) error }
 
@@ -327,7 +327,7 @@ func scanSession(r scanner) (session.Session, error) {
 	var ses session.Session
 	var created, updated int64
 	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectID, &ses.ProjectRoot, &ses.EnvironmentID,
-		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.LastSeq, &created, &updated); err != nil {
+		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.LastSeq, &created, &updated); err != nil {
 		return session.Session{}, err
 	}
 	ses.CreatedAt = time.UnixMilli(created).UTC()
@@ -390,6 +390,10 @@ var migrations = []string{
 	ALTER TABLE sessions RENAME COLUMN search_seq TO indexed_seq;
 	UPDATE sessions SET indexed_seq = 0;
 	DELETE FROM search;`,
+	// A worktree session's own branch, apart from the branch git state
+	// reports (SES-010). Existing sessions keep the branch last seen.
+	`ALTER TABLE sessions ADD COLUMN worktree_branch TEXT NOT NULL DEFAULT '';
+	UPDATE sessions SET worktree_branch = branch WHERE worktree != '';`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

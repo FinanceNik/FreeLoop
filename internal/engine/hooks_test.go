@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -39,11 +41,13 @@ func TestHooks(t *testing.T) {
 	defer cancel()
 	root := t.TempDir()
 	seen := filepath.Join(t.TempDir(), "post.json")
+	deniedRan := filepath.Join(t.TempDir(), "denied-post")
 	c := e.Config()
 	c.Hooks = []config.Hook{
 		{Event: config.HookPreToolUse, Match: "shell", Command: `grep -q curl && { echo "no network from hooks test" >&2; exit 2; }; exit 0`},
 		{Event: config.HookPreToolUse, Match: "write_*", Command: "exit 1"},
 		{Event: config.HookPostToolUse, Match: "write_file", Command: "cat > " + seen},
+		{Event: config.HookPostToolUse, Match: "shell", Command: "touch " + deniedRan},
 	}
 	if _, err := e.SaveSettings(c); err != nil {
 		t.Fatal(err)
@@ -82,6 +86,9 @@ func TestHooks(t *testing.T) {
 	if len(runs) != 3 || !runs[0].Blocked || runs[0].ExitCode != 2 || runs[1].Blocked || runs[1].ExitCode != 1 || runs[2].Event != config.HookPostToolUse {
 		t.Fatalf("hook runs = %+v", runs)
 	}
+	if _, err := os.Stat(deniedRan); err == nil {
+		t.Error("a post_tool_use hook ran for a call that was denied")
+	}
 	var post map[string]any
 	b, _ := os.ReadFile(seen)
 	if json.Unmarshal(b, &post) != nil || post["tool"] != "write_file" || post["status"] != "completed" || post["sessionId"] != ses.ID {
@@ -100,5 +107,49 @@ func TestHooks(t *testing.T) {
 	e.SetProjectTrust(ctx, root, true)
 	if _, err := e.Prompt(ctx, ses.ID, "and again"); err == nil || !strings.Contains(err.Error(), "the project needs setup first") {
 		t.Errorf("session_start block = %v", err)
+	}
+}
+
+// Stop also stops a post_tool_use hook: the turn does not wait out the
+// hook's timeout.
+func TestStopEndsPostToolUseHook(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	c := e.Config()
+	c.Hooks = []config.Hook{{Event: config.HookPostToolUse, Command: "sleep 60", Timeout: 120}}
+	if _, err := e.SaveSettings(c); err != nil {
+		t.Fatal(err)
+	}
+	p := scripted.New("sp",
+		scripted.Step{Calls: []scripted.Call{{Name: "write_file", Input: map[string]any{"path": "a.txt", "content": "x\n"}}}},
+		scripted.Step{Text: "done"})
+	e.mu.Lock()
+	e.providers.built["sp"] = &configuredProvider{cfg: config.Provider{ID: "sp", Name: "sp", Type: "scripted"}, p: p}
+	e.mu.Unlock()
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProviderID: "sp", Model: "m", Mode: "accept_edits"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Prompt(ctx, ses.ID, "go")
+	// Wait for the hook to start, then stop the turn.
+	for start := time.Now(); ; time.Sleep(20 * time.Millisecond) {
+		evs, _ := e.Events(ctx, ses.ID, 0)
+		if slices.ContainsFunc(evs, func(ev event.Event) bool {
+			return ev.Type == event.ToolCallUpdate && strings.Contains(string(ev.Data), `"completed"`)
+		}) {
+			break
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatal("the write never completed")
+		}
+	}
+	stopped := time.Now()
+	e.Cancel(ses.ID)
+	waitIdle(t, ch, ses.ID)
+	if took := time.Since(stopped); took > 10*time.Second {
+		t.Errorf("the turn ended %s after Stop", took)
 	}
 }

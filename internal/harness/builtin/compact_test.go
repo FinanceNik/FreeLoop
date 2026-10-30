@@ -3,6 +3,8 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -99,5 +101,58 @@ func TestCompaction(t *testing.T) {
 	}
 	if len(s.history) != 1 {
 		t.Errorf("history after /compact = %d messages", len(s.history))
+	}
+}
+
+// growing reports 75 % of a 1000-token window, then reads a large file:
+// the next call would pass the window, so the session compacts first, and
+// the summary request is cut to fit.
+type growing struct {
+	mu       sync.Mutex
+	requests []provider.ChatRequest
+}
+
+func (g *growing) ID() string                                               { return "grow" }
+func (g *growing) Type() provider.Type                                      { return provider.TypeScripted }
+func (g *growing) ListModels(context.Context) ([]provider.ModelInfo, error) { return nil, nil }
+func (g *growing) Capabilities(string) provider.ModelCaps                   { return provider.ModelCaps{Tools: true} }
+
+func (g *growing) Stream(ctx context.Context, req provider.ChatRequest) (<-chan provider.Event, error) {
+	g.mu.Lock()
+	g.requests = append(g.requests, req)
+	n := len(g.requests)
+	g.mu.Unlock()
+	msg := provider.Message{Role: provider.RoleAssistant, Parts: []provider.Part{{Type: provider.PartText, Text: "done"}}}
+	stop := provider.StopEndTurn
+	switch {
+	case req.System == compactPrompt:
+		msg.Parts[0].Text = "The user asked to read big.txt."
+	case n == 1:
+		msg.Parts = []provider.Part{{Type: provider.PartToolUse, ToolCallID: "c1", ToolName: "read_file", Input: json.RawMessage(`{"path":"big.txt"}`)}}
+		stop = provider.StopToolUse
+	}
+	ch := make(chan provider.Event, 1)
+	ch <- provider.Event{Type: provider.EventDone, Message: &msg, StopReason: stop, Usage: provider.Usage{InputTokens: 750}}
+	close(ch)
+	return ch, nil
+}
+
+func TestCompactsBeforeALargeToolResultOverflows(t *testing.T) {
+	f := setup(t, permission.ModeAcceptEdits)
+	os.WriteFile(filepath.Join(f.root, "big.txt"), []byte(strings.Repeat("0123456789 ", 1000)), 0o644)
+	prov := &growing{}
+	s := f.sess.(*session)
+	s.SetModel(prov, "m", 1000)
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "read big.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(prov.requests) != 3 || prov.requests[1].System != compactPrompt {
+		t.Fatalf("calls = %d, second is a summary request: %v", len(prov.requests), len(prov.requests) > 1 && prov.requests[1].System == compactPrompt)
+	}
+	if got := estimate(prov.requests[1].Messages); got > int64(summaryBudget*1000) {
+		t.Errorf("the summary request is %d tokens by estimate, over the budget", got)
+	}
+	if got := estimate(prov.requests[2].Messages); got >= 1000 {
+		t.Errorf("the call after compaction is %d tokens by estimate", got)
 	}
 }

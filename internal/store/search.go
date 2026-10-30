@@ -231,6 +231,9 @@ func (s *Store) index(ctx context.Context, t *transcript, sid string, ev event.E
 		return
 	}
 	if err := s.writeIndex(ctx, sid, b, done, sets, args); err != nil {
+		// The indexer moved past events whose rows were not written; the
+		// next append catches up from indexed_seq, which did not move.
+		t.search.loaded = false
 		log.Printf("store: search index %s: %v", sid, err)
 	}
 }

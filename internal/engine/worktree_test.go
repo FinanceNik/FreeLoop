@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 )
 
@@ -43,7 +44,7 @@ func TestWorktreeSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Worktree == "" || a.Worktree == b.Worktree || !strings.HasPrefix(a.Branch, BranchPrefix+"fix-a-") || strings.HasPrefix(a.Worktree, e.dataDir+string(filepath.Separator)) {
+	if a.Worktree == "" || a.Worktree == b.Worktree || !strings.HasPrefix(a.WorktreeBranch, BranchPrefix+"fix-a-") || strings.HasPrefix(a.Worktree, e.dataDir+string(filepath.Separator)) {
 		t.Fatalf("sessions = %+v / %+v", a, b)
 	}
 	e.Prompt(ctx, a.ID, "go")
@@ -75,6 +76,13 @@ func TestWorktreeSessions(t *testing.T) {
 	}
 	if read(repo) != "from one\n" {
 		t.Errorf("main after merge = %q", read(repo))
+	}
+
+	// A git state without a branch (a timeout, a detached HEAD) does not
+	// lose the session's own branch.
+	e.emit(a.ID, event.GitState, event.GitStateData{})
+	if got, _ := e.store.GetSession(ctx, a.ID); got.Branch != "" || got.OwnBranch() != a.WorktreeBranch {
+		t.Fatalf("after an empty git state: branch %q, own branch %q", got.Branch, got.OwnBranch())
 	}
 
 	// Archive: a clean worktree goes, a dirty one stays.

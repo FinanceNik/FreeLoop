@@ -106,16 +106,28 @@ func (e *Engine) Rewind(ctx context.Context, sid string, seq int64) error {
 	}
 	var cp event.CheckpointData
 	json.Unmarshal(events[i].Data, &cp)
+	// A compaction or an earlier rewind after the checkpoint replaced the
+	// history, so the checkpoint's length no longer points into it.
+	replaced := slices.ContainsFunc(events[i+1:], func(ev event.Event) bool {
+		var h struct {
+			Reset bool `json:"reset"`
+		}
+		return ev.Type == event.HistoryMessage && json.Unmarshal(ev.Data, &h) == nil && h.Reset
+	})
 	r, err := e.runtimeFor(ctx, sid)
 	if err != nil {
 		return err
 	}
+	// The session counts as busy while files are restored, so a prompt
+	// sent meanwhile waits in the queue and starts afterwards.
 	r.mu.Lock()
-	busy := r.busy
-	r.mu.Unlock()
-	if busy {
+	if r.busy {
+		r.mu.Unlock()
 		return errors.New("stop the running turn before rewinding")
 	}
+	r.busy, r.done = true, make(chan struct{})
+	r.mu.Unlock()
+	defer e.release(r)
 	saved, err := e.snapshot(ctx, r.host, sid, "before a rewind")
 	if err != nil {
 		return fmt.Errorf("save the current files: %w", err)
@@ -124,7 +136,7 @@ func (e *Engine) Rewind(ctx context.Context, sid string, seq int64) error {
 		return fmt.Errorf("restore the files: %w", err)
 	}
 	d := event.RewindData{CheckpointSeq: seq, Commit: cp.Commit, Saved: saved}
-	if h, ok := r.hs.(History); ok && cp.HistoryLen <= h.HistoryLen() {
+	if h, ok := r.hs.(History); ok && !replaced && cp.HistoryLen <= h.HistoryLen() {
 		h.TruncateHistory(cp.HistoryLen)
 		d.Context = true
 	}

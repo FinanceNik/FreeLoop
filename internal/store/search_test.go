@@ -184,3 +184,25 @@ func TestMatchExpr(t *testing.T) {
 		}
 	}
 }
+
+// A failed index write is caught up on the next append instead of being
+// skipped for good.
+func TestSearchRecoversFromAFailedWrite(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t, t.TempDir(), nil)
+	defer s.Close()
+	a, _ := s.CreateSession(ctx, session.Session{Title: "a", HarnessID: "builtin"})
+	s.Append(ctx, a.ID, event.TurnStarted, nil)
+	// Make the next index write fail.
+	s.db.Exec(`CREATE TRIGGER fail BEFORE INSERT ON usage BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+	s.Append(ctx, a.ID, event.UsageUpdate, raw(event.UsageData{InputTokens: 5, Model: "m"}))
+	s.Append(ctx, a.ID, event.AgentMessageChunk, text("the lost ostrich"))
+	s.db.Exec(`DROP TRIGGER fail`)
+	s.Append(ctx, a.ID, event.TurnEnded, nil)
+	if h := searchFor(t, s, "ostrich"); len(h) != 1 {
+		t.Errorf("hits = %+v", h)
+	}
+	if u, _ := s.UsageSince(ctx, "2000-01-01"); len(u) != 1 || u[0].InputTokens != 5 {
+		t.Errorf("usage = %+v", u)
+	}
+}

@@ -102,6 +102,13 @@ func (e *Engine) removeWorktree(ctx context.Context, ses session.Session) (bool,
 		gitOK(ctx, env, "worktree", "prune")
 		return true, nil
 	}
+	// Commits made off the session's branch would be left unreachable.
+	if wt, err := e.localEnv(ses.Worktree, nil); err == nil {
+		head, _ := git(ctx, wt, "symbolic-ref", "--quiet", "--short", "HEAD")
+		if head = strings.TrimSpace(head); head != ses.OwnBranch() {
+			return false, fmt.Errorf("it is not on the session's branch %s", ses.OwnBranch())
+		}
+	}
 	if _, err := gitOK(ctx, env, "worktree", "remove", ses.Worktree); err != nil {
 		return false, err
 	}
@@ -122,7 +129,7 @@ func (e *Engine) restoreWorktree(ctx context.Context, ses session.Session) error
 	if err != nil {
 		return err
 	}
-	if _, err := gitOK(ctx, env, "worktree", "add", "--quiet", ses.Worktree, ses.Branch); err != nil {
+	if _, err := gitOK(ctx, env, "worktree", "add", "--quiet", ses.Worktree, ses.OwnBranch()); err != nil {
 		return fmt.Errorf("recreate the worktree: %w", err)
 	}
 	return nil
@@ -182,19 +189,19 @@ func (e *Engine) MergeWorktree(ctx context.Context, sid string) (MergeResult, er
 	if !ok || into == "" {
 		return MergeResult{}, errors.New("the main checkout is not on a branch")
 	}
-	if into == ses.Branch {
+	if into == ses.OwnBranch() {
 		return MergeResult{}, errors.New("the main checkout is on the session's own branch")
 	}
-	res := MergeResult{Into: into, Branch: ses.Branch}
-	if _, err := gitOK(ctx, main, "merge", "--no-ff", "--no-edit", ses.Branch); err != nil {
+	res := MergeResult{Into: into, Branch: ses.OwnBranch()}
+	if _, err := gitOK(ctx, main, "merge", "--no-ff", "--no-edit", ses.OwnBranch()); err != nil {
 		conflicts, _ := git(ctx, main, "diff", "--name-only", "--diff-filter=U")
 		gitOK(ctx, main, "merge", "--abort")
 		if files := strings.Fields(conflicts); len(files) > 0 {
-			return res, fmt.Errorf("merging %s into %s conflicts in %s; the merge was undone, resolve it in a terminal", ses.Branch, into, strings.Join(files, ", "))
+			return res, fmt.Errorf("merging %s into %s conflicts in %s; the merge was undone, resolve it in a terminal", ses.OwnBranch(), into, strings.Join(files, ", "))
 		}
 		return res, err
 	}
-	res.Message = fmt.Sprintf("Merged %s into %s.", ses.Branch, into)
+	res.Message = fmt.Sprintf("Merged %s into %s.", ses.OwnBranch(), into)
 	e.emit(sid, event.Notice, event.NoticeData{Message: res.Message})
 	return res, nil
 }

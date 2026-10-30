@@ -204,8 +204,8 @@ func TestCancelWhileWaitingForApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	msgs := f.prov.Requests()[0].Messages
-	if n := len(msgs); n != 3 || len(msgs[2].Parts) != 2 || msgs[2].Parts[1].Text != "never mind" {
-		t.Errorf("follow-up prompt not merged into the trailing user message: %+v", msgs)
+	if n := len(msgs); n != 5 || msgs[3].Parts[0].Text != interruptedNote || msgs[4].Parts[0].Text != "never mind" {
+		t.Errorf("follow-up prompt does not follow the cancelled turn: %+v", msgs)
 	}
 }
 
@@ -311,11 +311,13 @@ func TestRestoredHistoryWithUnansweredCallIsRepaired(t *testing.T) {
 		t.Fatal(err)
 	}
 	msgs := f.prov.Requests()[0].Messages
-	if len(msgs) != 3 || msgs[2].Parts[0].Type != provider.PartToolResult || msgs[2].Parts[0].ToolCallID != "c1" {
+	if len(msgs) != 5 || msgs[2].Parts[0].Type != provider.PartToolResult || msgs[2].Parts[0].ToolCallID != "c1" {
 		t.Fatalf("history sent = %+v", msgs)
 	}
-	if msgs[2].Parts[len(msgs[2].Parts)-1].Text != "continue" {
-		t.Errorf("the new prompt was not appended after the repair: %+v", msgs[2])
+	// The new prompt follows a note in the assistant's place rather than
+	// being merged into the repaired results (SES-014).
+	if msgs[3].Role != provider.RoleAssistant || msgs[3].Parts[0].Text != interruptedNote || msgs[4].Parts[0].Text != "continue" {
+		t.Errorf("the new prompt was not appended after the repair: %+v", msgs[3:])
 	}
 }
 

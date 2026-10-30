@@ -51,10 +51,13 @@ type Session struct {
 	ExternalID string `json:"externalId"`
 	// Worktree is the session's own git worktree, when it has one
 	// (SES-010); the agent works there instead of the project root.
-	Worktree  string    `json:"worktree"`
-	LastSeq   int64     `json:"lastSeq"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Worktree string `json:"worktree"`
+	// WorktreeBranch is the branch created with the worktree. Branch
+	// follows the git state and can be empty; this one stays.
+	WorktreeBranch string    `json:"worktreeBranch"`
+	LastSeq        int64     `json:"lastSeq"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 // Project is a repository the user works in (ENV-003). It is identified by
@@ -107,4 +110,13 @@ func (s Session) WorkRoot() string {
 		return s.Worktree
 	}
 	return s.ProjectRoot
+}
+
+// OwnBranch is the branch of the session's worktree; sessions from before
+// it was recorded fall back to the last branch seen.
+func (s Session) OwnBranch() string {
+	if s.WorktreeBranch != "" {
+		return s.WorktreeBranch
+	}
+	return s.Branch
 }

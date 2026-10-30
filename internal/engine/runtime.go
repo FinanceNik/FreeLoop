@@ -46,8 +46,11 @@ type runtime struct {
 	mu     sync.Mutex
 	busy   bool
 	cancel context.CancelFunc
-	queue  []queued
-	done   chan struct{} // closed when the current prompt and queue finish
+	// turn is the running turn's context, which Stop cancels; hooks run
+	// for the turn use it.
+	turn  context.Context
+	queue []queued
+	done  chan struct{} // closed when the current prompt and queue finish
 }
 
 func (r *runtime) stop() {
@@ -298,7 +301,7 @@ func (e *Engine) enqueue(ctx context.Context, sid string, q queued) (PromptResul
 	r.busy = true
 	r.done = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
-	r.cancel = cancel
+	r.cancel, r.turn = cancel, ctx
 	go e.run(r, q, ctx)
 	return PromptResult{}, nil
 }
@@ -326,8 +329,26 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 		}
 		q, r.queue = r.queue[0], r.queue[1:]
 		ctx, r.cancel = context.WithCancel(context.Background())
+		r.turn = ctx
 		r.mu.Unlock()
 	}
+}
+
+// release ends something other than a turn that held the session busy (a
+// rewind), starting the queued prompts if any.
+func (e *Engine) release(r *runtime) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.queue) == 0 {
+		r.busy = false
+		close(r.done)
+		return
+	}
+	var q queued
+	q, r.queue = r.queue[0], r.queue[1:]
+	ctx, cancel := context.WithCancel(context.Background())
+	r.cancel, r.turn = cancel, ctx
+	go e.run(r, q, ctx)
 }
 
 // Cancel stops a session's running turn and drops its queued prompts.

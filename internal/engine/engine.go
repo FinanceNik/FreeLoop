@@ -484,13 +484,13 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	}
 	// The base commit is recorded now so the session's changes stay
 	// visible after unrelated commits (SES-006).
-	root, worktree := project.Root, ""
+	root, worktree, worktreeBranch := project.Root, "", ""
 	if req.Worktree {
-		path, _, err := e.addWorktree(ctx, project, title)
+		path, branch, err := e.addWorktree(ctx, project, title)
 		if err != nil {
 			return session.Session{}, err
 		}
-		root, worktree = path, path
+		root, worktree, worktreeBranch = path, path, branch
 	}
 	var git event.GitStateData
 	if env, err := e.localEnv(root, nil); err == nil {
@@ -500,7 +500,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	ses, err := e.store.CreateSession(ctx, session.Session{
 		Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
 		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
-		Worktree: worktree,
+		Worktree: worktree, WorktreeBranch: worktreeBranch,
 	})
 	if err != nil {
 		if worktree != "" {

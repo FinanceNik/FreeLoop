@@ -43,12 +43,14 @@ type HookRanData struct {
 	Error string `json:"error,omitempty"`
 }
 
-// hookCall is what a post_tool_use hook learns about the call.
+// hookCall is what a post_tool_use hook learns about the call; started
+// is set once the call ran, past the permission broker.
 type hookCall struct {
 	Tool     string          `json:"tool"`
 	Title    string          `json:"title"`
 	Kind     string          `json:"kind"`
 	RawInput json.RawMessage `json:"rawInput"`
+	started  bool
 }
 
 // hooksOf returns the hooks in force for a runtime's session, read afresh
@@ -189,12 +191,25 @@ func (e *Engine) toolHooks(r *runtime, typ event.Type, data any) {
 		return
 	}
 	call, ok := r.calls[d.ToolCallID]
+	if ok && d.Status == "in_progress" {
+		call.started = true
+		r.calls[d.ToolCallID] = call
+	}
 	if ok && (d.Status == "completed" || d.Status == "failed") {
 		delete(r.calls, d.ToolCallID)
 	}
 	r.callsMu.Unlock()
-	if !ok || (d.Status != "completed" && d.Status != "failed") {
+	// A call that failed before it started was denied or refused: it never
+	// ran, so it gets no post_tool_use hook.
+	if !ok || !(d.Status == "completed" || (d.Status == "failed" && call.started)) {
 		return
+	}
+	// The turn's context, so Stop also stops the hook.
+	r.mu.Lock()
+	ctx := r.turn
+	r.mu.Unlock()
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	var out []string
 	var paths []string
@@ -206,7 +221,7 @@ func (e *Engine) toolHooks(r *runtime, typ event.Type, data any) {
 			paths = append(paths, c.Path)
 		}
 	}
-	if why := e.runHooks(context.Background(), r, config.HookPostToolUse, call.Tool, map[string]any{
+	if why := e.runHooks(ctx, r, config.HookPostToolUse, call.Tool, map[string]any{
 		"tool": call.Tool, "toolCallId": d.ToolCallID, "kind": call.Kind, "title": call.Title, "input": call.RawInput,
 		"status": d.Status, "output": capText(strings.Join(out, "\n")), "paths": paths,
 	}); why != "" {

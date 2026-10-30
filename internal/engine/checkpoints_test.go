@@ -128,3 +128,54 @@ func TestCheckpointsAndRewind(t *testing.T) {
 		t.Errorf("restored %d messages, live %d, checkpoint %d", got, live, cp.HistoryLen)
 	}
 }
+
+// Once a compaction (or an earlier rewind) has replaced the history, a
+// checkpoint's length no longer points into it: rewinding restores the
+// files and leaves the context alone instead of cutting the wrong messages.
+func TestRewindAfterHistoryResetKeepsContext(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	prov := &byPrompt{}
+	e.mu.Lock()
+	e.providers.built["bp"] = &configuredProvider{cfg: config.Provider{ID: "bp", Name: "bp", Type: "scripted"}, p: prov}
+	e.mu.Unlock()
+	root := t.TempDir()
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProviderID: "bp", Model: "m", Mode: "accept_edits"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Prompt(ctx, ses.ID, "write a.txt one")
+	waitIdle(t, ch, ses.ID)
+	e.Prompt(ctx, ses.ID, "write b.txt two")
+	waitIdle(t, ch, ses.ID)
+	e.mu.Lock()
+	h := e.runtimes[ses.ID].hs.(History)
+	e.mu.Unlock()
+	// What a compaction does to the history: replace it, shorter.
+	h.TruncateHistory(1)
+	before := h.HistoryLen()
+
+	evs, _ := e.Events(ctx, ses.ID, 0)
+	var cps []event.Event
+	for _, ev := range evs {
+		if ev.Type == event.Checkpoint {
+			cps = append(cps, ev)
+		}
+	}
+	if err := e.Rewind(ctx, ses.ID, cps[1].Seq); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "b.txt")); err == nil {
+		t.Error("the files were not restored")
+	}
+	if h.HistoryLen() != before {
+		t.Errorf("history %d after the rewind, %d before", h.HistoryLen(), before)
+	}
+	evs, _ = e.Events(ctx, ses.ID, 0)
+	if ev := evs[len(evs)-1]; ev.Type != event.Rewind || strings.Contains(string(ev.Data), `"context":true`) {
+		t.Errorf("last event = %s %s", ev.Type, ev.Data)
+	}
+}

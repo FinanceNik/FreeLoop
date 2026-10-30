@@ -111,8 +111,10 @@ type session struct {
 	prov   provider.Provider
 	model  string
 	window int
-	// context is the size of the latest model call's context.
-	context int64
+	// context is the size of the latest model call's context, which held
+	// the first contextLen messages of the history.
+	context    int64
+	contextLen int
 	// nested are AGENTS.md files below the root, as paths relative to it,
 	// found when a tool call touched their folder (HRN-010).
 	nested []string
@@ -187,6 +189,8 @@ func (s *session) HistoryLen() int {
 func (s *session) TruncateHistory(n int) {
 	s.mu.Lock()
 	h := slices.Clone(s.history[:min(n, len(s.history))])
+	// The last call's size no longer applies; the next is estimated.
+	s.context, s.contextLen = 0, 0
 	s.mu.Unlock()
 	if len(h) == 0 {
 		// An empty history still has to be recorded as reset.
@@ -213,8 +217,12 @@ func (s *session) commit(i int, m provider.Message) {
 	s.p.Emit(event.HistoryMessage, map[string]any{"index": i, "message": m})
 }
 
+// interruptedNote stands in for the reply a stopped or failed turn never
+// gave.
+const interruptedNote = "[The previous turn ended before a reply.]"
+
 // appendUser adds parts as a user message, merged into the last message when
-// that is already a user message (after an error or a cancel).
+// that is already a user message (tool results).
 func (s *session) appendUser(parts ...provider.Part) {
 	if n := len(s.history); n > 0 && s.history[n-1].Role == provider.RoleUser {
 		m := s.history[n-1]
@@ -236,6 +244,17 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	for _, r := range p.Resources {
 		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "resource_link", URI: r.URI, Name: r.Path}})
 		parts = append(parts, provider.Part{Type: provider.PartText, Text: harness.ResourceText(r)})
+	}
+	// A turn that was stopped or failed can leave the history ending with
+	// the user's side. A note in the assistant's place keeps roles
+	// alternating without merging this prompt into that message, so a
+	// checkpoint's history length still ends exactly before it (SES-014).
+	s.mu.Lock()
+	n := len(s.history)
+	dangling := n > 0 && s.history[n-1].Role == provider.RoleUser
+	s.mu.Unlock()
+	if dangling {
+		s.commit(n, provider.Message{Role: provider.RoleAssistant, Parts: []provider.Part{{Type: provider.PartText, Text: interruptedNote}}})
 	}
 	s.appendUser(parts...)
 
@@ -357,12 +376,12 @@ func (s *session) call(ctx context.Context, prov provider.Provider, req provider
 			u := ev.Usage
 			total := u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
 			s.mu.Lock()
-			s.context = total
-			window, prov, model := s.window, s.prov, s.model
+			s.context, s.contextLen = total, len(req.Messages)
+			window := s.window
 			s.mu.Unlock()
 			s.p.Emit(event.UsageUpdate, event.UsageData{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
 				CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, ContextTokens: total, ContextWindow: window,
-				ProviderID: prov.ID(), Model: model})
+				ProviderID: prov.ID(), Model: req.Model})
 			return ev.Message, ev.StopReason, nil
 		case provider.EventError:
 			return nil, "", ev.Err

@@ -37,12 +37,57 @@ const compactPrompt = `You are compacting the history of a coding session so the
 
 Be specific: paths, names, numbers, error messages. Do not call tools. Reply with the summary only.`
 
-// needsCompaction reports whether the last model call filled the context
-// past compactAt.
+// needsCompaction reports whether the next model call's context passes
+// compactAt of the window: the last call's context plus an estimate of what
+// was added since, so one large tool result cannot push a call past the
+// window unnoticed.
 func (s *session) needsCompaction() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.window > 0 && float64(s.context) >= compactAt*float64(s.window) && len(s.history) > 2
+	return s.window > 0 && float64(s.projected()) >= compactAt*float64(s.window) && len(s.history) > 2
+}
+
+// projected is the context the next call would send. Callers hold s.mu.
+func (s *session) projected() int64 {
+	since := s.history[min(s.contextLen, len(s.history)):]
+	if s.context == 0 {
+		since = s.history
+	}
+	return s.context + estimate(since)
+}
+
+// summaryBudget is the share of the window a summary request may fill;
+// larger tool results are cut to fit, the longest first.
+const summaryBudget = 0.7
+
+// fitForSummary shortens tool results until msgs fit budget tokens (by
+// estimate), so a history too big for the window can still be summarised.
+func fitForSummary(msgs []provider.Message, budget int64) []provider.Message {
+	if budget <= 0 || estimate(msgs) <= budget {
+		return msgs
+	}
+	out := make([]provider.Message, len(msgs))
+	for i, m := range msgs {
+		out[i] = m
+		out[i].Parts = slices.Clone(m.Parts)
+	}
+	const keep = 1000
+	for estimate(out) > budget {
+		mi, pi, longest := -1, -1, keep
+		for i, m := range out {
+			for j, p := range m.Parts {
+				if p.Type == provider.PartToolResult && len(p.Text) > longest {
+					mi, pi, longest = i, j, len(p.Text)
+				}
+			}
+		}
+		if mi < 0 {
+			break
+		}
+		p := &out[mi].Parts[pi]
+		p.Text = p.Text[:keep] + fmt.Sprintf("\n[%d more characters left out to fit the summary]", len(p.Text)-keep)
+	}
+	return out
 }
 
 // estimate is a rough token count of messages: four characters a token.
@@ -60,14 +105,11 @@ func estimate(msgs []provider.Message) int64 {
 // current turn when that is small.
 func (s *session) compact(ctx context.Context, reason string) error {
 	s.mu.Lock()
-	before, window := s.context, s.window
+	before, window := s.projected(), s.window
 	history := slices.Clone(s.history)
 	s.mu.Unlock()
 	if len(history) == 0 {
 		return errors.New("there is nothing to compact yet")
-	}
-	if before == 0 {
-		before = estimate(history)
 	}
 	s.p.Emit(event.CompactionUpdate, event.CompactionData{Status: "started", Reason: reason, ContextTokens: before})
 
@@ -81,6 +123,9 @@ func (s *session) compact(ctx context.Context, reason string) error {
 		msgs[last] = m
 	} else {
 		msgs = append(msgs, provider.Message{Role: provider.RoleUser, Parts: []provider.Part{ask}})
+	}
+	if window > 0 {
+		msgs = fitForSummary(msgs, int64(summaryBudget*float64(window)))
 	}
 	prov, model := s.current()
 	summary, err := s.complete(ctx, prov, provider.ChatRequest{Model: model, System: compactPrompt, Messages: msgs, Tools: s.toolSpecs(s.Mode()), Effort: s.p.Effort})
@@ -105,7 +150,7 @@ func (s *session) compact(ctx context.Context, reason string) error {
 	s.replaceHistory(next)
 	after := estimate(next)
 	s.mu.Lock()
-	s.context = after
+	s.context, s.contextLen = after, len(next)
 	s.mu.Unlock()
 	s.p.Emit(event.CompactionUpdate, event.CompactionData{Status: "completed", Reason: reason, ContextTokens: before, AfterTokens: after, Summary: strings.TrimSpace(summary)})
 	if window > 0 && after >= int64(window) {
