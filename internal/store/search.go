@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/FinanceNik/Freeloop/internal/event"
 )
@@ -176,15 +177,21 @@ func (x *indexer) feed(ev event.Event) (batch, int64) {
 	return b, ev.Seq
 }
 
-// eventText is the searchable text of a tool call (its title, command and
-// paths) or a tool call update (its output and diffs), and the call's ID.
+// capIndexed cuts s to maxIndexed bytes at a character boundary, so a
+// snippet never ends in half a character.
 func capIndexed(s string) string {
-	if len(s) > maxIndexed {
-		return s[:maxIndexed]
+	if len(s) <= maxIndexed {
+		return s
 	}
-	return s
+	n := maxIndexed
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
+// eventText is the searchable text of a tool call (its title, command and
+// paths) or a tool call update (its output and diffs), and the call's ID.
 func eventText(ev event.Event) (string, string) {
 	var d struct {
 		ToolCallID string `json:"toolCallId"`
@@ -221,11 +228,7 @@ func eventText(ev event.Event) (string, string) {
 	default:
 		return "", ""
 	}
-	s := strings.Join(parts, "\n")
-	if len(s) > maxIndexed {
-		s = s[:maxIndexed]
-	}
-	return s, d.ToolCallID
+	return capIndexed(strings.Join(parts, "\n")), d.ToolCallID
 }
 
 // index feeds an appended event to the session's indexer and writes the

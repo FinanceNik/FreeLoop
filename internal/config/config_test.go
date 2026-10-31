@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -114,5 +115,28 @@ func TestUnknownKeyKeepsTheRest(t *testing.T) {
 	}
 	if _, issues := parse([]byte("network: [unclosed\n")); !Unreadable(issues) {
 		t.Errorf("a broken file is not unreadable: %+v", issues)
+	}
+}
+
+// Review finding: a config.yaml that could not be read at startup started
+// the app with defaults, local-only mode and hooks off. It now starts with
+// the last version that could be read.
+func TestUnreadableAtStartupUsesTheLastGoodCopy(t *testing.T) {
+	dir := t.TempDir()
+	good := Default()
+	good.Network.LocalOnly = true
+	if err := Save(dir, good); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, FileName), []byte("network: [unclosed\n"), 0o600)
+	cfg, issues, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Network.LocalOnly || !Unreadable(issues) {
+		t.Errorf("localOnly %v, issues %+v", cfg.Network.LocalOnly, issues)
+	}
+	if !strings.Contains(issues[0].Message, "last time it could be read") {
+		t.Errorf("issue = %q", issues[0].Message)
 	}
 }

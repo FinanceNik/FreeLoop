@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -166,7 +167,11 @@ func Save(dir string, c Config) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(dir, FileName), b)
+	if err := writeAtomic(filepath.Join(dir, FileName), b); err != nil {
+		return err
+	}
+	keepLastGood(dir, b)
+	return nil
 }
 
 // Issue is a problem found in a config file. Issues are shown in the UI; the
@@ -208,10 +213,36 @@ func Load(dir string) (Config, []Issue, error) {
 		return Default(), nil, fmt.Errorf("config: %w", err)
 	}
 	cfg, issues := parse(b)
+	if !Unreadable(issues) {
+		keepLastGood(dir, b)
+	} else if good, err := os.ReadFile(filepath.Join(dir, LastGoodFileName)); err == nil {
+		// Start with the settings as they last were, local-only mode and
+		// hooks included, rather than with defaults that turn them off.
+		if prev, prevIssues := parse(good); !Unreadable(prevIssues) {
+			cfg = prev
+			issues[0].Message += "; using the settings from the last time it could be read until it is fixed"
+		}
+	}
 	for i := range issues {
 		issues[i].File = path
 	}
 	return cfg, issues, nil
+}
+
+// LastGoodFileName is a copy of the last config.yaml that could be read,
+// which the app starts with when config.yaml cannot be. The watcher does
+// not look at it.
+const LastGoodFileName = ".config-last-good.yaml"
+
+// keepLastGood records b as the last readable config.yaml, when it changed.
+func keepLastGood(dir string, b []byte) {
+	path := filepath.Join(dir, LastGoodFileName)
+	if old, err := os.ReadFile(path); err == nil && bytes.Equal(old, b) {
+		return
+	}
+	if err := writeAtomic(path, b); err != nil {
+		log.Printf("config: keep a copy of %s: %v", FileName, err)
+	}
 }
 
 func parse(b []byte) (Config, []Issue) {

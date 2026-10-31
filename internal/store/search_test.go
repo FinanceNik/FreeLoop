@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/session"
@@ -295,5 +296,15 @@ func TestIndexAllAfterACrashMidReply(t *testing.T) {
 	}
 	if h := searchFor(t, s, "eggs"); len(h) != 1 {
 		t.Errorf("eggs indexed twice: %+v", h)
+	}
+}
+
+// Review finding: indexed text was cut at a byte offset and could end in
+// half a character.
+func TestCapIndexedKeepsCharacters(t *testing.T) {
+	s := strings.Repeat("a", maxIndexed-1) + "é" + "tail"
+	got := capIndexed(s)
+	if !utf8.ValidString(got) || len(got) != maxIndexed-1 {
+		t.Errorf("cut to %d bytes, valid %v", len(got), utf8.ValidString(got))
 	}
 }

@@ -347,6 +347,7 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
 ```
 ~/Library/Application Support/freeloop/
   config.yaml              general settings and defaults (SET-001, SET-004)
+  .config-last-good.yaml   the last config.yaml that could be read, started with when it cannot be
   providers.yaml           providers; secrets as keychain references only
   profiles/<id>.yaml       harness profiles (HRN-003)
   environments/<id>.yaml   environments (ENV-002)
@@ -357,7 +358,7 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
   schedules.json           scheduled and recurring sessions and their last runs (SES-012)
   workspace.json           the main window's panes (GUI-017)
   freeloop.db              SQLite: projects, environments, sessions, attention queue, tokens per day and model (PRV-008), FTS5 search index (SES-007)
-  sessions/<id>/events.jsonl   append-only transcript (SES-002)
+  sessions/<id>/events.jsonl   append-only transcript (SES-002); a torn last line is cut on open, a damaged line elsewhere is repaired with the original kept as events.jsonl.damaged-<time>
   sessions/<id>/attachments/
   logs/                    local only, secrets redacted
 ```
