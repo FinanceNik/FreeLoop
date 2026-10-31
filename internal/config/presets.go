@@ -64,11 +64,11 @@ func BuiltinPresets() []HarnessPreset {
 	return []HarnessPreset{{
 		ID:          ClaudeCodePresetID,
 		Name:        "Claude Code",
-		Description: "Claude Code through its ACP adapter, with your Claude subscription or Anthropic account.",
+		Description: "Use your Claude subscription or Anthropic account. Freeloop starts Claude Code, which signs in by itself.",
 		Command:     "npx",
 		Args:        []string{"-y", "@agentclientprotocol/claude-agent-acp@0.99.1"},
 		Modes:       map[string]string{"ask": "default", "accept_edits": "acceptEdits", "plan": "plan", "bypass": "bypassPermissions"},
-		Notes:       "Needs Node.js. Sign in once with the claude command in a terminal; Freeloop never sees or stores the login.",
+		Notes:       "Needs Node.js. Sign in once by running claude in a terminal; Freeloop never sees or stores the login.",
 		Skills:      SkillsClaudePlugin,
 		Builtin:     true,
 	}}

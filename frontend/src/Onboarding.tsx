@@ -3,10 +3,11 @@ import { EngineService, type Config, type HarnessInfo, type ProviderInfo } from 
 import Providers from "./Providers.tsx";
 import ClaudeImport from "./ClaudeImport.tsx";
 
-// Onboarding is the first-run guide (GUI-010): add and test a provider,
-// choose a first project and decide whether to trust it, then start a
-// session. Importing Claude Code skills and MCP servers joins it with
-// SKL-003 and MCP-002.
+// Onboarding is the first-run guide (GUI-010): choose how agents run (an
+// agent that signs in by itself, such as Claude Code with a subscription,
+// or a provider with an API key or a local model), import from Claude Code
+// if wanted, choose a first project and decide whether to trust it, then
+// start a session. Agents are listed from their presets, never by name.
 
 interface Props {
   config: Config;
@@ -28,7 +29,17 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
   const [root, setRoot] = useState("");
   const [trust, setTrust] = useState(false);
   const [busy, setBusy] = useState(false);
-  const ready = providers.some((p) => !p.builtin) || harnesses.some((h) => h.kind === "acp" && !h.missing);
+  const agents = harnesses.filter((h) => h.kind === "acp");
+  const hasProvider = providers.some((p) => !p.builtin);
+  const ready = hasProvider || agents.some((h) => !h.missing);
+  // Choosing an agent makes it the default for new sessions.
+  const useAgent = (h: HarnessInfo) =>
+    EngineService.SaveSettings({ ...config, defaults: { ...config.defaults, profileId: h.id } })
+      .then((c) => {
+        onSaved(c);
+        setStep("import");
+      })
+      .catch(onError);
 
   // Finishing or skipping is remembered, so the guide shows once.
   const finish = (folder: string) => {
@@ -60,7 +71,7 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
     <section className="page onboarding">
       <h2>Welcome to Freeloop</h2>
       <ol className="steps" aria-label="Setup steps">
-        <li className={step === "provider" ? "step-on" : "step-done"}>Add a model provider</li>
+        <li className={step === "provider" ? "step-on" : "step-done"}>Choose how agents run</li>
         <li className={step === "import" ? "step-on" : step === "project" ? "step-done" : ""}>Import from Claude Code (optional)</li>
         <li className={step === "project" ? "step-on" : ""}>Choose a project</li>
         <li>Start a session</li>
@@ -68,32 +79,42 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
 
       {step === "provider" && (
         <>
-          <p>
-            Freeloop runs agents with your own models: an API key for Anthropic, OpenAI or OpenRouter, or a local server such as Ollama or LM
-            Studio. Keys go to the macOS Keychain. Add one and test it.
-          </p>
-          <Providers providers={providers} onChanged={onProvidersChanged} onError={onError} />
-          {harnesses.some((h) => h.kind === "acp") && (
-            <div className="card">
-              <strong>Agents that bring their own model access</strong>
-              <ul className="agent-status">
-                {harnesses
-                  .filter((h) => h.kind === "acp")
-                  .map((h) => (
-                    <li key={h.id}>
-                      {h.name}: {h.missing ? <span className="error-text">{h.missing}</span> : <span className="ok">ready to start</span>}
-                      {h.notes && <div className="muted">{h.notes}</div>}
-                    </li>
-                  ))}
+          {agents.length > 0 && (
+            <section className="choice" aria-labelledby="choice-agent">
+              <h3 id="choice-agent">Use an agent you're signed in to</h3>
+              <p className="muted">It runs with its own account. Freeloop starts it on your Mac and never sees the login.</p>
+              <ul className="agent-choices">
+                {agents.map((h) => (
+                  <li key={h.id} className="agent-choice">
+                    <div>
+                      <strong>{h.name}</strong>
+                      {h.description && <p>{h.description}</p>}
+                      {h.notes && <p className="muted">{h.notes}</p>}
+                    </div>
+                    {h.missing ? (
+                      <span className="error-text">{h.missing}</span>
+                    ) : (
+                      <button className="primary" onClick={() => useAgent(h)}>
+                        Use {h.name}
+                      </button>
+                    )}
+                  </li>
+                ))}
               </ul>
-              <p className="muted">They need no provider here; you can skip adding one and continue with the guide.</p>
-            </div>
+            </section>
           )}
+          <details className="choice" open={hasProvider || agents.length === 0}>
+            <summary>
+              <h3>Use an API key or a local model</h3>
+              <span className="muted">Anthropic, OpenAI, Google Gemini, OpenRouter, or a server on this Mac such as Ollama or LM Studio. Keys go to the macOS Keychain.</span>
+            </summary>
+            <Providers providers={providers} onChanged={onProvidersChanged} onError={onError} />
+          </details>
           <div className="row onboarding-nav">
             <button className="primary" disabled={!ready} onClick={() => setStep("import")}>
               Next
             </button>
-            {!ready && <span className="muted">Add a provider to continue.</span>}
+            {!ready && <span className="muted">Choose an agent or add a provider to continue.</span>}
             <button className="link" onClick={() => finish("")} disabled={busy}>
               Skip the guide
             </button>

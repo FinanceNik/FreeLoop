@@ -623,13 +623,13 @@ export default function App() {
             </button>
           )}
           <footer className="row">
-            <button onClick={() => setScreen({ kind: "providers" })}>Providers</button>
-            <button onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
-            <button onClick={() => setScreen({ kind: "skills" })}>Skills</button>
-            <button onClick={() => setScreen({ kind: "mcp" })}>MCP</button>
-            <button onClick={() => setScreen({ kind: "environments" })}>Environments</button>
-            <button onClick={() => setScreen({ kind: "rules" })}>Rules</button>
-            <button onClick={() => setScreen({ kind: "settings" })}>Settings</button>
+            <button aria-current={screen.kind === "providers" ? "page" : undefined} onClick={() => setScreen({ kind: "providers" })}>Providers</button>
+            <button aria-current={screen.kind === "profiles" ? "page" : undefined} onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
+            <button aria-current={screen.kind === "skills" ? "page" : undefined} onClick={() => setScreen({ kind: "skills" })}>Skills</button>
+            <button aria-current={screen.kind === "mcp" ? "page" : undefined} onClick={() => setScreen({ kind: "mcp" })}>MCP</button>
+            <button aria-current={screen.kind === "environments" ? "page" : undefined} onClick={() => setScreen({ kind: "environments" })}>Environments</button>
+            <button aria-current={screen.kind === "rules" ? "page" : undefined} onClick={() => setScreen({ kind: "rules" })}>Rules</button>
+            <button aria-current={screen.kind === "settings" ? "page" : undefined} onClick={() => setScreen({ kind: "settings" })}>Settings</button>
           </footer>
         </aside>
       )}

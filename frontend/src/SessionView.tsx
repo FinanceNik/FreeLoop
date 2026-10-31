@@ -493,6 +493,13 @@ export default function SessionView({ session, events, focus, prices, initialDra
     act("delete", "Delete session…", remove, { keywords: "remove" }),
   ]);
 
+  // The header's More menu closes once an action is picked.
+  const moreMenu = useRef<HTMLDetailsElement>(null);
+  const fromMenu = (act: () => void) => () => {
+    if (moreMenu.current) moreMenu.current.open = false;
+    act();
+  };
+
   return (
     <div className="session-layout">
       <section className="session">
@@ -535,11 +542,6 @@ export default function SessionView({ session, events, focus, prices, initialDra
           </div>
           <div className="session-controls">
             <div className="row">
-              <button onClick={() => setRenaming(session.title)}>Rename</button>
-              <button onClick={archive}>{archived ? "Unarchive" : "Archive"}</button>
-              <button className="danger" onClick={remove}>
-                Delete
-              </button>
               {otherProfiles.length > 0 && (
                 <details className="export-menu">
                   <summary title="A new session with another profile or harness, told what happened here">{switchingTo ? `Handing over to ${switchingTo}…` : "Continue with…"}</summary>
@@ -552,19 +554,21 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   </div>
                 </details>
               )}
-              <details className="export-menu">
-                <summary>Export</summary>
+              <details className="export-menu" ref={moreMenu}>
+                <summary aria-label="More actions for this session">More</summary>
                 <div className="export-options">
-                  <button onClick={() => exportAs("markdown")}>Markdown…</button>
-                  <button onClick={() => exportAs("json")}>JSON…</button>
+                  <button onClick={fromMenu(() => setRenaming(session.title))}>Rename</button>
+                  {onOpenWindow && <button onClick={fromMenu(onOpenWindow)}>Open in a new window</button>}
+                  <button onClick={fromMenu(() => exportAs("markdown"))}>Export as Markdown…</button>
+                  <button onClick={fromMenu(() => exportAs("json"))}>Export as JSON…</button>
+                  <button onClick={fromMenu(archive)}>{archived ? "Unarchive" : "Archive"}</button>
+                  <hr />
+                  <button className="danger" onClick={fromMenu(remove)}>
+                    Delete…
+                  </button>
                 </div>
               </details>
-              {onOpenWindow && (
-                <button onClick={onOpenWindow} title="Open this session in a window of its own">
-                  New window
-                </button>
-              )}
-              <button onClick={togglePanel} aria-pressed={panelOpen} title="Show or hide the right panel">
+              <button className="ghost" onClick={togglePanel} aria-pressed={panelOpen} title="Show or hide the right panel">
                 Panel
               </button>
               {exported && (
