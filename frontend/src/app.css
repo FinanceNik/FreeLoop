@@ -3279,3 +3279,43 @@ table.hooks .hook-command {
 .pr-check-pending .pr-check-mark {
   color: var(--warn);
 }
+
+/* Starting from a GitHub issue (SES-017). */
+.issue-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.issue-picker input[type="search"] {
+  flex: 1;
+}
+
+.issue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.issue-list button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 6px 4px;
+  border-radius: var(--r-sm);
+}
+
+.issue-list button:hover:not(:disabled) {
+  background: var(--surface-2);
+}

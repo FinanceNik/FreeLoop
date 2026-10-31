@@ -913,8 +913,9 @@ export default function App() {
             onManageProviders={() => setScreen({ kind: "providers" })}
             onProvidersChanged={refreshProviders}
             onProjectsChanged={refreshProjects}
-            onCreated={(s) => {
+            onCreated={(s, draft) => {
               setSessions((list) => (list.some((x) => x.id === s.id) ? list : [s, ...list]));
+              if (draft) setForkDraft({ sid: s.id, text: draft });
               openSession(s.id);
             }}
             onError={report}

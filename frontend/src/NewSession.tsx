@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import WorktreeScripts from "./WorktreeScripts.tsx";
+import IssuePicker from "./IssuePicker.tsx";
 import {
   EngineService,
+  type IssueBrief,
   MODES,
   errorText,
   type EnvironmentInfo,
@@ -27,7 +29,9 @@ interface Props {
   defaults?: Defaults;
   // A folder chosen beforehand, by the first-run guide (GUI-010).
   initialRoot?: string;
-  onCreated: (s: Session) => void;
+  // draft is the first message to put in the session's box, from an
+  // issue (SES-017).
+  onCreated: (s: Session, draft?: string) => void;
   onProjectsChanged: () => void;
   onManageProviders: () => void;
   onProvidersChanged: () => void;
@@ -60,6 +64,9 @@ export default function NewSession({ providers, projects, environments, profiles
   const [providerId, setProviderId] = useState(initial?.id ?? "");
   const [model, setModel] = useState((initial && initial.id === defaults?.providerId && defaults?.model) || initial?.defaultModel || "");
   const [title, setTitle] = useState("");
+  // The GitHub issue the session starts from (SES-017).
+  const [issue, setIssue] = useState<IssueBrief | null>(null);
+  const [pickingIssue, setPickingIssue] = useState(false);
   const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -199,7 +206,8 @@ export default function NewSession({ providers, projects, environments, profiles
       .then(async (s) => {
         if (rememberWorktree && s.projectId) await EngineService.SetProjectWorktreeDefault(s.projectId, own ? "always" : "never").catch(onError);
         if (makeDefault && s.projectId) await EngineService.SetProjectProfile(s.projectId, profileId).catch(onError);
-        onCreated(s);
+        if (issue) await EngineService.SetTags(s.id, [issue.tag]).catch(onError);
+        onCreated(s, issue?.text);
       })
       .catch(onError)
       .finally(() => setBusy(false));
@@ -516,6 +524,33 @@ export default function NewSession({ providers, projects, environments, profiles
           Title <span className="muted">(optional)</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="New session" />
         </label>
+        {settings?.trusted && !pickingIssue && (
+          <p className="muted">
+            {issue ? (
+              <>
+                Starts from issue #{issue.number}; its text goes into the message box for you to edit and send.{" "}
+                <button type="button" className="link" onClick={() => (setIssue(null), setTitle(""))}>
+                  Remove
+                </button>
+              </>
+            ) : (
+              <button type="button" className="link" onClick={() => setPickingIssue(true)}>
+                Start from a GitHub issue…
+              </button>
+            )}
+          </p>
+        )}
+        {pickingIssue && (
+          <IssuePicker
+            root={root}
+            onClose={() => setPickingIssue(false)}
+            onPick={(b) => {
+              setIssue(b);
+              setTitle(b.sessionTitle);
+              setPickingIssue(false);
+            }}
+          />
+        )}
         <div className="row">
           <button type="submit" className="primary" disabled={busy || !root || !!harness?.missing || (usesProvider && (!model.trim() || (blocked && caps?.source !== "unknown")))}>
             {busy ? "Starting…" : "Start session"}

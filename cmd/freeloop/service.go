@@ -93,6 +93,16 @@ func (s *EngineService) CheckFailures(ctx context.Context, sessionID string) (st
 	return s.eng.CheckFailures(ctx, sessionID)
 }
 
+// Issues lists a project's open GitHub issues (SES-017).
+func (s *EngineService) Issues(ctx context.Context, root, search string) ([]engine.Issue, error) {
+	return s.eng.Issues(ctx, root, search)
+}
+
+// IssueBrief writes one issue as a first message.
+func (s *EngineService) IssueBrief(ctx context.Context, root string, number int) (engine.IssueBrief, error) {
+	return s.eng.IssueBrief(ctx, root, number)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }
