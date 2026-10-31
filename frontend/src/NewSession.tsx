@@ -32,6 +32,8 @@ interface Props {
   // draft is the first message to put in the session's box, from an
   // issue (SES-017).
   onCreated: (s: Session, draft?: string) => void;
+  // A comparison of one task on several profiles started (HRN-016).
+  onCompare: (tag: string) => void;
   onProjectsChanged: () => void;
   onManageProviders: () => void;
   onProvidersChanged: () => void;
@@ -45,7 +47,7 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
+export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, onCreated, onCompare, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers.find((p) => !p.builtin) ?? providers[0];
   // An agent that signs in by itself (Claude Code with a subscription)
@@ -67,6 +69,10 @@ export default function NewSession({ providers, projects, environments, profiles
   // The GitHub issue the session starts from (SES-017).
   const [issue, setIssue] = useState<IssueBrief | null>(null);
   const [pickingIssue, setPickingIssue] = useState(false);
+  // Other profiles the same task runs on, to compare (HRN-016), and the
+  // task itself, which a comparison sends at once.
+  const [extra, setExtra] = useState<string[]>([]);
+  const [task, setTask] = useState("");
   const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -200,6 +206,7 @@ export default function NewSession({ providers, projects, environments, profiles
 
   const create = (e: FormEvent) => {
     e.preventDefault();
+    if (extra.length > 0) return compare();
     setBusy(true);
     const own = worktree && !!settings?.trusted;
     EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode, worktree: own })
@@ -209,6 +216,30 @@ export default function NewSession({ providers, projects, environments, profiles
         if (issue) await EngineService.SetTags(s.id, [issue.tag]).catch(onError);
         onCreated(s, issue?.text);
       })
+      .catch(onError)
+      .finally(() => setBusy(false));
+  };
+
+  // A built-in profile without its own provider and model runs on the
+  // form's; an external agent brings its own.
+  const runOf = (p: Profile) => {
+    const h = harnesses.find((x) => x.id === (p.harness || "builtin"));
+    const own = !h || h.usesProvider;
+    return { profileId: p.id, label: p.name, providerId: own ? p.provider || providerId : "", model: own ? p.model || model.trim() : "" };
+  };
+  const compare = () => {
+    const chosen = allProfiles.find((p) => p.id === profileId);
+    if (!chosen) return;
+    setBusy(true);
+    EngineService.CreateCompare({
+      title,
+      projectRoot: root,
+      environmentId,
+      mode,
+      prompt: task,
+      profiles: [chosen, ...extra.map((id) => allProfiles.find((p) => p.id === id)).filter((p): p is Profile => !!p)].map(runOf),
+    })
+      .then(onCompare)
       .catch(onError)
       .finally(() => setBusy(false));
   };
@@ -524,7 +555,34 @@ export default function NewSession({ providers, projects, environments, profiles
           Title <span className="muted">(optional)</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="New session" />
         </label>
-        {settings?.trusted && !pickingIssue && (
+        {settings?.trusted && allProfiles.length > 1 && (
+          <details className="compare-choice" open={extra.length > 0}>
+            <summary>Also run this task on other profiles, to compare</summary>
+            <p className="muted">Each profile gets its own worktree; the task is sent to all of them at once, and a page shows the runs side by side.</p>
+            <div className="row wrap">
+              {allProfiles
+                .filter((p) => p.id !== profileId)
+                .map((p) => (
+                  <label key={p.id} className="row">
+                    <input
+                      type="checkbox"
+                      checked={extra.includes(p.id)}
+                      disabled={!extra.includes(p.id) && extra.length >= 3}
+                      onChange={(e) => setExtra(e.target.checked ? [...extra, p.id] : extra.filter((x) => x !== p.id))}
+                    />
+                    {p.name}
+                  </label>
+                ))}
+            </div>
+            {extra.length > 0 && (
+              <label>
+                Task <span className="muted">(sent to all {extra.length + 1} runs)</span>
+                <textarea rows={4} value={task} onChange={(e) => setTask(e.target.value)} placeholder="Describe the change all runs should make." required />
+              </label>
+            )}
+          </details>
+        )}
+        {settings?.trusted && !pickingIssue && extra.length === 0 && (
           <p className="muted">
             {issue ? (
               <>
@@ -553,7 +611,7 @@ export default function NewSession({ providers, projects, environments, profiles
         )}
         <div className="row">
           <button type="submit" className="primary" disabled={busy || !root || !!harness?.missing || (usesProvider && (!model.trim() || (blocked && caps?.source !== "unknown")))}>
-            {busy ? "Starting…" : "Start session"}
+            {busy ? "Starting…" : extra.length > 0 ? `Start ${extra.length + 1} runs` : "Start session"}
           </button>
         </div>
       </form>

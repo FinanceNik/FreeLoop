@@ -31,6 +31,7 @@ import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
 import Board from "./Board.tsx";
 import Schedules from "./Schedules.tsx";
 import Usage from "./Usage.tsx";
+import Compare from "./Compare.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
@@ -57,6 +58,7 @@ type Screen =
   | { kind: "board" }
   | { kind: "schedules" }
   | { kind: "usage" }
+  | { kind: "compare"; tag: string }
   | { kind: "profiles" }
   | { kind: "skills" }
   | { kind: "mcp" }
@@ -577,6 +579,13 @@ export default function App() {
         detail: tagFilter.includes(t) ? "current" : undefined,
         run: () => setTagFilter([t]),
       })),
+      ...[...new Set(sessions.flatMap((s) => (s.tags ?? []).filter((t) => t.startsWith("compare-"))))].map((tag) => ({
+        id: `compare:${tag}`,
+        title: `Compare runs: ${sessions.find((s) => (s.tags ?? []).includes(tag))?.title.replace(/ · [^·]*$/, "") ?? tag}`,
+        group: "Page",
+        keywords: "compare profiles runs",
+        run: () => setScreen({ kind: "compare", tag }),
+      })),
       ...savedFilters.map((f) => ({
         id: `saved:${f.name}`,
         title: `Saved filter: ${f.name}`,
@@ -878,6 +887,7 @@ export default function App() {
             }}
             prices={config?.prices ?? []}
             knownTags={tagsInUse}
+            onOpenCompare={(tag) => setScreen({ kind: "compare", tag })}
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
             providers={providers}
@@ -913,6 +923,10 @@ export default function App() {
             onManageProviders={() => setScreen({ kind: "providers" })}
             onProvidersChanged={refreshProviders}
             onProjectsChanged={refreshProjects}
+            onCompare={(tag) => {
+              refreshSessions();
+              setScreen({ kind: "compare", tag });
+            }}
             onCreated={(s, draft) => {
               setSessions((list) => (list.some((x) => x.id === s.id) ? list : [s, ...list]));
               if (draft) setForkDraft({ sid: s.id, text: draft });
@@ -998,6 +1012,7 @@ export default function App() {
             </div>
           </div>
         )}
+        {screen.kind === "compare" && <Compare key={screen.tag} tag={screen.tag} onOpen={(id) => openSession(id)} onError={report} />}
         {screen.kind === "usage" && (
           <Usage projects={projects} providers={providers} harnesses={harnesses} onOpenSession={(id) => openSession(id)} onOpenPrices={() => setScreen({ kind: "settings" })} onError={report} />
         )}

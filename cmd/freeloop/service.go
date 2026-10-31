@@ -103,6 +103,22 @@ func (s *EngineService) IssueBrief(ctx context.Context, root string, number int)
 	return s.eng.IssueBrief(ctx, root, number)
 }
 
+// CreateCompare sends one task to several profiles (HRN-016) and returns
+// the tag that groups the runs.
+func (s *EngineService) CreateCompare(ctx context.Context, req engine.CompareRequest) (string, error) {
+	return s.eng.CreateCompare(ctx, req)
+}
+
+// Compare returns a comparison's runs.
+func (s *EngineService) Compare(ctx context.Context, tag string) ([]engine.CompareRun, error) {
+	return s.eng.Compare(ctx, tag)
+}
+
+// KeepCompare keeps one run and archives the others.
+func (s *EngineService) KeepCompare(ctx context.Context, tag, sessionID string) error {
+	return s.eng.KeepCompare(ctx, tag, sessionID)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

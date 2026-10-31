@@ -63,6 +63,8 @@ interface Props {
   onOpenWindow?: () => void;
   // Tags on any session, offered when adding one (SES-013).
   knownTags?: string[];
+  // Opens the comparison a session belongs to (HRN-016).
+  onOpenCompare?: (tag: string) => void;
   // In a workspace of several panes (GUI-017): whether this pane is the
   // active one, which alone takes the keyboard, the palette and the right
   // panel and speaks to screen readers; and how to close the pane.
@@ -93,7 +95,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], active = true, onClosePane }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -606,6 +608,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
               )}
             </p>
             <Tags tags={session.tags ?? []} known={knownTags} adding={tagging} onAdding={setTagging} onChange={setTags} />
+            {onOpenCompare &&
+              (session.tags ?? [])
+                .filter((t) => t.startsWith("compare-"))
+                .map((t) => (
+                  <button key={t} className="link compare-link" onClick={() => onOpenCompare(t)}>
+                    Compare with the other runs
+                  </button>
+                ))}
           </div>
           <div className="session-controls">
             <div className="row">
