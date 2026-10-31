@@ -896,6 +896,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
           provider={provider}
           environment={environment}
           configVersion={configVersion}
+          onReview={(text) => {
+            // Added to what is already typed, for the user to edit and send.
+            setDraft((d) => (d.trim() ? `${d.trimEnd()}\n\n${text}` : text));
+            requestAnimationFrame(() => input.current?.focus());
+          }}
           onClose={togglePanel}
           onError={onError}
         />

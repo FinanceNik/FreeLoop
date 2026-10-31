@@ -199,7 +199,7 @@ From a comparison with the Claude Code and Codex desktop apps, Cursor's Agents W
    - *Ports:* each worktree session gets a block of ten ports from 41000, the lowest block no live session holds, kept on the session row and exported as `FREELOOP_PORT` to the agent's commands, the terminal and the scripts.
    - *Run:* a "Run" button in the session header opens a terminal tab running `run` (GUI-012's terminal with an argv), shown as running until it exits; "Stop" ends it.
    - *Archive:* `archive` runs before the worktree is removed, with a time limit; its failure is a notice, never a block.
-3. **Review comments on the diff (GUI-019).**
+3. **Review comments on the diff (GUI-019).** *Built 2026-10-31; checked in the browser with the demo provider.*
    - *Diff tab:* hovering a line shows a "+" in its number column; a click opens a comment box under the line (⌘↩ adds it). Comments show inline and in a "Review" bar at the top of the tab with the count, "Send review" and "Discard"; they are kept per session in the page until sent, and shift with the diff's line numbers by matching their line's text.
    - *Message:* sending puts one message in the composer, for the user to edit before sending, or sends it directly with ⌘↩: each comment as `path:line`, the changed line and two lines around it in a fenced block, then the comment. The message is plain text, so the built-in harness and every ACP agent read it the same way (HRN-001).
    - *Tests:* the message format and the line matching are pure functions in `frontend/src/review.ts` with `node --test` tests.

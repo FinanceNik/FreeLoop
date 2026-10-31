@@ -21,6 +21,8 @@ interface Props {
   provider?: ProviderInfo;
   environment?: EnvironmentInfo;
   configVersion: number;
+  // Puts a review of the diff into the composer (GUI-019).
+  onReview: (text: string) => void;
   onClose: () => void;
   onError: (err: unknown) => void;
 }
@@ -37,7 +39,7 @@ export function showTool(toolCallId: string) {
   el.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
 }
 
-export default function SessionPanel({ session, tab, onTab: setTab, view, provider, environment, configVersion, onClose, onError }: Props) {
+export default function SessionPanel({ session, tab, onTab: setTab, view, provider, environment, configVersion, onReview, onClose, onError }: Props) {
   const data = panelData(view);
   // Uncommitted files, from the latest git state.
   const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
@@ -66,7 +68,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
       </div>
       <div className="panel-body" role="tabpanel">
         {tab === "approvals" && <Approvals pending={data.pending} decided={data.decided} onError={onError} />}
-        {tab === "diff" && <DiffPanel session={session} gitKey={JSON.stringify(view.git)} agentEdits={data.changes} onError={onError} />}
+        {tab === "diff" && <DiffPanel session={session} gitKey={JSON.stringify(view.git)} agentEdits={data.changes} onReview={onReview} onError={onError} />}
         {tab === "files" && <FilesPanel session={session} gitKey={JSON.stringify(view.git) + data.changes.length} agentEdits={data.changes} onError={onError} />}
         {tab === "terminal" && (
           <Suspense fallback={<p className="muted">Loading…</p>}>

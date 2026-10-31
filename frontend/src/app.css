@@ -3009,3 +3009,78 @@ table.hooks .hook-command {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Review comments on the diff (GUI-019). */
+.diff-no-button {
+  border: none;
+  background: none;
+  border-radius: 0;
+  padding: 0 6px 0 0;
+  font: inherit;
+  color: var(--muted);
+  text-align: right;
+  cursor: pointer;
+}
+
+.diff-no-button:hover,
+.diff-no-button:focus-visible {
+  color: var(--accent-text);
+  background: var(--accent);
+  outline: none;
+}
+
+.review-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  margin: 6px 0;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+}
+
+.review-hint {
+  font-size: 12px;
+}
+
+.review-count {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.review-comment,
+.review-editor {
+  white-space: normal;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: 12.5px;
+  margin: 4px 8px 6px 6.4em;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  max-width: 520px;
+}
+
+.review-comment-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.review-comment-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.review-editor textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+  margin-bottom: 6px;
+}
