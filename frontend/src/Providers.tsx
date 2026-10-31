@@ -1,10 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, errorText, type ModelInfo, type PresetInfo, type ProviderInfo } from "./api.ts";
+import { EngineService, errorText, type HarnessInfo, type ModelInfo, type PresetInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
   providers: ProviderInfo[];
   onChanged: () => void;
   onError: (err: unknown) => void;
+  // Agents that sign in by themselves (such as Claude Code with a Claude
+  // subscription), shown above the providers on the Providers page; they
+  // need no key here. onStartWith starts a session with one.
+  agents?: HarnessInfo[];
+  defaultProfileId?: string;
+  onStartWith?: (profileId: string) => void;
 }
 
 interface Form {
@@ -24,7 +30,7 @@ function presetOf(p: ProviderInfo): string {
   return p.type === "openai_compat" ? p.preset || "custom" : p.type;
 }
 
-export default function Providers({ providers, onChanged, onError }: Props) {
+export default function Providers({ providers, onChanged, onError, agents, defaultProfileId, onStartWith }: Props) {
   const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [tests, setTests] = useState<Record<string, { ok: boolean; text: string; models?: ModelInfo[] }>>({});
@@ -96,6 +102,31 @@ export default function Providers({ providers, onChanged, onError }: Props) {
   return (
     <section className="page">
       <h2>Providers</h2>
+      {agents && agents.length > 0 && (
+        <section className="choice" aria-labelledby="signed-in-agents">
+          <h3 id="signed-in-agents">Agents you're signed in to</h3>
+          <p className="muted">These need no key here: Freeloop starts the agent on your Mac and it uses its own account. There is nothing to add.</p>
+          <ul className="agent-choices">
+            {agents.map((h) => (
+              <li key={h.id} className="agent-choice">
+                <div>
+                  <strong>{h.name}</strong>
+                  {h.missing ? <span className="error-text"> · {h.missing}</span> : <span className="ok"> · ready</span>}
+                  {defaultProfileId === h.id && <span className="muted"> · default for new sessions</span>}
+                  {h.description && <p>{h.description}</p>}
+                  {h.notes && <p className="muted">{h.notes}</p>}
+                </div>
+                {!h.missing && onStartWith && (
+                  <button className="primary" onClick={() => onStartWith(h.id)}>
+                    Start a session with {h.name}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {agents && agents.length > 0 && <h3>API keys and local models</h3>}
       <p className="muted">
         API keys are stored in the macOS Keychain. Freeloop never shows a saved key again and only connects to the endpoints you add here.
       </p>

@@ -749,7 +749,25 @@ export default function App() {
           <div className="settings-area">
             <SettingsNav current={screen.kind} onOpen={(kind) => setScreen({ kind })} onBack={leaveSettings} />
             <div className="settings-content">
-              {screen.kind === "providers" && <Providers providers={providers} onChanged={refreshProviders} onError={report} />}
+              {screen.kind === "providers" && (
+                <Providers
+                  providers={providers}
+                  onChanged={refreshProviders}
+                  onError={report}
+                  agents={harnesses.filter((h) => h.kind === "acp")}
+                  defaultProfileId={config?.defaults?.profileId}
+                  onStartWith={(profileId) => {
+                    // The agent becomes the default, so the form comes up with it.
+                    if (!config) return setScreen({ kind: "new" });
+                    EngineService.SaveSettings({ ...config, defaults: { ...config.defaults, profileId } })
+                      .then((c) => {
+                        setConfig(c);
+                        setScreen({ kind: "new" });
+                      })
+                      .catch(report);
+                  }}
+                />
+              )}
               {screen.kind === "settings" && config && (
                 <Settings
                   config={config}
