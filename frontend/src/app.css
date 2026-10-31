@@ -3242,3 +3242,40 @@ table.hooks .hook-command {
   flex-direction: column;
   gap: 3px;
 }
+
+/* Pull request checks (SES-018). */
+.pr-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+
+.pr-check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+}
+
+.pr-check-mark {
+  display: inline-block;
+  width: 1.2em;
+  font-weight: 600;
+}
+
+.pr-check-pass .pr-check-mark {
+  color: var(--ok);
+}
+
+.pr-check-fail .pr-check-mark,
+.pr-check-cancel .pr-check-mark {
+  color: var(--danger);
+}
+
+.pr-check-pending .pr-check-mark {
+  color: var(--warn);
+}

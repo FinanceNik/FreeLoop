@@ -51,6 +51,9 @@ type Options struct {
 	// ReleaseAPI replaces GitHub's latest-release address for the update
 	// check, in development builds only (OQ-015).
 	ReleaseAPI string
+	// GH replaces the GitHub CLI with a stand-in, in development builds
+	// only, for trying pull requests, checks and issues without GitHub.
+	GH string
 }
 
 // ConfigChange lists the config files that were reloaded, relative to the
@@ -172,6 +175,9 @@ func Open(opts Options) (*Engine, error) {
 	}
 	if opts.Dev {
 		e.releaseAPI = opts.ReleaseAPI
+		if opts.GH != "" {
+			e.gh = opts.GH
+		}
 	}
 	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: e.bus.publish, Redact: e.redact})
 	if err != nil {

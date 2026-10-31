@@ -82,6 +82,17 @@ func (s *EngineService) RunWorktreeScript(ctx context.Context, sessionID string)
 	return s.eng.RunWorktreeScript(ctx, sessionID)
 }
 
+// PullRequestChecks returns the CI checks of the session's last pull
+// request (SES-018).
+func (s *EngineService) PullRequestChecks(ctx context.Context, sessionID string) (engine.ChecksInfo, error) {
+	return s.eng.PullRequestChecks(ctx, sessionID)
+}
+
+// CheckFailures writes a message about the failing checks for the agent.
+func (s *EngineService) CheckFailures(ctx context.Context, sessionID string) (string, error) {
+	return s.eng.CheckFailures(ctx, sessionID)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

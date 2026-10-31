@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Browser } from "@wailsio/runtime";
-import { EngineService, type PullRequestInfo, type Session } from "./api.ts";
+import { EngineService, type ChecksInfo, type PullRequestInfo, type Session } from "./api.ts";
 
 // PullRequest is the diff panel's pull request section (SES-011): the
 // branch and its target, a title and description the model can draft and
@@ -11,10 +11,12 @@ interface Props {
   session: Session;
   // Changes with the git state, so the commits and the block refresh.
   gitKey: string;
+  // Puts a message about failing checks into the composer (SES-018).
+  onMessage: (text: string) => void;
   onError: (err: unknown) => void;
 }
 
-export default function PullRequest({ session, gitKey, onError }: Props) {
+export default function PullRequest({ session, gitKey, onMessage, onError }: Props) {
   const [info, setInfo] = useState<PullRequestInfo | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -75,6 +77,7 @@ export default function PullRequest({ session, gitKey, onError }: Props) {
           </a>
         </p>
       )}
+      {(opened || created) && <Checks sessionId={session.id} url={opened?.url ?? created} onMessage={onMessage} onError={onError} />}
       {info.blocked ? (
         <p className="muted">{info.blocked}</p>
       ) : (
@@ -115,5 +118,91 @@ export default function PullRequest({ session, gitKey, onError }: Props) {
         </>
       )}
     </section>
+  );
+}
+
+const BUCKET: Record<string, { mark: string; label: string }> = {
+  pass: { mark: "✓", label: "passed" },
+  fail: { mark: "✕", label: "failed" },
+  cancel: { mark: "✕", label: "cancelled" },
+  pending: { mark: "•", label: "running" },
+  skipping: { mark: "–", label: "skipped" },
+};
+
+// Checks lists the pull request's CI checks (SES-018), refreshing every
+// 30 seconds while any runs, and turns failures into a message.
+function Checks({ sessionId, url, onMessage, onError }: { sessionId: string; url: string; onMessage: (text: string) => void; onError: (err: unknown) => void }) {
+  const [checks, setChecks] = useState<ChecksInfo | null>(null);
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    EngineService.PullRequestChecks(sessionId)
+      .then((c) => {
+        setChecks({ ...c, checks: c.checks ?? [] });
+        setProblem("");
+      })
+      .catch((err) => setProblem(err instanceof Error ? err.message : String(err)));
+  useEffect(() => {
+    load();
+  }, [sessionId, url]);
+  useEffect(() => {
+    if (!checks?.pending) return;
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, [checks?.pending]);
+  const send = () => {
+    setBusy(true);
+    EngineService.CheckFailures(sessionId)
+      .then(onMessage)
+      .catch(onError)
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="pr-checks" aria-label="Checks">
+      <div className="row">
+        <strong>Checks</strong>
+        {checks && (
+          <span className="muted">
+            {(checks.checks ?? []).length === 0
+              ? "none reported yet"
+              : [checks.failed && `${checks.failed} failed`, checks.pending && `${checks.pending} running`, checks.passed && `${checks.passed} passed`].filter(Boolean).join(" · ")}
+          </span>
+        )}
+        <button className="link" onClick={load}>
+          Refresh
+        </button>
+      </div>
+      {problem && <p className="muted">{problem}</p>}
+      {checks && (checks.checks ?? []).length > 0 && (
+        <ul className="pr-check-list">
+          {(checks.checks ?? []).map((c, i) => (
+            <li key={i} className={`pr-check pr-check-${c.bucket}`}>
+              <span className="pr-check-mark" aria-label={BUCKET[c.bucket]?.label ?? c.state}>
+                {BUCKET[c.bucket]?.mark ?? "?"}
+              </span>
+              {c.link.startsWith("https://") ? (
+                <a
+                  href={c.link}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    Browser.OpenURL(c.link).catch(onError);
+                  }}
+                >
+                  {c.workflow && c.workflow !== c.name ? `${c.workflow} / ${c.name}` : c.name}
+                </a>
+              ) : (
+                <span>{c.name}</span>
+              )}
+              <span className="muted"> {BUCKET[c.bucket]?.label ?? c.state.toLowerCase()}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {checks && checks.failed > 0 && (
+        <button disabled={busy} onClick={send} title="Puts the failing checks and the end of their logs in the message box">
+          {busy ? "Reading the logs…" : "Send failures to the agent"}
+        </button>
+      )}
+    </div>
   );
 }

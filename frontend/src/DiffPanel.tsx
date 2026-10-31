@@ -265,7 +265,7 @@ export default function DiffPanel({ session, gitKey, agentEdits, onReview, onErr
         </p>
       )}
       <p className="muted">Commits from the panel do not run git hooks.</p>
-      <PullRequest session={session} gitKey={gitKey} onError={onError} />
+      <PullRequest session={session} gitKey={gitKey} onMessage={onReview} onError={onError} />
     </div>
   );
 }

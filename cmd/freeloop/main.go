@@ -69,6 +69,8 @@ func main() {
 		DataDir: dataDir, Secrets: darwin.Keychain{}, Dev: os.Getenv("FREELOOP_DEV") == "1",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: os.Getenv("FREELOOP_RELEASE_API"),
+		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).
+		GH: os.Getenv("FREELOOP_DEV_GH"),
 		OnConfigChange: func(c engine.ConfigChange) {
 			select {
 			case configChanges <- c:

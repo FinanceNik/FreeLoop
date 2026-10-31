@@ -206,6 +206,16 @@ From a comparison with the Claude Code and Codex desktop apps, Cursor's Agents W
 
 Order: 3, then 1, then 2. Review comments are the smallest and touch only the frontend; images touch every provider adapter and the transcript; setup scripts add a config file, a trust surface and a session state, and should come last, once the other two have settled.
 
+### Feature order, part 10 (planned 2026-11-01)
+
+The second tier of the comparison with other agent apps; each builds on the GitHub CLI or worktrees the app already uses. No new dependency.
+
+1. **Start from a GitHub issue (SES-017).** `Engine.Issues(root, search)` runs `gh issue list --json` in a trusted project's main checkout (no git hooks, local-only refuses); `Engine.IssueBrief(root, number)` reads one issue with its comments through `gh issue view --json` and writes the first message: the issue's title, link, body and comments, capped at 20 KB. The new-session form gets "From an issue…": a searchable list; choosing one sets the title to "#12 Title", tags the session `issue-12`, and opens it with the brief in the message box. The issue's text is the user's to read before sending: it is put in the box, never sent.
+2. **Pull request checks (SES-018).** *Built 2026-11-01; tested against a fake gh. Development builds take a gh stand-in from `FREELOOP_DEV_GH`.* `Engine.PullRequestChecks(sid)` runs `gh pr checks <url> --json name,state,bucket,link,workflow` for the session's last pull request; the Diff tab's pull request section lists the checks with their state and refreshes every 30 seconds while any is pending and the tab is open. `Engine.CheckFailures(sid)` reads the end of each failed GitHub Actions job's log (`gh run view --job <id> --log-failed`, 3 KB each) and writes one message naming each failure with its link and log; "Send failures to the agent" puts it in the message box.
+3. **One task on several profiles, compared (HRN-016).** The new-session form's "Also run on…" picks one to three more profiles; `Engine.CreateCompare` makes one worktree session per profile (a trusted git project is required), tags them `compare-<id>`, titles them "<title> · <profile>" and sends each the same first message. A compare page, from the sidebar group's "Compare" link or the palette, shows the runs side by side: status, files changed, lines added and removed against the shared base (`git diff --numstat`), tokens, estimated cost and the last reply; each run can be opened, and "Keep this one" archives the others (their worktrees go, their branches stay).
+
+Order: 2, 1, 3. Checks extend the pull request section that exists; the issue picker adds a form control; the compare runs touch session creation and add a page.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
