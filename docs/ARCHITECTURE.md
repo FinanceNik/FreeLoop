@@ -354,6 +354,8 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
   rules.yaml               global permission rules (SEC-002)
   skills/<name>/           app skill store (SKL-002)
   presets/harnesses/*.yaml ACP agent presets (HRN-006, HRN-007)
+  schedules.json           scheduled and recurring sessions and their last runs (SES-012)
+  workspace.json           the main window's panes (GUI-017)
   freeloop.db              SQLite: projects, environments, sessions, attention queue, tokens per day and model (PRV-008), FTS5 search index (SES-007)
   sessions/<id>/events.jsonl   append-only transcript (SES-002)
   sessions/<id>/attachments/

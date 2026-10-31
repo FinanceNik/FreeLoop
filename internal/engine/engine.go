@@ -41,6 +41,9 @@ type Options struct {
 	// WatchInterval is how often the config files are checked for hand
 	// edits (SET-001). Zero means one second; negative turns watching off.
 	WatchInterval time.Duration
+	// ScheduleInterval is how often due schedules are looked for
+	// (SES-012). Zero means thirty seconds; negative turns them off.
+	ScheduleInterval time.Duration
 	// OnConfigChange is called after files changed on disk were reloaded.
 	OnConfigChange func(ConfigChange)
 	// OnNotice receives notices (GUI-008) from a goroutine of its own.
@@ -110,6 +113,11 @@ type Engine struct {
 	updates    onceReset
 	updateErr  string
 	releaseAPI string
+	// schedules guards schedules.json and the runs it starts (SES-012);
+	// stopSchedules ends the loop, and Close waits on scheduling.
+	schedules     sync.Mutex
+	stopSchedules chan struct{}
+	scheduling    sync.WaitGroup
 	// starting are runtimes being set up, so hooks find them while the
 	// harness starts (an external agent's requests during session/load).
 	starting map[string]*runtime
@@ -139,19 +147,20 @@ func Open(opts Options) (*Engine, error) {
 		}
 	}
 	e := &Engine{
-		gh:       "gh",
-		dataDir:  opts.DataDir,
-		home:     opts.Home,
-		dev:      opts.Dev,
-		bus:      newBus(),
-		secrets:  opts.Secrets,
-		cfg:      cfg,
-		issues:   map[string][]config.Issue{issueConfig: issues},
-		onChange: opts.OnConfigChange,
-		quit:     make(chan struct{}),
-		runtimes: map[string]*runtime{},
-		starting: map[string]*runtime{},
-		streams:  map[string]*streamBuf{},
+		gh:            "gh",
+		dataDir:       opts.DataDir,
+		home:          opts.Home,
+		dev:           opts.Dev,
+		bus:           newBus(),
+		secrets:       opts.Secrets,
+		cfg:           cfg,
+		issues:        map[string][]config.Issue{issueConfig: issues},
+		onChange:      opts.OnConfigChange,
+		quit:          make(chan struct{}),
+		stopSchedules: make(chan struct{}),
+		runtimes:      map[string]*runtime{},
+		starting:      map[string]*runtime{},
+		streams:       map[string]*streamBuf{},
 	}
 	if opts.Dev {
 		e.releaseAPI = opts.ReleaseAPI
@@ -195,6 +204,14 @@ func Open(opts Options) (*Engine, error) {
 		e.watching.Add(1)
 		go e.watch(interval)
 	}
+	if opts.ScheduleInterval >= 0 {
+		interval := opts.ScheduleInterval
+		if interval == 0 {
+			interval = 30 * time.Second
+		}
+		e.scheduling.Add(1)
+		go e.scheduleLoop(interval)
+	}
 	return e, nil
 }
 
@@ -203,6 +220,8 @@ func Open(opts Options) (*Engine, error) {
 func (e *Engine) SetOpenURL(f func(string) error) { e.openURL = f }
 
 func (e *Engine) Close() error {
+	close(e.stopSchedules)
+	e.scheduling.Wait()
 	e.mu.Lock()
 	running := make([]*runtime, 0, len(e.runtimes))
 	for _, r := range e.runtimes {

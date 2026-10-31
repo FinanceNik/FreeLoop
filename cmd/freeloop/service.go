@@ -31,6 +31,22 @@ func (s *EngineService) SetTags(ctx context.Context, sessionID string, tags []st
 	return s.eng.SetTags(ctx, sessionID, tags)
 }
 
+// Schedules lists scheduled and recurring sessions (SES-012).
+func (s *EngineService) Schedules() ([]engine.ScheduleInfo, error) { return s.eng.Schedules() }
+
+// SaveSchedule adds or replaces a schedule.
+func (s *EngineService) SaveSchedule(sc config.Schedule) (config.Schedule, error) {
+	return s.eng.SaveSchedule(sc)
+}
+
+// DeleteSchedule removes a schedule; its sessions stay.
+func (s *EngineService) DeleteSchedule(id string) error { return s.eng.DeleteSchedule(id) }
+
+// RunSchedule runs a schedule now and returns the session it started.
+func (s *EngineService) RunSchedule(ctx context.Context, id string) (string, error) {
+	return s.eng.RunSchedule(ctx, id)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

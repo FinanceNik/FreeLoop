@@ -177,9 +177,13 @@ The user approved the dependencies these need on 2026-10-30.
 3. **Tags and saved filters (SES-013).** *Built 2026-10-31.* Tags set by a `tags_changed` event (so a fork keeps them) and indexed in SQLite, edited under the session title, shown in the sidebar and filtered by a menu or `#tag` in the search box; named filters are kept under `filters` in `config.yaml` (`frontend/src/filters.ts`, `Tags.tsx`, `internal/engine/tags.go`). The sidebar also no longer lets an older session list overwrite newer state.
 4. **Board view (GUI-016).** *Built 2026-10-31.* One card per session in columns for needs you, running and idle, from the sidebar's "Board" link or the palette, showing the sessions the sidebar's filters let through (`frontend/src/board.ts`, `Board.tsx`).
 
+### Feature order, part 8 (planned 2026-10-31)
+
+1. **Scheduled and recurring sessions (SES-012).** *Built 2026-10-31.* Settings → Schedules adds a schedule (project, prompt, profile, provider, model, mode other than bypass; hourly, daily, weekdays or weekly at a local time). A loop in the engine checks every thirty seconds and starts a due run as a new session tagged `scheduled`, through the broker; runs missed while the app was closed make one run at the next start, and "Run now" runs a schedule at once (`internal/config/schedules.go`, `internal/engine/schedules.go`, `Schedules.tsx`). The app must be open: there is no background agent.
+
 ## Later (unscheduled)
 
-ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SES-012, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
+ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
 
 ## Cut order
 

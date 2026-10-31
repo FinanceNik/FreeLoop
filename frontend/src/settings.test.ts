@@ -4,7 +4,7 @@ import { SETTINGS_GROUPS, inSettings, isSettingsShortcut } from "./settings.ts";
 
 test("every configuration page is listed once", () => {
   const ids = SETTINGS_GROUPS.flatMap((g) => g.pages.map((p) => p.id));
-  assert.deepEqual([...ids].sort(), ["environments", "mcp", "profiles", "providers", "rules", "settings", "skills"]);
+  assert.deepEqual([...ids].sort(), ["environments", "mcp", "profiles", "providers", "rules", "schedules", "settings", "skills"]);
   assert.equal(new Set(ids).size, ids.length);
 });
 

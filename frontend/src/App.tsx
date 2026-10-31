@@ -29,6 +29,7 @@ import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
 import Board from "./Board.tsx";
+import Schedules from "./Schedules.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
@@ -53,6 +54,7 @@ type Screen =
   | { kind: "settings" }
   | { kind: "attention" }
   | { kind: "board" }
+  | { kind: "schedules" }
   | { kind: "profiles" }
   | { kind: "skills" }
   | { kind: "mcp" }
@@ -532,6 +534,7 @@ export default function App() {
       page("profiles", "Profiles", () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
       page("skills", "Skills", () => setScreen({ kind: "skills" })),
       page("mcp", "MCP servers", () => setScreen({ kind: "mcp" }), { keywords: "tools" }),
+      page("schedules", "Schedules", () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
       page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
       page("rules", "Permission rules", () => setScreen({ kind: "rules" }), { keywords: "allow deny" }),
       page("settings", "Settings", () => setScreen({ kind: "settings" }), { keywords: "preferences theme notifications prices" }),
@@ -960,6 +963,9 @@ export default function App() {
                   onSaved={setConfig} onError={report} />
               )}
               {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
+              {screen.kind === "schedules" && (
+                <Schedules projects={projects} profiles={profiles} providers={providers} harnesses={harnesses} defaults={config?.defaults} onOpenSession={(id) => openSession(id)} onError={report} />
+              )}
               {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}
               {screen.kind === "mcp" && <MCP configVersion={configVersion} onImport={() => setScreen({ kind: "import" })} onError={report} />}
               {screen.kind === "import" && (

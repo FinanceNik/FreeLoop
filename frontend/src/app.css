@@ -647,6 +647,10 @@ fieldset {
   gap: 12px;
 }
 
+.provider-list li > .row button {
+  white-space: nowrap;
+}
+
 .form {
   display: flex;
   flex-direction: column;

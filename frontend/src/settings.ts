@@ -2,7 +2,7 @@
 // entry. The pages share a column listing them, like a macOS settings
 // window; the sidebar keeps its room for sessions.
 
-export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "rules" | "environments" | "settings";
+export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "rules" | "environments" | "schedules" | "settings";
 
 export interface SettingsGroup {
   title: string;
@@ -27,7 +27,10 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     title: "Workspace",
-    pages: [{ id: "environments", label: "Environments", icon: "environments" }],
+    pages: [
+      { id: "environments", label: "Environments", icon: "environments" },
+      { id: "schedules", label: "Schedules", icon: "schedules" },
+    ],
   },
   {
     title: "App",
