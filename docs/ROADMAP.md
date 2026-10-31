@@ -173,7 +173,7 @@ The user approved the dependencies these need on 2026-10-30.
 ### Feature order, part 7 (planned 2026-10-31)
 
 1. **Workspace (GUI-017).** *Groundwork built 2026-10-31: the layout rules (`frontend/src/workspace.ts`), keeping the layout in `workspace.json` (`internal/engine/workspace.go`), a session view that is safe to show more than once (approval keys, palette actions and the live region act only in the focused pane) and the ⌥⌘1–4 and ⌥⌘←/→ shortcuts. The component that draws the panes is not built yet.* Up to four sessions side by side in the main window.
-2. **A safer Stop button.** Stop no longer takes the place of Send while a turn runs, so a second click on Send cannot cancel the turn.
+2. **A safer Stop button.** *Built 2026-10-31.* Stop sits at the far end of the composer from Send and Queue, and the transcript says who stopped a turn (you, quitting the app, archiving, or the parent of a subagent), since an agent reports every stop as the same cancel.
 3. **Tags and saved filters (SES-013).** Tags on sessions, a tag filter in the sidebar, and named filters kept in `config.yaml`.
 4. **Board view (GUI-016).** One card per session, grouped by status, as an alternative to the session list.
 

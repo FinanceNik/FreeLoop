@@ -26,7 +26,7 @@ import {
   type TranscriptEvent,
 } from "./transcript.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
-import { CheckIcon, CopyIcon, ForkIcon, RewindIcon } from "./icons.tsx";
+import { CheckIcon, CopyIcon, ForkIcon, RewindIcon, StopIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
 import { usePaletteActions } from "./Palette.tsx";
@@ -853,6 +853,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
             onKeyDown={onKeyDown}
           />
           <div className="composer-actions">
+            {/* Stop sits at the far end from Send, so a second click on Send
+                never stops the turn it started. */}
+            {view.running && (
+              <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger composer-stop" title="Stop the turn">
+                <StopIcon /> Stop
+              </button>
+            )}
+            <span className="composer-spacer" />
             {queued > 0 && <span className="muted">{queued} queued</span>}
             {(mcp?.resources ?? []).length > 0 && (
               <button
@@ -863,11 +871,6 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 }}
               >
                 Attach…
-              </button>
-            )}
-            {view.running && (
-              <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger">
-                Stop
               </button>
             )}
             <button className="primary" onClick={send} disabled={!draft.trim() || accepting}>

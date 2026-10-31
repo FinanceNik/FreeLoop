@@ -279,6 +279,42 @@ func TestPromptQueueAndCancel(t *testing.T) {
 	if !strings.Contains(string(end.Data), "cancelled") || time.Since(start) > time.Second {
 		t.Errorf("cancel: %s after %v", end.Data, time.Since(start))
 	}
+	if !hasNotice(t, e, ses.ID, "You stopped the turn.") {
+		t.Error("no notice says who stopped the turn")
+	}
+}
+
+// Quitting stops a running turn and says so, since the agent reports it as
+// any other cancel.
+func TestQuitSaysWhyTheTurnStopped(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	ch, unsub := e.Subscribe()
+	ses, _ := demoSession(t, e, "demo", "ask")
+	e.Prompt(ctx, ses.ID, "go")
+	waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.PermissionRequested })
+	unsub()
+	e.Close()
+	e = openTest(t, dir)
+	defer e.Close()
+	if !hasNotice(t, e, ses.ID, "Stopped because Freeloop quit.") {
+		t.Error("no notice says the quit stopped the turn")
+	}
+}
+
+func hasNotice(t *testing.T, e *Engine, sid, msg string) bool {
+	t.Helper()
+	evs, err := e.Events(context.Background(), sid, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range evs {
+		if ev.Type == event.Notice && strings.Contains(string(ev.Data), msg) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestProvidersKeepKeysInTheKeychain(t *testing.T) {

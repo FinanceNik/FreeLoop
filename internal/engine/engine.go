@@ -209,6 +209,9 @@ func (e *Engine) Close() error {
 		running = append(running, r)
 	}
 	e.mu.Unlock()
+	for _, r := range running {
+		e.stopTurn(r.sid, "Stopped because Freeloop quit.")
+	}
 	// Stopped outside e.mu: a finishing turn still records events.
 	for _, r := range running {
 		r.stop()

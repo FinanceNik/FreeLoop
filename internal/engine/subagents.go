@@ -56,7 +56,7 @@ func (s sessionSubagents) Run(ctx context.Context, description, prompt string) (
 			case <-done:
 			case <-ctx.Done():
 				// The parent's turn was stopped: so is the child's.
-				e.Cancel(child.ID)
+				e.stopTurn(child.ID, "Stopped with the turn that started it.")
 				<-done
 				return harness.SubagentResult{SessionID: child.ID}, ctx.Err()
 			}

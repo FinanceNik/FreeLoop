@@ -438,21 +438,33 @@ func (e *Engine) release(r *runtime) {
 	go e.run(r, q, ctx)
 }
 
-// Cancel stops a session's running turn and drops its queued prompts.
+// Cancel stops a session's running turn and drops its queued prompts; the
+// user asked for it.
 func (e *Engine) Cancel(sid string) error {
+	e.stopTurn(sid, "You stopped the turn.")
+	return nil
+}
+
+// stopTurn cancels a session's running turn and drops its queued prompts,
+// saying in the transcript why, since an agent reports every stop the same
+// way.
+func (e *Engine) stopTurn(sid, why string) {
 	e.mu.Lock()
 	r, ok := e.runtimes[sid]
 	e.mu.Unlock()
 	if !ok {
-		return nil
+		return
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.queue = nil
-	if r.cancel != nil {
+	running := r.cancel != nil
+	if running {
 		r.cancel()
 	}
-	return nil
+	r.mu.Unlock()
+	if running {
+		e.emit(sid, event.Notice, event.NoticeData{Message: why})
+	}
 }
 
 // SetMode changes a session's permission mode; it applies from the next tool

@@ -84,6 +84,7 @@ func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) 
 				e.emit(c.ID, event.SessionStatus, event.SessionStatusData{Status: string(session.StatusArchived)})
 			}
 		}
+		e.stopTurn(sid, "Stopped because the session was archived.")
 		e.stopRuntime(sid)
 		e.closeTerminals(sid)
 		status = session.StatusArchived

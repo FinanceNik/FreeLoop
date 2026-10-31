@@ -1108,6 +1108,16 @@ button.ghost[aria-pressed="true"] {
   gap: 8px;
 }
 
+.composer-spacer {
+  flex: 1;
+}
+
+.composer-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .mention-picker {
   position: absolute;
   bottom: calc(100% - 4px);
