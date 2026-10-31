@@ -170,9 +170,16 @@ The user approved the dependencies these need on 2026-10-30.
 4. **Skills for external agents (SKL-008, OQ-006).** *Built 2026-10-30; checked with the reference agent, Claude Code itself is the user's check.* The session's enabled skills reach Claude Code as a per-session plugin folder in the app's data folder.
 5. **Update check (OQ-015, SEC-009).** *Built 2026-10-30.* An opt-in daily check of the project's GitHub releases that says when a newer version exists; the cask and in-app updates wait on signed builds.
 
+### Feature order, part 7 (planned 2026-10-31)
+
+1. **Workspace (GUI-017).** *Groundwork built 2026-10-31: the layout rules (`frontend/src/workspace.ts`), keeping the layout in `workspace.json` (`internal/engine/workspace.go`), a session view that is safe to show more than once (approval keys, palette actions and the live region act only in the focused pane) and the ⌥⌘1–4 and ⌥⌘←/→ shortcuts. The component that draws the panes is not built yet.* Up to four sessions side by side in the main window.
+2. **A safer Stop button.** Stop no longer takes the place of Send while a turn runs, so a second click on Send cannot cancel the turn.
+3. **Tags and saved filters (SES-013).** Tags on sessions, a tag filter in the sidebar, and named filters kept in `config.yaml`.
+4. **Board view (GUI-016).** One card per session, grouped by status, as an alternative to the session list.
+
 ## Later (unscheduled)
 
-ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SES-012, SES-013, GUI-016, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
+ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SES-012, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
 
 ## Cut order
 

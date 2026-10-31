@@ -25,9 +25,12 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-// showTool opens a tool card in the conversation and scrolls to it.
+// showTool opens a tool card in the conversation and scrolls to it: in the
+// active pane of the workspace (GUI-017), which is the one the panel,
+// the palette and the keyboard act on.
 export function showTool(toolCallId: string) {
-  const el = document.getElementById(`tool-${toolCallId}`);
+  const sel = `[data-tool-call="${CSS.escape(toolCallId)}"]`;
+  const el = document.querySelector(`.pane-active ${sel}`) ?? document.querySelector(sel);
   if (!el) return;
   if (el instanceof HTMLDetailsElement) el.open = true;
   const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;

@@ -58,6 +58,11 @@ interface Props {
   onDeleted: () => void;
   // Opens the session in a window of its own (GUI-015); absent in that window.
   onOpenWindow?: () => void;
+  // In a workspace of several panes (GUI-017): whether this pane is the
+  // active one, which alone takes the keyboard, the palette and the right
+  // panel and speaks to screen readers; and how to close the pane.
+  active?: boolean;
+  onClosePane?: () => void;
 }
 
 const STOP_LABEL: Record<string, string> = {
@@ -83,7 +88,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, active = true, onClosePane }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -436,7 +441,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     const opt = t.permission.options.find((o) => (kind === "reject" ? o.kind.startsWith("reject") : o.kind === kind));
     if (opt) EngineService.Decide({ requestId: t.permission.requestId, optionId: opt.optionId, reason: "", scope: "session" }).catch(onError);
   };
-  usePaletteActions([
+  usePaletteActions(!active ? [] : [
     ...waitingTools.flatMap((t) =>
       t.kind !== "tool"
         ? []
@@ -686,7 +691,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         )}
 
         <div className="sr-only" role="status" aria-live="polite">
-          {announcement}
+          {active && announcement}
         </div>
         <div className="conversation" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
@@ -1093,7 +1098,10 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
     shownAt.current = Date.now();
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.repeat || e.defaultPrevented || e.isComposing) return;
-      if (document.querySelector(".approval") !== box.current) return;
+      // Only the first waiting card of the active pane (GUI-017).
+      const pane = box.current?.closest(".pane");
+      if (pane && !pane.classList.contains("pane-active")) return;
+      if ((pane ?? document).querySelector(".approval") !== box.current) return;
       const kind = approvalShortcut(e, isTextField(e.target));
       const opt = kind && item.permission?.options.find((o) => optionKind(o.kind) === kind);
       if (!opt) return;
@@ -1109,7 +1117,7 @@ function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; on
 
   return (
     <details
-      id={`tool-${item.toolCallId}`}
+      data-tool-call={item.toolCallId}
       className={`tool tool-${item.status} ${waiting ? "tool-waiting" : ""}`}
       open={waiting || plan !== null || undefined}
     >

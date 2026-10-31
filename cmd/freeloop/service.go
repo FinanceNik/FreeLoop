@@ -25,6 +25,11 @@ type EngineService struct {
 	desk *desktop
 }
 
+// Workspace and SaveWorkspace keep the main window's panes (GUI-017).
+func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
+
+func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }
+
 // OpenSessionWindow opens a session in a window of its own, or brings that
 // window forward (GUI-015).
 func (s *EngineService) OpenSessionWindow(ctx context.Context, sessionID string) error {

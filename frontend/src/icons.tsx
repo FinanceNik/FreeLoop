@@ -48,6 +48,28 @@ export function RewindIcon() {
   );
 }
 
+// LayoutIcon draws a workspace layout of n panes (GUI-017): one, two side
+// by side, one large and two stacked, or four in a grid.
+export function LayoutIcon({ n }: { n: 1 | 2 | 3 | 4 }) {
+  return (
+    <Icon>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      {n > 1 ? <line x1="12" y1="4" x2="12" y2="20" /> : <></>}
+      {n === 3 ? <line x1="12" y1="12" x2="21" y2="12" /> : <></>}
+      {n === 4 ? <line x1="3" y1="12" x2="21" y2="12" /> : <></>}
+    </Icon>
+  );
+}
+
+export function CloseIcon() {
+  return (
+    <Icon size={14}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </Icon>
+  );
+}
+
 export function ForkIcon() {
   return (
     <Icon>

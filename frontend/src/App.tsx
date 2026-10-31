@@ -23,6 +23,7 @@ import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from ".
 import { HIT_LABEL, snippetParts } from "./search.ts";
 import { formatCost } from "./cost.ts";
 import { windowSession } from "./windows.ts";
+import * as ws from "./workspace.ts";
 import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
@@ -71,6 +72,9 @@ const STANDALONE = windowSession(window.location.search);
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  // The main window's panes (GUI-017).
+  const [work, setWork] = useState<ws.WorkspaceState>(ws.SINGLE);
+  const workLoaded = useRef(false);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [environments, setEnvironments] = useState<EnvironmentInfo[]>([]);
@@ -256,11 +260,78 @@ export default function App() {
     });
   }, []);
 
-  const openSession = (sid: string, seq?: number) => {
+  // A session opens in the active pane, or with where "new" in another one
+  // (GUI-017); the screen follows the active pane.
+  const openSession = (sid: string, seq?: number, where: "active" | "new" = "active") => {
+    setWork((w) => ws.openIn(w, sid, where));
     setScreen({ kind: "session", id: sid, focus: seq ? { seq, n: Date.now() } : undefined });
     setLastSessionId(sid);
     if (!transcriptsRef.current[sid]) catchUp(sid);
   };
+  // showWork shows the workspace as next, its active pane's session first.
+  const showWork = (next: ws.WorkspaceState) => {
+    setWork(next);
+    const sid = next.panes[next.active];
+    setScreen({ kind: "session", id: sid ?? "" });
+    if (sid) {
+      setLastSessionId(sid);
+      if (!transcriptsRef.current[sid]) catchUp(sid);
+    }
+  };
+  const workRef = useRef(work);
+  workRef.current = work;
+  const activatePane = (i: number) => {
+    if (i !== workRef.current.active) showWork(ws.focusPane(workRef.current, i));
+  };
+  const activatePaneRef = useRef(activatePane);
+  activatePaneRef.current = activatePane;
+  const showWorkRef = useRef(showWork);
+  showWorkRef.current = showWork;
+
+  // The workspace comes back as it was left, without sessions deleted since,
+  // and is saved whenever a pane changes (GUI-017).
+  useEffect(() => {
+    if (STANDALONE || !sessionsLoaded || workLoaded.current) return;
+    workLoaded.current = true;
+    EngineService.Workspace()
+      .then((saved) => {
+        const exists = (sid: string) => sessions.some((x) => x.id === sid);
+        const w = ws.forget(ws.restore({ ...saved, panes: (saved.panes ?? []).map((x) => x || null) }), exists);
+        setWork(w);
+        for (const sid of w.panes) if (sid && !transcriptsRef.current[sid]) catchUp(sid);
+        const sid = w.panes[w.active];
+        if (sid) setScreen((sc) => (sc.kind === "none" ? { kind: "session", id: sid } : sc));
+      })
+      .catch(() => {});
+  }, [sessionsLoaded]);
+  useEffect(() => {
+    if (!workLoaded.current) return;
+    const t = setTimeout(() => {
+      EngineService.SaveWorkspace({ layout: work.layout, panes: work.panes.map((x) => x ?? ""), active: work.active }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [work]);
+  useEffect(() => {
+    if (sessionsLoaded) setWork((w) => ws.forget(w, (sid) => sessions.some((x) => x.id === sid)));
+  }, [sessions, sessionsLoaded]);
+
+  // ⌥⌘1 to ⌥⌘4 make a pane active, ⌥⌘← and ⌥⌘→ move between panes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (STANDALONE || !e.metaKey || !e.altKey || e.ctrlKey || e.shiftKey) return;
+      const w = workRef.current;
+      const digit = /^Digit([1-4])$/.exec(e.code);
+      if (digit && Number(digit[1]) <= w.layout) {
+        e.preventDefault();
+        activatePaneRef.current(Number(digit[1]) - 1);
+      } else if ((e.code === "ArrowRight" || e.code === "ArrowLeft") && w.layout > 1) {
+        e.preventDefault();
+        showWorkRef.current(ws.cycle(w, e.code === "ArrowRight" ? 1 : -1));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // ⌘1 to ⌘9 open the sessions listed first, ⌘0 the attention view
   // (NFR-A11Y-001).

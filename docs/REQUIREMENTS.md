@@ -101,7 +101,8 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **GUI-013** · v1 · **File tree and viewer.** Read-only browser of the project with open-in-editor. *Accept:* a file changed by the agent is highlighted in the tree.
 - **GUI-014** · v1 · **Command palette and keyboard-first navigation.** *Accept:* every sidebar and panel action is reachable from the palette.
 - **GUI-015** · v1 · **Multiple windows.** A session can be opened in its own window. *Accept:* two windows stream two sessions simultaneously.
-- **GUI-016** · later · **Board view.** One card per session as an alternative home screen.
+- **GUI-016** · v1 · **Board view.** One card per session as an alternative home screen.
+- **GUI-017** · v1 · **Workspace of up to four sessions.** The main window shows one, two, three or four sessions side by side, each pane streaming live with its own composer and approvals; the layout and its sessions are kept across restarts. *Accept:* four sessions in four projects stream at once in one window, an approval key acts only in the focused pane, and the layout returns after a restart.
 
 ### Sessions and history (SES)
 
@@ -117,7 +118,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **SES-010** · v1 · **Worktree per session (opt-in).** Create a worktree and branch at session start, clean up on archive, merge-back or PR helper. *Accept:* two sessions on the same repo edit the same file without interfering.
 - **SES-011** · v1 · **Pull request creation.** Through the GitHub CLI with an AI-drafted, editable description. *Accept:* the PR URL appears in the session after creation.
 - **SES-012** · later · **Scheduled and recurring sessions.**
-- **SES-013** · later · **Tags and saved filters.**
+- **SES-013** · v1 · **Tags and saved filters.**
 - **SES-014** · v1 · **Checkpoints and rewind.** Before a turn changes files, the session's working tree is snapshotted; any user message offers "rewind to here", which restores the files to that point and continues the conversation from it, the later turns kept in the transcript as rewound. *Accept:* after rewinding past an edit, the file is back to its earlier content and the next turn's model context ends at the chosen message.
 
 ### Permissions and security (SEC)
