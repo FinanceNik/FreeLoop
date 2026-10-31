@@ -43,10 +43,14 @@ const SOURCE: Record<string, string> = {
 export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, onCreated, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers.find((p) => !p.builtin) ?? providers[0];
+  // An agent that signs in by itself (Claude Code with a subscription)
+  // needs no provider; without one, the form starts with such an agent.
+  const readyAgent = harnesses.find((h) => h.kind === "acp" && !h.missing);
+  const fallbackProfile = providers.length === 0 && readyAgent ? readyAgent.id : "default";
   const [root, setRoot] = useState(initialRoot ?? "");
   const [environmentId, setEnvironmentId] = useState(defaults?.environmentId ?? "");
   const [mode, setMode] = useState("");
-  const [profileId, setProfileId] = useState(defaults?.profileId || "default");
+  const [profileId, setProfileId] = useState(defaults?.profileId || fallbackProfile);
   const [makeDefault, setMakeDefault] = useState(false);
   // An own worktree (SES-010), and whether to remember the choice for the
   // project (OQ-008).
@@ -106,7 +110,7 @@ export default function NewSession({ providers, projects, environments, profiles
   useEffect(() => {
     if (!project) return;
     setEnvironmentId(project.defaultEnvironmentId || defaults?.environmentId || "local");
-    pickProfile(project.defaultProfileId || defaults?.profileId || "default");
+    pickProfile(project.defaultProfileId || defaults?.profileId || fallbackProfile);
     setMakeDefault(false);
     setRememberWorktree(false);
     setWorktree(project.worktreeDefault === "always" || (project.worktreeDefault !== "never" && sessionsIn(project.id) > 0));
@@ -200,11 +204,11 @@ export default function NewSession({ providers, projects, environments, profiles
       .finally(() => setBusy(false));
   };
 
-  if (providers.length === 0) {
+  if (providers.length === 0 && !readyAgent) {
     return (
       <section className="page">
         <h2>New session</h2>
-        <p>Add a model provider first.</p>
+        <p>Add a model provider, or install an agent that signs in by itself, such as Claude Code.</p>
         <button className="primary" onClick={onManageProviders}>
           Add a provider
         </button>
@@ -337,7 +341,16 @@ export default function NewSession({ providers, projects, environments, profiles
             {harness.name} brings its own model access and sign-in; Freeloop passes it no credentials.{harness.notes ? ` ${harness.notes}` : ""}
           </p>
         )}
-        {(!harness || harness.usesProvider) && (
+        {usesProvider && providers.length === 0 && (
+          <p className="banner warn">
+            This profile runs on a model provider, and none is set up.{" "}
+            <button type="button" className="link" onClick={onManageProviders}>
+              Add a provider
+            </button>
+            {readyAgent ? `, or choose the ${readyAgent.name} profile above.` : "."}
+          </p>
+        )}
+        {(!harness || harness.usesProvider) && providers.length > 0 && (
           <>
         <label>
           Provider
