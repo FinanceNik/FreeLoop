@@ -143,10 +143,10 @@ func (s *Store) CreateSession(ctx context.Context, tmpl session.Session) (sessio
 		return session.Session{}, fmt.Errorf("store: %w", err)
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, worktree, worktree_branch, parent_id, last_seq, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, worktree, worktree_branch, parent_id, port_base, last_seq, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 		ses.ID, ses.Title, ses.Status, ses.HarnessID, ses.ProjectID, ses.ProjectRoot, ses.EnvironmentID, ses.BaseCommit, ses.Branch,
-		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.Worktree, ses.WorktreeBranch, ses.ParentID, now.UnixMilli(), now.UnixMilli())
+		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.Worktree, ses.WorktreeBranch, ses.ParentID, ses.PortBase, now.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return session.Session{}, fmt.Errorf("store: insert session: %w", err)
 	}
@@ -380,7 +380,7 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
-const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, last_seq, created_at, updated_at`
+const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, port_base, last_seq, created_at, updated_at`
 
 type scanner interface{ Scan(...any) error }
 
@@ -389,7 +389,7 @@ func scanSession(r scanner) (session.Session, error) {
 	var created, updated int64
 	var tags string
 	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectID, &ses.ProjectRoot, &ses.EnvironmentID,
-		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.LastSeq, &created, &updated); err != nil {
+		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.PortBase, &ses.LastSeq, &created, &updated); err != nil {
 		return session.Session{}, err
 	}
 	ses.Tags = strings.Fields(tags)
@@ -464,6 +464,10 @@ var migrations = []string{
 	`ALTER TABLE sessions ADD COLUMN parent_id TEXT NOT NULL DEFAULT '';`,
 	// A session's tags, space separated (SES-013).
 	`ALTER TABLE sessions ADD COLUMN tags TEXT NOT NULL DEFAULT '';`,
+	// Worktree scripts set in the app, as JSON, and a worktree session's
+	// block of ports (SES-016).
+	`ALTER TABLE projects ADD COLUMN worktree_scripts TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN port_base INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

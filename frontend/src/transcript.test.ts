@@ -260,3 +260,21 @@ test("pictures the user attached join their message (SES-015)", () => {
   assert.ok(user && user.kind === "user");
   assert.deepEqual(user.images, [{ name: "ab.png", mimeType: "image/png" }]);
 });
+
+test("the worktree setup is one card that follows its run (SES-016)", () => {
+  const ev = (seq: number, data: object) => ({ v: 1, seq, ts: "2026-10-31T10:00:00Z", sid: "s", type: "worktree_setup", data });
+  const v = buildView([
+    ev(1, { status: "running", command: "npm install" }),
+    ev(2, { status: "failed", command: "npm install", error: "exit 1", output: "npm ERR!" }),
+    ev(3, { status: "skipped" }),
+  ]);
+  const cards = v.items.filter((i) => i.kind === "setup");
+  assert.equal(cards.length, 1);
+  assert.ok(cards[0].kind === "setup" && cards[0].status === "skipped" && cards[0].command === "npm install");
+  assert.equal(v.setup, "skipped");
+  const retried = buildView([ev(1, { status: "failed", error: "x" }), ev(2, { status: "running" }), ev(3, { status: "done", copied: [".env"] })]);
+  assert.deepEqual(
+    retried.items.map((i) => (i.kind === "setup" ? i.status : "")),
+    ["failed", "done"],
+  );
+});

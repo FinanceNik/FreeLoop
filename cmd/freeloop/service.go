@@ -57,6 +57,31 @@ func (s *EngineService) Attachment(ctx context.Context, sessionID, name string) 
 	return s.eng.Attachment(ctx, sessionID, name)
 }
 
+// ProjectScripts returns a project's worktree scripts (SES-016).
+func (s *EngineService) ProjectScripts(ctx context.Context, projectID string) (engine.ProjectScriptsInfo, error) {
+	return s.eng.ProjectScripts(ctx, projectID)
+}
+
+// SetProjectScripts records the worktree scripts set in the app.
+func (s *EngineService) SetProjectScripts(ctx context.Context, projectID string, w config.WorktreeScripts) error {
+	return s.eng.SetProjectScripts(ctx, projectID, w)
+}
+
+// RetrySetup runs a worktree session's setup again.
+func (s *EngineService) RetrySetup(ctx context.Context, sessionID string) error {
+	return s.eng.RetrySetup(ctx, sessionID)
+}
+
+// SkipSetup lets a session whose setup failed start anyway.
+func (s *EngineService) SkipSetup(ctx context.Context, sessionID string) error {
+	return s.eng.SkipSetup(ctx, sessionID)
+}
+
+// RunWorktreeScript starts the session's run command in a terminal tab.
+func (s *EngineService) RunWorktreeScript(ctx context.Context, sessionID string) (engine.TerminalInfo, error) {
+	return s.eng.RunWorktreeScript(ctx, sessionID)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

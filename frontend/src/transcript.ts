@@ -138,7 +138,9 @@ type ItemKinds =
   | { kind: "notice"; key: string; rev: number; message: string; warn: boolean }
   | { kind: "compaction"; key: string; rev: number; reason: string; before: number; after: number; summary: string }
   | { kind: "handoff"; key: string; rev: number; fromTitle: string; summary: string; generated: boolean }
-  | { kind: "pull_request"; key: string; rev: number; url: string; title: string; base: string; head: string; draft: boolean };
+  | { kind: "pull_request"; key: string; rev: number; url: string; title: string; base: string; head: string; draft: boolean }
+  // The setup of the session's own worktree (SES-016), updated in place.
+  | { kind: "setup"; key: string; rev: number; status: string; copied: string[]; missing: string[]; command: string; output: string; error: string };
 
 export interface Usage {
   inputTokens: number;
@@ -168,6 +170,8 @@ export interface SessionView {
   commands: AvailableCommand[];
   // The latest model call's context and the model's window (HRN-013).
   context: { tokens: number; window: number } | null;
+  // The worktree setup's latest status (SES-016), null when none ran.
+  setup: string | null;
 }
 
 export interface AvailableCommand {
@@ -200,6 +204,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   // session's).
   const calls: ModelCall[] = [];
   let turnCalls: ModelCall[] = [];
+  let setup: string | null = null;
   let current = { providerId: "", model: "" };
 
   const last = () => items[items.length - 1];
@@ -240,6 +245,27 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "pull_request":
         items.push({ kind: "pull_request", key, rev, url: d.url ?? "", title: d.title ?? "", base: d.base ?? "", head: d.head ?? "", draft: !!d.draft });
         break;
+      case "worktree_setup": {
+        setup = d.status ?? null;
+        // A run's later reports replace its card; a retry starts a new one.
+        let at = items.length - 1;
+        while (at >= 0 && items[at].kind !== "setup") at--;
+        const prev = at >= 0 ? items[at] : undefined;
+        const item = {
+          kind: "setup" as const,
+          key: prev && prev.kind === "setup" && prev.status === "running" ? prev.key : key,
+          rev,
+          status: d.status ?? "",
+          copied: d.copied ?? [],
+          missing: d.missing ?? [],
+          command: d.command ?? (prev?.kind === "setup" && d.status === "skipped" ? prev.command : ""),
+          output: d.output ?? "",
+          error: d.error ?? "",
+        };
+        if (prev && prev.kind === "setup" && (prev.status === "running" || (d.status === "skipped" && prev.status === "failed"))) items[at] = item;
+        else items.push(item);
+        break;
+      }
       case "handoff":
         items.push({ kind: "handoff", key, rev, fromTitle: d.fromTitle ?? "", summary: d.summary ?? "", generated: !!d.generated });
         break;
@@ -403,7 +429,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       if (seq > r.from && seq < r.to && !items[i].rewound) items[i] = { ...items[i], rewound: true, rev: r.to };
     }
   }
-  return { items, usage, calls, git, mode, status, running, commands, context };
+  return { items, usage, calls, git, mode, status, running, commands, context, setup };
 }
 
 function replaceTool(

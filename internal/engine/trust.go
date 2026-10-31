@@ -39,8 +39,11 @@ type ProjectSettings struct {
 	// Hooks are the commands the project's .freeloop/ defines in
 	// hooks.yaml and its profiles (EXT-005), listed whether or not the
 	// project is trusted so the trust prompt can show them.
-	Hooks  []config.Hook  `json:"hooks"`
-	Issues []config.Issue `json:"issues"`
+	Hooks []config.Hook `json:"hooks"`
+	// Worktree is the project's .freeloop/worktree.yaml (SES-016), shown
+	// whether or not the project is trusted, like Hooks.
+	Worktree config.WorktreeScripts `json:"worktree"`
+	Issues   []config.Issue         `json:"issues"`
 }
 
 type projectConfig struct {
@@ -142,10 +145,12 @@ func (e *Engine) ProjectSettings(ctx context.Context, root string) (ProjectSetti
 		// Not a project yet: nothing applies, but the trust prompt shows
 		// what trusting would run.
 		empty.Hooks = e.previewHooks(environment.Canonical(root))
+		empty.Worktree, _ = e.repoScripts(environment.Canonical(root))
 		return empty, nil
 	}
 	s := e.projectConfig(p).ProjectSettings
 	s.Hooks = e.previewHooks(p.Root)
+	s.Worktree, _ = e.repoScripts(p.Root)
 	return s, nil
 }
 

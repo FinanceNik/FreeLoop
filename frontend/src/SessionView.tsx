@@ -454,6 +454,23 @@ export default function SessionView({ session, events, focus, prices, initialDra
     setPanelTab(t);
     if (!panelOpen) togglePanel();
   };
+  // The project's run command for a worktree session (SES-016).
+  const [runCommand, setRunCommand] = useState("");
+  const [terminalNonce, setTerminalNonce] = useState(0);
+  useEffect(() => {
+    setRunCommand("");
+    if (!session.worktree || !session.projectId) return;
+    EngineService.ProjectScripts(session.projectId)
+      .then((s) => setRunCommand(s.effective.run ?? ""))
+      .catch(() => {});
+  }, [session.id, session.worktree, session.projectId, configVersion]);
+  const runApp = () =>
+    EngineService.RunWorktreeScript(session.id)
+      .then(() => {
+        setTerminalNonce((n) => n + 1);
+        showPanel("terminal");
+      })
+      .catch(onError);
   const rewindable = view.items.filter((i): i is Extract<Item, { kind: "user" }> => i.kind === "user" && !!i.checkpointSeq && !i.rewound).reverse();
   const act = (id: string, title: string, run: () => void, extra: Partial<PaletteItem> = {}): PaletteItem => ({
     id: `session:${session.id}:${id}`,
@@ -581,6 +598,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 </span>
               )}
               {" "}· env {environment?.name ?? session.environmentId ?? "Local"}
+              {session.portBase > 0 && (
+                <span title="This session's commands get FREELOOP_PORT, the first of its ten ports">
+                  {" "}
+                  · ports {session.portBase}–{session.portBase + 9}
+                </span>
+              )}
             </p>
             <Tags tags={session.tags ?? []} known={knownTags} adding={tagging} onAdding={setTagging} onChange={setTags} />
           </div>
@@ -597,6 +620,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
                     ))}
                   </div>
                 </details>
+              )}
+              {runCommand && (
+                <button title={`Runs ${runCommand} in a terminal tab`} disabled={archived} onClick={runApp}>
+                  Run
+                </button>
               )}
               <details className="export-menu" ref={moreMenu}>
                 <summary aria-label="More actions for this session">More</summary>
@@ -731,7 +759,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
           ))}
           {accepting && !view.running && (
             <p className="muted working" role="status">
-              {harness && !harness.usesProvider ? `Starting ${harness.name}… The first start can take a minute while it downloads.` : "Sending…"}
+              {view.setup === "running"
+                ? "Waiting for the worktree setup to finish…"
+                : harness && !harness.usesProvider
+                  ? `Starting ${harness.name}… The first start can take a minute while it downloads.`
+                  : "Sending…"}
             </p>
           )}
           {view.running && (
@@ -967,6 +999,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           provider={provider}
           environment={environment}
           configVersion={configVersion}
+          terminalNonce={terminalNonce}
           onReview={(text) => {
             // Added to what is already typed, for the user to edit and send.
             setDraft((d) => (d.trim() ? `${d.trimEnd()}\n\n${text}` : text));
@@ -1078,6 +1111,8 @@ function ItemBody({
       return <div className="turn-end">Model changed to {item.model}</div>;
     case "notice":
       return <div className={item.warn ? "turn-end turn-end-warn" : "turn-end"}>{item.message}</div>;
+    case "setup":
+      return <SetupCard sid={sid} item={item} onError={onError} />;
     case "pull_request":
       return (
         <div className="turn-end pr-opened">
@@ -1367,6 +1402,59 @@ function AttachedImages({ sid, images }: { sid: string; images: { name: string; 
       {open && (
         <div className="picture-view" role="dialog" aria-label="Picture" onClick={() => setOpen(null)} onKeyDown={(e) => e.key === "Escape" && setOpen(null)}>
           <img src={open} alt="Attached picture, full size" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// SetupCard shows the setup of the session's own worktree (SES-016): what
+// was copied and run, the end of the output, and after a failure the
+// choice to retry or start without it.
+function SetupCard({ sid, item, onError }: { sid: string; item: Extract<Item, { kind: "setup" }>; onError: (err: unknown) => void }) {
+  const [busy, setBusy] = useState(false);
+  const act = (p: Promise<unknown>) => {
+    setBusy(true);
+    p.catch(onError).finally(() => setBusy(false));
+  };
+  const parts = [
+    item.copied.length > 0 && `copied ${item.copied.join(", ")}`,
+    item.missing.length > 0 && `not in the main checkout: ${item.missing.join(", ")}`,
+  ].filter(Boolean);
+  const title =
+    item.status === "running"
+      ? "Setting up the worktree…"
+      : item.status === "done"
+        ? "Worktree set up"
+        : item.status === "skipped"
+          ? "Started without finishing the worktree setup"
+          : "The worktree setup failed";
+  return (
+    <div className={`setup-card setup-${item.status}`} role={item.status === "failed" ? "alert" : undefined}>
+      <div>
+        <strong>{title}</strong>
+        {parts.length > 0 && <span className="muted"> · {parts.join(" · ")}</span>}
+      </div>
+      {item.command && (
+        <div className="muted">
+          <code>{item.command}</code>
+        </div>
+      )}
+      {item.error && <div className="error-text">{item.error}</div>}
+      {item.output && (
+        <details open={item.status === "failed"}>
+          <summary className="muted">Output</summary>
+          <pre className="setup-output">{item.output}</pre>
+        </details>
+      )}
+      {item.status === "failed" && (
+        <div className="row">
+          <button className="primary" disabled={busy} onClick={() => act(EngineService.RetrySetup(sid))}>
+            Retry
+          </button>
+          <button disabled={busy} onClick={() => act(EngineService.SkipSetup(sid))}>
+            Start anyway
+          </button>
         </div>
       )}
     </div>

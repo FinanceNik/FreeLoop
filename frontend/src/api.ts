@@ -1,7 +1,7 @@
 // One import point for the generated bindings.
 export { EngineService } from "../bindings/github.com/FinanceNik/Freeloop/cmd/freeloop";
 export type { Command, Config, Defaults, Hook, Issue, MCPServer, Price, Profile, Schedule } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
-export type { AttentionItem, ChangedFile, Changes, ClaudeImport, ConfigRestore, DayCost, FileEntry, FileView, ImportItem, EnvironmentInfo, FileDiff, HarnessInfo, MCPServerInfo, PresetInfo, ProjectInfo, ProjectSettings, ProviderInfo, PullRequestInfo, PullRequestText, ResourceRef, ScheduleInfo, UsageReport, UsageRow, TerminalInfo, TerminalOutput, UpdateInfo, SkillTest, SessionHits, SessionMCPContext, SkillCandidate, SkillInfo, SkillList } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
+export type { AttentionItem, ChangedFile, Changes, ClaudeImport, ConfigRestore, DayCost, FileEntry, FileView, ImportItem, EnvironmentInfo, FileDiff, HarnessInfo, MCPServerInfo, PresetInfo, ProjectInfo, ProjectSettings, ProviderInfo, PullRequestInfo, PullRequestText, ProjectScriptsInfo, ResourceRef, ScheduleInfo, UsageReport, UsageRow, TerminalInfo, TerminalOutput, UpdateInfo, SkillTest, SessionHits, SessionMCPContext, SkillCandidate, SkillInfo, SkillList } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
 export type { Request as PermissionRequest, Rule } from "../bindings/github.com/FinanceNik/Freeloop/internal/permission/models";
 export type { ModelCaps, ModelInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/provider/models";
 export type { Project, Session } from "../bindings/github.com/FinanceNik/Freeloop/internal/session/models";

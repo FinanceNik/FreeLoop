@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import WorktreeScripts from "./WorktreeScripts.tsx";
 import {
   EngineService,
   MODES,
@@ -267,6 +268,20 @@ export default function NewSession({ providers, projects, environments, profiles
                 </ul>
               </div>
             )}
+            {(settings.worktree?.setup || settings.worktree?.run || settings.worktree?.archive) && (
+              <div>
+                <strong>Its worktree sessions would run these commands (.freeloop/worktree.yaml):</strong>
+                <ul>
+                  {(["setup", "run", "archive"] as const)
+                    .filter((k) => settings.worktree?.[k])
+                    .map((k) => (
+                      <li key={k}>
+                        {k}: <code>{settings.worktree![k]}</code>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
             <div className="row">
               <button type="button" className="primary" onClick={trust}>
                 Trust this project
@@ -470,6 +485,7 @@ export default function NewSession({ providers, projects, environments, profiles
                 <input type="checkbox" checked={rememberWorktree} onChange={(e) => setRememberWorktree(e.target.checked)} /> Remember for {project.name}
               </label>
             )}
+            {project && settings?.trusted && worktree && <WorktreeScripts projectId={project.id} onError={onError} />}
           </div>
         )}
         <label>

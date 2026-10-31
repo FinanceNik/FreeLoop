@@ -63,6 +63,9 @@ const (
 	PullRequest Type = "pull_request"
 	// TagsChanged sets a session's tags (SES-013).
 	TagsChanged Type = "tags_changed"
+	// WorktreeSetup reports the setup of a session's own worktree
+	// (SES-016).
+	WorktreeSetup Type = "worktree_setup"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -76,7 +79,7 @@ var ACPTypes = []Type{
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
-	PullRequest, TagsChanged,
+	PullRequest, TagsChanged, WorktreeSetup,
 }
 
 // AllTypes returns every known variant.
@@ -234,6 +237,18 @@ type PullRequestData struct {
 	Base  string `json:"base"`
 	Head  string `json:"head"`
 	Draft bool   `json:"draft,omitempty"`
+}
+
+// WorktreeSetupData is the payload of worktree_setup: running, then done,
+// failed or skipped (the user started the session anyway), with what was
+// copied and run and the end of the command's output.
+type WorktreeSetupData struct {
+	Status  string   `json:"status"`
+	Copied  []string `json:"copied,omitempty"`
+	Missing []string `json:"missing,omitempty"`
+	Command string   `json:"command,omitempty"`
+	Output  string   `json:"output,omitempty"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // TagsData is the payload of tags_changed: the session's tags from now on.

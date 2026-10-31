@@ -74,6 +74,16 @@ const maxKept = 64
 // OpenTerminal starts a shell in the session's environment, starting the
 // session's runtime (and its container) when needed.
 func (e *Engine) OpenTerminal(ctx context.Context, sid string, cols, rows int) (TerminalInfo, error) {
+	return e.openTerminalSized(ctx, sid, "", cols, rows)
+}
+
+// openTerminal runs command in a terminal tab instead of a shell, through
+// the user's login shell so their PATH applies.
+func (e *Engine) openTerminal(ctx context.Context, sid, command string) (TerminalInfo, error) {
+	return e.openTerminalSized(ctx, sid, command, 100, 30)
+}
+
+func (e *Engine) openTerminalSized(ctx context.Context, sid, command string, cols, rows int) (TerminalInfo, error) {
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {
 		return TerminalInfo{}, err
@@ -104,7 +114,11 @@ func (e *Engine) OpenTerminal(ctx context.Context, sid string, cols, rows int) (
 	}
 	// The terminal outlives the call that opened it; Close or the
 	// session's end stops it.
-	t, err := opener.OpenTerminal(context.WithoutCancel(ctx), environment.TerminalSpec{Cols: cols, Rows: rows})
+	spec := environment.TerminalSpec{Cols: cols, Rows: rows}
+	if command != "" {
+		spec.Argv = environment.LoginCommand(r.env, command)
+	}
+	t, err := opener.OpenTerminal(context.WithoutCancel(ctx), spec)
 	if err != nil {
 		return TerminalInfo{}, err
 	}

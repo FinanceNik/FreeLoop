@@ -103,3 +103,44 @@ func (s *Store) UpdateProject(ctx context.Context, p session.Project) error {
 	}
 	return tx.Commit()
 }
+
+// ProjectScripts returns the worktree scripts set in the app for a
+// project, as JSON, "" when none (SES-016).
+func (s *Store) ProjectScripts(ctx context.Context, id string) (string, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT worktree_scripts FROM projects WHERE id = ?`, id).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrProjectNotFound
+	}
+	return v, err
+}
+
+// SetProjectScripts records a project's worktree scripts, as JSON.
+func (s *Store) SetProjectScripts(ctx context.Context, id, scripts string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE projects SET worktree_scripts = ? WHERE id = ?`, scripts, id)
+	if err != nil {
+		return fmt.Errorf("store: project scripts: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrProjectNotFound
+	}
+	return nil
+}
+
+// PortBases returns the port blocks of the sessions that are not archived.
+func (s *Store) PortBases(ctx context.Context) ([]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT port_base FROM sessions WHERE port_base > 0 AND status != 'archived'`)
+	if err != nil {
+		return nil, fmt.Errorf("store: port bases: %w", err)
+	}
+	defer rows.Close()
+	var out []int
+	for rows.Next() {
+		var p int
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}

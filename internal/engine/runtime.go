@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -113,6 +114,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	}
 	e.mu.Unlock()
 
+	// A new worktree is set up before its session starts (SES-016).
+	if err := e.waitSetup(ctx, sid); err != nil {
+		return nil, err
+	}
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -153,6 +158,9 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	vars, err := e.resolveEnv(envCfg)
 	if err != nil {
 		return nil, err
+	}
+	if ses.PortBase > 0 {
+		vars["FREELOOP_PORT"] = strconv.Itoa(ses.PortBase)
 	}
 	if !environment.IsDir(ses.WorkRoot()) {
 		return nil, missingRoot(ses)

@@ -60,7 +60,10 @@ type Session struct {
 	ParentID string `json:"parentId"`
 	// Tags are the user's labels for the session (SES-013), set by
 	// tags_changed events.
-	Tags      []string  `json:"tags"`
+	Tags []string `json:"tags"`
+	// PortBase is the first of ten ports a worktree session's commands
+	// get as FREELOOP_PORT (SES-016); 0 for none.
+	PortBase  int       `json:"portBase"`
 	LastSeq   int64     `json:"lastSeq"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

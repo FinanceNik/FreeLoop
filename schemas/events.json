@@ -42,7 +42,8 @@
         "rewind",
         "handoff",
         "pull_request",
-        "tags_changed"
+        "tags_changed",
+        "worktree_setup"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -99,9 +100,26 @@
     {
       "if": { "properties": { "type": { "const": "tags_changed" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/tags" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "worktree_setup" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/worktreeSetup" } } }
     }
   ],
   "$defs": {
+    "worktreeSetup": {
+      "type": "object",
+      "description": "The setup of a session's own worktree (SES-016): files copied from the main checkout and the setup command, with the end of its output.",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["running", "done", "failed", "skipped"] },
+        "copied": { "type": "array", "items": { "type": "string" } },
+        "missing": { "type": "array", "items": { "type": "string" } },
+        "command": { "type": "string" },
+        "output": { "type": "string" },
+        "error": { "type": "string" }
+      }
+    },
     "tags": {
       "type": "object",
       "description": "A session's tags from this event on (SES-013): lower case, without spaces, sorted, each at most 32 characters.",

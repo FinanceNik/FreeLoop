@@ -179,3 +179,13 @@ func (d *Docker) OpenTerminal(ctx context.Context, spec TerminalSpec) (Terminal,
 	pt.onClose = func() { d.killExec(id) }
 	return pt, nil
 }
+
+// LoginCommand is the argv that runs command in a terminal of env: through
+// the user's login shell on this Mac, so their PATH applies, or sh in a
+// container.
+func LoginCommand(env Environment, command string) []string {
+	if l, ok := env.(*Local); ok && len(l.shell) > 0 {
+		return []string{l.shell[0], "-l", "-c", command}
+	}
+	return []string{"sh", "-lc", command}
+}

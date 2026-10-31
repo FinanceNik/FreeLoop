@@ -118,6 +118,7 @@ func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) 
 		e.stopTurn(sid, "Stopped because the session was archived.")
 		e.stopRuntime(sid)
 		e.closeTerminals(sid)
+		e.runArchiveScript(ctx, ses)
 		status = session.StatusArchived
 		// A worktree goes with the archive unless it holds uncommitted
 		// work; its branch and commits stay (SES-010).

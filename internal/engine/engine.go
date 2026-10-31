@@ -124,6 +124,8 @@ type Engine struct {
 	cancelSchedule context.CancelFunc
 	// closing is set under mu when Close begins: no runtime starts after.
 	closing bool
+	// setups are worktree setups of this run (SES-016).
+	setups setups
 	// starting are runtimes being set up, so hooks find them while the
 	// harness starts (an external agent's requests during session/load).
 	starting map[string]*runtime
@@ -589,6 +591,11 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 		}
 		root, worktree, worktreeBranch = path, path, branch
 	}
+	// A session with its own worktree gets its own ports (SES-016).
+	portBase := 0
+	if worktree != "" && req.shareWorktree == nil {
+		portBase = e.allocatePorts(ctx)
+	}
 	var git event.GitStateData
 	if env, err := e.localEnv(root, nil); err == nil {
 		git = gitState(ctx, env, project.Trusted)
@@ -597,13 +604,16 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	ses, err := e.store.CreateSession(ctx, session.Session{
 		Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
 		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
-		Worktree: worktree, WorktreeBranch: worktreeBranch, ParentID: req.parent,
+		Worktree: worktree, WorktreeBranch: worktreeBranch, ParentID: req.parent, PortBase: portBase,
 	})
 	if err != nil {
 		if worktree != "" {
 			e.removeWorktree(ctx, session.Session{ProjectID: project.ID, Worktree: worktree})
 		}
 		return session.Session{}, err
+	}
+	if worktree != "" && req.shareWorktree == nil {
+		e.startSetup(ses)
 	}
 	data, _ := json.Marshal(event.SessionStatusData{Status: string(session.StatusIdle)})
 	ev, err := e.store.Append(ctx, ses.ID, event.SessionStatus, data)
