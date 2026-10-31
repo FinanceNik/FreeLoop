@@ -109,10 +109,15 @@ type ContentBlock struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 	// URI and Name describe a resource_link, such as a file mentioned in a
-	// prompt.
-	URI  string `json:"uri,omitempty"`
-	Name string `json:"name,omitempty"`
+	// prompt. An image block (SES-015) names the session's stored picture
+	// as attachment:<name>, in place of ACP's inline data.
+	URI      string `json:"uri,omitempty"`
+	Name     string `json:"name,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
 }
+
+// AttachmentURI is the uri of an image block for a stored attachment.
+func AttachmentURI(name string) string { return "attachment:" + name }
 
 // MessageChunk is the payload of the three *_message_chunk / thought variants.
 type MessageChunk struct {

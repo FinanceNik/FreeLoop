@@ -102,7 +102,7 @@ func (p *Provider) Capabilities(model string) provider.ModelCaps {
 	c := provider.ModelCaps{
 		Source: provider.CapsStatic,
 		Tools:  true, ParallelTools: true, StreamedToolArgs: true, StableToolCallIDs: true,
-		PromptCaching: true,
+		PromptCaching: true, Images: true,
 	}
 	if reasons(model) {
 		c.Reasoning, c.Effort = true, true
@@ -174,6 +174,27 @@ func toInput(msgs []provider.Message) responses.ResponseInputParam {
 			}
 			out = append(out, responses.ResponseInputItemParamOfMessage(text.String(), role))
 			text.Reset()
+		}
+		// A user message with images goes as tool outputs, if any, then one
+		// message listing its text and images in order.
+		if images := m.Images(); len(images) > 0 && m.Role == provider.RoleUser {
+			var list responses.ResponseInputMessageContentListParam
+			for _, part := range m.Parts {
+				switch {
+				case part.Type == provider.PartToolResult:
+					item := responses.ResponseInputItemParamOfFunctionCallOutput(part.Text)
+					item.OfFunctionCallOutput.CallID = param.NewOpt(part.ToolCallID)
+					out = append(out, item)
+				case part.Type == provider.PartText && part.Text != "":
+					list = append(list, responses.ResponseInputContentUnionParam{OfInputText: &responses.ResponseInputTextParam{Text: part.Text}})
+				case part.Type == provider.PartImage && part.Image != nil && len(part.Image.Data) > 0:
+					list = append(list, responses.ResponseInputContentUnionParam{OfInputImage: &responses.ResponseInputImageParam{
+						ImageURL: param.NewOpt(part.Image.DataURL()), Detail: responses.ResponseInputImageDetailAuto,
+					}})
+				}
+			}
+			out = append(out, responses.ResponseInputItemParamOfMessage(list, responses.EasyInputMessageRoleUser))
+			continue
 		}
 		for _, part := range m.Parts {
 			switch part.Type {

@@ -27,6 +27,8 @@ import {
 } from "./transcript.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import Tags from "./Tags.tsx";
+import { prepareImage, type PreparedImage } from "./imageprep.ts";
+import { MAX_IMAGES, room } from "./images.ts";
 import { CheckIcon, CopyIcon, ForkIcon, RewindIcon, StopIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
@@ -251,6 +253,24 @@ export default function SessionView({ session, events, focus, prices, initialDra
   );
   // Resources attached to the next message, and the open prompt form.
   const [attached, setAttached] = useState<ResourceRef[]>([]);
+  // Pictures for the next message (SES-015), already scaled down.
+  const [pictures, setPictures] = useState<(PreparedImage & { id: number })[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
+  const addPictures = (files: File[]) => {
+    const take = files.filter((f) => f.type.startsWith("image/")).slice(0, room(pictures.length, files.length));
+    if (files.some((f) => f.type.startsWith("image/")) && take.length === 0) onError(new Error(`A message takes at most ${MAX_IMAGES} pictures.`));
+    for (const f of take) {
+      prepareImage(f)
+        .then((p) => setPictures((list) => (list.length >= MAX_IMAGES ? (URL.revokeObjectURL(p.url), list) : [...list, { ...p, id: ++pictureCount }])))
+        .catch(onError);
+    }
+  };
+  const dropPicture = (id: number) =>
+    setPictures((list) => {
+      list.filter((p) => p.id === id).forEach((p) => URL.revokeObjectURL(p.url));
+      return list.filter((p) => p.id !== id);
+    });
   const [attaching, setAttaching] = useState<string | null>(null);
   const [promptForm, setPromptForm] = useState<{ command: SlashCommand; values: Record<string, string> } | null>(null);
   const runPrompt = (c: SlashCommand, values: Record<string, string>) => {
@@ -334,7 +354,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const [accepting, setAccepting] = useState(false);
   const send = () => {
     const text = draft.trim();
-    if (!text || accepting) return;
+    if ((!text && pictures.length === 0) || accepting) return;
     const m = modeCommand(text);
     if (m && (m !== "bypass" || allowBypass)) {
       setDraft("");
@@ -349,14 +369,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
     }
     holdBottom.current = false;
     const sending = attached;
+    const images = pictures.map((p) => ({ mediaType: p.mediaType, data: p.data }));
     // Until the engine takes the message, which waits for an agent to
     // start (the first start may download it), the composer says so and
     // takes no second one.
     setAccepting(true);
-    (sending.length > 0 ? EngineService.PromptWith(session.id, { text, resources: sending }) : EngineService.Prompt(session.id, text))
+    (sending.length > 0 || images.length > 0 ? EngineService.PromptWith(session.id, { text, resources: sending, images }) : EngineService.Prompt(session.id, text))
       .then((r) => {
         setDraft("");
         setAttached([]);
+        pictures.forEach((p) => URL.revokeObjectURL(p.url));
+        setPictures([]);
         if (r.queued) setQueued((n) => n + 1);
       })
       .catch(onError)
@@ -704,7 +727,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         <div className="conversation" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {view.items.map((item) => (
-            <ItemView key={item.key} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} onError={onError} onRewind={rewind} onFork={fork} />
+            <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} onError={onError} onRewind={rewind} onFork={fork} />
           ))}
           {accepting && !view.running && (
             <p className="muted working" role="status">
@@ -749,7 +772,23 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </div>
           </form>
         )}
-        <div className="composer">
+        <div
+          className={dragging ? "composer composer-drop" : "composer"}
+          onDragOver={(e) => {
+            if (!e.dataTransfer.types.includes("Files")) return;
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            if (!e.dataTransfer.files.length) return;
+            e.preventDefault();
+            setDragging(false);
+            addPictures([...e.dataTransfer.files]);
+          }}
+        >
           {attaching !== null && (
             <div className="mention-picker attach-picker" role="dialog" aria-label="Attach a resource">
               <input
@@ -784,6 +823,18 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   ))}
               </ul>
             </div>
+          )}
+          {pictures.length > 0 && (
+            <ul className="picture-strip" aria-label="Pictures for the next message">
+              {pictures.map((p, i) => (
+                <li key={p.id}>
+                  <img src={p.url} alt={`Picture ${i + 1}`} />
+                  <button className="picture-remove" aria-label={`Remove picture ${i + 1}`} title="Remove" onClick={() => dropPicture(p.id)}>
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
           {attached.length > 0 && (
             <ul className="attachments" aria-label="Attached resources">
@@ -841,6 +892,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
             ref={input}
             aria-label="Message"
             aria-autocomplete="list"
+            onPaste={(e) => {
+              const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+              if (files.length === 0) return;
+              e.preventDefault();
+              addPictures(files);
+            }}
             placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file, / for commands."}
             value={draft}
             rows={3}
@@ -881,7 +938,21 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 Attach…
               </button>
             )}
-            <button className="primary" onClick={send} disabled={!draft.trim() || accepting}>
+            <input
+              ref={picker}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              multiple
+              hidden
+              onChange={(e) => {
+                addPictures([...(e.target.files ?? [])]);
+                e.target.value = "";
+              }}
+            />
+            <button title="Attach pictures; you can also paste or drop them" disabled={pictures.length >= MAX_IMAGES} onClick={() => picker.current?.click()}>
+              Picture…
+            </button>
+            <button className="primary" onClick={send} disabled={(!draft.trim() && pictures.length === 0) || accepting}>
               {view.running ? "Queue" : "Send"}
             </button>
           </div>
@@ -912,6 +983,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
 // ItemView re-renders only when its item changed (see Item.rev).
 const ItemView = memo(
   function ItemView({
+    sid,
     item,
     focused,
     cost,
@@ -919,6 +991,7 @@ const ItemView = memo(
     onRewind,
     onFork,
   }: {
+    sid: string;
     item: Item;
     focused: boolean;
     cost?: string;
@@ -929,7 +1002,7 @@ const ItemView = memo(
     const cls = [item.rewound && "rewound", focused && "found"].filter(Boolean).join(" ");
     return (
       <div data-item={item.key} className={cls || undefined}>
-        <ItemBody item={item} cost={cost} onError={onError} onRewind={onRewind} onFork={onFork} />
+        <ItemBody sid={sid} item={item} cost={cost} onError={onError} onRewind={onRewind} onFork={onFork} />
       </div>
     );
   },
@@ -937,12 +1010,14 @@ const ItemView = memo(
 );
 
 function ItemBody({
+  sid,
   item,
   cost,
   onError,
   onRewind,
   onFork,
 }: {
+  sid: string;
   item: Item;
   cost?: string;
   onError: (err: unknown) => void;
@@ -954,6 +1029,7 @@ function ItemBody({
       return (
         <div className="user-turn">
           <div className="msg msg-user">
+            {item.images && item.images.length > 0 && <AttachedImages sid={sid} images={item.images} />}
             {item.text}
             {item.files.length > 0 && (
               <div className="attached" aria-label="Attached files">
@@ -1247,4 +1323,52 @@ const SESSION_URI = "freeloop://session/";
 export const OPEN_SESSION_DOM_EVENT = "freeloop-open-session";
 function openSessionEvent(sid: string) {
   window.dispatchEvent(new CustomEvent(OPEN_SESSION_DOM_EVENT, { detail: sid }));
+}
+
+let pictureCount = 0;
+
+// The pictures a user message carried (SES-015), loaded from the session's
+// attachments once and kept for the rest of the app's run. They are the
+// user's own files; nothing a model writes is ever shown as an image.
+const pictureCache = new Map<string, string>();
+
+function AttachedImages({ sid, images }: { sid: string; images: { name: string; mimeType: string }[] }) {
+  const [, setLoaded] = useState(0);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    for (const img of images) {
+      const key = `${sid}/${img.name}`;
+      if (pictureCache.has(key)) continue;
+      EngineService.Attachment(sid, img.name)
+        .then((a) => {
+          if (!a.mediaType.startsWith("image/")) return;
+          pictureCache.set(key, `data:${a.mediaType};base64,${a.data}`);
+          if (live) setLoaded((n) => n + 1);
+        })
+        .catch(() => pictureCache.set(key, ""));
+    }
+    return () => {
+      live = false;
+    };
+  }, [sid, images]);
+  return (
+    <div className="msg-pictures">
+      {images.map((img, i) => {
+        const src = pictureCache.get(`${sid}/${img.name}`);
+        if (src === "") return <span key={img.name} className="muted">[picture missing]</span>;
+        if (!src) return <span key={img.name} className="msg-picture msg-picture-loading" aria-label="Loading picture" />;
+        return (
+          <button key={img.name} className="msg-picture" onClick={() => setOpen(src)} aria-label={`Show picture ${i + 1} full size`}>
+            <img src={src} alt={`Picture ${i + 1}`} />
+          </button>
+        );
+      })}
+      {open && (
+        <div className="picture-view" role="dialog" aria-label="Picture" onClick={() => setOpen(null)} onKeyDown={(e) => e.key === "Escape" && setOpen(null)}>
+          <img src={open} alt="Attached picture, full size" />
+        </div>
+      )}
+    </div>
+  );
 }

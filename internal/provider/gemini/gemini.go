@@ -113,7 +113,7 @@ func (p *Provider) Capabilities(model string) provider.ModelCaps {
 		// Calls arrive whole, with IDs only on some models; the adapter
 		// makes IDs up where they are missing.
 		StreamedToolArgs: false, StableToolCallIDs: true,
-		ContextWindow: 1_048_576, MaxOutput: 65_536,
+		ContextWindow: 1_048_576, MaxOutput: 65_536, Images: true,
 	}
 	if thinks(model) {
 		c.Reasoning, c.Effort = true, true
@@ -211,6 +211,10 @@ func toContents(msgs []provider.Message) []*genai.Content {
 			case provider.PartText:
 				if part.Text != "" || len(signature(part)) > 0 {
 					c.Parts = append(c.Parts, &genai.Part{Text: part.Text, ThoughtSignature: signature(part)})
+				}
+			case provider.PartImage:
+				if part.Image != nil && len(part.Image.Data) > 0 {
+					c.Parts = append(c.Parts, &genai.Part{InlineData: &genai.Blob{MIMEType: part.Image.MediaType, Data: part.Image.Data}})
 				}
 			case provider.PartThinking:
 				if sig := signature(part); len(sig) > 0 {

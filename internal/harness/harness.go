@@ -45,6 +45,9 @@ type Params struct {
 	Mode          permission.Mode
 	// History restores a built-in session's context after a restart.
 	History []provider.Message
+	// Attachment reads one of the session's stored images, for history
+	// that names images restored without their data (SES-015).
+	Attachment func(name string) ([]byte, error)
 	// DisabledTools are not offered to the model (the environment's tool
 	// list, ENV-002).
 	DisabledTools []string
@@ -178,6 +181,9 @@ const (
 type Prompt struct {
 	Text      string
 	Resources []Resource
+	// Images are pictures the user attached (SES-015), with their data;
+	// the engine has stored each as an attachment of the session.
+	Images []provider.Image
 }
 
 // Subagents runs a child agent on a task and returns its final reply and

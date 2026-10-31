@@ -7,6 +7,7 @@ package provider
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 )
 
@@ -63,6 +64,8 @@ type ModelCaps struct {
 	// Effort reports support for the effort levels low through max.
 	Effort        bool `json:"effort"`
 	PromptCaching bool `json:"promptCaching"`
+	// Images reports that the model reads images in user messages.
+	Images        bool `json:"images"`
 	ContextWindow int  `json:"contextWindow"`
 	MaxOutput     int  `json:"maxOutput"`
 }
@@ -83,6 +86,8 @@ const (
 	PartThinking   PartType = "thinking"
 	PartToolUse    PartType = "tool_use"
 	PartToolResult PartType = "tool_result"
+	// PartImage is a picture in a user message (SES-015).
+	PartImage PartType = "image"
 )
 
 // Part is one block of a message. Fields are used per type.
@@ -100,6 +105,35 @@ type Part struct {
 	ToolName   string          `json:"toolName,omitempty"`
 	Input      json.RawMessage `json:"input,omitempty"`
 	IsError    bool            `json:"isError,omitempty"`
+	// Image is an image part's picture.
+	Image *Image `json:"image,omitempty"`
+}
+
+// Image is a picture attached to a user message (SES-015). History keeps
+// its attachment name and type; the harness loads Data before a request,
+// and Data never goes into a transcript. An adapter leaves out an image
+// without data.
+type Image struct {
+	Name      string `json:"name"`
+	MediaType string `json:"mediaType"`
+	Data      []byte `json:"-"`
+}
+
+// Base64 returns the image's data in standard base64.
+func (i *Image) Base64() string { return base64.StdEncoding.EncodeToString(i.Data) }
+
+// DataURL returns the image as a data: URL.
+func (i *Image) DataURL() string { return "data:" + i.MediaType + ";base64," + i.Base64() }
+
+// Images returns the image parts of m that carry data.
+func (m Message) Images() []*Image {
+	var out []*Image
+	for _, p := range m.Parts {
+		if p.Type == PartImage && p.Image != nil && len(p.Image.Data) > 0 {
+			out = append(out, p.Image)
+		}
+	}
+	return out
 }
 
 // Message is one turn of the conversation.

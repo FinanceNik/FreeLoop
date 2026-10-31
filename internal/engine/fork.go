@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
@@ -99,6 +100,10 @@ func (e *Engine) ForkSession(ctx context.Context, sid string, seq int64) (ForkRe
 	if err := e.store.CopyEvents(ctx, fork.ID, copied); err != nil {
 		e.store.DeleteSession(ctx, fork.ID)
 		return ForkResult{}, err
+	}
+	// The pictures the copied messages show (SES-015).
+	if err := e.store.CopyAttachments(src.ID, fork.ID); err != nil {
+		log.Printf("engine: copy the images of %s to its fork: %v", src.ID, err)
 	}
 	// The copied events set the source's title and mode again; the fork
 	// has its own.

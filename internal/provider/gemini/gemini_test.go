@@ -250,3 +250,29 @@ func TestNullCandidatesAndParts(t *testing.T) {
 		srv.Close()
 	}
 }
+
+// SES-015: a user message's picture goes out in this API's own shape.
+func TestImagesInRequests(t *testing.T) {
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			body, _ = io.ReadAll(r.Body)
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	msg := provider.Message{Role: provider.RoleUser, Parts: []provider.Part{
+		{Type: provider.PartText, Text: "what is this?"},
+		{Type: provider.PartImage, Image: &provider.Image{Name: "x.png", MediaType: "image/png", Data: []byte("PNGDATA")}},
+	}}
+	ch, err := New(Options{BaseURL: srv.URL, APIKey: "k"}).Stream(context.Background(), provider.ChatRequest{Model: "gemini-3-pro", Messages: []provider.Message{msg}})
+	if err == nil {
+		for range ch {
+		}
+	}
+	for _, want := range []string{`"inlineData":{"data":"UE5HREFUQQ==","mimeType":"image/png"}`} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("request lacks %s:\n%s", want, body)
+		}
+	}
+}

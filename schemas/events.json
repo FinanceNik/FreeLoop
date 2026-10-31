@@ -134,7 +134,8 @@
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": { "type": "string", "description": "ACP content block type: \"text\", or \"resource_link\" for a file a user message mentions." },
+        "type": { "type": "string", "description": "ACP content block type: \"text\", \"resource_link\" for a file a user message mentions, or \"image\" for a picture the user attached (SES-015), whose uri is attachment:<name> in the session's attachments folder instead of ACP's inline data." },
+        "mimeType": { "type": "string", "description": "image: the picture's media type." },
         "text": { "type": "string" },
         "uri": { "type": "string", "description": "resource_link: the file's file:// URI." },
         "name": { "type": "string", "description": "resource_link: the path relative to the project root." }

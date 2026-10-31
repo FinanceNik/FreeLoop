@@ -52,6 +52,11 @@ func (s *EngineService) UsageReport(ctx context.Context, days int) (engine.Usage
 	return s.eng.UsageReport(ctx, days)
 }
 
+// Attachment returns one of a session's stored pictures (SES-015).
+func (s *EngineService) Attachment(ctx context.Context, sessionID, name string) (engine.Attachment, error) {
+	return s.eng.Attachment(ctx, sessionID, name)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

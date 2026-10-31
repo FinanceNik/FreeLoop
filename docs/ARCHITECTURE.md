@@ -359,7 +359,7 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
   workspace.json           the main window's panes (GUI-017)
   freeloop.db              SQLite: projects, environments, sessions, attention queue, tokens per day and model (PRV-008), FTS5 search index (SES-007)
   sessions/<id>/events.jsonl   append-only transcript (SES-002); a torn last line is cut on open, a damaged line elsewhere is repaired with the original kept as events.jsonl.damaged-<time>
-  sessions/<id>/attachments/
+  sessions/<id>/attachments/   pictures attached to messages, one file per content named by its SHA-256 (SES-015)
   logs/                    local only, secrets redacted
 ```
 

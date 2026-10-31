@@ -249,3 +249,14 @@ test("a tool call's later title and input replace the first ones", () => {
   assert.deepEqual(t.input, { command: "git status --short" });
   assert.equal(t.status, "completed");
 });
+
+test("pictures the user attached join their message (SES-015)", () => {
+  const view = buildView([
+    { v: 1, seq: 1, ts: "2026-10-31T10:00:00Z", sid: "s", type: "user_message_chunk", data: { content: { type: "text", text: "what is this?" } } },
+    { v: 1, seq: 2, ts: "2026-10-31T10:00:00Z", sid: "s", type: "user_message_chunk", data: { content: { type: "image", uri: "attachment:ab.png", mimeType: "image/png" } } },
+    { v: 1, seq: 3, ts: "2026-10-31T10:00:00Z", sid: "s", type: "user_message_chunk", data: { content: { type: "image", uri: "https://example.com/x.png" } } },
+  ]);
+  const user = view.items.find((i) => i.kind === "user");
+  assert.ok(user && user.kind === "user");
+  assert.deepEqual(user.images, [{ name: "ab.png", mimeType: "image/png" }]);
+});

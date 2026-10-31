@@ -3084,3 +3084,94 @@ table.hooks .hook-command {
   font: inherit;
   margin-bottom: 6px;
 }
+
+/* Pictures in prompts (SES-015). */
+.composer-drop textarea {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.picture-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.picture-strip li {
+  position: relative;
+}
+
+.picture-strip img {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+}
+
+.picture-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  line-height: 1;
+  font-size: 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+}
+
+.msg-pictures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.msg-picture {
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.msg-picture img {
+  display: block;
+  max-width: 220px;
+  max-height: 160px;
+  border-radius: var(--r-sm);
+}
+
+.msg-picture-loading {
+  display: inline-block;
+  width: 120px;
+  height: 80px;
+  background: var(--surface-2);
+}
+
+.picture-view {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, 0.72);
+  cursor: zoom-out;
+}
+
+.picture-view img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+}

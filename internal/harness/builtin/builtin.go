@@ -107,7 +107,9 @@ type session struct {
 	env   environment.Environment
 	tools []*tool
 
-	mu      sync.Mutex
+	mu sync.Mutex
+	// images holds the data of pictures this run has seen, by name.
+	images  map[string][]byte
 	mode    permission.Mode
 	history []provider.Message
 	// prov and model answer the next model call; SetModel changes them
@@ -256,6 +258,11 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "resource_link", URI: r.URI, Name: r.Path}})
 		parts = append(parts, provider.Part{Type: provider.PartText, Text: harness.ResourceText(r)})
 	}
+	for _, img := range p.Images {
+		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "image", URI: event.AttachmentURI(img.Name), MimeType: img.MediaType}})
+		s.remember(img)
+		parts = append(parts, provider.Part{Type: provider.PartImage, Image: &provider.Image{Name: img.Name, MediaType: img.MediaType, Data: img.Data}})
+	}
 	// A turn that was stopped or failed can leave the history ending with
 	// the user's side. A note in the assistant's place keeps roles
 	// alternating without merging this prompt into that message, so a
@@ -335,7 +342,7 @@ func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
 		req := provider.ChatRequest{
 			Model:    model,
 			System:   s.systemPrompt(mode),
-			Messages: s.history,
+			Messages: s.withImages(s.history),
 			Tools:    s.toolSpecs(mode),
 			Effort:   s.p.Effort,
 		}
@@ -778,4 +785,57 @@ func Restore(events []event.Event) []provider.Message {
 		}
 	}
 	return history
+}
+
+// remember keeps an image's data for later requests in this run.
+func (s *session) remember(img provider.Image) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.images == nil {
+		s.images = map[string][]byte{}
+	}
+	s.images[img.Name] = img.Data
+}
+
+// withImages returns the history with each image's data filled in, from
+// this run's images or the session's stored attachments; restored history
+// keeps names only. The history itself is not changed. An image that
+// cannot be read becomes a note saying so.
+func (s *session) withImages(history []provider.Message) []provider.Message {
+	missing := func(p provider.Part) bool {
+		return p.Type == provider.PartImage && p.Image != nil && len(p.Image.Data) == 0
+	}
+	if !slices.ContainsFunc(history, func(m provider.Message) bool { return slices.ContainsFunc(m.Parts, missing) }) {
+		return history
+	}
+	out := slices.Clone(history)
+	for i, m := range out {
+		if !slices.ContainsFunc(m.Parts, missing) {
+			continue
+		}
+		parts := slices.Clone(m.Parts)
+		for j, p := range parts {
+			if !missing(p) {
+				continue
+			}
+			s.mu.Lock()
+			data, ok := s.images[p.Image.Name]
+			s.mu.Unlock()
+			if !ok && s.p.Attachment != nil {
+				if b, err := s.p.Attachment(p.Image.Name); err == nil {
+					data, ok = b, true
+					s.remember(provider.Image{Name: p.Image.Name, Data: b})
+				}
+			}
+			if !ok {
+				parts[j] = provider.Part{Type: provider.PartText, Text: "[An image the user attached could not be read.]"}
+				continue
+			}
+			img := *p.Image
+			img.Data = data
+			parts[j] = provider.Part{Type: provider.PartImage, Image: &img}
+		}
+		out[i].Parts = parts
+	}
+	return out
 }

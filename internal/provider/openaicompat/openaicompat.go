@@ -244,8 +244,10 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error)
 // Wire types for Chat Completions.
 
 type wireMessage struct {
-	Role       string     `json:"role"`
-	Content    *string    `json:"content"`
+	Role string `json:"role"`
+	// Content is a *string, or for a user message with images a list of
+	// text and image_url parts.
+	Content    any        `json:"content"`
 	ToolCalls  []wireCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
@@ -317,7 +319,18 @@ func toWire(system string, msgs []provider.Message) []wireMessage {
 				text.WriteString(part.Text)
 			}
 		}
-		if text.Len() > 0 {
+		images := m.Images()
+		switch {
+		case len(images) > 0:
+			parts := []map[string]any{}
+			if text.Len() > 0 {
+				parts = append(parts, map[string]any{"type": "text", "text": text.String()})
+			}
+			for _, img := range images {
+				parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{"url": img.DataURL()}})
+			}
+			out = append(out, wireMessage{Role: "user", Content: parts})
+		case text.Len() > 0:
 			out = append(out, wireMessage{Role: "user", Content: strPtr(text.String())})
 		}
 	}

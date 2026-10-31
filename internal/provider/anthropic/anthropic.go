@@ -90,7 +90,7 @@ func (p *Provider) Capabilities(model string) provider.ModelCaps {
 	c := provider.ModelCaps{
 		Source: provider.CapsStatic,
 		Tools:  true, ParallelTools: true, StreamedToolArgs: true, StableToolCallIDs: true,
-		PromptCaching: true, ContextWindow: 200_000, MaxOutput: 64_000,
+		PromptCaching: true, ContextWindow: 200_000, MaxOutput: 64_000, Images: true,
 	}
 	if modern(model) {
 		c.Reasoning, c.Effort = true, true
@@ -177,6 +177,10 @@ func toParams(msgs []provider.Message) []sdk.MessageParam {
 				blocks = append(blocks, sdk.NewToolUseBlock(part.ToolCallID, input, part.ToolName))
 			case provider.PartToolResult:
 				blocks = append(blocks, sdk.NewToolResultBlock(part.ToolCallID, part.Text, part.IsError))
+			case provider.PartImage:
+				if part.Image != nil && len(part.Image.Data) > 0 {
+					blocks = append(blocks, sdk.NewImageBlockBase64(part.Image.MediaType, part.Image.Base64()))
+				}
 			}
 		}
 		if len(blocks) == 0 {

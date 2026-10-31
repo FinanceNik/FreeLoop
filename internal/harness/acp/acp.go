@@ -249,6 +249,18 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 			blocks = append(blocks, sdk.TextBlock(harness.ResourceText(r)))
 		}
 	}
+	for _, img := range p.Images {
+		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "image", URI: event.AttachmentURI(img.Name), MimeType: img.MediaType}})
+		blocks = append(blocks, sdk.ImageBlock(img.Base64(), img.MediaType))
+	}
+	// An agent that did not say it reads images gets none (SES-015).
+	if len(p.Images) > 0 && !s.caps.PromptCapabilities.Image {
+		err := fmt.Errorf("%s does not accept images; send the message again without them", s.preset.Name)
+		s.p.Emit(event.Error, event.ErrorData{Message: err.Error()})
+		s.p.Emit(event.TurnEnded, event.TurnEndedData{StopReason: string(harness.StopError)})
+		s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "idle"})
+		return harness.StopError, err
+	}
 	type answer struct {
 		res sdk.PromptResponse
 		err error

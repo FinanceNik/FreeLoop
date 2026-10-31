@@ -127,6 +127,11 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 				blocks = append(blocks, mdBlock{text: "*Attached: " + cmpOr(c.Content.Name, c.Content.URI) + "*"})
 				continue
 			}
+			if c.Content.Type == "image" {
+				// The picture stays in the session's attachments folder.
+				blocks = append(blocks, mdBlock{text: "*Attached picture: " + strings.TrimPrefix(c.Content.URI, "attachment:") + "*"})
+				continue
+			}
 			blocks = append(blocks, mdBlock{text: "## You\n\n" + strings.TrimSpace(c.Content.Text)})
 		case event.AgentMessageChunk, event.AgentThoughtChunk:
 			var c event.MessageChunk

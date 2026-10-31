@@ -87,7 +87,7 @@ export interface PermissionState {
 
 export interface ToolContent {
   type: string;
-  content?: { type: string; text?: string; uri?: string; name?: string };
+  content?: { type: string; text?: string; uri?: string; name?: string; mimeType?: string };
   path?: string;
   oldText?: string;
   newText?: string;
@@ -108,6 +108,9 @@ type ItemKinds =
       text: string;
       ts: string;
       files: string[];
+      // Pictures the user attached (SES-015): names in the session's
+      // attachments, which the view loads.
+      images?: { name: string; mimeType: string }[];
       checkpointSeq?: number;
       // The context was replaced after the checkpoint (a compaction or an
       // earlier rewind): rewinding restores the files only.
@@ -210,6 +213,12 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         const prev = last();
         if (d.content?.type === "resource_link") {
           if (prev?.kind === "user") items[items.length - 1] = { ...prev, rev, files: [...prev.files, d.content.name ?? d.content.uri] };
+          break;
+        }
+        if (d.content?.type === "image") {
+          const uri = d.content.uri ?? "";
+          if (prev?.kind === "user" && uri.startsWith("attachment:"))
+            items[items.length - 1] = { ...prev, rev, images: [...(prev.images ?? []), { name: uri.slice("attachment:".length), mimeType: d.content.mimeType ?? "" }] };
           break;
         }
         items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [], checkpointSeq: checkpoint ?? undefined });

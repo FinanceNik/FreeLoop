@@ -6,6 +6,7 @@ package acptest
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,10 @@ const AuthVar = "FREELOOP_ACP_TEST_AUTH"
 // message (which a client must not record again) and says "loaded: <id>"
 // on the next prompt.
 const LoadVar = "FREELOOP_ACP_TEST_LOAD"
+
+// ImageVar, set to 1, makes the agent declare that it reads images, and
+// say "images: <n>" for the image blocks of each prompt (SES-015).
+const ImageVar = "FREELOOP_ACP_TEST_IMAGE"
 
 // Serve runs the agent on stdin and stdout until the client disconnects and
 // reports whether it did, so a TestMain can return early.
@@ -66,7 +71,8 @@ func pluginOf(meta map[string]any) string {
 
 func (a *agent) Initialize(context.Context, sdk.InitializeRequest) (sdk.InitializeResponse, error) {
 	return sdk.InitializeResponse{ProtocolVersion: sdk.ProtocolVersionNumber, AuthMethods: []sdk.AuthMethod{},
-		AgentCapabilities: sdk.AgentCapabilities{LoadSession: os.Getenv(LoadVar) == "1", McpCapabilities: sdk.McpCapabilities{Http: true}}}, nil
+		AgentCapabilities: sdk.AgentCapabilities{LoadSession: os.Getenv(LoadVar) == "1", McpCapabilities: sdk.McpCapabilities{Http: true},
+			PromptCapabilities: sdk.PromptCapabilities{Image: os.Getenv(ImageVar) == "1"}}}, nil
 }
 
 func (a *agent) NewSession(_ context.Context, r sdk.NewSessionRequest) (sdk.NewSessionResponse, error) {
@@ -95,6 +101,15 @@ func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResp
 		say("loaded: " + a.loaded)
 	}
 	say("mcp: " + strings.Join(a.mcp, ","))
+	if os.Getenv(ImageVar) == "1" {
+		n := 0
+		for _, b := range r.Prompt {
+			if b.Image != nil && b.Image.Data != "" {
+				n++
+			}
+		}
+		say(fmt.Sprintf("images: %d", n))
+	}
 	if a.plugin != "" {
 		say("plugin: " + a.plugin)
 	}

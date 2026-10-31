@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -200,5 +201,54 @@ func TestExternalAgentNotSignedIn(t *testing.T) {
 	}
 	if turns != 1 || !slices.ContainsFunc(notices, func(n string) bool { return strings.Contains(n, "1 queued message was not sent") }) {
 		t.Errorf("turns %d, notices %q", turns, notices)
+	}
+}
+
+// SES-015: an agent that says it reads images gets them as image blocks;
+// one that does not is told nothing and the user is, before anything is
+// sent.
+func TestExternalAgentImages(t *testing.T) {
+	for _, reads := range []bool{true, false} {
+		ctx := context.Background()
+		dir := t.TempDir()
+		e := openTest(t, dir)
+		ch, cancel := e.Subscribe()
+		exe, _ := os.Executable()
+		os.MkdirAll(filepath.Join(dir, config.PresetsDir), 0o700)
+		flag := "0"
+		if reads {
+			flag = "1"
+		}
+		os.WriteFile(filepath.Join(dir, config.PresetsDir, "ref.yaml"),
+			[]byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n  "+acptest.ImageVar+": \""+flag+"\"\n"), 0o600)
+		e.loadPresets()
+		e.loadProfiles()
+		ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProfileID: "ref", Mode: "plan"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		png := ImageInput{MediaType: "image/png", Data: base64.StdEncoding.EncodeToString(tinyPNG)}
+		if _, err := e.PromptWith(ctx, ses.ID, PromptRequest{Text: "look", Images: []ImageInput{png, png}}); err != nil {
+			t.Fatal(err)
+		}
+		waitIdle(t, ch, ses.ID)
+		evs, _ := e.Events(ctx, ses.ID, 0)
+		var text, errs string
+		for _, ev := range evs {
+			switch ev.Type {
+			case event.AgentMessageChunk:
+				text += string(ev.Data)
+			case event.Error:
+				errs += string(ev.Data)
+			}
+		}
+		if reads && !strings.Contains(text, "images: 2") {
+			t.Errorf("the agent saw: %s (errors %s)", text, errs)
+		}
+		if !reads && (!strings.Contains(errs, "does not accept images") || strings.Contains(text, "mcp:")) {
+			t.Errorf("without image support: text %q, errors %q", text, errs)
+		}
+		cancel()
+		e.Close()
 	}
 }

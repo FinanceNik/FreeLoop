@@ -17,6 +17,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/harness/acp"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
+	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/session"
 	"github.com/FinanceNik/Freeloop/internal/store"
 )
@@ -234,6 +235,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		Effort:         effort,
 		Mode:           permission.Mode(ses.Mode),
 		History:        builtin.Restore(events),
+		Attachment:     func(name string) ([]byte, error) { return e.store.Attachment(sid, name) },
 		DisabledTools:  envCfg.DisabledTools,
 		SystemPrompt:   prof.SystemPrompt,
 		Tools:          prof.Tools,
@@ -361,6 +363,8 @@ func (e *Engine) Prompt(ctx context.Context, sid, text string) (PromptResult, er
 type PromptRequest struct {
 	Text      string        `json:"text"`
 	Resources []ResourceRef `json:"resources"`
+	// Images are pictures the user attached (SES-015).
+	Images []ImageInput `json:"images"`
 }
 
 // queued is a prompt waiting for its turn. Resources are read when it
@@ -369,6 +373,8 @@ type queued struct {
 	text   string
 	refs   []ResourceRef
 	inline []harness.Resource
+	// images were stored as the session's attachments when queued.
+	images []provider.Image
 	// noMentions is set for text the user did not type (an MCP prompt's):
 	// its @ words attach no files.
 	noMentions bool
@@ -376,12 +382,16 @@ type queued struct {
 
 // PromptWith sends a message with attached resources; see Prompt.
 func (e *Engine) PromptWith(ctx context.Context, sid string, req PromptRequest) (PromptResult, error) {
-	return e.enqueue(ctx, sid, queued{text: req.Text, refs: req.Resources})
+	images, err := e.storeImages(ctx, sid, req.Images)
+	if err != nil {
+		return PromptResult{}, err
+	}
+	return e.enqueue(ctx, sid, queued{text: req.Text, refs: req.Resources, images: images})
 }
 
 func (e *Engine) enqueue(ctx context.Context, sid string, q queued) (PromptResult, error) {
 	text := q.text
-	if text == "" {
+	if text == "" && len(q.images) == 0 {
 		return PromptResult{}, errors.New("empty message")
 	}
 	r, err := e.runtimeFor(ctx, sid)
@@ -425,6 +435,7 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 		if !q.noMentions {
 			p = e.embedMentions(r.sid, r.env, q.text)
 		}
+		p.Images = q.images
 		r.mu.Lock()
 		if r.handoff != nil {
 			p.Resources = append([]harness.Resource{*r.handoff}, p.Resources...)

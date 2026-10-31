@@ -178,8 +178,10 @@ func (p *Provider) Describe(ctx context.Context, model string) (provider.ModelCa
 }
 
 type wireMessage struct {
-	Role      string     `json:"role"`
-	Content   string     `json:"content"`
+	Role    string `json:"role"`
+	Content string `json:"content"`
+	// Images are base64 pictures for a user message (SES-015).
+	Images    []string   `json:"images,omitempty"`
 	ToolCalls []wireCall `json:"tool_calls,omitempty"`
 	ToolName  string     `json:"tool_name,omitempty"`
 }
@@ -235,8 +237,12 @@ func toWire(system string, msgs []provider.Message) []wireMessage {
 				text = append(text, part.Text)
 			}
 		}
-		if len(text) > 0 {
-			out = append(out, wireMessage{Role: "user", Content: strings.Join(text, "\n\n")})
+		var images []string
+		for _, img := range m.Images() {
+			images = append(images, img.Base64())
+		}
+		if len(text) > 0 || len(images) > 0 {
+			out = append(out, wireMessage{Role: "user", Content: strings.Join(text, "\n\n"), Images: images})
 		}
 	}
 	return out
