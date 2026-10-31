@@ -14,6 +14,11 @@ export interface Row {
   calls: number;
   cost: number;
   priced: boolean;
+  // Cost per kind of token; missing on rows from before they were added.
+  costInput?: number;
+  costOutput?: number;
+  costCacheRead?: number;
+  costCacheWrite?: number;
 }
 
 export type Metric = "tokens" | "cost";
@@ -179,4 +184,68 @@ export function weekStart(day: string): string {
 // weeks lists the Mondays that start the weeks from since to until.
 export function weeks(since: string, until: string): string[] {
   return [...new Set(days(since, until).map(weekStart))];
+}
+
+// The kinds of token, in the order the dashboard stacks them: what the
+// model was sent fresh, what it wrote, what went into the prompt cache and
+// what was read from it.
+export const TOKEN_TYPES = [
+  { key: "input", label: "Input" },
+  { key: "output", label: "Output" },
+  { key: "cacheWrite", label: "Cache write" },
+  { key: "cacheRead", label: "Cache read" },
+] as const;
+
+export type TokenType = (typeof TOKEN_TYPES)[number]["key"];
+
+// typeValue is one kind of token's count or cost in a row.
+export function typeValue(r: Row, t: TokenType, m: Metric): number {
+  if (m === "cost") {
+    if (!r.priced) return 0;
+    return { input: r.costInput, output: r.costOutput, cacheWrite: r.costCacheWrite, cacheRead: r.costCacheRead }[t] ?? 0;
+  }
+  return { input: r.inputTokens, output: r.outputTokens, cacheWrite: r.cacheWriteTokens, cacheRead: r.cacheReadTokens }[t];
+}
+
+export interface TypeGroup {
+  key: TokenType;
+  label: string;
+  tokens: number;
+  cost: number;
+}
+
+// byType adds up each kind of token, in TOKEN_TYPES order.
+export function byType(rows: Row[]): TypeGroup[] {
+  return TOKEN_TYPES.map((t) => ({
+    key: t.key,
+    label: t.label,
+    tokens: rows.reduce((n, r) => n + typeValue(r, t.key, "tokens"), 0),
+    cost: rows.reduce((n, r) => n + typeValue(r, t.key, "cost"), 0),
+  }));
+}
+
+// dailyByType returns each day's value per kind of token.
+export function dailyByType(rows: Row[], dayList: string[], metric: Metric): Day[] {
+  const byDay = new Map(dayList.map((d) => [d, new Array<number>(TOKEN_TYPES.length).fill(0)]));
+  for (const r of rows) {
+    const vals = byDay.get(r.day);
+    if (!vals) continue;
+    TOKEN_TYPES.forEach((t, i) => (vals[i] += typeValue(r, t.key, metric)));
+  }
+  return dayList.map((d) => {
+    const values = byDay.get(d)!;
+    return { day: d, values, total: values.reduce((a, b) => a + b, 0) };
+  });
+}
+
+// perCall is the average tokens of a model call, 0 without calls.
+export function perCall(s: Sums): number {
+  return s.calls ? tokensOf(s) / s.calls : 0;
+}
+
+// withoutCacheReads drops cache reads from rows, tokens and cost, for a
+// view of what was sent fresh and generated: cache reads are cheap and can
+// dwarf every other kind.
+export function withoutCacheReads<R extends Row>(rows: R[]): R[] {
+  return rows.map((r) => ({ ...r, cacheReadTokens: 0, cost: r.cost - (r.costCacheRead ?? 0), costCacheRead: 0 }));
 }

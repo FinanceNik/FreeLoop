@@ -81,7 +81,8 @@ func TestUsageCosts(t *testing.T) {
 	}
 	r := rep.Rows[0]
 	if r.SessionID != ses.ID || r.ProjectRoot != ses.ProjectRoot || r.HarnessID != ses.HarnessID || r.InputTokens != 200 || r.Calls != 2 ||
-		!r.Priced || math.Abs(r.Cost-want) > 1e-12 || len(r.Tags) != 1 || r.Deleted {
+		!r.Priced || math.Abs(r.Cost-want) > 1e-12 || len(r.Tags) != 1 || r.Deleted ||
+		math.Abs(r.CostInput+r.CostOutput+r.CostCacheRead+r.CostCacheWrite-r.Cost) > 1e-12 || math.Abs(r.CostInput-200*3.0/1e6) > 1e-12 {
 		t.Errorf("row = %+v", r)
 	}
 	out := filepath.Join(t.TempDir(), "usage.csv")

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { EngineService, type HarnessInfo, type ProjectInfo, type ProviderInfo, type UsageReport, type UsageRow } from "./api.ts";
-import { change, compact, daily, days, groupBy, OTHER, topKeys, totals, value, weekStart, weeks, type Metric, type Row } from "./analytics.ts";
+import { byType, change, compact, daily, dailyByType, days, groupBy, OTHER, perCall, TOKEN_TYPES, topKeys, totals, value, weekStart, weeks, withoutCacheReads, type Metric, type Row } from "./analytics.ts";
 import { formatCost } from "./cost.ts";
 import UsageChart, { type Series } from "./UsageChart.tsx";
 
-// The usage dashboard (PRV-008): tokens and estimated cost over a range,
-// by model, agent or project, and the sessions that used the most. Costs
+// The usage dashboard (GUI-018, PRV-008): tokens and estimated cost over a
+// range, by kind of token, model, agent or project, and the sessions that
+// used the most. Costs
 // come from the price table in Settings; tokens of unpriced models are
 // counted but cost nothing here.
 
@@ -26,6 +27,7 @@ const RANGES = [
 ];
 
 const GROUPS = [
+  { id: "type", label: "Token type" },
   { id: "model", label: "Model" },
   { id: "agent", label: "Provider or agent" },
   { id: "project", label: "Project" },
@@ -39,8 +41,9 @@ const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString([], { 
 
 export default function Usage({ projects, providers, harnesses, onOpenSession, onOpenPrices, onError }: Props) {
   const [range, setRange] = useState(30);
-  const [group, setGroup] = useState<GroupID>("model");
+  const [group, setGroup] = useState<GroupID>("type");
   const [metric, setMetric] = useState<Metric>("tokens");
+  const [cacheReads, setCacheReads] = useState(true);
   const [report, setReport] = useState<UsageReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [exported, setExported] = useState("");
@@ -63,13 +66,14 @@ export default function Usage({ projects, providers, harnesses, onOpenSession, o
     return providers.find((p) => p.id === r.providerId)?.name ?? (r.providerId || "Unknown provider");
   };
   const project = (r: UsageRow) => projects.find((p) => p.id === r.projectId)?.name ?? (r.projectRoot ? basename(r.projectRoot) : "Deleted sessions");
-  const keyOf: Record<GroupID, (r: UsageRow) => string> = {
+  const keyOf: Record<Exclude<GroupID, "type">, (r: UsageRow) => string> = {
     model: (r) => r.model || `${agent(r)} (model not reported)`,
     agent,
     project,
   };
 
-  const all = (report?.rows ?? []) as (UsageRow & Row)[];
+  const fetched = (report?.rows ?? []) as (UsageRow & Row)[];
+  const all = cacheReads ? fetched : withoutCacheReads(fetched);
   const until = report?.until ?? new Date().toISOString().slice(0, 10);
   const span = report ? days(report.since, until) : [];
   const since = span[Math.max(0, span.length - range)] ?? until;
@@ -81,22 +85,29 @@ export default function Usage({ projects, providers, harnesses, onOpenSession, o
   const m: Metric = metric === "cost" && !priced ? "tokens" : metric;
   const fmt = m === "cost" ? formatCost : compact;
 
-  const key = keyOf[group];
+  // By kind of token the series are fixed, in stacking order; otherwise the
+  // largest groups get one each and the rest fold into Other.
+  const byKind = group === "type";
+  const key = keyOf[byKind ? "model" : group];
   const groups = groupBy(rows, key, m);
-  const top = topKeys(groups, SERIES);
-  const series: Series[] = [
-    ...top.map((k, i) => ({ key: k, label: k, color: `var(--series-${i + 1})` })),
-    ...(groups.length > top.length ? [{ key: OTHER, label: `${OTHER} (${groups.length - top.length})`, color: "var(--series-other)" }] : []),
-  ];
+  const types = byType(rows);
+  const top = byKind ? [] : topKeys(groups, SERIES);
+  const series: Series[] = byKind
+    ? TOKEN_TYPES.map((t, i) => ({ key: t.key, label: t.label, color: `var(--series-${i + 1})` })).filter((s) => cacheReads || s.key !== "cacheRead")
+    : [
+        ...top.map((k, i) => ({ key: k, label: k, color: `var(--series-${i + 1})` })),
+        ...(groups.length > top.length ? [{ key: OTHER, label: `${OTHER} (${groups.length - top.length})`, color: "var(--series-other)" }] : []),
+      ];
   const weekly = range > 90;
   const buckets = weekly ? weeks(since, until) : days(since, until);
   const bucketed = weekly ? rows.map((r) => ({ ...r, day: weekStart(r.day) })) : rows;
-  const chart = daily(bucketed, buckets, key, top, m);
+  const chart = byKind ? dailyByType(bucketed, buckets, m) : daily(bucketed, buckets, key, top, m);
   const colorOf = (k: string) => series.find((s) => s.key === k)?.color ?? "var(--series-other)";
   const sessions = groupBy(rows, (r) => r.sessionId, m).slice(0, 10);
   const sessionRow = (id: string) => rows.find((r) => r.sessionId === id)!;
   const delta = change(value(now, m), value(prev, m));
   const maxGroup = Math.max(0, ...groups.map((g) => value(g, m)));
+  const tokensTotal = value(now, "tokens");
 
   const exportCSV = () =>
     EngineService.ExportUsage(range)
@@ -143,6 +154,9 @@ export default function Usage({ projects, providers, harnesses, onOpenSession, o
             Cost
           </button>
         </div>
+        <label className="row">
+          <input type="checkbox" checked={cacheReads} onChange={(e) => setCacheReads(e.target.checked)} /> Include cache reads
+        </label>
         <span className="usage-filters-end">
           {exported && <span className="muted">Saved to {basename(exported)}</span>}
           <button onClick={exportCSV} disabled={rows.length === 0}>
@@ -168,11 +182,17 @@ export default function Usage({ projects, providers, harnesses, onOpenSession, o
                 <span className="muted">
                   {delta === null ? "Nothing to compare with in the period before" : `${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta * 100))}% on the ${RANGES.find((r) => r.days === range)?.label} before`}
                 </span>
+                {m === "tokens" && now.cacheRead > 0 && (
+                  <span className="muted">
+                    {compact(now.input + now.output + now.cacheWrite)} without cache reads
+                  </span>
+                )}
               </div>
               <Tile label="Input" value={compact(now.input)} />
               <Tile label="Output" value={compact(now.output)} />
-              <Tile label="From the prompt cache" value={`${Math.round(now.cacheShare * 100)}%`} note={`${compact(now.cacheRead)} tokens read`} />
-              <Tile label="Model calls" value={compact(now.calls)} note={`${now.sessions} ${now.sessions === 1 ? "session" : "sessions"}`} />
+              {cacheReads && <Tile label="From the prompt cache" value={`${Math.round(now.cacheShare * 100)}%`} note={`${compact(now.cacheRead)} tokens read`} />}
+              <Tile label="Per model call" value={compact(perCall(now))} note={`${compact(now.calls ? now.output / now.calls : 0)} of them output`} />
+              <Tile label="Per session" value={compact(now.sessions ? value(now, "tokens") / now.sessions : 0)} note={`${compact(now.calls)} calls in ${now.sessions} ${now.sessions === 1 ? "session" : "sessions"}`} />
               {m === "tokens" && priced && <Tile label="Estimated cost" value={formatCost(now.cost)} />}
             </div>
             {now.unpricedTokens > 0 && (
@@ -235,17 +255,55 @@ export default function Usage({ projects, providers, harnesses, onOpenSession, o
               </details>
             </div>
 
+            {byKind && (
+              <div className="usage-card">
+                <h3>By token type</h3>
+                <table className="usage-table">
+                  <thead>
+                    <tr>
+                      <th>Token type</th>
+                      <th className="usage-share-col">Share of tokens</th>
+                      <th className="num">Tokens</th>
+                      <th className="num">Per model call</th>
+                      <th className="num">Est. cost</th>
+                      <th className="num">Share of cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {types.filter((t) => cacheReads || t.key !== "cacheRead").map((t, i) => (
+                      <tr key={t.key}>
+                        <td>
+                          <span className="usage-swatch" style={{ background: series[i].color }} />
+                          {t.label}
+                        </td>
+                        <td className="usage-share-col">
+                          <span className="usage-share">
+                            <span style={{ width: `${tokensTotal ? (t.tokens / Math.max(...types.map((x) => x.tokens))) * 100 : 0}%`, background: series[i].color }} />
+                          </span>
+                          <span className="muted">{tokensTotal ? `${Math.round((t.tokens / tokensTotal) * 100)}%` : ""}</span>
+                        </td>
+                        <td className="num">{compact(t.tokens)}</td>
+                        <td className="num">{compact(now.calls ? t.tokens / now.calls : 0)}</td>
+                        <td className="num">{priced ? formatCost(t.cost) : "–"}</td>
+                        <td className="num">{priced && now.cost ? `${Math.round((t.cost / now.cost) * 100)}%` : "–"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <div className="usage-card">
-              <h3>By {GROUPS.find((g) => g.id === group)?.label.toLowerCase()}</h3>
+              <h3>By {byKind ? "model" : GROUPS.find((g) => g.id === group)?.label.toLowerCase()}</h3>
               <table className="usage-table">
                 <thead>
                   <tr>
-                    <th>{GROUPS.find((g) => g.id === group)?.label}</th>
+                    <th>{byKind ? "Model" : GROUPS.find((g) => g.id === group)?.label}</th>
                     <th className="usage-share-col">Share</th>
                     <th className="num">Tokens</th>
                     <th className="num">Input</th>
                     <th className="num">Output</th>
-                    <th className="num">Cache read</th>
+                    {cacheReads && <th className="num">Cache read</th>}
                     <th className="num">Calls</th>
                     <th className="num">Est. cost</th>
                   </tr>
@@ -254,7 +312,7 @@ export default function Usage({ projects, providers, harnesses, onOpenSession, o
                   {groups.map((g) => (
                     <tr key={g.key}>
                       <td>
-                        <span className="usage-swatch" style={{ background: colorOf(top.includes(g.key) ? g.key : OTHER) }} />
+                        {!byKind && <span className="usage-swatch" style={{ background: colorOf(top.includes(g.key) ? g.key : OTHER) }} />}
                         {g.key}
                       </td>
                       <td className="usage-share-col">
@@ -266,7 +324,7 @@ export default function Usage({ projects, providers, harnesses, onOpenSession, o
                       <td className="num">{compact(value(g, "tokens"))}</td>
                       <td className="num">{compact(g.input)}</td>
                       <td className="num">{compact(g.output)}</td>
-                      <td className="num">{compact(g.cacheRead)}</td>
+                      {cacheReads && <td className="num">{compact(g.cacheRead)}</td>}
                       <td className="num">{compact(g.calls)}</td>
                       <td className="num">{g.unpricedTokens === value(g, "tokens") ? "–" : formatCost(g.cost)}</td>
                     </tr>

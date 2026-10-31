@@ -66,11 +66,16 @@ func (e *Engine) Usage(ctx context.Context, days int) ([]DayCost, error) {
 	return out, nil
 }
 
-// UsageRow is a store row with its estimated cost.
+// UsageRow is a store row with its estimated cost, in all and per kind of
+// token, so the dashboard can split cost the way it splits tokens.
 type UsageRow struct {
 	store.UsageRow
-	Cost   float64 `json:"cost"`
-	Priced bool    `json:"priced"`
+	Cost           float64 `json:"cost"`
+	CostInput      float64 `json:"costInput"`
+	CostOutput     float64 `json:"costOutput"`
+	CostCacheRead  float64 `json:"costCacheRead"`
+	CostCacheWrite float64 `json:"costCacheWrite"`
+	Priced         bool    `json:"priced"`
 }
 
 // UsageReport is the usage the analytics view works from (PRV-008): one row
@@ -102,6 +107,10 @@ func (e *Engine) UsageReport(ctx context.Context, days int) (UsageReport, error)
 		r := UsageRow{UsageRow: u}
 		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
 			r.Cost, r.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens), true
+			r.CostInput = p.Cost(u.InputTokens, 0, 0, 0)
+			r.CostOutput = p.Cost(0, u.OutputTokens, 0, 0)
+			r.CostCacheRead = p.Cost(0, 0, u.CacheReadTokens, 0)
+			r.CostCacheWrite = p.Cost(0, 0, 0, u.CacheWriteTokens)
 		}
 		rep.Rows = append(rep.Rows, r)
 	}

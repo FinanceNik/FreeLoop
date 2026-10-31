@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { change, compact, daily, days, groupBy, niceTicks, OTHER, topKeys, totals, weekStart, weeks, type Row } from "./analytics.ts";
+import { change, compact, daily, days, groupBy, niceTicks, OTHER, topKeys, totals, weekStart, weeks, byType, dailyByType, perCall, withoutCacheReads, type Row } from "./analytics.ts";
 
 const row = (p: Partial<Row>): Row => ({
   day: "2026-10-30",
@@ -91,4 +91,32 @@ test("weeks start on Monday", () => {
   assert.equal(weekStart("2026-11-01"), "2026-10-26"); // a Sunday
   assert.equal(weekStart("2026-10-26"), "2026-10-26");
   assert.deepEqual(weeks("2026-10-25", "2026-11-03"), ["2026-10-19", "2026-10-26", "2026-11-02"]);
+});
+
+test("tokens and cost by kind of token", () => {
+  const priced = row({ inputTokens: 100, outputTokens: 10, cacheReadTokens: 1000, cacheWriteTokens: 50, cost: 2, priced: true, costInput: 0.5, costOutput: 1, costCacheRead: 0.3, costCacheWrite: 0.2 });
+  const free = row({ day: "2026-10-31", inputTokens: 5, outputTokens: 1 });
+  const g = byType([priced, free]);
+  assert.deepEqual(
+    g.map((x) => [x.key, x.tokens, x.cost]),
+    [
+      ["input", 105, 0.5],
+      ["output", 11, 1],
+      ["cacheWrite", 50, 0.2],
+      ["cacheRead", 1000, 0.3],
+    ],
+  );
+  const d = dailyByType([priced, free], ["2026-10-30", "2026-10-31"], "tokens");
+  assert.deepEqual(d[0].values, [100, 10, 50, 1000]);
+  assert.deepEqual(d[1].values, [5, 1, 0, 0]);
+  assert.equal(dailyByType([priced, free], ["2026-10-31"], "cost")[0].total, 0);
+  assert.equal(perCall(totals([priced, free])), 1166 / 2);
+  assert.equal(perCall(totals([])), 0);
+});
+
+test("without cache reads", () => {
+  const [r] = withoutCacheReads([row({ inputTokens: 10, cacheReadTokens: 90, cost: 1, priced: true, costCacheRead: 0.25 })]);
+  assert.equal(r.cacheReadTokens, 0);
+  assert.equal(r.cost, 0.75);
+  assert.equal(totals([r]).cacheShare, 0);
 });
