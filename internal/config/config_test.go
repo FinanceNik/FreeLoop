@@ -101,3 +101,18 @@ func TestSaveAndFontSize(t *testing.T) {
 		t.Errorf("issues = %v", issues)
 	}
 }
+
+// Review finding: an unknown key made the whole file default, turning off
+// local-only mode and hooks.
+func TestUnknownKeyKeepsTheRest(t *testing.T) {
+	cfg, issues := parse([]byte("network:\n  localOnly: true\nui:\n  thme: dark\nhooks:\n  - event: pre_tool_use\n    command: ./check\n"))
+	if !cfg.Network.LocalOnly || len(cfg.Hooks) != 1 {
+		t.Errorf("cfg = %+v", cfg)
+	}
+	if len(issues) == 0 || Unreadable(issues) {
+		t.Errorf("issues = %+v", issues)
+	}
+	if _, issues := parse([]byte("network: [unclosed\n")); !Unreadable(issues) {
+		t.Errorf("a broken file is not unreadable: %+v", issues)
+	}
+}

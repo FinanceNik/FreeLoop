@@ -52,13 +52,18 @@ func (e *Engine) reload(changed []string) {
 		case f == config.FileName:
 			cfg, issues, err := config.Load(e.dataDir)
 			if err != nil {
-				issues = append(issues, config.Issue{File: config.FileName, Message: err.Error()})
+				issues = append(issues, config.Issue{File: config.FileName, Message: err.Error(), Unreadable: true})
 			}
-			netguard.SetLocalOnly(cfg.Network.LocalOnly)
 			e.mu.Lock()
-			e.cfg = cfg
+			// A file that cannot be read keeps the settings in force, so a
+			// half-saved edit does not turn off local-only mode or hooks.
+			if !config.Unreadable(issues) {
+				e.cfg = cfg
+			}
+			localOnly := e.cfg.Network.LocalOnly
 			e.issues[issueConfig] = issues
 			e.mu.Unlock()
+			netguard.SetLocalOnly(localOnly)
 		case f == config.ProvidersFileName:
 			if err := e.loadProviders(); err != nil {
 				e.setIssues(issueProviders, []config.Issue{{File: config.ProvidersFileName, Message: err.Error()}})

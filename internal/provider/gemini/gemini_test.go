@@ -223,3 +223,30 @@ func TestMadeUpIDsAndBudgets(t *testing.T) {
 		}
 	}
 }
+
+// Review finding: a null candidate or part crashed the app, the first
+// inside the SDK; both now fail or skip without a panic.
+func TestNullCandidatesAndParts(t *testing.T) {
+	for _, body := range []string{
+		`{"candidates":[{"content":{"role":"model","parts":[null,{"text":"ok"}]},"finishReason":"STOP"}]}`,
+		`{"candidates":[null]}`,
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprintf(w, "data: %s\n\n", body)
+		}))
+		ch, err := New(Options{BaseURL: srv.URL, APIKey: "k"}).Stream(context.Background(), provider.ChatRequest{Model: "gemini-3-pro",
+			Messages: []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: "hi"}}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var last provider.Event
+		for ev := range ch {
+			last = ev
+		}
+		if last.Type != provider.EventDone && last.Type != provider.EventError {
+			t.Errorf("%s: last event %+v", body, last)
+		}
+		srv.Close()
+	}
+}

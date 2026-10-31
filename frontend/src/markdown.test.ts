@@ -59,3 +59,18 @@ test("only http links are followed", () => {
   assert.equal(safeHref("file:///etc/passwd"), null);
   assert.equal(safeHref("/wails/runtime"), null);
 });
+
+// Review findings: a long run of spaces in a heading backtracked for
+// seconds, and thousands of > overflowed the stack and blanked the window.
+test("hostile headings and quotes stay fast and shallow", () => {
+  let start = Date.now();
+  const [h] = parseMarkdown("# Title" + " ".repeat(20000) + "end");
+  assert.equal(h.type, "heading");
+  assert.ok(Date.now() - start < 500, `heading took ${Date.now() - start} ms`);
+  start = Date.now();
+  assert.equal(parseMarkdown(">".repeat(20000) + " hi")[0].type, "quote");
+  assert.ok(Date.now() - start < 2000, `quotes took ${Date.now() - start} ms`);
+  assert.deepEqual(parseMarkdown("## Title ##"), parseMarkdown("## Title"));
+  const [csharp] = parseMarkdown("# C#");
+  assert.equal(csharp.type === "heading" && csharp.children[0].type === "text" ? csharp.children[0].text : "", "C#");
+});

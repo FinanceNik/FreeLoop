@@ -2,9 +2,12 @@ package provider
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -64,4 +67,19 @@ func transient(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "connection reset by peer") || strings.Contains(msg, "broken pipe")
+}
+
+// RecoverStream, deferred in a stream goroutine after close, turns a panic
+// into an error event: one malformed response from an endpoint, or a bug
+// it hits in an SDK, fails the turn instead of the app.
+func RecoverStream(ch chan<- Event) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	log.Printf("provider: stream panic: %v\n%s", r, debug.Stack())
+	select {
+	case ch <- Event{Type: EventError, Err: fmt.Errorf("the provider sent a response that could not be read (%v)", r)}:
+	default:
+	}
 }

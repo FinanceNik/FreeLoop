@@ -256,6 +256,12 @@ func (e *Engine) Config() config.Config {
 // SaveSettings replaces config.yaml (SET-004, GUI-011). Turning bypass mode
 // off also takes any session out of it on its next mode change.
 func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
+	e.mu.Lock()
+	broken := config.Unreadable(e.issues[issueConfig])
+	e.mu.Unlock()
+	if broken {
+		return config.Config{}, fmt.Errorf("%s cannot be read, so it is not overwritten; fix or remove it first", config.FileName)
+	}
 	c.Version = 1
 	if err := config.Save(e.dataDir, c); err != nil {
 		return config.Config{}, err

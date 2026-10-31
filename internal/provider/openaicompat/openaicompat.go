@@ -396,6 +396,7 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 	ch := make(chan provider.Event, 64)
 	go func() {
 		defer close(ch)
+		defer provider.RecoverStream(ch)
 		defer resp.Body.Close()
 		send := func(ev provider.Event) bool {
 			select {
@@ -470,7 +471,7 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 			for _, tc := range d.ToolCalls {
 				var acc *callAcc
 				switch {
-				case tc.Index != nil && *tc.Index < len(calls):
+				case tc.Index != nil && *tc.Index >= 0 && *tc.Index < len(calls):
 					acc = calls[*tc.Index]
 					// Some servers send every call as index 0, each complete.
 					if tc.ID != "" && acc.id != tc.ID && json.Valid([]byte(acc.args.String())) {

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
@@ -76,4 +77,32 @@ func hasIssue(e *Engine, file string) bool {
 		}
 	}
 	return false
+}
+
+// Review finding: a config.yaml that could not be read was replaced by
+// defaults on reload and overwritten by the next save.
+func TestUnreadableConfigIsKept(t *testing.T) {
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	cfg := config.Default()
+	cfg.Network.LocalOnly = false
+	cfg.UI.Theme = "dark"
+	if _, err := e.SaveSettings(cfg); err != nil {
+		t.Fatal(err)
+	}
+	broken := []byte("ui: [unclosed\n")
+	if err := os.WriteFile(filepath.Join(dir, config.FileName), broken, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.reload([]string{config.FileName})
+	if e.Config().UI.Theme != "dark" {
+		t.Errorf("theme after a broken edit = %q", e.Config().UI.Theme)
+	}
+	if _, err := e.SaveSettings(config.Default()); err == nil {
+		t.Error("saved over a file that cannot be read")
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, config.FileName)); string(b) != string(broken) {
+		t.Error("the broken file was rewritten")
+	}
 }

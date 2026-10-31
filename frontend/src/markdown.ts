@@ -22,11 +22,26 @@ export type Block =
   | { type: "para"; children: Inline[] };
 
 const fence = /^\s*(```|~~~)\s*([\w+#.-]*)\s*$/;
-const heading = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
+// The closing #s are cut by headingText: a lazy group before optional
+// spaces and #s backtracks in cubic time on a long line of spaces.
+const heading = /^(#{1,6})\s+(.*)$/;
 const bullet = /^\s*[-*+]\s+(.*)$/;
 const numbered = /^\s*(\d{1,9})[.)]\s+(.*)$/;
 const rule = /^\s*([-*_])(\s*\1){2,}\s*$/;
 const tableSep = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+
+// headingText drops a heading's closing #s, which need a space before them.
+function headingText(s: string): string {
+  let t = s.trimEnd();
+  let j = t.length;
+  while (j > 0 && t[j - 1] === "#") j--;
+  if (j < t.length && (j === 0 || t[j - 1] === " " || t[j - 1] === "\t")) t = t.slice(0, j).trimEnd();
+  return t;
+}
+
+// Quotes nest deeper than this only as text: each level is a recursive
+// parse, and thousands of > would overflow the stack.
+const MAX_QUOTE_DEPTH = 16;
 
 function cells(line: string): string[] {
   let s = line.trim();
@@ -35,7 +50,7 @@ function cells(line: string): string[] {
   return s.split("|").map((c) => c.trim());
 }
 
-export function parseMarkdown(src: string): Block[] {
+export function parseMarkdown(src: string, depth = 0): Block[] {
   const lines = src.replace(/\r\n?/g, "\n").split("\n");
   const blocks: Block[] = [];
   let i = 0;
@@ -56,7 +71,7 @@ export function parseMarkdown(src: string): Block[] {
       continue;
     }
     if ((m = heading.exec(line))) {
-      blocks.push({ type: "heading", level: m[1].length, children: parseInline(m[2]) });
+      blocks.push({ type: "heading", level: m[1].length, children: parseInline(headingText(m[2])) });
       i++;
       continue;
     }
@@ -68,7 +83,8 @@ export function parseMarkdown(src: string): Block[] {
     if (line.trimStart().startsWith(">")) {
       const body: string[] = [];
       while (i < lines.length && lines[i].trimStart().startsWith(">")) body.push(lines[i++].trimStart().replace(/^>\s?/, ""));
-      blocks.push({ type: "quote", children: parseMarkdown(body.join("\n")) });
+      const inner = body.join("\n");
+      blocks.push({ type: "quote", children: depth < MAX_QUOTE_DEPTH ? parseMarkdown(inner, depth + 1) : [{ type: "para", children: parseInline(inner) }] });
       continue;
     }
     if (line.includes("|") && i + 1 < lines.length && tableSep.test(lines[i + 1])) {

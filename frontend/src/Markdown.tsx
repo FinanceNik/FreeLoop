@@ -1,13 +1,42 @@
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { Component, memo, useMemo, useState, type ReactNode } from "react";
 import { Browser, Clipboard } from "@wailsio/runtime";
 import { parseMarkdown, safeHref, type Block, type Inline } from "./markdown.ts";
 
 // Markdown renders agent text as React elements (see markdown.ts): no HTML
 // from the model ever reaches the DOM.
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
+  return (
+    <Plain text={text}>
+      <Rendered text={text} />
+    </Plain>
+  );
+});
+
+function Rendered({ text }: { text: string }) {
   const blocks = useMemo(() => parseMarkdown(text), [text]);
   return <div className="md">{blocks.map((b, i) => renderBlock(b, i))}</div>;
-});
+}
+
+// Plain shows the text as it is if rendering it fails, so one message the
+// parser cannot handle never takes down the window, which would come back
+// with the session on every launch. It tries again when the text changes.
+class Plain extends Component<{ text: string; children: ReactNode }, { failed: string | null }> {
+  state = { failed: null as string | null };
+  static getDerivedStateFromError() {
+    return { failed: "" };
+  }
+  componentDidCatch(err: unknown) {
+    console.error("markdown: rendering failed", err);
+    this.setState({ failed: this.props.text });
+  }
+  componentDidUpdate(prev: { text: string }) {
+    if (this.state.failed !== null && prev.text !== this.props.text) this.setState({ failed: null });
+  }
+  render() {
+    if (this.state.failed !== null) return <pre className="md-plain">{this.props.text}</pre>;
+    return this.props.children;
+  }
+}
 
 function renderBlock(b: Block, key: number): ReactNode {
   switch (b.type) {

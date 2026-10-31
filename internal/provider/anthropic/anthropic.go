@@ -196,6 +196,7 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 	ch := make(chan provider.Event, 64)
 	go func() {
 		defer close(ch)
+		defer provider.RecoverStream(ch)
 		defer stream.Close()
 		send := func(ev provider.Event) bool {
 			select {

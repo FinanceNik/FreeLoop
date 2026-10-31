@@ -260,6 +260,7 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 	ch := make(chan provider.Event, 64)
 	go func() {
 		defer close(ch)
+		defer provider.RecoverStream(ch)
 		send := func(ev provider.Event) bool {
 			select {
 			case ch <- ev:
@@ -312,8 +313,8 @@ func (p *Provider) run(seq iter.Seq2[*genai.GenerateContentResponse, error], sen
 				CacheReadTokens: int64(u.CachedContentTokenCount),
 			}
 		}
-		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
-			if len(resp.Candidates) > 0 && resp.Candidates[0].FinishReason != "" {
+		if len(resp.Candidates) == 0 || resp.Candidates[0] == nil || resp.Candidates[0].Content == nil {
+			if len(resp.Candidates) > 0 && resp.Candidates[0] != nil && resp.Candidates[0].FinishReason != "" {
 				finish = resp.Candidates[0].FinishReason
 			}
 			continue
@@ -324,6 +325,8 @@ func (p *Provider) run(seq iter.Seq2[*genai.GenerateContentResponse, error], sen
 		}
 		for _, part := range cand.Content.Parts {
 			switch {
+			case part == nil:
+				continue
 			case part.FunctionCall != nil:
 				calls++
 				fc := part.FunctionCall

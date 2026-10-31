@@ -2664,3 +2664,11 @@ table.hooks .hook-command {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
+
+/* Agent text shown as it is when it cannot be formatted. */
+.md-plain {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  margin: 0;
+}

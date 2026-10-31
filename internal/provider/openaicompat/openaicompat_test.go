@@ -251,3 +251,17 @@ func TestEffortInTheRequest(t *testing.T) {
 		}
 	}
 }
+
+// Review finding: a negative tool call index indexed the call list and
+// crashed the app.
+func TestStreamNegativeIndex(t *testing.T) {
+	srv := server(t, []string{
+		`{"choices":[{"delta":{"tool_calls":[{"index":-1,"id":"a","function":{"name":"read_file","arguments":"{}"}}]}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+	}, nil)
+	defer srv.Close()
+	_, done := collect(t, New(Options{Preset: "ollama-v1", BaseURL: srv.URL + "/v1"}), req)
+	if calls := done.Message.ToolCalls(); len(calls) != 1 || calls[0].ToolCallID != "a" {
+		t.Errorf("calls = %+v", calls)
+	}
+}

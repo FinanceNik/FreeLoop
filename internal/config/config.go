@@ -177,12 +177,27 @@ type Issue struct {
 	// Line is the line in File the problem is on, when known.
 	Line    int    `json:"line,omitempty"`
 	Message string `json:"message"`
+	// Unreadable marks a file that could not be parsed at all, as opposed
+	// to one with a setting ignored.
+	Unreadable bool `json:"unreadable,omitempty"`
+}
+
+// Unreadable reports whether any issue says its file could not be parsed.
+func Unreadable(issues []Issue) bool {
+	for _, is := range issues {
+		if is.Unreadable {
+			return true
+		}
+	}
+	return false
 }
 
 // Load reads config.yaml from dir. A missing file yields Default(). A file
-// that cannot be parsed yields Default() plus an issue; invalid fields fall
-// back to their defaults with an issue each. The error is reserved for I/O
-// failures other than a missing file.
+// that cannot be parsed yields Default() plus an unreadable issue; an
+// unknown key is reported and the rest of the file kept, so a typo does not
+// turn off local-only mode or hooks; invalid fields fall back to their
+// defaults with an issue each. The error is reserved for I/O failures
+// other than a missing file.
 func Load(dir string) (Config, []Issue, error) {
 	path := filepath.Join(dir, FileName)
 	b, err := os.ReadFile(path)
@@ -203,11 +218,17 @@ func parse(b []byte) (Config, []Issue) {
 	cfg := Default()
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
+	var issues []Issue
 	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return Default(), []Issue{{Message: err.Error()}}
+		// Read again without the strict check: an unknown key is reported
+		// and ignored; only a file that still cannot be read is dropped.
+		cfg = Default()
+		if err2 := yaml.Unmarshal(b, &cfg); err2 != nil {
+			return Default(), []Issue{{Message: err2.Error(), Unreadable: true}}
+		}
+		issues = append(issues, Issue{Message: err.Error() + " (ignored; the rest of the file applies)"})
 	}
-	issues := cfg.Validate()
-	return cfg, issues
+	return cfg, append(issues, cfg.Validate()...)
 }
 
 // SocketFileName is the headless API's Unix socket in the data folder
