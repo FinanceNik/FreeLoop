@@ -28,6 +28,7 @@ import { allTags, isEmpty, matches, parseQuery, sameFilter, saveFilter, type Sav
 import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
+import Board from "./Board.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
@@ -51,6 +52,7 @@ type Screen =
   | { kind: "environments" }
   | { kind: "settings" }
   | { kind: "attention" }
+  | { kind: "board" }
   | { kind: "profiles" }
   | { kind: "skills" }
   | { kind: "mcp" }
@@ -525,6 +527,7 @@ export default function App() {
       ...collect(),
       { id: "app:new", title: "New session", group: "Action", keywords: "create start", run: () => setScreen({ kind: "new" }) },
       page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: "⌘0", detail: attentionCount ? `${attentionCount} waiting` : undefined }),
+      page("board", "Board", () => setScreen({ kind: "board" }), { keywords: "cards overview columns kanban" }),
       page("providers", "Providers", () => setScreen({ kind: "providers" }), { keywords: "api keys models" }),
       page("profiles", "Profiles", () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
       page("skills", "Skills", () => setScreen({ kind: "skills" })),
@@ -625,6 +628,9 @@ export default function App() {
           >
             Needs attention
             {attentionCount > 0 && <span className="badge badge-waiting_permission">{attentionCount}</span>}
+          </button>
+          <button className="attention-link" aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
+            Board
           </button>
           <div className="filters">
             <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -979,6 +985,15 @@ export default function App() {
               )}
             </div>
           </div>
+        )}
+        {screen.kind === "board" && (
+          <Board
+            sessions={visible.filter((s) => s.status !== "archived")}
+            projectName={(s) => projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)}
+            statusLabel={STATUS_LABEL}
+            filtered={!isEmpty(filter)}
+            onOpen={(id) => openSession(id)}
+          />
         )}
         {screen.kind === "attention" && <Attention items={attention} onOpen={openSession} onChanged={refreshAttention} onError={report} />}
         {STANDALONE && screen.kind === "session" && !selected && sessionsLoaded && <div className="empty">This session no longer exists.</div>}

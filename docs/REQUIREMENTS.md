@@ -101,7 +101,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **GUI-013** · v1 · **File tree and viewer.** Read-only browser of the project with open-in-editor. *Accept:* a file changed by the agent is highlighted in the tree.
 - **GUI-014** · v1 · **Command palette and keyboard-first navigation.** *Accept:* every sidebar and panel action is reachable from the palette.
 - **GUI-015** · v1 · **Multiple windows.** A session can be opened in its own window. *Accept:* two windows stream two sessions simultaneously.
-- **GUI-016** · v1 · **Board view.** One card per session as an alternative home screen.
+- **GUI-016** · v1 · **Board view.** One card per session as an alternative home screen. *Accept:* every unarchived session the sidebar lists shows as a card in its status's column (needs you, running, idle), and a card opens its session.
 - **GUI-017** · v1 · **Workspace of up to four sessions.** The main window shows one, two, three or four sessions side by side, each pane streaming live with its own composer and approvals; the layout and its sessions are kept across restarts. *Accept:* four sessions in four projects stream at once in one window, an approval key acts only in the focused pane, and the layout returns after a restart.
 
 ### Sessions and history (SES)
