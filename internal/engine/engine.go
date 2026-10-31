@@ -118,6 +118,12 @@ type Engine struct {
 	schedules     sync.Mutex
 	stopSchedules chan struct{}
 	scheduling    sync.WaitGroup
+	// scheduleCtx is the context runs start under; Close cancels it, so a
+	// run that is still starting does not hold up quitting.
+	scheduleCtx    context.Context
+	cancelSchedule context.CancelFunc
+	// closing is set under mu when Close begins: no runtime starts after.
+	closing bool
 	// starting are runtimes being set up, so hooks find them while the
 	// harness starts (an external agent's requests during session/load).
 	starting map[string]*runtime
@@ -204,6 +210,7 @@ func Open(opts Options) (*Engine, error) {
 		e.watching.Add(1)
 		go e.watch(interval)
 	}
+	e.scheduleCtx, e.cancelSchedule = context.WithCancel(context.Background())
 	if opts.ScheduleInterval >= 0 {
 		interval := opts.ScheduleInterval
 		if interval == 0 {
@@ -220,6 +227,10 @@ func Open(opts Options) (*Engine, error) {
 func (e *Engine) SetOpenURL(f func(string) error) { e.openURL = f }
 
 func (e *Engine) Close() error {
+	e.mu.Lock()
+	e.closing = true
+	e.mu.Unlock()
+	e.cancelSchedule()
 	close(e.stopSchedules)
 	e.scheduling.Wait()
 	e.mu.Lock()
@@ -241,6 +252,8 @@ func (e *Engine) Close() error {
 	close(e.quit)
 	e.watching.Wait()
 	e.bg.Wait()
+	// An MCP server a background start registered after the first stop.
+	e.mcp.StopAll()
 	e.bus.close()
 	e.notifying.Wait()
 	return e.store.Close()

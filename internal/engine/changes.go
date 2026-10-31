@@ -356,7 +356,7 @@ func (e *Engine) gitChanged(sid string) {
 	r, ok := e.runtimes[sid]
 	e.mu.Unlock()
 	if ok {
-		e.bg.Go(func() { e.refreshGit(r) })
+		e.refreshGitLater(r)
 		return
 	}
 	e.bg.Go(func() {

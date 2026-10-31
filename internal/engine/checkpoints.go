@@ -127,6 +127,10 @@ func (e *Engine) Rewind(ctx context.Context, sid string, seq int64) error {
 	// The session counts as busy while files are restored, so a prompt
 	// sent meanwhile waits in the queue and starts afterwards.
 	r.mu.Lock()
+	if r.stopped {
+		r.mu.Unlock()
+		return errStopped
+	}
 	if r.busy {
 		r.mu.Unlock()
 		return errors.New("stop the running turn before rewinding")

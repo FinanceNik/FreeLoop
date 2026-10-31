@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -55,16 +56,46 @@ func (e *Engine) RenameSession(ctx context.Context, sid, title string) error {
 	return nil
 }
 
-// stopRuntime cancels a session's turn and queue, waits for it, and forgets
-// the live session.
+// stopRuntime cancels a session's turn and queue, waits for it and its git
+// refreshes, and forgets the live session. A start in progress is waited
+// for first, so it cannot install a runtime after the stop.
 func (e *Engine) stopRuntime(sid string) {
+	if lock, ok := e.startLocks.Load(sid); ok {
+		lock.(*sync.Mutex).Lock()
+		defer lock.(*sync.Mutex).Unlock()
+	}
 	e.mu.Lock()
 	r, ok := e.runtimes[sid]
 	delete(e.runtimes, sid)
 	e.mu.Unlock()
 	if ok {
 		r.stop()
+		r.jobs.Wait()
 	}
+}
+
+// stopIfIdle stops a session's runtime unless a turn holds it, checking
+// and removing under the runtime's lock so a prompt cannot start between.
+func (e *Engine) stopIfIdle(sid string) bool {
+	e.mu.Lock()
+	r, ok := e.runtimes[sid]
+	if !ok {
+		e.mu.Unlock()
+		return false
+	}
+	r.mu.Lock()
+	if r.busy {
+		r.mu.Unlock()
+		e.mu.Unlock()
+		return false
+	}
+	r.stopped = true
+	delete(e.runtimes, sid)
+	r.mu.Unlock()
+	e.mu.Unlock()
+	r.stop()
+	r.jobs.Wait()
+	return true
 }
 
 // ArchiveSession hides a session from the default list (SES-005), stopping
@@ -135,10 +166,12 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 			log.Printf("engine: kept the worktree %s of deleted session %s: %v", ses.Worktree, sid, err)
 		}
 	}
-	e.bg.Wait() // a git refresh must not recreate the transcript
+	// stopRuntime waited for the session's git refreshes; an event a
+	// late one emits for a deleted session is dropped by the store.
 	e.mu.Lock()
 	delete(e.streams, sid)
 	e.mu.Unlock()
+	e.startLocks.Delete(sid)
 	e.rules.forget(sid)
 	return e.store.DeleteSession(ctx, sid)
 }

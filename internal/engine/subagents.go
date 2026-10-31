@@ -44,6 +44,9 @@ func (s sessionSubagents) Run(ctx context.Context, description, prompt string) (
 	if _, err := e.Prompt(ctx, child.ID, prompt); err != nil {
 		return harness.SubagentResult{SessionID: child.ID}, err
 	}
+	// The child's runtime, and a container it started, stop until the
+	// user prompts it again, also when the parent's turn was stopped.
+	defer e.stopRuntime(child.ID)
 	e.mu.Lock()
 	r := e.runtimes[child.ID]
 	e.mu.Unlock()
@@ -62,9 +65,6 @@ func (s sessionSubagents) Run(ctx context.Context, description, prompt string) (
 			}
 		}
 	}
-	// The child's work is done: its runtime, and a container it started,
-	// stop until the user prompts it again.
-	e.stopRuntime(child.ID)
 	events, err := e.store.Events(ctx, child.ID, 0)
 	if err != nil {
 		return harness.SubagentResult{SessionID: child.ID}, err

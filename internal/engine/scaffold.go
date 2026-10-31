@@ -101,13 +101,9 @@ func (e *Engine) watchAgents() {
 			if r.harnessID != p.ID || r.agentFiles == "" || r.agentFiles == fp {
 				continue
 			}
-			r.mu.Lock()
-			busy := r.busy
-			r.mu.Unlock()
-			if busy {
+			if !e.stopIfIdle(sid) {
 				continue
 			}
-			e.stopRuntime(sid)
 			e.emit(sid, event.Notice, event.NoticeData{Message: fmt.Sprintf("The agent's files in %s changed; it starts again with your next message.", p.Watch)})
 		}
 	}

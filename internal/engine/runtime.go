@@ -18,6 +18,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
+	"github.com/FinanceNik/Freeloop/internal/store"
 )
 
 // runtime is a live session: its harness session and the prompt it is
@@ -47,9 +48,15 @@ type runtime struct {
 	base    string
 	lastGit event.GitStateData
 
-	mu     sync.Mutex
-	busy   bool
-	cancel context.CancelFunc
+	// jobs are the git refreshes in flight, which stopRuntime waits for.
+	jobs sync.WaitGroup
+
+	mu   sync.Mutex
+	busy bool
+	// stopped is set once stop began: nothing starts on this runtime
+	// again, and a caller that fetched it earlier fetches a new one.
+	stopped bool
+	cancel  context.CancelFunc
 	// handoff goes with the session's first prompt (HRN-012).
 	handoff *harness.Resource
 	// turn is the running turn's context, which Stop cancels; hooks run
@@ -61,6 +68,7 @@ type runtime struct {
 
 func (r *runtime) stop() {
 	r.mu.Lock()
+	r.stopped = true
 	r.queue = nil
 	if r.cancel != nil {
 		r.cancel()
@@ -106,6 +114,9 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			e.startLocks.Delete(sid) // no lock kept for an ID that is no session
+		}
 		return nil, err
 	}
 	var preset config.HarnessPreset
@@ -237,7 +248,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 			e.emit(sid, typ, data)
 			e.toolHooks(r, typ, data)
 			if changesFiles(typ, data) {
-				e.bg.Go(func() { e.refreshGit(r) })
+				e.refreshGitLater(r)
 			}
 		},
 	}
@@ -282,8 +293,12 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		hs.Close()
 		return existing, nil
 	}
+	if e.closing {
+		hs.Close()
+		return nil, errClosing
+	}
 	r.hs = hs
-	e.bg.Go(func() { e.refreshGit(r) })
+	e.refreshGitLater(r)
 	e.runtimes[sid] = r
 	return r, nil
 }
@@ -301,6 +316,16 @@ func changesFiles(typ event.Type, data any) bool {
 	return ok && m["status"] == "completed"
 }
 
+// refreshGitLater refreshes the git state in the background, counted in
+// the runtime's jobs.
+func (e *Engine) refreshGitLater(r *runtime) {
+	r.jobs.Add(1)
+	e.bg.Go(func() {
+		defer r.jobs.Done()
+		e.refreshGit(r)
+	})
+}
+
 // refreshGit records the session's git state when it changed.
 func (e *Engine) refreshGit(r *runtime) {
 	r.gitMu.Lock()
@@ -313,6 +338,13 @@ func (e *Engine) refreshGit(r *runtime) {
 	r.lastGit = st
 	e.emit(r.sid, event.GitState, st)
 }
+
+// errStopped is a message sent while its session was being stopped, by an
+// archive, a delete or a restart of its agent.
+var errStopped = errors.New("the session stopped while the message was sent; send it again")
+
+// errClosing refuses to start a session while the app quits.
+var errClosing = errors.New("Freeloop is quitting")
 
 // PromptResult says whether the prompt started or waits for the current one.
 type PromptResult struct {
@@ -353,6 +385,9 @@ func (e *Engine) enqueue(ctx context.Context, sid string, q queued) (PromptResul
 		return PromptResult{}, errors.New("empty message")
 	}
 	r, err := e.runtimeFor(ctx, sid)
+	if errors.Is(err, store.ErrNotFound) {
+		return PromptResult{}, err
+	}
 	if err != nil {
 		e.emit(sid, event.Error, event.ErrorData{Message: err.Error()})
 		e.emit(sid, event.SessionStatus, event.SessionStatusData{Status: string(session.StatusError)})
@@ -365,6 +400,9 @@ func (e *Engine) enqueue(ctx context.Context, sid string, q queued) (PromptResul
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.stopped {
+		return PromptResult{}, errStopped
+	}
 	if r.busy {
 		r.queue = append(r.queue, q)
 		return PromptResult{Queued: true}, nil
@@ -426,7 +464,8 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 func (e *Engine) release(r *runtime) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.queue) == 0 {
+	if len(r.queue) == 0 || r.stopped {
+		r.queue = nil
 		r.busy = false
 		close(r.done)
 		return

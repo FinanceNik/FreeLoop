@@ -376,3 +376,48 @@ func TestBypassNeedsOptIn(t *testing.T) {
 		t.Errorf("mode = %s", got.Mode)
 	}
 }
+
+// Review finding: a prompt that fetched its runtime just before
+// stopRuntime removed it started a turn on the stopped runtime, which
+// nothing could cancel. It now fails and asks the user to send it again.
+func TestPromptRacingAStop(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	ses, _ := demoSession(t, e, "", "ask") // the default title makes enqueue emit
+	r, err := e.runtimeFor(ctx, ses.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := e.streamFor(ses.ID)
+	b.mu.Lock() // enqueue blocks in emit after runtimeFor, before r.mu
+	errc := make(chan error, 1)
+	go func() {
+		_, err := e.Prompt(ctx, ses.ID, "hello")
+		errc <- err
+	}()
+	time.Sleep(100 * time.Millisecond)
+	e.stopRuntime(ses.ID)
+	b.mu.Unlock()
+	// Either the prompt reached the stopped runtime and was refused, or,
+	// on a slow machine, it fetched a new one after the stop; never does a
+	// turn run on the stopped runtime.
+	err = <-errc
+	r.mu.Lock()
+	busy := r.busy
+	r.mu.Unlock()
+	if busy {
+		t.Error("a turn started on the stopped runtime")
+	}
+	if err != nil && !errors.Is(err, errStopped) {
+		t.Errorf("prompt during a stop = %v", err)
+	}
+	if err == nil {
+		e.mu.Lock()
+		now := e.runtimes[ses.ID]
+		e.mu.Unlock()
+		if now == nil || now == r {
+			t.Error("the prompt ran without a live runtime")
+		}
+	}
+}
