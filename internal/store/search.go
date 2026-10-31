@@ -525,3 +525,47 @@ func (s *Store) UsageSince(ctx context.Context, since string) ([]Usage, error) {
 	}
 	return out, rows.Err()
 }
+
+// UsageRow is the tokens one model used in one session on one day, with
+// what the analytics view groups by (PRV-008). A deleted session's rows
+// keep their tokens and lose the rest.
+type UsageRow struct {
+	Usage
+	SessionID   string   `json:"sessionId"`
+	Title       string   `json:"title"`
+	ProjectID   string   `json:"projectId"`
+	ProjectRoot string   `json:"projectRoot"`
+	HarnessID   string   `json:"harnessId"`
+	ParentID    string   `json:"parentId"`
+	Tags        []string `json:"tags"`
+	Deleted     bool     `json:"deleted"`
+}
+
+// UsageRowsSince returns the usage per day, session and model from day
+// since (YYYY-MM-DD, local time) on, newest day first.
+func (s *Store) UsageRowsSince(ctx context.Context, since string) ([]UsageRow, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT u.day, u.provider_id, u.model, sum(u.input), sum(u.output), sum(u.cache_read), sum(u.cache_write), sum(u.calls),
+		        u.session_id, coalesce(s.title, ''), coalesce(s.project_id, ''), coalesce(s.project_root, ''),
+		        coalesce(s.harness_id, ''), coalesce(s.parent_id, ''), coalesce(s.tags, ''), s.id IS NULL
+		 FROM usage u LEFT JOIN sessions s ON s.id = u.session_id
+		 WHERE u.day >= ?
+		 GROUP BY u.day, u.session_id, u.provider_id, u.model
+		 ORDER BY u.day DESC, u.session_id, u.provider_id, u.model`, since)
+	if err != nil {
+		return nil, fmt.Errorf("store: usage rows: %w", err)
+	}
+	defer rows.Close()
+	out := []UsageRow{}
+	for rows.Next() {
+		var r UsageRow
+		var tags string
+		if err := rows.Scan(&r.Day, &r.ProviderID, &r.Model, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens, &r.CacheWriteTokens, &r.Calls,
+			&r.SessionID, &r.Title, &r.ProjectID, &r.ProjectRoot, &r.HarnessID, &r.ParentID, &tags, &r.Deleted); err != nil {
+			return nil, err
+		}
+		r.Tags = strings.Fields(tags)
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

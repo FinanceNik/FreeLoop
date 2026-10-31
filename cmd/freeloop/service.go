@@ -47,6 +47,11 @@ func (s *EngineService) RunSchedule(ctx context.Context, id string) (string, err
 	return s.eng.RunSchedule(ctx, id)
 }
 
+// UsageReport returns the usage rows the analytics view groups (PRV-008).
+func (s *EngineService) UsageReport(ctx context.Context, days int) (engine.UsageReport, error) {
+	return s.eng.UsageReport(ctx, days)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }
@@ -476,6 +481,20 @@ func (s *EngineService) ExportSession(ctx context.Context, sessionID, format str
 		return "", err
 	}
 	return path, s.eng.ExportSession(ctx, sessionID, format, path)
+}
+
+// ExportUsage asks where to save the last days days of usage as CSV
+// (PRV-008) and writes it; it returns the path, or "" when the user cancels.
+func (s *EngineService) ExportUsage(ctx context.Context, days int) (string, error) {
+	path, err := s.app.Dialog.SaveFile().
+		SetMessage("Export token usage").
+		SetFilename("freeloop-usage.csv").
+		CanCreateDirectories(true).
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return "", err
+	}
+	return path, s.eng.ExportUsage(ctx, days, path)
 }
 
 // ExportConfig asks where to save a config backup (SET-005) and writes it;

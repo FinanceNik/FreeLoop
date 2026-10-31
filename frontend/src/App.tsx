@@ -30,6 +30,7 @@ import type { PaletteItem } from "./palette.ts";
 import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
 import Board from "./Board.tsx";
 import Schedules from "./Schedules.tsx";
+import Usage from "./Usage.tsx";
 import Providers from "./Providers.tsx";
 import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
@@ -55,6 +56,7 @@ type Screen =
   | { kind: "attention" }
   | { kind: "board" }
   | { kind: "schedules" }
+  | { kind: "usage" }
   | { kind: "profiles" }
   | { kind: "skills" }
   | { kind: "mcp" }
@@ -538,7 +540,7 @@ export default function App() {
       page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
       page("rules", "Permission rules", () => setScreen({ kind: "rules" }), { keywords: "allow deny" }),
       page("settings", "Settings", () => setScreen({ kind: "settings" }), { keywords: "preferences theme notifications prices" }),
-      page("usage", "Usage and prices", () => setScreen({ kind: "settings" }), { keywords: "cost tokens", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
+      page("usage", "Usage", () => setScreen({ kind: "usage" }), { keywords: "cost tokens analytics dashboard spend", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
       page("import", "Import from Claude Code", () => setScreen({ kind: "import" })),
       page("backup", "Back up or restore the configuration", () => setScreen({ kind: "settings" }), { keywords: "export import settings providers profiles" }),
       page("guide", "Setup guide", () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
@@ -634,6 +636,9 @@ export default function App() {
           </button>
           <button className="attention-link" aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
             Board
+          </button>
+          <button className="attention-link" aria-current={screen.kind === "usage" ? "page" : undefined} onClick={() => setScreen({ kind: "usage" })}>
+            Usage
           </button>
           <div className="filters">
             <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -815,8 +820,8 @@ export default function App() {
           {today && (today.models ?? []).length > 0 && (
             <button
               className="link today"
-              title="Estimated from the price table in Settings; calls to models without a price are left out"
-              onClick={() => setScreen({ kind: "settings" })}
+              title="Estimated from the price table in Settings; calls to models without a price are left out. Opens the usage dashboard."
+              onClick={() => setScreen({ kind: "usage" })}
             >
               {(today.models ?? []).some((m) => m.priced)
                 ? `Today ≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`
@@ -991,6 +996,9 @@ export default function App() {
               )}
             </div>
           </div>
+        )}
+        {screen.kind === "usage" && (
+          <Usage projects={projects} providers={providers} harnesses={harnesses} onOpenSession={(id) => openSession(id)} onOpenPrices={() => setScreen({ kind: "settings" })} onError={report} />
         )}
         {screen.kind === "board" && (
           <Board
