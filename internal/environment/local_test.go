@@ -190,6 +190,39 @@ func TestSymlinksDoNotEscapeTheGuard(t *testing.T) {
 	}
 }
 
+// Review finding: a link whose target did not exist was judged as the link
+// itself, inside the project, and the write followed it out.
+func TestWriteRefusesDanglingSymlinks(t *testing.T) {
+	outside, _ := filepath.EvalSymlinks(t.TempDir())
+	l := newTest(t, nil)
+	os.Symlink(filepath.Join(outside, "hook"), filepath.Join(l.Root(), "notes.md"))
+	os.Symlink(filepath.Join(outside, "gone", "dir"), filepath.Join(l.Root(), "folder"))
+	if err := l.FS().WriteFile("notes.md", []byte("x")); err == nil {
+		t.Error("wrote through a dangling symlink")
+	}
+	if err := l.FS().WriteFile("folder/file", []byte("x")); err == nil {
+		t.Error("wrote under a dangling directory symlink")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "hook")); err == nil {
+		t.Error("the file outside the project was created")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "gone")); err == nil {
+		t.Error("a folder outside the project was created")
+	}
+	// A link to a file inside the project is written where it points.
+	os.WriteFile(filepath.Join(l.Root(), "real.md"), []byte("old"), 0o600)
+	os.Symlink("real.md", filepath.Join(l.Root(), "alias.md"))
+	if err := l.FS().WriteFile("alias.md", []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(l.Root(), "real.md")); string(b) != "new" {
+		t.Errorf("real.md = %q", b)
+	}
+	if fi, _ := os.Lstat(filepath.Join(l.Root(), "alias.md")); fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("the link was replaced by a file")
+	}
+}
+
 func TestExecArgv(t *testing.T) {
 	l := newTest(t, nil)
 	res, err := l.Exec(context.Background(), ExecSpec{Argv: []string{"printf", "%s|%s", "a b", "$HOME"}})

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -232,6 +233,35 @@ func (b *Broker) Request(ctx context.Context, pc Context, req Request) Decision 
 	return d
 }
 
+// Hidden reports whether a deny rule refuses reading path, for leaving it
+// out of search results: a search names a folder, and a deny rule on a
+// file inside it would otherwise be read through grep. Rules that cannot
+// be loaded hide everything.
+func (b *Broker) Hidden(sessionID, root, path string) bool {
+	if b.rules == nil {
+		return false
+	}
+	rules, err := b.rules.Rules(sessionID)
+	if err != nil {
+		return true
+	}
+	for _, r := range rules {
+		if r.Effect != Deny || r.Path == "" {
+			continue
+		}
+		for _, req := range []Request{
+			{Tool: "read_file", Kind: KindRead, Paths: []string{path}},
+			{Tool: "grep", Kind: KindSearch, Paths: []string{path}},
+			{Tool: "glob", Kind: KindSearch, Paths: []string{path}},
+		} {
+			if r.Matches(req, root) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // evaluate applies the path policy and the mode. It returns false when the
 // user has to decide.
 func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
@@ -380,7 +410,11 @@ func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, ans
 		if b.sink == nil {
 			return errors.New("permission: rules cannot be saved")
 		}
-		r := RuleFor(p.req, p.pc.Root, scope)
+		r, ok := RuleFor(p.req, p.pc.Root, scope)
+		if !ok {
+			d.Reason = strings.TrimSpace(d.Reason + " Allowed once: one rule cannot cover this call, so none was saved.")
+			break
+		}
 		if err := b.sink.AddRule(p.req.SessionID, r); err != nil {
 			return fmt.Errorf("permission: save rule: %w", err)
 		}

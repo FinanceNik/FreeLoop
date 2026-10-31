@@ -27,6 +27,16 @@ func TestRuleMatching(t *testing.T) {
 		{"allow never covers pipes", Rule{Effect: Allow, Tool: "shell", Command: "cat *"}, shell("cat a | sh"), false},
 		{"allow never covers substitution", Rule{Effect: Allow, Tool: "shell", Command: "echo *"}, shell("echo $(curl evil)"), false},
 		{"allow never covers redirection", Rule{Effect: Allow, Tool: "shell", Command: "echo *"}, shell("echo x > ~/.zshrc"), false},
+		// Review finding: zsh runs code through process substitution, glob
+		// qualifiers and nested expansion, none of which used $( or a
+		// backtick.
+		{"allow never covers zsh process substitution", Rule{Effect: Allow, Tool: "shell", Command: "git diff *"}, shell("git diff =(touch X)"), false},
+		{"allow never covers zsh glob qualifiers", Rule{Effect: Allow, Tool: "shell", Command: "ls *"}, shell("ls dir/*(e:'touch X':)"), false},
+		{"allow never covers parameter expansion", Rule{Effect: Allow, Tool: "shell", Command: "git status *"}, shell(`git status ${(e)${:-$'\x24\x28touch X\x29'}}`), false},
+		{"allow never covers expansion in double quotes", Rule{Effect: Allow, Tool: "shell", Command: "git commit *"}, shell(`git commit -m "it's $(touch X)"`), false},
+		{"allow covers single-quoted text", Rule{Effect: Allow, Tool: "shell", Command: "git commit *"}, shell(`git commit -m 'fix $(x) > y'`), true},
+		{"allow covers plain double-quoted text", Rule{Effect: Allow, Tool: "shell", Command: "git commit *"}, shell(`git commit -m "fix the build"`), true},
+		{"allow never covers an open quote", Rule{Effect: Allow, Tool: "shell", Command: "echo *"}, shell(`echo 'abc`), false},
 		{"deny matches inside a chain", Rule{Effect: Deny, Tool: "shell", Command: "rm *"}, shell("make && rm -rf build"), true},
 		{"deny does not overmatch", Rule{Effect: Deny, Tool: "shell", Command: "rm *"}, shell("make format"), false},
 		{"tool pattern", Rule{Effect: Allow, Tool: "mcp__github__*"}, Request{Tool: "mcp__github__list_issues"}, true},
@@ -81,17 +91,27 @@ func TestRuleValidate(t *testing.T) {
 
 func TestRuleFor(t *testing.T) {
 	root := t.TempDir()
-	if r := RuleFor(Request{Tool: "shell", Command: " git  status "}, root, ScopeSession); r.Command != "git status" || !r.Literal || r.Scope != ScopeSession {
+	if r, _ := RuleFor(Request{Tool: "shell", Command: " git  status "}, root, ScopeSession); r.Command != "git status" || !r.Literal || r.Scope != ScopeSession {
 		t.Errorf("shell rule = %+v", r)
 	}
-	if r := RuleFor(Request{Tool: "write_file", Paths: []string{filepath.Join(root, "src", "a.go")}}, root, ScopeGlobal); r.Path != "src/a.go" || !r.Literal {
+	if r, _ := RuleFor(Request{Tool: "write_file", Paths: []string{filepath.Join(root, "src", "a.go")}}, root, ScopeGlobal); r.Path != "src/a.go" || !r.Literal {
 		t.Errorf("path rule = %+v", r)
 	}
-	if r := RuleFor(Request{Tool: "read_file", Paths: []string{"/etc/hosts"}}, root, ScopeGlobal); r.Path != "/etc/hosts" {
+	if r, _ := RuleFor(Request{Tool: "read_file", Paths: []string{"/etc/hosts"}}, root, ScopeGlobal); r.Path != "/etc/hosts" {
 		t.Errorf("outside-root rule = %+v", r)
 	}
-	r := RuleFor(Request{Tool: "write_file", Paths: []string{filepath.Join(root, "a.go")}}, root, ScopeSession)
+	r, _ := RuleFor(Request{Tool: "write_file", Paths: []string{filepath.Join(root, "a.go")}}, root, ScopeSession)
 	if !r.Matches(Request{Tool: "write_file", Paths: []string{filepath.Join(root, "a.go")}}, root) {
 		t.Error("an Allow always rule does not match the call it was made from")
+	}
+	// Review finding: these became a rule for the whole tool.
+	if _, ok := RuleFor(Request{Tool: "read_file", Kind: KindRead, Paths: []string{"/a", "/b"}}, root, ScopeGlobal); ok {
+		t.Error("a rule was made for a call with two paths")
+	}
+	if _, ok := RuleFor(Request{Tool: "shell", Kind: KindExecute}, root, ScopeGlobal); ok {
+		t.Error("a rule was made for a command it does not show")
+	}
+	if r, ok := RuleFor(Request{Tool: "mcp__docs__search", Kind: KindOther}, root, ScopeSession); !ok || r.Tool != "mcp__docs__search" {
+		t.Errorf("tool rule = %+v, %v", r, ok)
 	}
 }

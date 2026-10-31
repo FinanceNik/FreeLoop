@@ -405,3 +405,24 @@ func TestHooksBlockButNeverApprove(t *testing.T) {
 		t.Errorf("hooks that pass still leave the decision to the user: %+v", d)
 	}
 }
+
+// Review finding: path deny rules matched case-sensitively on a
+// case-insensitive volume, and a search over the folder read the file
+// anyway. Searches now leave out what a deny rule hides.
+func TestDenyRulesIgnoreCaseAndHideFromSearch(t *testing.T) {
+	b, _, _, root := setup(t)
+	rules := &memRules{global: []Rule{{Effect: Deny, Tool: "*", Path: "secrets/**", Scope: ScopeGlobal}}}
+	b.SetRules(rules, rules)
+	for _, p := range []string{"secrets/key.txt", "SECRETS/key.txt", "Secrets/KEY.txt"} {
+		d := b.Request(context.Background(), Context{Mode: ModeAsk, Root: root}, Request{SessionID: "s", Tool: "read_file", Kind: KindRead, Paths: []string{filepath.Join(root, p)}})
+		if d.Outcome != Denied {
+			t.Errorf("read %s: %s", p, d.Outcome)
+		}
+		if !b.Hidden("s", root, filepath.Join(root, p)) {
+			t.Errorf("%s not hidden from searches", p)
+		}
+	}
+	if b.Hidden("s", root, filepath.Join(root, "src", "main.go")) {
+		t.Error("an unrelated file is hidden")
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -304,22 +305,52 @@ func (f *localFS) WriteFile(p string, data []byte) error {
 	if err := f.guard.CheckWrite(abs); err != nil {
 		return err
 	}
-	if real := realTarget(abs); real != abs {
-		if err := f.guard.CheckWrite(real); err != nil {
-			return err
+	// A symlink is written where it points, checked there. One whose
+	// target does not exist is refused: it would be followed to a place
+	// realTarget cannot see, such as a file outside the project a cloned
+	// repository's link names.
+	target := abs
+	if fi, err := os.Lstat(abs); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		real, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			return fmt.Errorf("%s is a symbolic link to a file that does not exist; it is not written through", p)
 		}
+		target = real
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	// Checked before folders are made, and again once they exist, so
+	// every symlink on the way is resolved.
+	check := func() error {
+		if real := realTarget(target); real != abs {
+			return f.guard.CheckWrite(real)
+		}
+		return nil
+	}
+	if err := check(); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	if err := check(); err != nil {
 		return err
 	}
 	mode := os.FileMode(0o644)
-	if fi, err := os.Stat(abs); err == nil {
+	if fi, err := os.Lstat(target); err == nil {
 		if !fi.Mode().IsRegular() {
 			return fmt.Errorf("%s is not a regular file", p)
 		}
 		mode = fi.Mode().Perm()
 	}
-	return os.WriteFile(abs, data, mode)
+	// O_NOFOLLOW: a link put in place since the checks is not followed.
+	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 func (f *localFS) Stat(p string) (FileInfo, error) {

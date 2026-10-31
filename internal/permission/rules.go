@@ -103,9 +103,39 @@ func (r Rule) String() string {
 // shellOperators split a command line into the commands it runs.
 var shellOperators = []string{"&&", "||", ";", "|", "&", "\n"}
 
-// risky marks command lines an allow rule must never approve: substitutions
-// and redirections can run or write anything regardless of the prefix.
-var risky = []string{"$(", "`", ">", "<"}
+// expanding are the characters outside single quotes that let a shell run
+// or write more than the words of a line: substitutions and expansions
+// ($, backticks, zsh's =(...) and ${(e)...}), redirections, groups and
+// zsh glob qualifiers such as *(e:...:), and escapes.
+const expanding = "$`<>(){}\\"
+
+// plain reports whether a line is only words a prefix allow rule can
+// approve: no expanding character outside single quotes, and none of $,
+// backticks or backslashes inside double quotes, where the shell still
+// expands them. zsh, the default shell, and sh agree on both. Anything
+// else asks.
+func plain(cmd string) bool {
+	var quote rune
+	for _, c := range cmd {
+		switch {
+		case quote == '\'':
+			if c == '\'' {
+				quote = 0
+			}
+		case quote == '"':
+			if c == '"' {
+				quote = 0
+			} else if strings.ContainsRune("$`\\", c) {
+				return false
+			}
+		case c == '\'' || c == '"':
+			quote = c
+		case strings.ContainsRune(expanding, c):
+			return false
+		}
+	}
+	return quote == 0
+}
 
 func normalize(cmd string) string { return strings.Join(strings.Fields(cmd), " ") }
 
@@ -229,7 +259,7 @@ func (r Rule) matchCommand(cmd string) bool {
 		return exactForm(cmd) == exactForm(r.Command)
 	}
 	segs := segments(cmd)
-	if len(segs) != 1 || slices.ContainsFunc(risky, func(m string) bool { return strings.Contains(cmd, m) }) {
+	if len(segs) != 1 || !plain(cmd) {
 		return false
 	}
 	return commandMatches(r.Command, segs[0])
@@ -248,15 +278,43 @@ func (r Rule) matchPath(root, p string) bool {
 		}
 		return false
 	}
+	// Globs ignore case, as macOS volumes do, so SECRETS/key is secrets/key.
 	if filepath.IsAbs(pattern) {
-		return environment.MatchGlob(strings.TrimPrefix(filepath.ToSlash(pattern), "/"), strings.TrimPrefix(filepath.ToSlash(p), "/"))
+		name := strings.ToLower(strings.TrimPrefix(filepath.ToSlash(p), "/"))
+		for _, pat := range absSpellings(pattern) {
+			if environment.MatchGlob(strings.ToLower(strings.TrimPrefix(filepath.ToSlash(pat), "/")), name) {
+				return true
+			}
+		}
+		return false
 	}
 	for _, rt := range canonical(root) {
-		if rel, err := filepath.Rel(rt, p); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return environment.MatchGlob(pattern, filepath.ToSlash(rel))
+		if within(p, rt) {
+			rel := strings.TrimPrefix(p[len(rt):], string(filepath.Separator))
+			return environment.MatchGlob(strings.ToLower(pattern), strings.ToLower(filepath.ToSlash(rel)))
 		}
 	}
 	return false
+}
+
+// absSpellings returns an absolute pattern under each spelling of its
+// folders without globs, so /tmp/** also matches the resolved
+// /private/tmp/... paths reach the broker as.
+func absSpellings(pattern string) []string {
+	parts := strings.Split(filepath.ToSlash(pattern), "/")
+	i := slices.IndexFunc(parts, func(s string) bool { return strings.ContainsAny(s, "*?[") })
+	if i < 0 {
+		i = len(parts)
+	}
+	prefix, rest := strings.Join(parts[:i], "/"), strings.Join(parts[i:], "/")
+	if prefix == "" {
+		return []string{pattern}
+	}
+	var out []string
+	for _, sp := range canonical(filepath.FromSlash(prefix)) {
+		out = append(out, path.Join(filepath.ToSlash(sp), rest))
+	}
+	return append(out, pattern)
 }
 
 // Matches reports whether r applies to req in a session rooted at root. An
@@ -288,8 +346,11 @@ func (r Rule) Matches(req Request, root string) bool {
 }
 
 // RuleFor is the rule "Allow always" creates for req: the literal command,
-// or the literal path (relative to root when inside it), or the tool alone.
-func RuleFor(req Request, root string, scope Scope) Rule {
+// or the literal path (relative to root when inside it), or the tool alone
+// for a tool that names neither. It reports false for a request one rule
+// cannot narrow, several paths or a command it does not show: a rule for
+// the whole tool would allow far more than the user saw.
+func RuleFor(req Request, root string, scope Scope) (Rule, bool) {
 	r := Rule{Effect: Allow, Tool: req.Tool, Scope: scope}
 	switch {
 	case req.Command != "":
@@ -302,8 +363,10 @@ func RuleFor(req Request, root string, scope Scope) Rule {
 				break
 			}
 		}
+	case len(req.Paths) > 1, req.Kind == KindExecute:
+		return r, false
 	}
-	return r
+	return r, true
 }
 
 // RuleSource supplies the rules in force for a session, every scope

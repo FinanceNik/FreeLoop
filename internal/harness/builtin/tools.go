@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 	"time"
 
@@ -193,6 +194,7 @@ func globTool() *tool {
 				if err != nil {
 					return result{}, err
 				}
+				paths = slices.DeleteFunc(paths, func(p string) bool { return s.hidden(p) })
 				if len(paths) == 0 {
 					return result{text: "No files matched."}, nil
 				}
@@ -200,6 +202,12 @@ func globTool() *tool {
 			}}, nil
 		},
 	}
+}
+
+// hidden reports whether a search result is a file a deny rule refuses to
+// read, so a search over its folder does not show it either.
+func (s *session) hidden(p string) bool {
+	return s.p.Broker.Hidden(s.p.SessionID, s.env.Root(), s.env.Resolve(p))
 }
 
 func grepTool() *tool {
@@ -232,6 +240,7 @@ func grepTool() *tool {
 				if err != nil {
 					return result{}, err
 				}
+				matches = slices.DeleteFunc(matches, func(m environment.Match) bool { return s.hidden(m.Path) })
 				if len(matches) == 0 {
 					return result{text: "No matches."}, nil
 				}

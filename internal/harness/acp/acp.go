@@ -65,6 +65,7 @@ type session struct {
 }
 
 type approval struct {
+	kind    permission.Kind
 	paths   []string
 	command string
 	until   time.Time
@@ -415,7 +416,7 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 	switch d.Outcome {
 	case permission.Allowed:
 		s.mu.Lock()
-		s.approved = approval{paths: paths, command: command, until: time.Now().Add(2 * time.Minute)}
+		s.approved = approval{kind: kind, paths: paths, command: command, until: time.Now().Add(2 * time.Minute)}
 		s.mu.Unlock()
 		return pick(sdk.PermissionOptionKindAllowOnce, sdk.PermissionOptionKindAllowAlways)
 	case permission.Denied:
@@ -424,19 +425,32 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 	return sdk.RequestPermissionResponse{Outcome: sdk.NewRequestPermissionOutcomeCancelled()}, nil
 }
 
-// covered reports whether a just-approved request covers this path or
-// command, and uses the approval up for that path.
-func (s *session) covered(path, command string) bool {
+// covered reports whether a just-approved request of one of these kinds
+// covers this path or command. An approval covers only its own kind of
+// action, so a read allowed by policy never lets a write through; spend
+// uses it up, so an edit's approval covers the one write it was for and a
+// command's the one run.
+func (s *session) covered(kinds []permission.Kind, path, command string, spend bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a := s.approved
-	if time.Now().After(a.until) {
+	if time.Now().After(a.until) || !slices.Contains(kinds, a.kind) {
 		return false
 	}
 	if command != "" {
-		return a.command != "" && strings.Join(strings.Fields(a.command), " ") == strings.Join(strings.Fields(command), " ")
+		ok := a.command != "" && strings.Join(strings.Fields(a.command), " ") == strings.Join(strings.Fields(command), " ")
+		if ok && spend {
+			s.approved.command = ""
+		}
+		return ok
 	}
-	return slices.Contains(a.paths, path)
+	if !slices.Contains(a.paths, path) {
+		return false
+	}
+	if spend {
+		s.approved.paths = slices.DeleteFunc(slices.Clone(a.paths), func(p string) bool { return p == path })
+	}
+	return true
 }
 
 // ask sends a file or terminal request the agent did not ask permission
@@ -465,7 +479,7 @@ func (s *session) ask(ctx context.Context, kind permission.Kind, title, path, co
 // allowed by policy; outside it the broker asks.
 func (s *session) ReadTextFile(ctx context.Context, r sdk.ReadTextFileRequest) (sdk.ReadTextFileResponse, error) {
 	path := s.env.Resolve(r.Path)
-	if !s.covered(path, "") {
+	if !s.covered([]permission.Kind{permission.KindRead, permission.KindEdit}, path, "", false) {
 		if err := s.ask(ctx, permission.KindRead, "Read "+filepath.Base(path), path, ""); err != nil {
 			return sdk.ReadTextFileResponse{}, err
 		}
@@ -494,7 +508,7 @@ func (s *session) ReadTextFile(ctx context.Context, r sdk.ReadTextFileRequest) (
 // the user just approved a change to that file.
 func (s *session) WriteTextFile(ctx context.Context, r sdk.WriteTextFileRequest) (sdk.WriteTextFileResponse, error) {
 	path := s.env.Resolve(r.Path)
-	if !s.covered(path, "") {
+	if !s.covered([]permission.Kind{permission.KindEdit, permission.KindDelete, permission.KindMove}, path, "", true) {
 		if err := s.ask(ctx, permission.KindEdit, "Write "+filepath.Base(path), path, ""); err != nil {
 			return sdk.WriteTextFileResponse{}, err
 		}
@@ -512,7 +526,7 @@ type terminal struct {
 
 func (s *session) CreateTerminal(ctx context.Context, r sdk.CreateTerminalRequest) (sdk.CreateTerminalResponse, error) {
 	line := strings.TrimSpace(r.Command + " " + strings.Join(r.Args, " "))
-	if !s.covered("", line) {
+	if !s.covered([]permission.Kind{permission.KindExecute}, "", line, true) {
 		if err := s.ask(ctx, permission.KindExecute, "Run "+line, "", line); err != nil {
 			return sdk.CreateTerminalResponse{}, err
 		}
