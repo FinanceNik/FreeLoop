@@ -41,7 +41,8 @@
         "checkpoint",
         "rewind",
         "handoff",
-        "pull_request"
+        "pull_request",
+        "tags_changed"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -94,9 +95,21 @@
     {
       "if": { "properties": { "type": { "const": "hook_ran" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/hookRan" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "tags_changed" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/tags" } } }
     }
   ],
   "$defs": {
+    "tags": {
+      "type": "object",
+      "description": "A session's tags from this event on (SES-013): lower case, without spaces, sorted, each at most 32 characters.",
+      "required": ["tags"],
+      "properties": {
+        "tags": { "type": "array", "items": { "type": "string", "pattern": "^[^\\sA-Z]{1,32}$" }, "maxItems": 16 }
+      }
+    },
     "hookRan": {
       "type": "object",
       "description": "One hook run (EXT-005). Exit code 2 blocked what it ran for; any other non-zero code, a timeout or an error was reported and the session went on.",

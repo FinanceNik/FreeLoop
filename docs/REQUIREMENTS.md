@@ -118,7 +118,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **SES-010** · v1 · **Worktree per session (opt-in).** Create a worktree and branch at session start, clean up on archive, merge-back or PR helper. *Accept:* two sessions on the same repo edit the same file without interfering.
 - **SES-011** · v1 · **Pull request creation.** Through the GitHub CLI with an AI-drafted, editable description. *Accept:* the PR URL appears in the session after creation.
 - **SES-012** · later · **Scheduled and recurring sessions.**
-- **SES-013** · v1 · **Tags and saved filters.**
+- **SES-013** · v1 · **Tags and saved filters.** Sessions carry tags; the sidebar filters by tag (from a menu or `#tag` in the search box) and keeps named filters. *Accept:* a tag added in one session shows in the sidebar at once, filtering by it lists only tagged sessions, and a saved filter returns after a restart.
 - **SES-014** · v1 · **Checkpoints and rewind.** Before a turn changes files, the session's working tree is snapshotted; any user message offers "rewind to here", which restores the files to that point and continues the conversation from it, the later turns kept in the transcript as rewound. *Accept:* after rewinding past an edit, the file is back to its earlier content and the next turn's model context ends at the chosen message.
 
 ### Permissions and security (SEC)

@@ -57,7 +57,10 @@ type Session struct {
 	WorktreeBranch string `json:"worktreeBranch"`
 	// ParentID is the session whose task tool started this one, for a
 	// subagent (HRN-014).
-	ParentID  string    `json:"parentId"`
+	ParentID string `json:"parentId"`
+	// Tags are the user's labels for the session (SES-013), set by
+	// tags_changed events.
+	Tags      []string  `json:"tags"`
 	LastSeq   int64     `json:"lastSeq"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

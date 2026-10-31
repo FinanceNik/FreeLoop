@@ -478,7 +478,8 @@ fieldset {
 
 .session-meta {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
   align-items: center;
   font-size: 12px;
 }
@@ -507,6 +508,19 @@ fieldset {
 .filters input[type="search"] {
   width: 100%;
   box-sizing: border-box;
+}
+
+.filters > .row {
+  flex-wrap: wrap;
+}
+
+.filters > .row select {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.filters > .row label {
+  white-space: nowrap;
 }
 
 /* Status pills */
@@ -2459,4 +2473,94 @@ table.hooks .hook-command {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   overflow: hidden;
+}
+
+/* Session tags and saved filters (SES-013). */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.tags form {
+  display: contents;
+}
+
+.tag-editable button {
+  border: 0;
+  background: none;
+  padding: 0 0 0 2px;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tag-editable button:hover,
+.tag-editable button:focus-visible {
+  color: var(--text);
+}
+
+.tag-input {
+  width: 110px;
+  padding: 1px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+}
+
+.tag-add {
+  font-size: 11px;
+}
+
+.saved-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.saved-filters form input {
+  width: 100px;
+  min-width: 0;
+}
+
+.saved-filter {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.saved-filter button {
+  border: 0;
+  background: none;
+  padding: 1px 4px 1px 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.saved-filter .saved-filter-remove {
+  padding: 1px 8px 1px 2px;
+  color: var(--faint);
+}
+
+.saved-filter-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }

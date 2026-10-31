@@ -61,6 +61,8 @@ const (
 	Handoff Type = "handoff"
 	// PullRequest records a pull request opened from the session (SES-011).
 	PullRequest Type = "pull_request"
+	// TagsChanged sets a session's tags (SES-013).
+	TagsChanged Type = "tags_changed"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -74,7 +76,7 @@ var ACPTypes = []Type{
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
-	PullRequest,
+	PullRequest, TagsChanged,
 }
 
 // AllTypes returns every known variant.
@@ -227,6 +229,11 @@ type PullRequestData struct {
 	Base  string `json:"base"`
 	Head  string `json:"head"`
 	Draft bool   `json:"draft,omitempty"`
+}
+
+// TagsData is the payload of tags_changed: the session's tags from now on.
+type TagsData struct {
+	Tags []string `json:"tags"`
 }
 
 // HandoffData is the payload of handoff: the session continued from and

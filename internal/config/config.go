@@ -61,6 +61,17 @@ type Config struct {
 	Network Network `yaml:"network,omitempty" json:"network"`
 	// Updates holds the opt-in update check (SEC-009, OQ-015).
 	Updates Updates `yaml:"updates,omitempty" json:"updates"`
+	// Filters are the sidebar's saved filters (SES-013).
+	Filters []Filter `yaml:"filters,omitempty" json:"filters"`
+}
+
+// Filter is a named set of sidebar filters (SES-013); a session shows when
+// it matches every one that is set.
+type Filter struct {
+	Name   string   `yaml:"name" json:"name"`
+	Query  string   `yaml:"query,omitempty" json:"query"`
+	Status string   `yaml:"status,omitempty" json:"status"`
+	Tags   []string `yaml:"tags,omitempty" json:"tags"`
 }
 
 // Updates settings.

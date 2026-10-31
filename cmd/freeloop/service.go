@@ -26,6 +26,11 @@ type EngineService struct {
 }
 
 // Workspace and SaveWorkspace keep the main window's panes (GUI-017).
+// SetTags replaces a session's tags (SES-013) and returns them cleaned.
+func (s *EngineService) SetTags(ctx context.Context, sessionID string, tags []string) ([]string, error) {
+	return s.eng.SetTags(ctx, sessionID, tags)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

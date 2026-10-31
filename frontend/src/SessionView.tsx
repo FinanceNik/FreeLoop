@@ -26,6 +26,7 @@ import {
   type TranscriptEvent,
 } from "./transcript.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
+import Tags from "./Tags.tsx";
 import { CheckIcon, CopyIcon, ForkIcon, RewindIcon, StopIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
@@ -58,6 +59,8 @@ interface Props {
   onDeleted: () => void;
   // Opens the session in a window of its own (GUI-015); absent in that window.
   onOpenWindow?: () => void;
+  // Tags on any session, offered when adding one (SES-013).
+  knownTags?: string[];
   // In a workspace of several panes (GUI-017): whether this pane is the
   // active one, which alone takes the keyboard, the palette and the right
   // panel and speaks to screen readers; and how to close the pane.
@@ -88,7 +91,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, active = true, onClosePane }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], active = true, onClosePane }: Props) {
   const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
   const togglePanel = () =>
     setPanelOpen((open) => {
@@ -117,6 +120,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
     EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError);
   };
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [tagging, setTagging] = useState(false);
+  const setTags = (tags: string[]) => EngineService.SetTags(session.id, tags).catch(onError);
   // The model switch form (PRV-006).
   const [switching, setSwitching] = useState<{ providerId: string; model: string } | null>(null);
   const rename = () => {
@@ -501,6 +506,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     act("export-md", "Export as Markdown…", () => exportAs("markdown"), { keywords: "save share download" }),
     act("export-json", "Export as JSON…", () => exportAs("json"), { keywords: "save download events" }),
     act("rename", "Rename session", () => setRenaming(session.title), { keywords: "title" }),
+    act("tag", "Add a tag to this session", () => setTagging(true), { keywords: "label tags" }),
     act("archive", archived ? "Unarchive session" : "Archive session", archive, { keywords: "hide" }),
     act("delete", "Delete session…", remove, { keywords: "remove" }),
   ]);
@@ -553,6 +559,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
               )}
               {" "}· env {environment?.name ?? session.environmentId ?? "Local"}
             </p>
+            <Tags tags={session.tags ?? []} known={knownTags} adding={tagging} onAdding={setTagging} onChange={setTags} />
           </div>
           <div className="session-controls">
             <div className="row">
@@ -572,6 +579,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 <summary aria-label="More actions for this session">More</summary>
                 <div className="export-options">
                   <button onClick={fromMenu(() => setRenaming(session.title))}>Rename</button>
+                  <button onClick={fromMenu(() => setTagging(true))}>Add a tag</button>
                   {onOpenWindow && <button onClick={fromMenu(onOpenWindow)}>Open in a new window</button>}
                   <button onClick={fromMenu(() => exportAs("markdown"))}>Export as Markdown…</button>
                   <button onClick={fromMenu(() => exportAs("json"))}>Export as JSON…</button>

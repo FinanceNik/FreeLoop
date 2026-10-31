@@ -24,6 +24,7 @@ import { HIT_LABEL, snippetParts } from "./search.ts";
 import { formatCost } from "./cost.ts";
 import { windowSession } from "./windows.ts";
 import * as ws from "./workspace.ts";
+import { allTags, isEmpty, matches, parseQuery, sameFilter, saveFilter, type SavedFilter, type SessionFilter } from "./filters.ts";
 import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
@@ -92,6 +93,10 @@ export default function App() {
   // Sidebar filters (SES-004).
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  // Tags every listed session must have (SES-013).
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  // The name being typed for a new saved filter, while the field is open.
+  const [filterName, setFilterName] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   // Full-text results for the sidebar query (SES-007), for that query.
   const [found, setFound] = useState<{ query: string; results: SessionHits[] } | null>(null);
@@ -115,13 +120,19 @@ export default function App() {
 
   const report = (err: unknown) => setError(errorText(err));
 
-  const refreshSessions = () =>
-    EngineService.ListSessions()
+  // A list can arrive after events that changed a session since it was
+  // read, or after a list asked for later; neither replaces newer state.
+  const refreshCount = useRef(0);
+  const refreshSessions = () => {
+    const n = ++refreshCount.current;
+    return EngineService.ListSessions()
       .then((list) => {
-        setSessions(list ?? []);
+        if (n !== refreshCount.current) return;
+        setSessions((old) => (list ?? []).map((s) => old.find((o) => o.id === s.id && o.lastSeq > s.lastSeq) ?? s));
         setSessionsLoaded(true);
       })
       .catch(report);
+  };
   const refreshProjects = () =>
     EngineService.ListProjects()
       .then((list) => setProjects(list ?? []))
@@ -255,6 +266,7 @@ export default function App() {
           s.providerId = d.providerId || s.providerId;
         }
         if (ev.type === "session_info_update" && d.title) s.title = d.title;
+        if (ev.type === "tags_changed") s.tags = (ev.data as { tags?: string[] }).tags ?? [];
         return [s, ...list.slice(0, i), ...list.slice(i + 1)];
       });
     });
@@ -451,7 +463,7 @@ export default function App() {
 
   // The query also searches every transcript, once typing pauses.
   useEffect(() => {
-    const q = query.trim();
+    const q = parseQuery(query).text;
     if (q.length < 2) {
       setFound(null);
       return;
@@ -467,15 +479,27 @@ export default function App() {
   // Sessions grouped under their projects (GUI-001); sessions from before
   // projects existed are grouped by folder.
   const groups: { key: string; name: string; project?: ProjectInfo; sessions: Session[] }[] = [];
-  const q = query.trim().toLowerCase();
+  const filter: SessionFilter = { query, status: statusFilter, tags: tagFilter };
+  const applyFilter = (f: SessionFilter) => {
+    setQuery(f.query);
+    setStatusFilter(f.status);
+    setTagFilter(f.tags);
+  };
+  const savedFilters: SavedFilter[] = (config?.filters ?? []).map((f) => ({ ...f, tags: f.tags ?? [] }));
+  const saveFilters = (filters: SavedFilter[]) => {
+    if (!config) return;
+    EngineService.SaveSettings({ ...config, filters })
+      .then((c) => c && setConfig(c))
+      .catch(report);
+  };
+  const tagsInUse = allTags(sessions.filter((s) => s.status !== "archived"));
   // Subagents are listed under the session that started them (HRN-014).
   const subagents = (id: string) => sessions.filter((c) => c.parentId === id && (showArchived || c.status !== "archived"));
   const visible = sessions.filter(
     (s) =>
       !s.parentId &&
       (showArchived ? s.status === "archived" : s.status !== "archived") &&
-      (!statusFilter || s.status === statusFilter) &&
-      (!q || s.title.toLowerCase().includes(q) || s.projectRoot.toLowerCase().includes(q) || (s.branch ?? "").toLowerCase().includes(q)),
+      matches(s, filter),
   );
   for (const s of visible) {
     const project = projects.find((p) => p.id === s.projectId);
@@ -538,6 +562,20 @@ export default function App() {
         detail: statusFilter === v ? "current" : undefined,
         run: () => setStatusFilter(v),
       })),
+      ...tagsInUse.map((t) => ({
+        id: `tag:${t}`,
+        title: `Show sessions tagged #${t}`,
+        group: "Filter",
+        detail: tagFilter.includes(t) ? "current" : undefined,
+        run: () => setTagFilter([t]),
+      })),
+      ...savedFilters.map((f) => ({
+        id: `saved:${f.name}`,
+        title: `Saved filter: ${f.name}`,
+        group: "Filter",
+        detail: sameFilter(f, filter) ? "current" : undefined,
+        run: () => applyFilter(f),
+      })),
       ...projects.map((p) => ({
         id: `new:${p.id}`,
         title: `New session in ${p.name}`,
@@ -598,10 +636,68 @@ export default function App() {
                 <option value="idle">Idle</option>
                 <option value="error">Error</option>
               </select>
+              {tagsInUse.length > 0 && (
+                <select value={tagFilter[0] ?? ""} onChange={(e) => setTagFilter(e.target.value ? [e.target.value] : [])} aria-label="Tag">
+                  <option value="">Any tag</option>
+                  {tagsInUse.map((t) => (
+                    <option key={t} value={t}>
+                      #{t}
+                    </option>
+                  ))}
+                </select>
+              )}
               <label className="row muted">
                 <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Archived
               </label>
             </div>
+            {(savedFilters.length > 0 || !isEmpty(filter)) && (
+              <div className="saved-filters" role="group" aria-label="Saved filters">
+                {savedFilters.map((f) => (
+                  <span key={f.name} className={`saved-filter ${sameFilter(f, filter) ? "saved-filter-on" : ""}`}>
+                    <button
+                      className="saved-filter-name"
+                      aria-pressed={sameFilter(f, filter)}
+                      title={[f.query, f.status && (STATUS_LABEL[f.status] ?? f.status), ...(f.tags ?? []).map((t) => `#${t}`)].filter(Boolean).join(" · ")}
+                      onClick={() => (sameFilter(f, filter) ? applyFilter({ query: "", status: "", tags: [] }) : applyFilter(f))}
+                    >
+                      {f.name}
+                    </button>
+                    <button className="saved-filter-remove" aria-label={`Remove the saved filter ${f.name}`} onClick={() => saveFilters(savedFilters.filter((x) => x !== f))}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {!isEmpty(filter) && !savedFilters.some((f) => sameFilter(f, filter)) && filterName === null && (
+                  <button className="link" onClick={() => setFilterName("")}>
+                    Save filter…
+                  </button>
+                )}
+                {filterName !== null && (
+                  <form
+                    className="row"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!filterName.trim()) return;
+                      saveFilters(saveFilter(savedFilters, filterName, filter));
+                      setFilterName(null);
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      aria-label="Filter name"
+                      placeholder="Name"
+                      value={filterName}
+                      maxLength={40}
+                      onChange={(e) => setFilterName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Escape" && setFilterName(null)}
+                    />
+                    <button type="submit" disabled={!filterName.trim()}>
+                      Save
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
           </div>
           <nav aria-label="Projects and sessions">
             {groups.map((g) => (
@@ -635,6 +731,11 @@ export default function App() {
                         <span className="session-meta">
                           <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
                           {s.branch && <span className="muted">{s.branch}</span>}
+                          {(s.tags ?? []).map((t) => (
+                            <span key={t} className="tag">
+                              #{t}
+                            </span>
+                          ))}
                         </span>
                       </button>
                       {subagents(s.id).length > 0 && (
@@ -762,6 +863,7 @@ export default function App() {
               openSession(sid);
             }}
             prices={config?.prices ?? []}
+            knownTags={tagsInUse}
             events={transcripts[selected.id]?.events ?? []}
             provider={providers.find((p) => p.id === selected.providerId)}
             providers={providers}

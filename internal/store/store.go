@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -251,12 +252,13 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 	if !chunk(typ) {
 		sets, args := `last_seq = ?, updated_at = ?`, []any{ev.Seq, ev.TS.UnixMilli()}
 		var d struct {
-			Status        string `json:"status"`
-			CurrentModeID string `json:"currentModeId"`
-			Model         string `json:"model"`
-			ProviderID    string `json:"providerId"`
-			Branch        string `json:"branch"`
-			Title         string `json:"title"`
+			Status        string   `json:"status"`
+			CurrentModeID string   `json:"currentModeId"`
+			Model         string   `json:"model"`
+			ProviderID    string   `json:"providerId"`
+			Branch        string   `json:"branch"`
+			Title         string   `json:"title"`
+			Tags          []string `json:"tags"`
 		}
 		json.Unmarshal(data, &d)
 		switch {
@@ -279,6 +281,9 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 		case typ == event.SessionInfoUpdate && d.Title != "":
 			sets += `, title = ?`
 			args = append(args, d.Title)
+		case typ == event.TagsChanged:
+			sets += `, tags = ?`
+			args = append(args, strings.Join(d.Tags, " "))
 		}
 		// The transcript is the source of truth; a failed index update is
 		// repaired from it on the next open, so it does not fail the append.
@@ -375,17 +380,19 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
-const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, last_seq, created_at, updated_at`
+const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, last_seq, created_at, updated_at`
 
 type scanner interface{ Scan(...any) error }
 
 func scanSession(r scanner) (session.Session, error) {
 	var ses session.Session
 	var created, updated int64
+	var tags string
 	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectID, &ses.ProjectRoot, &ses.EnvironmentID,
-		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &ses.LastSeq, &created, &updated); err != nil {
+		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.LastSeq, &created, &updated); err != nil {
 		return session.Session{}, err
 	}
+	ses.Tags = strings.Fields(tags)
 	ses.CreatedAt = time.UnixMilli(created).UTC()
 	ses.UpdatedAt = time.UnixMilli(updated).UTC()
 	return ses, nil
@@ -455,6 +462,8 @@ var migrations = []string{
 	`ALTER TABLE sessions ADD COLUMN copied_seq INTEGER NOT NULL DEFAULT 0;`,
 	// A subagent's parent session (HRN-014).
 	`ALTER TABLE sessions ADD COLUMN parent_id TEXT NOT NULL DEFAULT '';`,
+	// A session's tags, space separated (SES-013).
+	`ALTER TABLE sessions ADD COLUMN tags TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.
