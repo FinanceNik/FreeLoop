@@ -76,7 +76,7 @@ export default function Settings({ config, providers, environments, profiles, pr
 
   return (
     <section className="page">
-      <h2>Settings</h2>
+      <h2>General</h2>
       <form className="card form" onSubmit={save}>
         <h3>Appearance</h3>
         <label>

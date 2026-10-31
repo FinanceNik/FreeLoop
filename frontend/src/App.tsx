@@ -36,6 +36,8 @@ import Profiles from "./Profiles.tsx";
 import Onboarding from "./Onboarding.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
+import SettingsNav, { Icon } from "./SettingsNav.tsx";
+import { inSettings, isSettingsShortcut } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
 
 type Screen =
@@ -277,6 +279,24 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // ⌘, opens the settings area; its Back returns to the last screen
+  // outside it.
+  const outside = useRef<Screen>({ kind: "none" });
+  if (!inSettings(screen.kind)) outside.current = screen;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (STANDALONE || !isSettingsShortcut(e)) return;
+      e.preventDefault();
+      setScreen((s) => (inSettings(s.kind) ? s : { kind: "settings" }));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const leaveSettings = () => {
+    const s = outside.current;
+    setScreen(s.kind === "session" && !sessions.some((x) => x.id === s.id) ? { kind: "none" } : s);
+  };
 
   // ⌘K opens the command palette over everything, and closes it again.
   const paletteRef = useRef<() => PaletteItem[]>(() => []);
@@ -622,14 +642,17 @@ export default function App() {
                 : "Today: no prices set"}
             </button>
           )}
-          <footer className="row">
-            <button aria-current={screen.kind === "providers" ? "page" : undefined} onClick={() => setScreen({ kind: "providers" })}>Providers</button>
-            <button aria-current={screen.kind === "profiles" ? "page" : undefined} onClick={() => setScreen({ kind: "profiles" })}>Profiles</button>
-            <button aria-current={screen.kind === "skills" ? "page" : undefined} onClick={() => setScreen({ kind: "skills" })}>Skills</button>
-            <button aria-current={screen.kind === "mcp" ? "page" : undefined} onClick={() => setScreen({ kind: "mcp" })}>MCP</button>
-            <button aria-current={screen.kind === "environments" ? "page" : undefined} onClick={() => setScreen({ kind: "environments" })}>Environments</button>
-            <button aria-current={screen.kind === "rules" ? "page" : undefined} onClick={() => setScreen({ kind: "rules" })}>Rules</button>
-            <button aria-current={screen.kind === "settings" ? "page" : undefined} onClick={() => setScreen({ kind: "settings" })}>Settings</button>
+          <footer>
+            <button
+              className="settings-link"
+              aria-current={inSettings(screen.kind) ? "page" : undefined}
+              aria-keyshortcuts="Meta+,"
+              onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen({ kind: "settings" }))}
+            >
+              <Icon name="general" />
+              Settings
+              <kbd>⌘,</kbd>
+            </button>
           </footer>
         </aside>
       )}
@@ -710,21 +733,6 @@ export default function App() {
             onError={report}
           />
         )}
-        {screen.kind === "providers" && <Providers providers={providers} onChanged={refreshProviders} onError={report} />}
-        {screen.kind === "settings" && config && (
-          <Settings
-            config={config}
-            providers={providers}
-            environments={environments}
-            profiles={profiles}
-            projects={projects}
-            onProjectsChanged={refreshProjects}
-            onImport={() => setScreen({ kind: "import" })}
-            onProviders={() => setScreen({ kind: "providers" })}
-            onSaved={setConfig} onError={report} />
-        )}
-        {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
-        {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}
         {screen.kind === "onboarding" && config && (
           <Onboarding
             config={config}
@@ -737,27 +745,49 @@ export default function App() {
             onError={report}
           />
         )}
-        {screen.kind === "mcp" && <MCP configVersion={configVersion} onImport={() => setScreen({ kind: "import" })} onError={report} />}
-        {screen.kind === "import" && (
-          <section className="page">
-            <h2>Import from Claude Code</h2>
-            <ClaudeImport onError={report} />
-          </section>
-        )}
-        {screen.kind === "skills" && (
-          <Skills projects={projects} providers={providers} configVersion={configVersion} onConfigChanged={refreshConfig} onProjectsChanged={refreshProjects} onError={report} />
-        )}
-        {screen.kind === "profiles" && (
-          <Profiles
-            profiles={profiles}
-            harnesses={harnesses}
-            providers={providers}
-            onChanged={() => {
-              refreshProfiles();
-              refreshConfig();
-            }}
-            onError={report}
-          />
+        {inSettings(screen.kind) && (
+          <div className="settings-area">
+            <SettingsNav current={screen.kind} onOpen={(kind) => setScreen({ kind })} onBack={leaveSettings} />
+            <div className="settings-content">
+              {screen.kind === "providers" && <Providers providers={providers} onChanged={refreshProviders} onError={report} />}
+              {screen.kind === "settings" && config && (
+                <Settings
+                  config={config}
+                  providers={providers}
+                  environments={environments}
+                  profiles={profiles}
+                  projects={projects}
+                  onProjectsChanged={refreshProjects}
+                  onImport={() => setScreen({ kind: "import" })}
+                  onProviders={() => setScreen({ kind: "providers" })}
+                  onSaved={setConfig} onError={report} />
+              )}
+              {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
+              {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}
+              {screen.kind === "mcp" && <MCP configVersion={configVersion} onImport={() => setScreen({ kind: "import" })} onError={report} />}
+              {screen.kind === "import" && (
+                <section className="page">
+                  <h2>Import from Claude Code</h2>
+                  <ClaudeImport onError={report} />
+                </section>
+              )}
+              {screen.kind === "skills" && (
+                <Skills projects={projects} providers={providers} configVersion={configVersion} onConfigChanged={refreshConfig} onProjectsChanged={refreshProjects} onError={report} />
+              )}
+              {screen.kind === "profiles" && (
+                <Profiles
+                  profiles={profiles}
+                  harnesses={harnesses}
+                  providers={providers}
+                  onChanged={() => {
+                    refreshProfiles();
+                    refreshConfig();
+                  }}
+                  onError={report}
+                />
+              )}
+            </div>
+          </div>
         )}
         {screen.kind === "attention" && <Attention items={attention} onOpen={openSession} onChanged={refreshAttention} onError={report} />}
         {STANDALONE && screen.kind === "session" && !selected && sessionsLoaded && <div className="empty">This session no longer exists.</div>}

@@ -321,29 +321,123 @@ fieldset {
 }
 
 .sidebar footer {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
   padding: 8px;
   border-top: 1px solid var(--border);
 }
 
-.sidebar footer button {
+/* One entry for the whole settings area, as in most Mac apps. */
+.settings-link,
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  color: var(--muted);
   background: transparent;
   border-color: transparent;
-  color: var(--muted);
-  text-align: left;
-  padding: 5px 10px;
 }
 
-.sidebar footer button:hover {
+.settings-link:hover:not(:disabled),
+.settings-nav button:hover:not(:disabled) {
   background: var(--surface);
+  border-color: transparent;
   color: var(--text);
 }
 
-.sidebar footer button[aria-current="page"] {
+.settings-link[aria-current="page"],
+.settings-nav button[aria-current="page"] {
   background: var(--accent-soft);
   color: var(--link);
+}
+
+.settings-link kbd {
+  margin-left: auto;
+  font: inherit;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.icon {
+  flex: none;
+}
+
+/* The settings area: a column of its pages beside the page itself. */
+.settings-area {
+  display: grid;
+  grid-template-columns: 208px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-nav {
+  overflow-y: auto;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+}
+
+.settings-nav h2 {
+  margin: 14px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.settings-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-nav li + li {
+  margin-top: 1px;
+}
+
+.settings-nav .settings-back {
+  width: auto;
+  padding: 4px 10px 4px 6px;
+  font-size: 13px;
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Narrow windows: the page list goes across the top. */
+@media (max-width: 900px) {
+  .settings-area {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .settings-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    padding: 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .settings-nav section,
+  .settings-nav ul {
+    display: contents;
+  }
+
+  .settings-nav h2 {
+    display: none;
+  }
+
+  .settings-nav button {
+    width: auto;
+  }
 }
 
 .session-row {
