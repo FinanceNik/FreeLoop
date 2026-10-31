@@ -395,12 +395,19 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 		r.mu.Unlock()
 		p.Resources = append(p.Resources, q.inline...)
 		p.Resources = append(p.Resources, e.readResources(ctx, r, q.refs)...)
-		if _, err := r.hs.Prompt(ctx, p); err != nil {
+		_, err := r.hs.Prompt(ctx, p)
+		if err != nil {
 			log.Printf("engine: prompt: %v", err)
 		}
 		r.mu.Lock()
 		r.cancel()
 		r.cancel = nil
+		// Queued prompts would fail the same way until the user signs in.
+		if errors.Is(err, harness.ErrSignIn) && len(r.queue) > 0 {
+			n := len(r.queue)
+			r.queue = nil
+			e.emit(r.sid, event.Notice, event.NoticeData{Message: fmt.Sprintf("%d queued %s not sent; send %s again after signing in.", n, plural(n, "message was", "messages were"), plural(n, "it", "them"))})
+		}
 		if len(r.queue) == 0 {
 			r.busy = false
 			close(r.done)
@@ -542,4 +549,11 @@ func (e *Engine) recover(ctx context.Context) {
 		}
 		e.emit(ses.ID, event.SessionStatus, event.SessionStatusData{Status: string(session.StatusIdle)})
 	}
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

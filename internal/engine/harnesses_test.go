@@ -2,11 +2,13 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -148,5 +150,55 @@ func TestMissingAgentCommand(t *testing.T) {
 	}
 	if m := e.missingCommand("it's"); !strings.Contains(m, "it's") {
 		t.Errorf("quoting = %q", m)
+	}
+}
+
+// An agent that is not signed in says so in plain words, with the preset's
+// own sign-in note, and the prompts queued behind it are not sent.
+func TestExternalAgentNotSignedIn(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	exe, _ := os.Executable()
+	os.MkdirAll(filepath.Join(dir, config.PresetsDir), 0o700)
+	os.WriteFile(filepath.Join(dir, config.PresetsDir, "ref.yaml"),
+		[]byte("name: Reference agent\ncommand: "+exe+"\nnotes: Sign in once by running ref login in a terminal.\nenv:\n  "+acptest.EnvVar+": \"1\"\n  "+acptest.AuthVar+": \"1\"\n"), 0o600)
+	e.loadPresets()
+	e.loadProfiles()
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProfileID: "ref", Mode: "accept_edits"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Prompt(ctx, ses.ID, "first"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Prompt(ctx, ses.ID, "second"); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, ch, ses.ID)
+	time.Sleep(200 * time.Millisecond)
+	evs, _ := e.Events(ctx, ses.ID, 0)
+	var errs, notices []string
+	turns := 0
+	for _, ev := range evs {
+		var d struct{ Message string }
+		json.Unmarshal(ev.Data, &d)
+		switch ev.Type {
+		case event.Error:
+			errs = append(errs, d.Message)
+		case event.Notice:
+			notices = append(notices, d.Message)
+		case event.TurnEnded:
+			turns++
+		}
+	}
+	if len(errs) != 1 || !strings.Contains(errs[0], "Reference agent needs you to sign in") || !strings.Contains(errs[0], "ref login") || strings.Contains(errs[0], "-32000") {
+		t.Errorf("errors = %q", errs)
+	}
+	if turns != 1 || !slices.ContainsFunc(notices, func(n string) bool { return strings.Contains(n, "1 queued message was not sent") }) {
+		t.Errorf("turns %d, notices %q", turns, notices)
 	}
 }

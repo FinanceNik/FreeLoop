@@ -698,6 +698,16 @@ fieldset {
   font-size: 12px;
 }
 
+/* The folder on one line; the whole path shows on hover. */
+.session-path {
+  display: inline-block;
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 /* The title side and the controls both shrink, and the controls wrap,
    so nothing in the header spills over the right panel. */
 .session-header > div:first-child {

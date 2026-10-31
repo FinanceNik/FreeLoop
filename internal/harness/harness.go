@@ -7,6 +7,7 @@ package harness
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -245,3 +246,8 @@ func ToolCall(ctx context.Context) string {
 	id, _ := ctx.Value(toolCallKey{}).(string)
 	return id
 }
+
+// ErrSignIn marks a prompt an external agent refused because it is not
+// signed in to its own account; prompts queued behind it would fail the
+// same way.
+var ErrSignIn = errors.New("the agent is not signed in")

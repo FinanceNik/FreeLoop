@@ -276,6 +276,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	stop := harness.StopReason(a.res.StopReason)
 	if a.err != nil {
 		stop = harness.StopError
+		a.err = s.explain(a.err)
 		s.p.Emit(event.Error, event.ErrorData{Message: a.err.Error()})
 	} else if ctx.Err() != nil {
 		stop = harness.StopCancelled
@@ -624,3 +625,24 @@ func (s *session) sessionMeta() map[string]any {
 		"plugins": []map[string]any{{"type": "local", "path": s.p.SkillPlugin, "skipMcpDiscovery": true}},
 	}}}
 }
+
+// explain turns the protocol's "authentication required" (-32000) into
+// what to do: the agent signs in by itself, with its own command, which the
+// preset's notes name; Freeloop never handles the login (HRN-008).
+func (s *session) explain(err error) error {
+	var re *sdk.RequestError
+	if !errors.As(err, &re) || re.Code != -32000 {
+		return err
+	}
+	how := "Sign in with the agent's own command in a terminal."
+	if s.preset.Notes != "" {
+		how = s.preset.Notes
+	}
+	return signInError(fmt.Sprintf("%s needs you to sign in to its own account. %s Then send your message again.", s.preset.Name, how))
+}
+
+// signInError reads as its message and counts as harness.ErrSignIn.
+type signInError string
+
+func (e signInError) Error() string        { return string(e) }
+func (e signInError) Is(target error) bool { return target == harness.ErrSignIn }

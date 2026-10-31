@@ -320,9 +320,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
     if (!view.running) setQueued(0);
   }, [view.running]);
 
+  const [accepting, setAccepting] = useState(false);
   const send = () => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || accepting) return;
     const m = modeCommand(text);
     if (m && (m !== "bypass" || allowBypass)) {
       setDraft("");
@@ -337,13 +338,18 @@ export default function SessionView({ session, events, focus, prices, initialDra
     }
     holdBottom.current = false;
     const sending = attached;
+    // Until the engine takes the message, which waits for an agent to
+    // start (the first start may download it), the composer says so and
+    // takes no second one.
+    setAccepting(true);
     (sending.length > 0 ? EngineService.PromptWith(session.id, { text, resources: sending }) : EngineService.Prompt(session.id, text))
       .then((r) => {
         setDraft("");
         setAttached([]);
         if (r.queued) setQueued((n) => n + 1);
       })
-      .catch(onError);
+      .catch(onError)
+      .finally(() => setAccepting(false));
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -528,7 +534,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
               </p>
             )}
             <p className="muted">
-              <code title={session.worktree ? `Worktree of ${session.projectRoot}` : undefined}>{session.worktree || session.projectRoot}</code>
+              <code className="session-path" title={session.worktree ? `Worktree of ${session.projectRoot}: ${session.worktree}` : session.projectRoot}>
+                {session.worktree || session.projectRoot}
+              </code>
               {view.git?.repo && (
                 <span title={`HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}`}>
                   {" "}
@@ -684,6 +692,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
           {view.items.map((item) => (
             <ItemView key={item.key} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} onError={onError} onRewind={rewind} onFork={fork} />
           ))}
+          {accepting && !view.running && (
+            <p className="muted working" role="status">
+              {harness && !harness.usesProvider ? `Starting ${harness.name}… The first start can take a minute while it downloads.` : "Sending…"}
+            </p>
+          )}
           {view.running && (
             <p className="muted working">{view.status === "queued" ? "Waiting for a free slot on the provider…" : "Working…"}</p>
           )}
@@ -851,7 +864,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 Stop
               </button>
             )}
-            <button className="primary" onClick={send} disabled={!draft.trim()}>
+            <button className="primary" onClick={send} disabled={!draft.trim() || accepting}>
               {view.running ? "Queue" : "Send"}
             </button>
           </div>

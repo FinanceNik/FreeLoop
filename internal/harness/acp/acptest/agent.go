@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	sdk "github.com/coder/acp-go-sdk"
 )
@@ -16,6 +17,10 @@ import (
 // EnvVar, set to 1, makes a test binary serve the agent instead of running
 // its tests; see Serve.
 const EnvVar = "FREELOOP_ACP_TEST_AGENT"
+
+// AuthVar, set to 1, makes the agent refuse every prompt as not signed in
+// (the protocol's -32000), as an agent with an expired login does.
+const AuthVar = "FREELOOP_ACP_TEST_AUTH"
 
 // LoadVar, set to 1, makes the agent support session/load: it replays one
 // message (which a client must not record again) and says "loaded: <id>"
@@ -78,6 +83,10 @@ func (a *agent) NewSession(_ context.Context, r sdk.NewSessionRequest) (sdk.NewS
 }
 
 func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResponse, error) {
+	if os.Getenv(AuthVar) == "1" {
+		time.Sleep(300 * time.Millisecond) // long enough for a second prompt to queue
+		return sdk.PromptResponse{}, sdk.NewAuthRequired(nil)
+	}
 	text := r.Prompt[0].Text.Text
 	say := func(s string) {
 		a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: r.SessionId, Update: sdk.UpdateAgentMessageText(s)})
