@@ -1941,15 +1941,61 @@ details.choice[open] > summary h3::after {
   opacity: 0.45;
 }
 
-.msg-user .rewind {
-  float: right;
-  margin-left: 8px;
-  font-size: 0.85em;
+/* A message of the user's: the bubble, and under it the icon actions,
+   which show when the message is pointed at or focused. */
+.user-turn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
-.msg-user span.rewind {
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 26px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.user-turn:hover .msg-actions,
+.user-turn:focus-within .msg-actions,
+.msg-actions-open {
+  opacity: 1;
+}
+
+.msg-actions-open {
+  gap: 8px;
+  font-size: 12px;
+}
+
+.msg-actions-open button {
+  padding: 3px 10px;
+}
+
+.icon-button {
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  line-height: 0;
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--r-xs);
+  color: var(--muted);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-actions {
+    transition: none;
+  }
 }
 
 /* Search across sessions (SES-007) */

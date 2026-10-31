@@ -236,3 +236,16 @@ test("an opened pull request shows in the conversation (SES-011)", () => {
     [["https://github.com/acme/app/pull/7", "Add the feature", "main", "feature", true]],
   );
 });
+
+test("a tool call's later title and input replace the first ones", () => {
+  const v = buildView([
+    { ...ev(1, { toolCallId: "t1", title: "Terminal", tool: "shell", kind: "execute", status: "pending", rawInput: {} }), type: "tool_call" },
+    { ...ev(2, { toolCallId: "t1", title: "git status --short", rawInput: { command: "git status --short" } }), type: "tool_call_update" },
+    { ...ev(3, { toolCallId: "t1", status: "completed" }), type: "tool_call_update" },
+  ]);
+  const t = v.items.find((i) => i.kind === "tool");
+  assert.ok(t && t.kind === "tool");
+  assert.equal(t.title, "git status --short");
+  assert.deepEqual(t.input, { command: "git status --short" });
+  assert.equal(t.status, "completed");
+});

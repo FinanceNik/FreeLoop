@@ -1,4 +1,4 @@
-import { Browser } from "@wailsio/runtime";
+import { Browser, Clipboard } from "@wailsio/runtime";
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
@@ -26,6 +26,7 @@ import {
   type TranscriptEvent,
 } from "./transcript.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
+import { CheckIcon, CopyIcon, ForkIcon, RewindIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
 import { usePaletteActions } from "./Palette.tsx";
@@ -930,23 +931,24 @@ function ItemBody({
   switch (item.kind) {
     case "user":
       return (
-        <div className="msg msg-user">
-          {!item.rewound && (
-            <button className="link rewind" onClick={() => onFork(Number(item.key))} title="Start a new session with the conversation up to this message">
-              Fork
-            </button>
-          )}
-          {item.checkpointSeq && !item.rewound && <RewindButton filesOnly={!!item.filesOnly} onRewind={() => onRewind(item.checkpointSeq!, item.text)} />}
-          {item.text}
-          {item.files.length > 0 && (
-            <div className="attached" aria-label="Attached files">
-              {item.files.map((f) => (
-                <code key={f} title="Attached to this message">
-                  {f}
-                </code>
-              ))}
-            </div>
-          )}
+        <div className="user-turn">
+          <div className="msg msg-user">
+            {item.text}
+            {item.files.length > 0 && (
+              <div className="attached" aria-label="Attached files">
+                {item.files.map((f) => (
+                  <code key={f} title="Attached to this message">
+                    {f}
+                  </code>
+                ))}
+              </div>
+            )}
+          </div>
+          <MessageActions
+            text={item.text}
+            onFork={item.rewound ? undefined : () => onFork(Number(item.key))}
+            rewind={item.checkpointSeq && !item.rewound ? { filesOnly: !!item.filesOnly, run: () => onRewind(item.checkpointSeq!, item.text) } : undefined}
+          />
         </div>
       );
     case "agent":
@@ -1024,24 +1026,47 @@ function ItemBody({
   }
 }
 
-// RewindButton asks once more before rewinding (SES-014).
-function RewindButton({ filesOnly, onRewind }: { filesOnly: boolean; onRewind: () => void }) {
+// MessageActions are the icon buttons under a message of the user's: copy
+// it, rewind the files (and the conversation) to before it, which asks once
+// more (SES-014), and fork a new session from it (SES-009). They show when
+// the message is pointed at or focused.
+function MessageActions({ text, onFork, rewind }: { text: string; onFork?: () => void; rewind?: { filesOnly: boolean; run: () => void } }) {
+  const [copied, setCopied] = useState(false);
   const [sure, setSure] = useState(false);
-  return sure ? (
-    <span className="rewind">
-      <button
-        className="danger"
-        onClick={onRewind}
-        title={filesOnly ? "The conversation was compacted or rewound since this message, so the agent keeps its context" : undefined}
-      >
-        {filesOnly ? "Rewind files only" : "Rewind files and conversation"}
+  const copy = () =>
+    Clipboard.SetText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  if (sure && rewind) {
+    return (
+      <div className="msg-actions msg-actions-open" role="group" aria-label="Rewind to before this message">
+        <span className="muted">{rewind.filesOnly ? "Restore the files to before this message?" : "Restore the files and the conversation to before this message?"}</span>
+        <button className="danger" onClick={rewind.run} title={rewind.filesOnly ? "The conversation was compacted or rewound since, so the agent keeps its context" : undefined}>
+          Rewind
+        </button>
+        <button onClick={() => setSure(false)}>Keep</button>
+      </div>
+    );
+  }
+  return (
+    <div className="msg-actions" role="group" aria-label="Message actions">
+      <button className="icon-button" onClick={copy} title={copied ? "Copied" : "Copy"} aria-label={copied ? "Copied" : "Copy message"}>
+        {copied ? <CheckIcon /> : <CopyIcon />}
       </button>
-      <button onClick={() => setSure(false)}>Keep</button>
-    </span>
-  ) : (
-    <button className="link rewind" onClick={() => setSure(true)} title="Restore the files to before this message and continue from here">
-      Rewind to here
-    </button>
+      {rewind && (
+        <button className="icon-button" onClick={() => setSure(true)} title="Rewind to here: restore the files to before this message" aria-label="Rewind to here">
+          <RewindIcon />
+        </button>
+      )}
+      {onFork && (
+        <button className="icon-button" onClick={onFork} title="Fork: a new session with the conversation up to this message" aria-label="Fork from here">
+          <ForkIcon />
+        </button>
+      )}
+    </div>
   );
 }
 

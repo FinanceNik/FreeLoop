@@ -260,7 +260,15 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "tool_call_update": {
         const item = tools.get(d.toolCallId);
         if (!item) break;
-        const next = { ...item, rev, status: d.status ?? item.status, content: d.content ?? item.content };
+        // Agents send the command or path later, as a new title and input.
+        const next = {
+          ...item,
+          rev,
+          status: d.status ?? item.status,
+          content: d.content ?? item.content,
+          title: d.title || item.title,
+          input: d.rawInput && Object.keys(d.rawInput).length > 0 ? d.rawInput : item.input,
+        };
         replaceTool(items, tools, next);
         break;
       }
