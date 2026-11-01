@@ -18,6 +18,7 @@ func TestPullRequestChecks(t *testing.T) {
 	e := openTest(t, t.TempDir())
 	defer e.Close()
 	ses, _ := demoSession(t, e, "checks", "ask")
+	e.SetProjectTrust(ctx, ses.ProjectRoot, true)
 	if _, err := e.PullRequestChecks(ctx, ses.ID); err == nil || !strings.Contains(err.Error(), "no pull request") {
 		t.Errorf("without a pull request: %v", err)
 	}

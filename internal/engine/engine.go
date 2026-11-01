@@ -1,5 +1,5 @@
-// Package engine is the transport-agnostic API the GUI and, from v1, the
-// JSON-RPC socket are thin adapters over. Requests and responses are plain
+// Package engine is the transport-agnostic API the GUI and the JSON-RPC
+// socket are thin adapters over. Requests and responses are plain
 // types; live events arrive through Subscribe.
 package engine
 
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -230,10 +231,10 @@ func Open(opts Options) (*Engine, error) {
 	return e, nil
 }
 
-// Close cancels running turns, closes every subscription and the store.
 // SetOpenURL sets how the engine shows a page in the user's browser.
 func (e *Engine) SetOpenURL(f func(string) error) { e.openURL = f }
 
+// Close cancels running turns, closes every subscription and the store.
 func (e *Engine) Close() error {
 	e.mu.Lock()
 	e.closing = true
@@ -470,6 +471,50 @@ func (e *Engine) redact(data json.RawMessage) json.RawMessage {
 				data = bytes.ReplaceAll(data, form, []byte("[REDACTED]"))
 			}
 		}
+		data = redactCut(data, []byte(k))
+	}
+	return data
+}
+
+// minCutSecret is the shortest piece of a secret recognized as one: long
+// enough that it does not match a key format's common prefix alone.
+const minCutSecret = 16
+
+// redactCut replaces what is left of a secret some text limit cut in two, a
+// title's or an output's: its start running up to a cut, its end running on
+// from one. Those no longer match the whole value.
+func redactCut(data, secret []byte) []byte {
+	if len(secret) <= minCutSecret {
+		return data
+	}
+	mark := []byte("[REDACTED]")
+	for from := 0; ; {
+		i := bytes.Index(data[from:], secret[:minCutSecret])
+		if i < 0 {
+			break
+		}
+		i += from
+		n := minCutSecret
+		for n < len(secret) && i+n < len(data) && data[i+n] == secret[n] {
+			n++
+		}
+		data = slices.Concat(data[:i], mark, data[i+n:])
+		from = i + len(mark)
+	}
+	end := secret[len(secret)-minCutSecret:]
+	for from := 0; ; {
+		i := bytes.Index(data[from:], end)
+		if i < 0 {
+			break
+		}
+		i += from
+		start, n := i, len(secret)-minCutSecret
+		for n > 0 && start > 0 && data[start-1] == secret[n-1] {
+			start--
+			n--
+		}
+		data = slices.Concat(data[:start], mark, data[i+minCutSecret:])
+		from = start + len(mark)
 	}
 	return data
 }
@@ -510,7 +555,8 @@ type CreateSessionRequest struct {
 // the first transcript event. Bypass mode is never a new session's mode
 // (SEC-001).
 func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (session.Session, error) {
-	title := strings.TrimSpace(req.Title)
+	// A title goes to the database without passing through an event.
+	title := string(e.redact(json.RawMessage(strings.TrimSpace(req.Title))))
 	if title == "" {
 		title = defaultTitle
 	}

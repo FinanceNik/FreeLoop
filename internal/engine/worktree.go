@@ -190,11 +190,11 @@ func (e *Engine) MergeWorktree(ctx context.Context, sid string) (MergeResult, er
 		return MergeResult{}, err
 	}
 	if wt, err := e.localEnv(ses.Worktree, nil); err == nil {
-		if out, _ := git(ctx, wt, "status", "--porcelain", "--untracked-files=no"); strings.TrimSpace(out) != "" {
+		if out, _ := git(ctx, wt, "status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"); strings.TrimSpace(out) != "" {
 			return MergeResult{}, errors.New("the session has uncommitted changes; commit them in the Diff panel first")
 		}
 	}
-	if out, _ := git(ctx, main, "status", "--porcelain", "--untracked-files=no"); strings.TrimSpace(out) != "" {
+	if out, _ := git(ctx, main, "status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"); strings.TrimSpace(out) != "" {
 		return MergeResult{}, fmt.Errorf("the main checkout at %s has uncommitted changes; commit or stash them first", project.Root)
 	}
 	into, ok := git(ctx, main, "symbolic-ref", "--quiet", "--short", "HEAD")
@@ -207,7 +207,7 @@ func (e *Engine) MergeWorktree(ctx context.Context, sid string) (MergeResult, er
 	}
 	res := MergeResult{Into: into, Branch: ses.OwnBranch()}
 	if _, err := gitOK(ctx, main, "merge", "--no-ff", "--no-edit", ses.OwnBranch()); err != nil {
-		conflicts, _ := git(ctx, main, "diff", "--name-only", "--diff-filter=U")
+		conflicts, _ := git(ctx, main, "diff", "--name-only", "--diff-filter=U", "--ignore-submodules=dirty")
 		gitOK(ctx, main, "merge", "--abort")
 		if files := strings.Fields(conflicts); len(files) > 0 {
 			return res, fmt.Errorf("merging %s into %s conflicts in %s; the merge was undone, resolve it in a terminal", ses.OwnBranch(), into, strings.Join(files, ", "))

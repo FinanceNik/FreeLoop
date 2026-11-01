@@ -301,6 +301,31 @@ func (f *localFS) ReadFile(p string) ([]byte, error) {
 }
 
 func (f *localFS) WriteFile(p string, data []byte) error {
+	return f.writeMode(p, data, 0o644)
+}
+
+// CopyFile copies the file at rel to the same path under dst, through both
+// environments' guards, keeping it as private as it is here.
+func (l *Local) CopyFile(dst *Local, rel string) error {
+	b, err := l.fs.ReadFile(rel)
+	if err != nil {
+		return err
+	}
+	mode := os.FileMode(0o644)
+	if fi, err := os.Stat(l.Resolve(rel)); err == nil {
+		mode = fi.Mode().Perm()
+	}
+	return dst.fs.writeMode(rel, b, mode)
+}
+
+// WritePrivate writes a file only its owner can read when it is new, for what
+// holds a user's work or settings, such as an export.
+func (l *Local) WritePrivate(p string, data []byte) error {
+	return l.fs.writeMode(p, data, 0o600)
+}
+
+// writeMode writes a file, new ones with mode; an existing one keeps its own.
+func (f *localFS) writeMode(p string, data []byte, newMode os.FileMode) error {
 	abs := f.env.Resolve(p)
 	if err := f.guard.CheckWrite(abs); err != nil {
 		return err
@@ -334,7 +359,7 @@ func (f *localFS) WriteFile(p string, data []byte) error {
 	if err := check(); err != nil {
 		return err
 	}
-	mode := os.FileMode(0o644)
+	mode := newMode
 	if fi, err := os.Lstat(target); err == nil {
 		if !fi.Mode().IsRegular() {
 			return fmt.Errorf("%s is not a regular file", p)

@@ -189,7 +189,6 @@ type wireMessage struct {
 type wireCall struct {
 	ID       string `json:"id,omitempty"`
 	Function struct {
-		Index     *int            `json:"index,omitempty"`
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
 	} `json:"function"`

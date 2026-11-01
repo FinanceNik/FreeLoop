@@ -657,7 +657,7 @@ func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "\n…"
+	return strings.ToValidUTF8(s[:n], "") + "\n…"
 }
 
 // systemPrompt assembles the system prompt (HRN-010): the harness's own

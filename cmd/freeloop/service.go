@@ -25,7 +25,6 @@ type EngineService struct {
 	desk *desktop
 }
 
-// Workspace and SaveWorkspace keep the main window's panes (GUI-017).
 // SetTags replaces a session's tags (SES-013) and returns them cleaned.
 func (s *EngineService) SetTags(ctx context.Context, sessionID string, tags []string) ([]string, error) {
 	return s.eng.SetTags(ctx, sessionID, tags)
@@ -142,6 +141,7 @@ func (s *EngineService) PortOpen(ctx context.Context, port int) bool {
 	return s.eng.PortOpen(ctx, port)
 }
 
+// Workspace and SaveWorkspace keep the main window's panes (GUI-017).
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }
@@ -182,10 +182,6 @@ func (s *EngineService) SetMode(ctx context.Context, sessionID, mode string) err
 
 func (s *EngineService) Decide(req engine.DecideRequest) error {
 	return s.eng.Decide(req)
-}
-
-func (s *EngineService) PendingPermissions() []permission.Request {
-	return s.eng.PendingPermissions()
 }
 
 // Attention lists the sessions that need the user (GUI-002).
@@ -503,10 +499,6 @@ func (s *EngineService) AddProject(ctx context.Context, root string) (session.Pr
 
 func (s *EngineService) RelinkProject(ctx context.Context, id, root string) (session.Project, error) {
 	return s.eng.RelinkProject(ctx, id, root)
-}
-
-func (s *EngineService) SetProjectEnvironment(ctx context.Context, projectID, envID string) error {
-	return s.eng.SetProjectEnvironment(ctx, projectID, envID)
 }
 
 func (s *EngineService) ListEnvironments() []engine.EnvironmentInfo {

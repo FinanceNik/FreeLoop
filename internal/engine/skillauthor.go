@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -130,7 +131,7 @@ func (e *Engine) TestSkill(ctx context.Context, req SkillTestRequest) (SkillTest
 	if err != nil {
 		return SkillTest{}, err
 	}
-	model := cmpOr(req.Model, cp.cfg.DefaultModel)
+	model := cmp.Or(req.Model, cp.cfg.DefaultModel)
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	ch, err := e.limit(cp, "").Stream(cctx, provider.ChatRequest{

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -230,7 +231,7 @@ func (e *Engine) runSetup(ctx context.Context, ses session.Session, scripts conf
 			return fail(err)
 		}
 		for _, c := range scripts.Copy {
-			n, err := copyTree(src.FS(), dst.FS(), path.Clean(c), 0)
+			n, err := copyTree(src, dst, path.Clean(c), 0)
 			switch {
 			case errors.Is(err, errMissing):
 				d.Missing = append(d.Missing, c)
@@ -300,8 +301,30 @@ func (e *Engine) RetrySetup(ctx context.Context, sid string) error {
 			return errors.New("the setup is still running")
 		}
 	}
+	if e.containerRan(ctx, ses) {
+		return errors.New("the setup runs on this Mac, and a command in this session's container could have changed the files it uses; run it in the session instead")
+	}
 	e.startSetup(ses)
 	return nil
+}
+
+// containerRan reports a session whose container has started. Setup and
+// archive commands run on the Mac with the environment's secrets, so from
+// then on they could be running what a command in the container wrote into
+// the worktree, such as a Makefile: that would be a way out of the container.
+func (e *Engine) containerRan(ctx context.Context, ses session.Session) bool {
+	envID := ses.EnvironmentID
+	if envID == "" {
+		envID = DefaultEnvironmentID
+	}
+	if c, err := e.environment(envID); err == nil && c.Kind != "docker" {
+		return false
+	}
+	evs, err := e.store.Events(ctx, ses.ID, 0)
+	if err != nil {
+		return true
+	}
+	return slices.ContainsFunc(evs, func(ev event.Event) bool { return ev.Type == event.EnvHealth })
 }
 
 // SkipSetup lets a session whose setup failed start anyway.
@@ -338,6 +361,10 @@ func (e *Engine) runArchiveScript(ctx context.Context, ses session.Session) {
 	if cmd == "" || !environment.IsDir(ses.Worktree) {
 		return
 	}
+	if e.containerRan(ctx, ses) {
+		e.emit(ses.ID, event.Notice, event.NoticeData{Message: "The archive command did not run: it runs on this Mac, and a command in this session's container could have changed the files it uses."})
+		return
+	}
 	host, err := e.localEnv(ses.Worktree, nil)
 	if err != nil {
 		return
@@ -361,32 +388,31 @@ const maxCopied = 2000
 
 // copyTree copies a file, or a folder's files, from one checkout to the
 // other, at most maxCopied files and maxDepth folders deep (a symlink loop
-// ends there). It returns how many files it copied.
-func copyTree(src, dst environment.FileSystem, rel string, n int) (int, error) {
+// ends there). It returns how many files it copied. A symlink leading out of
+// the checkout is left out: a repository can hold one that names any file of
+// the user's, and a copy would hand it to the agent without the prompt a read
+// outside the project takes.
+func copyTree(src, dst *environment.Local, rel string, n int) (int, error) {
 	return copyDepth(src, dst, rel, n, 0)
 }
 
 const maxDepth = 12
 
-func copyDepth(src, dst environment.FileSystem, rel string, n, depth int) (int, error) {
-	fi, err := src.Stat(rel)
-	if err != nil {
+func copyDepth(src, dst *environment.Local, rel string, n, depth int) (int, error) {
+	fi, err := src.FS().Stat(rel)
+	if err != nil || !src.Contains(rel) {
 		if depth == 0 {
 			return 0, errMissing
 		}
 		return n, nil
 	}
 	if !fi.IsDir {
-		b, err := src.ReadFile(rel)
-		if err != nil {
-			return n, err
-		}
-		return n + 1, dst.WriteFile(rel, b)
+		return n + 1, src.CopyFile(dst, rel)
 	}
 	if depth >= maxDepth {
 		return n, nil
 	}
-	entries, err := src.ReadDir(rel)
+	entries, err := src.FS().ReadDir(rel)
 	if err != nil {
 		return n, err
 	}
@@ -399,6 +425,17 @@ func copyDepth(src, dst environment.FileSystem, rel string, n, depth int) (int, 
 		}
 	}
 	return n, nil
+}
+
+// cutBytes cuts s to at most n bytes at a character boundary.
+func cutBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && s[n]&0xC0 == 0x80 {
+		n--
+	}
+	return s[:n]
 }
 
 // tail keeps the end of s.

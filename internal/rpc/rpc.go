@@ -8,6 +8,7 @@ package rpc
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -198,7 +199,7 @@ func (s *Server) call(ctx context.Context, method string, raw json.RawMessage) (
 		}
 		// What the new-session form preselects (SET-004).
 		if d := e.Config().Defaults; p.ProviderID == "" && p.ProfileID == "" {
-			p.ProviderID, p.Model = d.ProviderID, cmpOr(p.Model, d.Model)
+			p.ProviderID, p.Model = d.ProviderID, cmp.Or(p.Model, d.Model)
 		}
 		return e.CreateSession(ctx, p)
 	case "sessions.prompt":
@@ -264,11 +265,4 @@ func (s *Server) wait(ctx context.Context, p waitP) ([]event.Event, error) {
 			return []event.Event{}, nil
 		}
 	}
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }

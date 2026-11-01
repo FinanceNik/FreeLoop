@@ -155,10 +155,15 @@ func SaveEnvironment(dir string, e Environment) error {
 
 // DeleteEnvironment removes environments/<id>.yaml.
 func DeleteEnvironment(dir, id string) error {
+	return removeYAML(environmentsDir(dir), "environment", id)
+}
+
+// removeYAML removes <id>.yaml from a folder; a missing one is fine.
+func removeYAML(dir, kind, id string) error {
 	if !idPattern.MatchString(id) {
-		return fmt.Errorf("bad environment id %q", id)
+		return fmt.Errorf("bad %s id %q", kind, id)
 	}
-	err := os.Remove(filepath.Join(environmentsDir(dir), id+".yaml"))
+	err := os.Remove(filepath.Join(dir, id+".yaml"))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}

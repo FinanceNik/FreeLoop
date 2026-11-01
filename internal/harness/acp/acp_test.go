@@ -157,3 +157,49 @@ func TestUnaskedWritesGoThroughTheBroker(t *testing.T) {
 		t.Error("a write into .git was allowed")
 	}
 }
+
+// Review finding: an agent's current_mode_update was taken as it came, so it
+// could put the session in bypass and approve itself. It can tighten the mode;
+// it loosens it only after the user approved its request, and never to bypass.
+func TestAgentCannotLoosenTheMode(t *testing.T) {
+	rec := &recorder{}
+	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit}, mode: permission.ModePlan, preset: config.HarnessPreset{Name: "Agent"}}
+	for _, m := range []permission.Mode{permission.ModeBypass, permission.ModeAcceptEdits, permission.ModeAsk} {
+		s.agentMode(m)
+		if s.Mode() != permission.ModePlan {
+			t.Fatalf("the agent changed plan mode to %s on its own", m)
+		}
+	}
+	if strings.Contains(rec.text(event.CurrentModeUpdate), "bypass") {
+		t.Error("the refused change reached the transcript")
+	}
+	if !strings.Contains(rec.text(event.Notice), "on its own") {
+		t.Error("the user was not told")
+	}
+
+	s.approved = approval{kind: permission.KindSwitchMode, until: time.Now().Add(time.Minute)}
+	s.agentMode(permission.ModeBypass)
+	if s.Mode() != permission.ModePlan {
+		t.Error("an approved switch reached bypass")
+	}
+	s.agentMode(permission.ModeAcceptEdits)
+	if s.Mode() != permission.ModeAcceptEdits {
+		t.Errorf("an approved switch left the mode %s", s.Mode())
+	}
+	s.agentMode(permission.ModeBypass)
+	if s.Mode() != permission.ModeAcceptEdits {
+		t.Error("the approval was used twice")
+	}
+	s.approved = approval{kind: permission.KindEdit, until: time.Now().Add(time.Minute)}
+	s.mode = permission.ModePlan
+	s.agentMode(permission.ModeAsk)
+	if s.Mode() != permission.ModePlan {
+		t.Error("an approval of something else loosened the mode")
+	}
+
+	s.mode = permission.ModeAcceptEdits
+	s.agentMode(permission.ModePlan)
+	if s.Mode() != permission.ModePlan {
+		t.Error("the agent could not tighten the mode")
+	}
+}

@@ -384,8 +384,8 @@ type queued struct {
 	inline []harness.Resource
 	// images were stored as the session's attachments when queued.
 	images []provider.Image
-	// noMentions is set for text the user did not type (an MCP prompt's):
-	// its @ words attach no files.
+	// noMentions is set for text the user did not type (an MCP prompt's, a
+	// subagent's, a review's): its @ words attach no files.
 	noMentions bool
 }
 

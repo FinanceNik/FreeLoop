@@ -111,7 +111,7 @@ func main() {
 			// in the preview frame (GUI-020).
 			Middleware: func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path == "/wails/runtime" && !netguard.RuntimeCallAllowed(r.Method, r.Header.Get("Origin"), r.Header.Get("Sec-Fetch-Site"), r.Host, r.Header.Get("x-wails-client-id")) {
+					if r.URL.Path == "/wails/runtime" && !netguard.RuntimeCallAllowed(r.Method, r.Header.Get("Origin"), r.Header.Get("Sec-Fetch-Site"), r.Host, r.Header.Get("x-wails-client-id"), servedBuild) {
 						log.Printf("refused a runtime call: %s from origin %q to %q", r.Method, r.Header.Get("Origin"), r.Host)
 						http.Error(w, "refused", http.StatusForbidden)
 						return

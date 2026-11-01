@@ -1,5 +1,5 @@
 // Package harness defines what every harness offers the engine (HRN-001):
-// the built-in loop and, from M2, external agents over ACP. The GUI never
+// the built-in loop and external agents over ACP. The GUI never
 // special-cases one; everything it shows comes from the events a session
 // emits.
 package harness

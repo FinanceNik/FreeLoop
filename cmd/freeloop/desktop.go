@@ -17,6 +17,9 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/engine"
 )
 
+// servedBuild is false here: the page comes from the app's own URL scheme.
+const servedBuild = false
+
 // desktop shows the engine's notices as system notifications while the
 // window is not focused, opens the session a notification names when it is
 // clicked, and keeps the dock badge at the number of things waiting

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/FinanceNik/Freeloop/internal/engine"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -50,11 +51,30 @@ func runCLI(sock string, args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	defer c.Close()
-	if err := command(c, args, out); err != nil {
-		fmt.Fprintln(errOut, err)
+	if err := command(c, args, plainWriter{out}); err != nil {
+		fmt.Fprintln(plainWriter{errOut}, err)
 		return 1
 	}
 	return 0
+}
+
+// plainWriter drops control characters from what goes to the terminal.
+// Titles and replies come from the model, and a shell call's title is its
+// command: escape sequences in one could hide the real command at an approval.
+type plainWriter struct{ w io.Writer }
+
+func (p plainWriter) Write(b []byte) (int, error) {
+	_, err := io.WriteString(p.w, plainText(string(b)))
+	return len(b), err
+}
+
+func plainText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 func command(c *rpc.Client, args []string, out io.Writer) error {

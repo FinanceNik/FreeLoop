@@ -41,7 +41,8 @@ func (s sessionSubagents) Run(ctx context.Context, description, prompt string) (
 	if err != nil {
 		return harness.SubagentResult{}, err
 	}
-	if _, err := e.Prompt(ctx, child.ID, prompt); err != nil {
+	// The model wrote this text, so its @ words attach nothing.
+	if _, err := e.enqueue(ctx, child.ID, queued{text: prompt, noMentions: true}); err != nil {
 		return harness.SubagentResult{SessionID: child.ID}, err
 	}
 	// The child's runtime, and a container it started, stop until the

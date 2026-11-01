@@ -69,6 +69,24 @@ func ExportBundle(dir string) ([]byte, error) {
 	return json.MarshalIndent(b, "", "  ")
 }
 
+// withoutApprovals clears what an mcp.yaml says the user confirmed. A
+// fingerprint can be computed by anyone, so a backup from elsewhere could
+// otherwise start its commands with no question asked (MCP-005); the servers
+// ask again after a restore.
+func withoutApprovals(content []byte) ([]byte, error) {
+	var f map[string]any
+	if err := yaml.Unmarshal(content, &f); err != nil {
+		return nil, err
+	}
+	servers, _ := f["servers"].([]any)
+	for _, s := range servers {
+		if m, ok := s.(map[string]any); ok {
+			delete(m, "approved")
+		}
+	}
+	return yaml.Marshal(f)
+}
+
 // ImportBundle writes a backup's files into the data folder, after copying
 // the files it replaces to backups/<time>/. Every file is checked first, so
 // a bad backup changes nothing. It returns the paths written.
@@ -91,6 +109,13 @@ func ImportBundle(dir string, data []byte) ([]string, error) {
 		var v any
 		if err := yaml.Unmarshal([]byte(content), &v); err != nil {
 			return nil, fmt.Errorf("%s is not valid YAML: %w", rel, err)
+		}
+		if rel == MCPFileName {
+			clean, err := withoutApprovals([]byte(content))
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", rel, err)
+			}
+			b.Files[rel] = string(clean)
 		}
 		names = append(names, rel)
 	}

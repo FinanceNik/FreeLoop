@@ -95,17 +95,3 @@ func (e *Engine) RelinkProject(ctx context.Context, id, root string) (session.Pr
 	}
 	return p, nil
 }
-
-// SetProjectEnvironment changes the environment new sessions of a project
-// start with.
-func (e *Engine) SetProjectEnvironment(ctx context.Context, projectID, envID string) error {
-	if _, err := e.environment(envID); err != nil {
-		return err
-	}
-	p, err := e.store.GetProject(ctx, projectID)
-	if err != nil {
-		return err
-	}
-	p.DefaultEnvironmentID = envID
-	return e.store.UpdateProject(ctx, p)
-}

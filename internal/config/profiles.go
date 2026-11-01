@@ -347,14 +347,7 @@ func SaveProfile(dir string, p Profile) error {
 
 // DeleteProfile removes profiles/<id>.yaml.
 func DeleteProfile(dir, id string) error {
-	if !idPattern.MatchString(id) {
-		return fmt.Errorf("bad profile id %q", id)
-	}
-	err := os.Remove(filepath.Join(profilesDir(dir), id+".yaml"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	return err
+	return removeYAML(profilesDir(dir), "profile", id)
 }
 
 // ReadProfileFile returns profiles/<id>.yaml as written, comments included;

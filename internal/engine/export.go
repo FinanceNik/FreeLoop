@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -64,7 +65,7 @@ func (e *Engine) ExportSession(ctx context.Context, sid, format, path string) er
 	if err != nil {
 		return err
 	}
-	return env.FS().WriteFile(path, []byte(text))
+	return env.WritePrivate(path, []byte(text))
 }
 
 // ExportFileName suggests a file name for a session's export.
@@ -124,7 +125,7 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 			var c event.MessageChunk
 			json.Unmarshal(ev.Data, &c)
 			if c.Content.Type == "resource_link" {
-				blocks = append(blocks, mdBlock{text: "*Attached: " + cmpOr(c.Content.Name, c.Content.URI) + "*"})
+				blocks = append(blocks, mdBlock{text: "*Attached: " + cmp.Or(c.Content.Name, c.Content.URI) + "*"})
 				continue
 			}
 			if c.Content.Type == "image" {
@@ -143,7 +144,7 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 			text.WriteString(c.Content.Text)
 		case event.ToolCall:
 			flush()
-			t := &mdTool{title: cmpOr(str("title"), str("tool"), "Tool call"), kind: str("kind"), status: str("status")}
+			t := &mdTool{title: cmp.Or(str("title"), str("tool"), "Tool call"), kind: str("kind"), status: str("status")}
 			if in, ok := d["rawInput"]; ok && in != nil {
 				b, _ := json.MarshalIndent(in, "", "  ")
 				t.input = string(b)
@@ -216,7 +217,7 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 			var h HookRanData
 			json.Unmarshal(ev.Data, &h)
 			if h.Blocked {
-				note(fmt.Sprintf("A %s hook blocked it: %s", h.Event, cmpOr(strings.TrimSpace(h.Stderr), h.Command)))
+				note(fmt.Sprintf("A %s hook blocked it: %s", h.Event, cmp.Or(strings.TrimSpace(h.Stderr), h.Command)))
 			}
 		}
 	}
@@ -268,15 +269,6 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 		}
 	}
 	return sb.String()
-}
-
-func cmpOr(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // fence wraps s in a code fence longer than any backtick run inside it.

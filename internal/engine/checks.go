@@ -79,9 +79,15 @@ func (e *Engine) prEnv(ctx context.Context, sid string) (environment.Environment
 	if pr == nil {
 		return nil, "", errors.New("no pull request was opened from this session")
 	}
+	if !e.trusted(ses.ProjectID) {
+		return nil, "", errors.New(untrustedDiff)
+	}
 	env, err := e.localEnv(ses.WorkRoot(), nil)
 	if err != nil {
 		return nil, "", err
+	}
+	if why := pushBlocked(ctx, env); why != "" {
+		return nil, "", errors.New(why)
 	}
 	return env, pr.URL, nil
 }

@@ -198,11 +198,58 @@ func (s *session) applyMode(ctx context.Context) {
 	s.mu.Unlock()
 	id, ok := s.preset.Modes[string(m)]
 	if !ok {
+		if m == permission.ModePlan {
+			s.p.Emit(event.Notice, event.NoticeData{Message: s.preset.Name + " has no plan mode to switch to. What it asks the app is held read-only; tools of its own may still change files."})
+		}
 		return
 	}
 	if _, err := s.conn.SetSessionMode(ctx, sdk.SetSessionModeRequest{SessionId: s.id, ModeId: sdk.SessionModeId(id)}); err != nil {
 		log.Printf("acp: set mode %s: %v", id, err)
 	}
+}
+
+// modeLooseness orders the modes by what they let through without asking.
+func modeLooseness(m permission.Mode) int {
+	switch m {
+	case permission.ModePlan:
+		return 0
+	case permission.ModeAcceptEdits:
+		return 2
+	case permission.ModeBypass:
+		return 3
+	}
+	return 1
+}
+
+// agentMode takes a mode the agent reports. The mode decides what the
+// broker lets through, so an agent can tighten it and can never loosen it on
+// its own (SEC-003): only after the user approved its switch_mode request,
+// and never to bypass, which only the user sets and config.yaml must allow.
+// A refused change is told back to the agent, which keeps to the app's mode.
+func (s *session) agentMode(m permission.Mode) {
+	s.mu.Lock()
+	cur := s.mode
+	asked := s.approved.kind == permission.KindSwitchMode && time.Now().Before(s.approved.until)
+	loosens := modeLooseness(m) > modeLooseness(cur)
+	refused := loosens && (!asked || m == permission.ModeBypass)
+	if m == cur || refused {
+		s.mu.Unlock()
+		if refused {
+			s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("The agent tried to change the mode from %s to %s on its own; the mode stays %s.", cur, m, cur)})
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				s.applyMode(ctx)
+			}()
+		}
+		return
+	}
+	s.mode = m
+	if loosens {
+		s.approved = approval{}
+	}
+	s.mu.Unlock()
+	s.p.Emit(event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: string(m)})
 }
 
 func (s *session) Mode() permission.Mode {
@@ -344,10 +391,8 @@ func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) er
 		id, _ := m["currentModeId"].(string)
 		for app, agent := range s.preset.Modes {
 			if agent == id {
-				s.mu.Lock()
-				s.mode = permission.Mode(app)
-				s.mu.Unlock()
-				s.p.Emit(event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: app})
+				s.agentMode(permission.Mode(app))
+				break
 			}
 		}
 		return nil

@@ -60,7 +60,42 @@ type claudeServer struct {
 }
 
 // secretName matches variables and headers whose values are secrets.
-var secretName = regexp.MustCompile(`(?i)(token|secret|password|passwd|api[_-]?key|access[_-]?key|private[_-]?key|credential|auth|bearer|\bpat\b|_pat$)`)
+var secretName = regexp.MustCompile(`(?i)(token|secret|password|passwd|api[_-]?key|access[_-]?key|private[_-]?key|credential|auth|bearer|\bpat\b|_pat$|(^|[_-])key$|(^|[_-])dsn$)`)
+
+// urlWithPassword matches a URL carrying a user and password.
+var urlWithPassword = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^/@\s]*:[^/@\s]+@`)
+
+// notAValue matches options that say where a secret is.
+var notAValue = regexp.MustCompile(`(?i)[_-](file|path|env|var|dir|command|cmd|url|name)$`)
+
+// secretValue reports a variable whose value is a secret, by name or by
+// form, such as DATABASE_URL=postgres://me:pw@host/db.
+func secretValue(name, value string) bool {
+	return value != "" && (secretName.MatchString(name) || urlWithPassword.MatchString(value))
+}
+
+// secretArgument returns the first argument holding a secret, an option such
+// as --token x or --token=x, or a URL with a password. Unlike a variable it
+// cannot move to the Keychain, because a command line is stored as it is.
+func secretArgument(args []string) string {
+	for i, a := range args {
+		if urlWithPassword.MatchString(a) {
+			return "a URL with a password"
+		}
+		if !strings.HasPrefix(a, "-") {
+			continue
+		}
+		name, value, inline := strings.Cut(a, "=")
+		// --token-file and --token-env name a place, not a value.
+		if !secretName.MatchString(name) || notAValue.MatchString(name) {
+			continue
+		}
+		if value != "" || (!inline && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-")) {
+			return name
+		}
+	}
+	return ""
+}
 
 var notID = regexp.MustCompile(`[^a-z0-9]+`)
 
@@ -200,8 +235,13 @@ func (e *Engine) mcpItem(name string, cs claudeServer, source string) ImportItem
 	case "", "stdio":
 		s.Transport, s.Command, s.Args = "stdio", cs.Command, cs.Args
 		it.Detail = strings.TrimSpace(cs.Command + " " + strings.Join(cs.Args, " "))
+		if a := secretArgument(cs.Args); a != "" {
+			it.Status, it.Destination = "unsupported", "none"
+			it.Note = fmt.Sprintf("Its arguments hold a secret (%s), and a command line would be stored as plain text. Move it to an environment variable in Claude Code, then import again.", a)
+			return it
+		}
 		for k, v := range cs.Env {
-			if secretName.MatchString(k) && v != "" {
+			if secretValue(k, v) {
 				req.Secrets[k] = v
 				it.Secrets = append(it.Secrets, k)
 			} else {
@@ -212,7 +252,7 @@ func (e *Engine) mcpItem(name string, cs claudeServer, source string) ImportItem
 		s.Transport, s.URL = "http", cs.URL
 		it.Detail = cs.URL
 		for k, v := range cs.Headers {
-			if secretName.MatchString(k) && v != "" {
+			if secretValue(k, v) {
 				req.Secrets[k] = v
 				it.Secrets = append(it.Secrets, k)
 			} else {

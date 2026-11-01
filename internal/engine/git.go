@@ -19,8 +19,10 @@ import (
 // what can be turned off; in a project the user has not trusted (SEC-006)
 // they are limited to plumbing reads that run nothing (rev-parse,
 // symbolic-ref, rev-list, config --get), and in a trusted one the file scan
-// is still skipped where filters are configured.
-var safeGit = []string{"git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"}
+// is still skipped where filters are configured. Asking a nested repository
+// whether its files changed starts git in it, under a config this repository
+// knows nothing of; only the commit it stands at is compared.
+var safeGit = []string{"git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "diff.ignoreSubmodules=dirty"}
 
 func git(ctx context.Context, env environment.Environment, args ...string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)

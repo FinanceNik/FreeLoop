@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"strings"
 	"time"
@@ -236,8 +237,12 @@ func (e *Engine) CreatePullRequest(ctx context.Context, req CreatePullRequestReq
 	if !branchName.MatchString(info.Branch) || strings.HasPrefix(info.Branch, "-") {
 		return event.PullRequestData{}, fmt.Errorf("the branch name %q cannot be passed to gh", info.Branch)
 	}
-	// Hooks do not run (safeGit), so a pre-push hook cannot either.
-	res, err := gitRun(ctx, env, prTimeout, "push", "--porcelain", "--set-upstream", info.Remote, "HEAD:refs/heads/"+info.Branch)
+	if strings.HasPrefix(info.Remote, "-") {
+		return event.PullRequestData{}, fmt.Errorf("the remote name %q cannot be passed to git", info.Remote)
+	}
+	// Hooks do not run (safeGit), so a pre-push hook cannot either; the ext
+	// and fd transports would run a program the remote's URL names.
+	res, err := gitRun(ctx, env, prTimeout, "-c", "protocol.ext.allow=never", "-c", "protocol.fd.allow=never", "push", "--porcelain", "--set-upstream", info.Remote, "HEAD:refs/heads/"+info.Branch)
 	if err != nil {
 		return event.PullRequestData{}, err
 	}
@@ -251,13 +256,10 @@ func (e *Engine) CreatePullRequest(ctx context.Context, req CreatePullRequestReq
 		argv = append(argv, "--draft")
 	}
 	res, err = env.Exec(ctx, environment.ExecSpec{
-		Argv:       argv,
-		LoginShell: true,
-		Stdin:      []byte(req.Body),
-		Env: map[string]string{
-			"GH_PROMPT_DISABLED": "1", "GH_NO_UPDATE_NOTIFIER": "1", "NO_COLOR": "1",
-			"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1",
-		},
+		Argv:           argv,
+		LoginShell:     true,
+		Stdin:          []byte(req.Body),
+		Env:            pushEnv(),
 		SeparateStderr: true,
 		MaxOutput:      64 << 10,
 		Timeout:        prTimeout,
@@ -297,11 +299,11 @@ func prURL(out string) string {
 
 // pushBlocked says why the push and gh must not run in env, or "": beyond
 // what the diff panel refuses, a repository's own config can name programs
-// that a push (ssh, credential helpers, a local remote's receive-pack) or
-// gh's own git calls (fsmonitor) run. Those come from the user's global
-// config only.
+// that a push (ssh, credential helpers, a local remote's receive-pack, a
+// transport a rewritten URL or protocol setting allows) or gh's own git calls
+// (fsmonitor) run. Those come from the user's global config only.
 func pushBlocked(ctx context.Context, env environment.Environment) string {
-	keys, ok := repoConfigKeys(ctx, env, `^(core\.(sshcommand|gitproxy|askpass|fsmonitor)|credential\..*helper|remote\..*\.(receivepack|uploadpack))$`)
+	keys, ok := repoConfigKeys(ctx, env, `^(core\.(sshcommand|gitproxy|askpass|fsmonitor)|credential\..*helper|remote\..*\.(receivepack|uploadpack)|url\..*|protocol\..*)$`)
 	if len(keys) > 0 {
 		return fmt.Sprintf("This repository's own git config sets %s, which can run a program when pushing. Push from a terminal instead.", keys[0])
 	}
@@ -309,4 +311,12 @@ func pushBlocked(ctx context.Context, env environment.Environment) string {
 		return "Freeloop could not read this repository's git config, so it does not push from here."
 	}
 	return ""
+}
+
+// pushEnv is gh's environment for a call that pushes: ghEnv, and no system
+// git config.
+func pushEnv() map[string]string {
+	env := maps.Clone(ghEnv)
+	env["GIT_CONFIG_NOSYSTEM"] = "1"
+	return env
 }

@@ -39,3 +39,10 @@ func TestDevcontainerBuildStaysInProject(t *testing.T) {
 		t.Errorf("the project root as context = %+v, %v", d, err)
 	}
 }
+
+// Review finding: an image named like an option would be one on docker run.
+func TestDevcontainerImageIsNoOption(t *testing.T) {
+	if _, err := ParseDevcontainer("x.json", []byte(`{"image": "--privileged"}`)); err == nil {
+		t.Error("an option was taken for an image")
+	}
+}

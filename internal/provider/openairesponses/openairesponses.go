@@ -5,6 +5,7 @@
 package openairesponses
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -264,11 +265,11 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 				r := ev.Response
 				final = &r
 			case "response.failed":
-				msg := cmpOr(ev.Response.Error.Message, "the response failed")
+				msg := cmp.Or(ev.Response.Error.Message, "the response failed")
 				send(provider.Event{Type: provider.EventError, Err: streamError(string(ev.Response.Error.Code), msg)})
 				return
 			case "error":
-				send(provider.Event{Type: provider.EventError, Err: streamError(ev.Code, cmpOr(ev.Message, ev.Code, "stream error"))})
+				send(provider.Event{Type: provider.EventError, Err: streamError(ev.Code, cmp.Or(ev.Message, ev.Code, "stream error"))})
 				return
 			}
 			if out.Type != "" && !send(out) {
@@ -358,15 +359,6 @@ func reasoningItem(ri responses.ResponseReasoningItem) json.RawMessage {
 	}
 	b, _ := json.Marshal(v)
 	return b
-}
-
-func cmpOr(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // describe turns an API error into a readable one naming the cause (PRV-002).

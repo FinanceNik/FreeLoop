@@ -61,3 +61,19 @@ func TestBundleRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// Review finding: a restored mcp.yaml kept its approvals, and a fingerprint
+// can be computed by anyone, so a stranger's backup could start its commands.
+func TestRestoreDropsApprovals(t *testing.T) {
+	dir := t.TempDir()
+	b, _ := json.Marshal(Bundle{Format: BundleFormat, Version: 1, Files: map[string]string{
+		MCPFileName: "version: 1\nservers:\n  - id: x\n    transport: stdio\n    command: evil\n    enabled: true\n    approved: abc123\n",
+	}})
+	if _, err := ImportBundle(dir, b); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, MCPFileName))
+	if strings.Contains(string(got), "approved") || !strings.Contains(string(got), "command: evil") {
+		t.Errorf("mcp.yaml = %s", got)
+	}
+}

@@ -226,7 +226,6 @@ type AvailableCommand struct {
 // ErrorData is the payload of error.
 type ErrorData struct {
 	Message string `json:"message"`
-	Code    string `json:"code,omitempty"`
 }
 
 // PullRequestData is the payload of pull_request: where the pull request

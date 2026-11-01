@@ -60,6 +60,13 @@ func (e *Engine) snapshot(ctx context.Context, host *environment.Local, sid, mes
 			return "", err
 		}
 	}
+	// A nested repository stays out too. For one the index knows, git add
+	// starts git in it to see whether it changed, under that repository's own
+	// config, which can run programs and which a container can write. A
+	// snapshot never held its files anyway, only the commit it stood at.
+	if err := e.dropNested(ctx, host, sid); err != nil {
+		return "", err
+	}
 	// The project's .claude/ is never written (a hard rule) and .freeloop/
 	// holds the user's own settings and deny rules: snapshots leave both out,
 	// so a rewind never changes them.
@@ -69,10 +76,44 @@ func (e *Engine) snapshot(ctx context.Context, host *environment.Local, sid, mes
 	if _, err := e.shadowGit(ctx, host, sid, checkpointTimeout, "add", "-A", "--", ".", ":(exclude).claude", ":(exclude)"+ProjectDir); err != nil {
 		return "", err
 	}
+	if err := e.dropNested(ctx, host, sid); err != nil {
+		return "", err
+	}
 	if _, err := e.shadowGit(ctx, host, sid, 30*time.Second, "commit", "-q", "--allow-empty", "--no-verify", "-m", message); err != nil {
 		return "", err
 	}
 	return e.shadowGit(ctx, host, sid, 10*time.Second, "rev-parse", "HEAD")
+}
+
+// dropNested takes the nested repositories out of the store's index.
+func (e *Engine) dropNested(ctx context.Context, host *environment.Local, sid string) error {
+	ctx, cancel := context.WithTimeout(ctx, checkpointTimeout)
+	defer cancel()
+	store := "--git-dir=" + e.checkpointStore(sid)
+	res, err := host.Exec(ctx, environment.ExecSpec{
+		Argv: append(slices.Clone(safeGit), store, "--work-tree="+host.Root(), "ls-files", "--stage", "-z"),
+		Env:  map[string]string{"GIT_CONFIG_NOSYSTEM": "1"}, MaxOutput: 64 << 20, Timeout: checkpointTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		return fmt.Errorf("git ls-files: %s", strings.TrimSpace(res.Output))
+	}
+	var nested []string
+	for _, entry := range strings.Split(res.Output, "\x00") {
+		if mode, rest, ok := strings.Cut(entry, " "); ok && mode == "160000" {
+			if _, p, ok := strings.Cut(rest, "\t"); ok {
+				nested = append(nested, p)
+			}
+		}
+	}
+	for chunk := range slices.Chunk(nested, 200) {
+		if _, err := e.shadowGit(ctx, host, sid, 30*time.Second, append([]string{"update-index", "--force-remove", "--"}, chunk...)...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkpoint records the state before a prompt. A failure turns checkpoints

@@ -10,6 +10,10 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/engine"
 )
 
+// servedBuild is true here: a browser loads the page from the address the
+// app listens on.
+const servedBuild = true
+
 // In server mode (a browser, no app bundle) there is no notification
 // center or dock; notices and the badge are dropped.
 type desktop struct{}

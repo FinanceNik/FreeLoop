@@ -36,7 +36,7 @@ func (e *Engine) ExportConfig(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	return env.FS().WriteFile(path, b)
+	return env.WritePrivate(path, b)
 }
 
 // ImportConfig restores a config backup from path. The files it replaces

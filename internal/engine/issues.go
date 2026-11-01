@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -155,16 +156,12 @@ func (e *Engine) IssueBrief(ctx context.Context, root string, number int) (Issue
 	if len(is.Comments) > 0 {
 		b.WriteString("\n## Comments\n")
 		for _, c := range is.Comments {
-			fmt.Fprintf(&b, "\n%s wrote:\n%s\n", cmpOr(c.Author.Login, "someone"), strings.TrimSpace(c.Body))
+			fmt.Fprintf(&b, "\n%s wrote:\n%s\n", cmp.Or(c.Author.Login, "someone"), strings.TrimSpace(c.Body))
 		}
 	}
 	text := b.String()
 	if len(text) > maxBrief {
-		cut := maxBrief
-		for cut > 0 && text[cut]&0xC0 == 0x80 {
-			cut--
-		}
-		text = text[:cut] + fmt.Sprintf("\n\n[The issue is longer; read the rest at %s]\n", is.URL)
+		text = cutBytes(text, maxBrief) + fmt.Sprintf("\n\n[The issue is longer; read the rest at %s]\n", is.URL)
 	}
 	return IssueBrief{
 		Number: is.Number, Title: is.Title, Text: text,

@@ -200,3 +200,24 @@ func TestDockerCancelEndsTheCommand(t *testing.T) {
 		t.Errorf("the command still runs in the container:\n%s", res.Output)
 	}
 }
+
+// Review finding: docker follows a symlink in a mount's source, so a cloned
+// repository's .freeloop link could mount a folder of the Mac.
+func TestSymlinkOnPath(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "real", "hooks"), 0o755)
+	os.Symlink(filepath.Join(root, "real"), filepath.Join(root, ".git"))
+	os.Symlink("../../.ssh", filepath.Join(root, ".freeloop"))
+	bases := []string{root}
+	if got := symlinkOnPath(filepath.Join(root, ".freeloop"), bases); got != filepath.Join(root, ".freeloop") {
+		t.Errorf(".freeloop: %q", got)
+	}
+	if got := symlinkOnPath(filepath.Join(root, ".git", "hooks"), bases); got != filepath.Join(root, ".git") {
+		t.Errorf(".git/hooks: %q", got)
+	}
+	for _, p := range []string{filepath.Join(root, "real", "hooks"), filepath.Join(root, "missing", "x"), "/elsewhere/x"} {
+		if got := symlinkOnPath(p, bases); got != "" {
+			t.Errorf("%s: %q", p, got)
+		}
+	}
+}

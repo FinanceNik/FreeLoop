@@ -1,12 +1,15 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
@@ -66,7 +69,7 @@ func (e *Engine) RequestReview(ctx context.Context, req ReviewRequest) (session.
 	if base == "" {
 		base = "HEAD"
 	}
-	diff, err := gitOK(ctx, env, "diff", "--no-ext-diff", "--no-textconv", "--no-color", base)
+	diff, err := gitOK(ctx, env, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--ignore-submodules=dirty", base)
 	if err != nil {
 		return session.Session{}, err
 	}
@@ -86,9 +89,20 @@ func (e *Engine) RequestReview(ctx context.Context, req ReviewRequest) (session.
 	if err != nil {
 		return session.Session{}, err
 	}
+	// An external agent's own tools do not pass through the app, so only its
+	// own plan mode keeps it read-only, and the review promises that.
+	if prof.Harness != "" && prof.Harness != builtin.ID {
+		preset, err := e.preset(prof.Harness)
+		if err != nil {
+			return session.Session{}, err
+		}
+		if preset.Modes[string(permission.ModePlan)] == "" {
+			return session.Session{}, fmt.Errorf("%s has no read-only mode the app can set, so it cannot review; add a plan entry to its preset's modes", preset.Name)
+		}
+	}
 	// A profile without a model of its own reviews on the session's.
 	create := CreateSessionRequest{
-		Title: "Review: " + cmpOr(strings.TrimSpace(req.Label), prof.Name), ProjectRoot: ses.ProjectRoot, EnvironmentID: ses.EnvironmentID,
+		Title: "Review: " + cmp.Or(strings.TrimSpace(req.Label), prof.Name), ProjectRoot: ses.ProjectRoot, EnvironmentID: ses.EnvironmentID,
 		ProfileID: req.ProfileID, Mode: "plan", parent: ses.ID,
 	}
 	if prof.Provider == "" {
@@ -114,7 +128,8 @@ func (e *Engine) RequestReview(ctx context.Context, req ReviewRequest) (session.
 		fmt.Fprintf(&b, "New files not shown in the diff:\n%s\n\n", u)
 	}
 	b.WriteString(fence("diff", diff))
-	if _, err := e.Prompt(ctx, reviewer.ID, b.String()); err != nil {
+	// Whoever wrote the diff wrote this text, so its @ words attach nothing.
+	if _, err := e.enqueue(ctx, reviewer.ID, queued{text: b.String(), noMentions: true}); err != nil {
 		return reviewer, err
 	}
 	return reviewer, nil
@@ -148,11 +163,7 @@ func (e *Engine) ReviewFindings(ctx context.Context, reviewerID string) (string,
 		return "", errors.New("the reviewer has not answered yet")
 	}
 	if len(reply) > maxFindings {
-		cut := maxFindings
-		for cut > 0 && reply[cut]&0xC0 == 0x80 {
-			cut--
-		}
-		reply = reply[:cut] + "\n[The review is longer; open the reviewer's session for the rest.]"
+		reply = cutBytes(reply, maxFindings) + "\n[The review is longer; open the reviewer's session for the rest.]"
 	}
 	who := strings.TrimPrefix(r.Title, "Review: ")
 	return fmt.Sprintf("A second agent (%s) reviewed your changes and reported the following. Check which of these are real problems, fix those, and say which you left and why.\n\n%s\n", who, reply), nil

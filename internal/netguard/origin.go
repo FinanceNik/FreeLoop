@@ -21,8 +21,15 @@ import (
 //     the header, but keeps its origin: a foreign origin is refused;
 //   - a form post keeps its origin and has no header.
 //
+// In the desktop app no http origin is taken at all. A page chooses the host
+// of a request it sends to the app's URL scheme, so comparing its origin
+// with that host proves nothing: fetch("wails://localhost:41000/...") from
+// http://localhost:41000 would match. Only the server build, whose requests
+// arrive over a real socket and whose page is served from the address it
+// listens on, compares them (served).
+//
 // Only POST is taken, because a GET can be sent by a mere image tag.
-func RuntimeCallAllowed(method, origin, fetchSite, host, clientID string) bool {
+func RuntimeCallAllowed(method, origin, fetchSite, host, clientID string, served bool) bool {
 	if method != "POST" || clientID == "" {
 		return false
 	}
@@ -33,6 +40,9 @@ func RuntimeCallAllowed(method, origin, fetchSite, host, clientID string) bool {
 	if err != nil || origin == "null" {
 		return false
 	}
+	if served {
+		return strings.EqualFold(u.Host, host)
+	}
 	// The app's page is served from its own URL scheme in the desktop app.
-	return u.Scheme == "wails" || strings.EqualFold(u.Host, host)
+	return u.Scheme == "wails"
 }

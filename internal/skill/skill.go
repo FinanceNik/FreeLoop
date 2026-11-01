@@ -146,9 +146,7 @@ func allowedTools(n yaml.Node) []string {
 	var out []string
 	switch n.Kind {
 	case yaml.ScalarNode:
-		for _, f := range strings.FieldsFunc(n.Value, func(r rune) bool { return r == ',' || r == ' ' }) {
-			out = append(out, f)
-		}
+		out = append(out, strings.FieldsFunc(n.Value, func(r rune) bool { return r == ',' || r == ' ' })...)
 	case yaml.SequenceNode:
 		for _, c := range n.Content {
 			out = append(out, strings.TrimSpace(c.Value))

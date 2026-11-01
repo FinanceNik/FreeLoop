@@ -87,11 +87,7 @@ func (w sessionWeb) Fetch(ctx context.Context, raw string) (harness.WebPage, err
 		page.Title, text = web.Text(text)
 	}
 	if len(text) > maxPageText {
-		cut := maxPageText
-		for cut > 0 && text[cut]&0xC0 == 0x80 {
-			cut--
-		}
-		text, page.Truncated = text[:cut], true
+		text, page.Truncated = cutBytes(text, maxPageText), true
 	}
 	page.Text = text
 	return page, nil
@@ -128,8 +124,16 @@ func (w sessionWeb) Search(ctx context.Context, query string) ([]web.Result, err
 		w.e.remember(key)
 		req.Header.Set(cfg.SearchHeader, key)
 	}
-	// Through http.DefaultTransport, so the local-only switch covers it.
-	res, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	// Through http.DefaultTransport, so the local-only switch covers it. The
+	// key is for the endpoint the user set: a redirect to another host would
+	// carry it there.
+	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(next *http.Request, via []*http.Request) error {
+		if next.URL.Host != req.URL.Host || len(via) >= 5 {
+			return errors.New("the search endpoint redirects elsewhere")
+		}
+		return nil
+	}}
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

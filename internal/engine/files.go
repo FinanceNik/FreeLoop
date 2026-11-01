@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"path"
@@ -76,7 +77,7 @@ func (e *Engine) ListFolder(ctx context.Context, sid, rel string) ([]FileEntry, 
 	if err != nil {
 		return nil, err
 	}
-	infos, err := env.FS().ReadDir(env.Resolve(cmpOr(rel, ".")))
+	infos, err := env.FS().ReadDir(env.Resolve(cmp.Or(rel, ".")))
 	if err != nil {
 		return nil, err
 	}

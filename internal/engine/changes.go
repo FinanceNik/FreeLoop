@@ -103,12 +103,21 @@ func (e *Engine) sessionGit(ctx context.Context, sid string) (environment.Enviro
 	return env, ses, err
 }
 
-// blocked says why the panel must not run git in env, or "". A repository's
-// local config can name programs git runs: content filters (status, diff,
-// add, checkout) and signing programs (commit). Until projects are trusted
-// (SEC-006) the panel stays off in such a repository.
+// blockedKeys are the keys of a repository's own config that name programs
+// git runs: content filters (status, diff, add, checkout), signing programs
+// and config-based hooks (commit, which core.hooksPath does not cover), merge
+// drivers, and a promisor remote, which a missing object makes git fetch from
+// (through ext:: a program; even a plain diff can need one).
+const blockedKeys = `^(filter\.|gpg\.|hook\.|merge\..*\.driver$|extensions\.partialclone$|remote\..*\.promisor$|protocol\.)`
+
+// blocked says why the panel must not run git in env, or "". Until projects
+// are trusted (SEC-006) the panel stays off in a repository that sets
+// blockedKeys, or whose common directory is not where it belongs.
 func blocked(ctx context.Context, env environment.Environment) string {
-	keys, ok := repoConfigKeys(ctx, env, `^(filter\.|gpg\.|merge\..*\.driver$)`)
+	if movedCommonDir(ctx, env) {
+		return "This repository's .git/commondir points somewhere unusual, so its config and hooks may not be its own. The diff panel stays off for it."
+	}
+	keys, ok := repoConfigKeys(ctx, env, blockedKeys)
 	if len(keys) > 0 {
 		return fmt.Sprintf("This repository's own git config sets %s, which can run programs. The diff panel stays off for it.", keys[0])
 	}
@@ -116,6 +125,27 @@ func blocked(ctx context.Context, env environment.Environment) string {
 		return "Freeloop could not read this repository's git config, so the diff panel stays off for it."
 	}
 	return ""
+}
+
+// movedCommonDir reports a repository whose common directory, which holds its
+// config and hooks, is neither its git directory nor, for a linked worktree,
+// the main one. A command in a container can write .git/commondir, though not
+// .git/config, so this is how it would plant a config of its own.
+func movedCommonDir(ctx context.Context, env environment.Environment) bool {
+	out, ok := git(ctx, env, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+	if !ok {
+		return false // not a repository
+	}
+	dirs := strings.Split(strings.TrimSpace(out), "\n")
+	if len(dirs) != 2 {
+		return true
+	}
+	own, common := environment.Canonical(dirs[0]), environment.Canonical(dirs[1])
+	if own == common {
+		return false
+	}
+	parent := filepath.Dir(own)
+	return filepath.Base(parent) != "worktrees" || filepath.Dir(parent) != common
 }
 
 // Changes lists the files that differ from the session's base commit plus
@@ -265,7 +295,7 @@ func (e *Engine) FileDiff(ctx context.Context, sid, path string) (FileDiff, erro
 	if from == "" {
 		from = emptyTree
 	}
-	args := []string{"diff", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", from, "--", path}
+	args := []string{"diff", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", "--ignore-submodules=dirty", from, "--", path}
 	if f.Status == "untracked" {
 		args = []string{"diff", "--no-index", "--no-ext-diff", "--no-textconv", "--no-color", "--", "/dev/null", path}
 	}
@@ -392,7 +422,7 @@ func (e *Engine) SuggestCommitMessage(ctx context.Context, sid string) (string, 
 		return "", err
 	}
 	if strings.TrimSpace(diff) == "" {
-		if diff, err = gitOK(ctx, env, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "HEAD"); err != nil {
+		if diff, err = gitOK(ctx, env, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--ignore-submodules=dirty", "HEAD"); err != nil {
 			return "", err
 		}
 	}

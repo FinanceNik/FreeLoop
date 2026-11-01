@@ -67,7 +67,7 @@ func TestHeadless(t *testing.T) {
 
 	// Follow the turn: answer its approval, stop at its end.
 	var after int64
-	ended, approved := false, false
+	ended, approved := false, map[string]bool{}
 	for deadline := time.Now().Add(20 * time.Second); !ended && time.Now().Before(deadline); {
 		var evs []event.Event
 		if err := c.Call("sessions.wait", map[string]any{"id": ses.ID, "after": after, "timeoutMs": 2000}, &evs); err != nil {
@@ -80,15 +80,16 @@ func TestHeadless(t *testing.T) {
 		var pending []permission.Request
 		c.Call("approvals.list", nil, &pending)
 		for _, r := range pending {
-			if r.SessionID == ses.ID {
+			// A request stays listed for a moment after its decision.
+			if r.SessionID == ses.ID && !approved[r.ID] {
 				if err := c.Call("approvals.decide", map[string]any{"requestId": r.ID, "optionId": "allow_once"}, nil); err != nil {
 					t.Fatal(err)
 				}
-				approved = true
+				approved[r.ID] = true
 			}
 		}
 	}
-	if !ended || !approved {
+	if !ended || len(approved) == 0 {
 		t.Fatalf("turn ended %v, approved %v", ended, approved)
 	}
 	var list []session.Session

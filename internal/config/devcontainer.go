@@ -86,6 +86,10 @@ func ParseDevcontainer(file string, b []byte) (Devcontainer, error) {
 			return Devcontainer{}, fmt.Errorf("%s: %s is outside the project", file, p)
 		}
 	}
+	// It becomes an argument of docker run, where it must not be an option.
+	if strings.HasPrefix(d.Image, "-") {
+		return Devcontainer{}, fmt.Errorf("%s: %q is not an image name", file, d.Image)
+	}
 	if d.Image == "" && d.Dockerfile == "" {
 		return Devcontainer{}, fmt.Errorf("%s names neither an image nor a Dockerfile; Freeloop does not run Docker Compose devcontainers", file)
 	}

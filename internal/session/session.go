@@ -1,5 +1,5 @@
-// Package session holds the engine-side session record the GUI lists. The
-// SessionManager that runs sessions lands here in M1.
+// Package session holds the session and project records the store keeps and
+// the GUI lists. The engine runs sessions (internal/engine/runtime.go).
 package session
 
 import (

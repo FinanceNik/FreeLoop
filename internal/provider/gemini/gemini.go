@@ -5,6 +5,7 @@
 package gemini
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -94,7 +95,7 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.ModelInfo, error)
 		if !strings.HasPrefix(id, "gemini-") || strings.Contains(id, "embedding") || strings.Contains(id, "image") || strings.Contains(id, "tts") {
 			continue
 		}
-		out = append(out, provider.ModelInfo{ID: id, DisplayName: cmpOr(m.DisplayName, id)})
+		out = append(out, provider.ModelInfo{ID: id, DisplayName: cmp.Or(m.DisplayName, id)})
 	}
 	return out, nil
 }
@@ -375,15 +376,6 @@ func (p *Provider) run(seq iter.Seq2[*genai.GenerateContentResponse, error], sen
 		stop = provider.StopRefusal
 	}
 	return provider.Event{Type: provider.EventDone, Message: &msg, StopReason: stop, Usage: usage}, nil
-}
-
-func cmpOr(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // describe turns an API error into a readable one naming the cause (PRV-002).

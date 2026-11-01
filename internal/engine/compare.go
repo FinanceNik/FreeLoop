@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -61,7 +62,7 @@ func (e *Engine) CreateCompare(ctx context.Context, req CompareRequest) (string,
 	tag := CompareTagPrefix + strconv.FormatInt(time.Now().UnixMilli()%1_000_000_000, 36)
 	var made []session.Session
 	for _, p := range req.Profiles {
-		label := cmpOr(strings.TrimSpace(p.Label), p.ProfileID)
+		label := cmp.Or(strings.TrimSpace(p.Label), p.ProfileID)
 		ses, err := e.CreateSession(ctx, CreateSessionRequest{
 			Title: fmt.Sprintf("%s · %s", title, label), ProjectRoot: req.ProjectRoot, EnvironmentID: req.EnvironmentID,
 			ProfileID: p.ProfileID, ProviderID: p.ProviderID, Model: p.Model, Mode: req.Mode, Worktree: true,
@@ -144,7 +145,7 @@ const maxCountedNew = 200
 
 // diffStat counts a session's changes against its base commit.
 func (e *Engine) diffStat(ctx context.Context, ses session.Session) (files, added, deleted int) {
-	if ses.BaseCommit == "" || ses.Status == session.StatusArchived {
+	if ses.BaseCommit == "" || ses.Status == session.StatusArchived || !e.trusted(ses.ProjectID) {
 		return
 	}
 	env, _, err := e.sessionGit(ctx, ses.ID)
@@ -154,7 +155,7 @@ func (e *Engine) diffStat(ctx context.Context, ses session.Session) (files, adde
 	if blocked(ctx, env) != "" {
 		return
 	}
-	if res, err := gitRun(ctx, env, 30*time.Second, "diff", "--numstat", ses.BaseCommit, "--"); err == nil && res.ExitCode == 0 {
+	if res, err := gitRun(ctx, env, 30*time.Second, "diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=dirty", "--numstat", ses.BaseCommit, "--"); err == nil && res.ExitCode == 0 {
 		for _, line := range strings.Split(strings.TrimSpace(res.Output), "\n") {
 			f := strings.Fields(line)
 			if len(f) < 3 {
@@ -177,7 +178,7 @@ func (e *Engine) diffStat(ctx context.Context, ses session.Session) (files, adde
 			if i >= maxCountedNew {
 				continue
 			}
-			if res, err := gitRun(ctx, env, 30*time.Second, "diff", "--no-index", "--numstat", "--", "/dev/null", line); err == nil {
+			if res, err := gitRun(ctx, env, 30*time.Second, "diff", "--no-index", "--no-ext-diff", "--no-textconv", "--numstat", "--", "/dev/null", line); err == nil {
 				if f := strings.Fields(res.Output); len(f) >= 3 {
 					a, _ := strconv.Atoi(f[0])
 					added += a

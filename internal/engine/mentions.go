@@ -66,6 +66,11 @@ func (e *Engine) embedMentions(sid string, env environment.Environment, text str
 		if errors.Is(err, errNotMentionable) {
 			continue
 		}
+		// A message can be text the user did not write, such as an issue's
+		// in the composer; a deny rule holds for what it attaches.
+		if err == nil && e.broker.Hidden(sid, env.Root(), env.Resolve(m)) {
+			err = errors.New("a deny rule covers it")
+		}
 		if err == nil && total+len(r.Text) > maxMentionTotal {
 			err = errors.New(mentionOverTotal)
 		}

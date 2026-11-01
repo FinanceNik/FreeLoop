@@ -201,6 +201,11 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 			if !inside(p) {
 				continue
 			}
+			// Docker follows a symlink in a mount's source, so a repository's
+			// link could mount a folder of the Mac into the container.
+			if link := symlinkOnPath(p, append([]string{root}, d.opts.Mounts...)); link != "" {
+				return "", fmt.Errorf("%s is a symbolic link, which the container cannot be kept away from; remove it to use this environment", link)
+			}
 			if _, err := os.Lstat(p); err != nil {
 				if !dir {
 					continue
@@ -285,6 +290,27 @@ func (d *Docker) execArgs(interactive bool, cwd string, env map[string]string, e
 		args = append(args, "-e", k)
 	}
 	return append(args, d.opts.Container), all
+}
+
+// symlinkOnPath returns the first symlink at or above p, below the base that
+// holds it, or "".
+func symlinkOnPath(p string, bases []string) string {
+	for _, base := range bases {
+		base = filepath.Clean(base)
+		rel, err := filepath.Rel(base, p)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		cur := base
+		for _, part := range strings.Split(rel, string(filepath.Separator)) {
+			cur = filepath.Join(cur, part)
+			if fi, err := os.Lstat(cur); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				return cur
+			}
+		}
+		return ""
+	}
+	return ""
 }
 
 // hostSensitive reports names that would change what the docker CLI on

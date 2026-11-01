@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -61,9 +62,9 @@ func (e *Engine) readGit(g gitSource) ([]bundle, error) {
 	defer cancel()
 	clone := append(append([]string{}, gitProtocols...), "clone", "--quiet", "--no-checkout", "--", g.URL, dir)
 	if res, err := gitRun(ctx, env, 4*time.Minute, clone...); err != nil || res.ExitCode != 0 {
-		return nil, fmt.Errorf("clone %s: %s", g.URL, cmpOr(lastLine(res.Output), fmt.Sprint(err)))
+		return nil, fmt.Errorf("clone %s: %s", g.URL, cmp.Or(lastLine(res.Output), fmt.Sprint(err)))
 	}
-	ref := cmpOr(g.Ref, "HEAD")
+	ref := cmp.Or(g.Ref, "HEAD")
 	commit, err := gitOK(ctx, env, "-C", dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	if err != nil {
 		if commit, err = gitOK(ctx, env, "-C", dir, "rev-parse", "--verify", "--quiet", "origin/"+ref+"^{commit}"); err != nil {

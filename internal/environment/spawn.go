@@ -47,7 +47,6 @@ type proc struct {
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
 	stderr *tail
-	once   sync.Once
 	err    error
 	done   chan struct{}
 }

@@ -307,10 +307,15 @@ export default function NewSession({ providers, projects, environments, profiles
                 </ul>
               </div>
             )}
-            {(settings.worktree?.setup || settings.worktree?.run || settings.worktree?.archive) && (
+            {(settings.worktree?.setup || settings.worktree?.run || settings.worktree?.archive || (settings.worktree?.copy ?? []).length > 0) && (
               <div>
-                <strong>Its worktree sessions would run these commands (.freeloop/worktree.yaml):</strong>
+                <strong>Its worktree sessions would do this (.freeloop/worktree.yaml):</strong>
                 <ul>
+                  {(settings.worktree?.copy ?? []).length > 0 && (
+                    <li>
+                      copy into each worktree: {(settings.worktree?.copy ?? []).map((c) => <code key={c}>{c} </code>)}
+                    </li>
+                  )}
                   {(["setup", "run", "archive"] as const)
                     .filter((k) => settings.worktree?.[k])
                     .map((k) => (

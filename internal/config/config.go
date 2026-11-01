@@ -1,7 +1,7 @@
-// Package config locates the app data directory and loads config.yaml
-// (SET-001). This is the M0 skeleton: one file, strict decoding, validation
-// that reports issues instead of failing. Further files, JSON Schema
-// validation and hot reload arrive in M1.
+// Package config reads and writes the app's files in its data folder
+// (SET-001): config.yaml, providers, profiles, environments, rules and the
+// rest, with strict decoding and validation that reports issues instead of
+// failing.
 package config
 
 import (
