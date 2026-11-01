@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EngineService } from "./api.ts";
 
 // The pictures a user message carried (SES-015), loaded from the session's
@@ -9,6 +9,20 @@ const pictureCache = new Map<string, string>();
 export default function AttachedImages({ sid, images }: { sid: string; images: { name: string; mimeType: string }[] }) {
   const [, setLoaded] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
+  // The full-size view takes the focus, so Escape reaches it, and gives it
+  // back to the picture it came from.
+  const closer = useRef<HTMLButtonElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (open) {
+      opener.current = document.activeElement as HTMLElement | null;
+      closer.current?.focus();
+    }
+  }, [open]);
+  const close = () => {
+    setOpen(null);
+    opener.current?.focus();
+  };
   useEffect(() => {
     let live = true;
     for (const img of images) {
@@ -39,8 +53,22 @@ export default function AttachedImages({ sid, images }: { sid: string; images: {
         );
       })}
       {open && (
-        <div className="picture-view" role="dialog" aria-label="Picture" onClick={() => setOpen(null)} onKeyDown={(e) => e.key === "Escape" && setOpen(null)}>
+        <div
+          className="picture-view"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Picture"
+          onClick={close}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") close();
+            // Its only control: the focus stays in the dialog.
+            if (e.key === "Tab") e.preventDefault();
+          }}
+        >
           <img src={open} alt="Attached picture, full size" />
+          <button ref={closer} className="picture-close" onClick={close}>
+            Close
+          </button>
         </div>
       )}
     </div>

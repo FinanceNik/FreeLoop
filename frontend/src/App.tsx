@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { screenName } from "./a11y.ts";
 import { Browser, Events, Window } from "@wailsio/runtime";
 import {
   CONFIG_EVENT_NAME,
@@ -93,6 +94,29 @@ export default function App() {
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([]);
   const [config, setConfig] = useState<Config | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "none" });
+  const mainBox = useRef<HTMLElement>(null);
+  const [heardScreen, setHeardScreen] = useState("");
+  // Moving to another screen says so (NFR-A11Y-003): the window's title, an
+  // announcement, and the focus in the new screen. A session opened from its
+  // row keeps the focus there, so the next one is an arrow key or Tab away;
+  // anything else would leave a screen reader where it no longer is.
+  const screenId = screen.kind === "session" ? screen.id : "";
+  const screenTitle = screenName(screen.kind, sessions.find((s) => s.id === screenId)?.title);
+  useEffect(() => {
+    document.title = screenTitle ? `${screenTitle} · Freeloop` : "Freeloop";
+  }, [screenTitle]);
+  const firstScreen = useRef(true);
+  useEffect(() => {
+    if (screen.kind === "none") return;
+    if (firstScreen.current) {
+      firstScreen.current = false;
+      return;
+    }
+    setHeardScreen(screenTitle);
+    const at = document.activeElement;
+    const kept = screen.kind === "session" && at && at !== document.body;
+    if (!kept && !mainBox.current?.contains(at)) mainBox.current?.focus({ preventScroll: true });
+  }, [screen.kind, screenId]);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [issues, setIssues] = useState<Issue[]>([]);
   // The last session opened, for the rules page's session scope.
@@ -624,6 +648,14 @@ export default function App() {
   return (
     <PaletteContext.Provider value={registry}>
     <div className={STANDALONE ? "app standalone" : "app"}>
+      <div className="sr-only" role="status" aria-live="polite">
+        {heardScreen}
+      </div>
+      {!STANDALONE && (
+        <button className="skip-link" onClick={() => mainBox.current?.focus()}>
+          Skip to the main content
+        </button>
+      )}
       {!STANDALONE && (
         <aside className="sidebar">
           <header>
@@ -848,13 +880,13 @@ export default function App() {
             >
               <Icon name="general" />
               Settings
-              <kbd>⌘,</kbd>
+              <kbd aria-hidden="true">⌘,</kbd>
             </button>
           </footer>
         </aside>
       )}
 
-      <main className="main">
+      <main className="main" ref={mainBox} tabIndex={-1}>
         {issues.length > 0 && (
           <div role="alert" className="banner warn">
             <strong>Configuration problems; using defaults where needed.</strong>

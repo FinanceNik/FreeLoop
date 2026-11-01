@@ -21,6 +21,7 @@ import {
   type Item,
   type TranscriptEvent,
 } from "./transcript.ts";
+import { pickLabel } from "./a11y.ts";
 import AttachedImages from "./AttachedImages.tsx";
 import ToolView, { openSessionEvent } from "./ToolView.tsx";
 import Tags from "./Tags.tsx";
@@ -183,6 +184,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
     else if (before.running && !view.running) setAnnouncement(view.status === "error" ? "The turn stopped with an error" : "Turn finished");
     heard.current = { waiting: waitingTools.length, running: view.running };
   }, [waitingTools.length, view.running]);
+  // Cleared after a moment: the same words again are only heard as a change.
+  useEffect(() => {
+    if (!announcement) return;
+    const t = setTimeout(() => setAnnouncement(""), 4000);
+    return () => clearTimeout(t);
+  }, [announcement]);
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [queued, setQueued] = useState(0);
   const bottom = useRef<HTMLDivElement>(null);
@@ -284,6 +291,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
       .catch(onError);
   };
   const slashMatches = useMemo(() => (slash === null ? [] : matchCommands(slash, commands)), [slash, commands]);
+  // The focus stays in the message box while a picker is open, so the entry
+  // that lights up is announced.
+  const pickerNames = slash !== null && slashMatches.length > 0 ? slashMatches.map((c) => c.name) : mention ? matches.map((f) => f.slice(f.lastIndexOf("/") + 1)) : [];
+  const pickerOptions = pickerNames.length;
+  const pickedName = pickerNames[pick] ?? "";
+  useEffect(() => {
+    if (pickedName) setAnnouncement(pickLabel(pickedName, pick, pickerOptions));
+  }, [pickedName, pick, pickerOptions]);
   const syncSlash = (el: HTMLTextAreaElement) => {
     const q = el.selectionStart === el.selectionEnd ? slashQuery(el.value, el.selectionStart) : null;
     if (q === null) setSlashDismissed(false);
@@ -760,7 +775,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         <div className="sr-only" role="status" aria-live="polite">
           {active && announcement}
         </div>
-        <div className="conversation" aria-label="Conversation">
+        <div className="conversation" role="region" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {view.items.map((item) => (
             <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} onError={onError} onRewind={rewind} onFork={fork} />
@@ -890,10 +905,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </ul>
           )}
           {slash !== null && slashMatches.length > 0 && (
-            <ul className="mention-picker" role="listbox" aria-label="Commands">
+            <ul className="mention-picker" id="composer-options" role="listbox" aria-label="Commands">
               {slashMatches.map((c, i) => (
                 <li
                   key={c.name}
+                  id={`composer-option-${i}`}
                   role="option"
                   aria-selected={i === pick}
                   className={i === pick ? "picked" : ""}
@@ -909,12 +925,13 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </ul>
           )}
           {mention && (
-            <ul className="mention-picker" role="listbox" aria-label="Files">
+            <ul className="mention-picker" id="composer-options" role="listbox" aria-label="Files">
               {files === null && <li className="muted">Listing files…</li>}
               {files !== null && matches.length === 0 && <li className="muted">No matching files</li>}
               {matches.map((f, i) => (
                 <li
                   key={f}
+                  id={`composer-option-${i}`}
                   role="option"
                   aria-selected={i === pick}
                   className={i === pick ? "picked" : ""}
@@ -933,6 +950,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
             ref={input}
             aria-label="Message"
             aria-autocomplete="list"
+            aria-controls={pickerOptions > 0 ? "composer-options" : undefined}
+            aria-activedescendant={pickerOptions > 0 ? `composer-option-${pick}` : undefined}
             onPaste={(e) => {
               const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
               if (files.length === 0) return;
@@ -1044,6 +1063,7 @@ const ItemView = memo(
     const cls = [item.rewound && "rewound", focused && "found"].filter(Boolean).join(" ");
     return (
       <div data-item={item.key} className={cls || undefined}>
+        {item.rewound && <span className="sr-only">Rewound, no longer part of the conversation:</span>}
         <ItemBody sid={sid} item={item} cost={cost} onError={onError} onRewind={onRewind} onFork={onFork} />
       </div>
     );
@@ -1071,10 +1091,11 @@ function ItemBody({
       return (
         <div className="user-turn">
           <div className="msg msg-user">
+            <h3 className="sr-only">You</h3>
             {item.images && item.images.length > 0 && <AttachedImages sid={sid} images={item.images} />}
             {item.text}
             {item.files.length > 0 && (
-              <div className="attached" aria-label="Attached files">
+              <div className="attached" role="group" aria-label="Attached files">
                 {item.files.map((f) => (
                   <code key={f} title="Attached to this message">
                     {f}
@@ -1093,6 +1114,7 @@ function ItemBody({
     case "agent":
       return (
         <div className="msg msg-agent">
+          <h3 className="sr-only">Agent</h3>
           <Markdown text={item.text} />
         </div>
       );

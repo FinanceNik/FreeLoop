@@ -76,7 +76,12 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
           >
             <span className="file-icon">{f.isDir ? (open.has(f.path) ? "▾" : "▸") : ""}</span>
             {f.name}
-            {mark && <span className="file-mark" aria-label={mark === "agent" ? "changed by the agent" : "changed"} />}
+            {mark && (
+              <>
+                <span className="file-mark" aria-hidden="true" />
+                <span className="sr-only">{mark === "agent" ? "changed by the agent" : "changed"}</span>
+              </>
+            )}
           </button>
         </li>
       );

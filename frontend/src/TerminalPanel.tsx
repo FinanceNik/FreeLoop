@@ -57,10 +57,10 @@ export default function TerminalPanel({ session, onError }: Props) {
   const shown = terms.find((t) => t.id === current);
   return (
     <div className="terminal-panel">
-      <div className="row terminal-tabs" role="tablist" aria-label="Terminals">
+      <div className="row terminal-tabs" role="group" aria-label="Terminals">
         {terms.map((t, i) => (
           <span key={t.id} className={t.id === current ? "terminal-tab terminal-tab-on" : "terminal-tab"}>
-            <button role="tab" aria-selected={t.id === current} className="link" onClick={() => setCurrent(t.id)}>
+            <button aria-current={t.id === current ? "true" : undefined} className="link" onClick={() => setCurrent(t.id)}>
               Shell {i + 1}
             </button>
             <button className="link" aria-label={`Close shell ${i + 1}`} title="Close this shell" onClick={() => close(t.id)}>
@@ -75,7 +75,7 @@ export default function TerminalPanel({ session, onError }: Props) {
       {shown ? (
         <>
           <p className="muted terminal-where">
-            <code>{shown.where}</code>
+            <code>{shown.where}</code> · Shift+Esc leaves the terminal
           </p>
           <TerminalView key={shown.id} id={shown.id} onError={onError} />
         </>
@@ -107,12 +107,21 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
   useEffect(() => {
     const term = new Terminal({
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      fontSize: 12,
+      // Two points under the app's text, as it was at the default of 14.
+      fontSize: (parseFloat(getComputedStyle(document.documentElement).fontSize) || 14) - 2,
       cursorBlink: true,
+      // Lets VoiceOver read the output and the line being typed.
+      screenReaderMode: true,
       scrollback: 5000,
       theme: themeColors(),
     });
     term.open(box.current!);
+    // A shell takes Tab, so the keyboard needs another way out (NFR-A11Y-001).
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.key !== "Escape" || !e.shiftKey) return true;
+      if (e.type === "keydown") document.querySelector<HTMLElement>('.panel-tablist [role="tab"][aria-selected="true"]')?.focus();
+      return false;
+    });
     let size = { cols: 0, rows: 0 };
     const fit = () => {
       const el = box.current;
@@ -164,7 +173,7 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
 
   return (
     <>
-      <div className="terminal-box" ref={box} aria-label="Terminal" />
+      <div className="terminal-box" ref={box} role="group" aria-label="Terminal" />
       {exited !== null && <p className="muted">The shell exited{exited ? ` with code ${exited}` : ""}.</p>}
     </>
   );

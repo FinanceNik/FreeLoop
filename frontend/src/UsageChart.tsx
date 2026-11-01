@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { tabAfterKey } from "./a11y.ts";
 import { niceTicks, type Day } from "./analytics.ts";
 
 // UsageChart draws usage over time as stacked columns, one per day or week
@@ -62,12 +63,22 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
     return { x, parts, d };
   });
 
+  // One stop in the Tab order, however many days are shown; the arrow keys
+  // walk the columns (NFR-A11Y-001).
+  const [cursor, setCursor] = useState(Number.MAX_SAFE_INTEGER);
+  const onKey = (e: KeyboardEvent<SVGSVGElement>) => {
+    const at = data.findIndex((_, i) => i === Math.min(cursor, data.length - 1));
+    const next = tabAfterKey(e.key, at, data.length);
+    if (next < 0) return;
+    e.preventDefault();
+    e.currentTarget.querySelectorAll<SVGRectElement>(".usage-hit")[next]?.focus();
+  };
   const tip = hover !== null ? data[hover] : null;
   const tipLeft = hover !== null ? Math.min(Math.max(PAD.left + hover * slot + slot / 2, 90), width - 90) : 0;
 
   return (
     <div className="usage-chart" ref={box}>
-      <svg width={width} height={HEIGHT} role="img" aria-label={label} onPointerLeave={() => setHover(null)}>
+      <svg width={width} height={HEIGHT} role="group" aria-label={label} onPointerLeave={() => setHover(null)} onKeyDown={onKey}>
         {ticks.map((t) => (
           <g key={t}>
             <line className="usage-grid" x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)} />
@@ -97,11 +108,15 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
               y={PAD.top}
               width={slot}
               height={plotH}
-              tabIndex={0}
-              aria-label={`${bucketLabel(d.day)}: ${format(d.total)}`}
+              role="img"
+              tabIndex={i === Math.min(cursor, data.length - 1) ? 0 : -1}
+              aria-label={`${bucketLabel(d.day)}: ${format(d.total)}${d.values.map((v, s) => (v > 0 ? `, ${series[s]?.label} ${format(v)}` : "")).join("")}`}
               onPointerMove={() => setHover(i)}
               onMouseMove={() => setHover(i)}
-              onFocus={() => setHover(i)}
+              onFocus={() => {
+                setHover(i);
+                setCursor(i);
+              }}
               onBlur={() => setHover(null)}
             />
           </g>
@@ -109,7 +124,7 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
         <line className="usage-baseline" x1={PAD.left} x2={width - PAD.right} y1={PAD.top + plotH} y2={PAD.top + plotH} />
       </svg>
       {tip && (
-        <div className="usage-tip" style={{ left: tipLeft }} role="status">
+        <div className="usage-tip" style={{ left: tipLeft }} aria-hidden="true">
           <div className="usage-tip-head">
             <strong>{format(tip.total)}</strong> <span className="muted">{bucketLabel(tip.day)}</span>
           </div>

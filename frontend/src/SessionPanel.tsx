@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { tabAfterKey } from "./a11y.ts";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
 import { panelData, type SessionView, type ToolItem } from "./transcript.ts";
 import DiffPanel from "./DiffPanel.tsx";
@@ -49,30 +50,43 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
 
   return (
     <aside className={tab === "diff" || tab === "files" || tab === "terminal" || tab === "preview" ? "panel panel-wide" : "panel"} aria-label="Session panel">
-      <div className="panel-tabs" role="tablist">
-        <TabButton id="approvals" tab={tab} setTab={setTab}>
-          Approvals{data.pending.length > 0 && <span className="badge badge-waiting_permission">{data.pending.length}</span>}
-        </TabButton>
-        <TabButton id="diff" tab={tab} setTab={setTab}>
-          Diff{dirty > 0 && <span className="muted"> {dirty}</span>}
-        </TabButton>
-        <TabButton id="files" tab={tab} setTab={setTab}>
-          Files
-        </TabButton>
-        <TabButton id="terminal" tab={tab} setTab={setTab}>
-          Terminal
-        </TabButton>
-        <TabButton id="preview" tab={tab} setTab={setTab}>
-          Preview
-        </TabButton>
-        <TabButton id="info" tab={tab} setTab={setTab}>
-          Info
-        </TabButton>
+      <div className="panel-tabs">
+        <div
+          className="panel-tablist"
+          role="tablist"
+          aria-label="Panel views"
+          onKeyDown={(e) => {
+            const tabs = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
+            const next = tabAfterKey(e.key, tabs.indexOf(e.target as HTMLElement), tabs.length);
+            if (next < 0) return;
+            e.preventDefault();
+            tabs[next].focus();
+          }}
+        >
+          <TabButton id="approvals" tab={tab} setTab={setTab}>
+            Approvals{data.pending.length > 0 && <span className="badge badge-waiting_permission">{data.pending.length}</span>}
+          </TabButton>
+          <TabButton id="diff" tab={tab} setTab={setTab}>
+            Diff{dirty > 0 && <span className="muted"> {dirty}</span>}
+          </TabButton>
+          <TabButton id="files" tab={tab} setTab={setTab}>
+            Files
+          </TabButton>
+          <TabButton id="terminal" tab={tab} setTab={setTab}>
+            Terminal
+          </TabButton>
+          <TabButton id="preview" tab={tab} setTab={setTab}>
+            Preview
+          </TabButton>
+          <TabButton id="info" tab={tab} setTab={setTab}>
+            Info
+          </TabButton>
+        </div>
         <button className="panel-close" onClick={onClose} aria-label="Hide the panel" title="Hide the panel">
           ×
         </button>
       </div>
-      <div className="panel-body" role="tabpanel">
+      <div className="panel-body" role="tabpanel" id="panel-body" aria-labelledby={`panel-tab-${tab}`}>
         {tab === "approvals" && <Approvals pending={data.pending} decided={data.decided} onError={onError} />}
         {tab === "diff" && <DiffPanel session={session} gitKey={JSON.stringify(view.git)} agentEdits={data.changes} onReview={onReview} onError={onError} />}
         {tab === "files" && <FilesPanel session={session} gitKey={JSON.stringify(view.git) + data.changes.length} agentEdits={data.changes} onError={onError} />}
@@ -100,7 +114,15 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
 
 function TabButton({ id, tab, setTab, children }: { id: Tab; tab: Tab; setTab: (t: Tab) => void; children: ReactNode }) {
   return (
-    <button role="tab" aria-selected={tab === id} className={tab === id ? "tab tab-on" : "tab"} onClick={() => setTab(id)}>
+    <button
+      role="tab"
+      id={`panel-tab-${id}`}
+      aria-selected={tab === id}
+      aria-controls={tab === id ? "panel-body" : undefined}
+      tabIndex={tab === id ? 0 : -1}
+      className={tab === id ? "tab tab-on" : "tab"}
+      onClick={() => setTab(id)}
+    >
       {children}
     </button>
   );

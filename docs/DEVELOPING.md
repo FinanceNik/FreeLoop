@@ -115,6 +115,24 @@ The templates live in `internal/harness/templates` as `.tmpl` files; their tests
 
 Add the constant to `internal/event/event.go` (in `ACPTypes` or `FreeloopTypes`) and to `schemas/events.json`, with a `$defs` entry for its data; the schema test checks both lists agree, and the store refuses unknown types. Fold it into the view in `frontend/src/transcript.ts` with a `node --test` case, and decide whether the search index (`internal/store/search.go`) and the Markdown export (`internal/engine/export.go`) should show it.
 
+## Accessibility
+
+Pure rules are in `frontend/src/a11y.ts`, and `a11y.test.ts` computes the contrast of every text colour on every surface in each theme. To keep it true: define colours as theme tokens, never dim text with `opacity`, and size text in `rem` (`calc(12rem / 14)` is 12 at the default), so the Font size setting reaches it. A dot, colour or icon that carries meaning also needs words, in `.sr-only` if they would clutter the view. `aria-label` on a plain `div` or `span` is ignored: give it a role.
+
+To check with VoiceOver (⌘F5), which no test can replace:
+
+1. Move through the sidebar with Tab: each session says its title and status, and opening one says its title.
+2. Open Board, Usage and Settings: each is announced, and the next Tab lands in it.
+3. From the top of the page, the first Tab offers "Skip to the main content".
+4. Send a message and jump by heading (VO+⌘H): you hear "You" and "Agent" before each message.
+5. When the agent asks: you hear "Approval needed", the card says "Waiting for your approval", and Y and N answer it.
+6. Tool cards say Done, Failed or Running before their titles.
+7. Type `@` in the message box and use the arrows: each entry is read with its place in the list.
+8. In the panel, use the arrows across the tabs: they move focus without opening anything, and Return opens one.
+9. In the Terminal tab, type a command and hear the output; Shift+Esc leaves it.
+10. Open ⌘K, and a picture at full size: Tab stays inside, and Escape returns you to where you were.
+11. On Usage, the arrows walk the chart's columns, and "Show as a table" reads the same data.
+
 ## Every change
 
 - Name the requirement IDs in the commit message; IDs are stable and never renumbered.

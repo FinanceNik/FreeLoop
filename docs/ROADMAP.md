@@ -237,7 +237,14 @@ What the M3 list still holds and needs no account of the user's.
    - *SBOM:* `make release` writes `bin/release` with the DMG, a CycloneDX 1.6 bill of materials (`internal/sbom`, `cmd/freeloop-sbom`, from the binary's own build information and the frontend's lockfile), `BUILDINFO.txt` and checksums. No new dependency.
    - *Pins:* an exact `toolchain` in `go.mod`, CI's actions pinned to commits, and `internal/archtest/pins_test.go` holding those, npm's exact versions and checksums, and a budget of four shipped npm packages. `make verify-deps` checks modules against `go.sum` in CI.
    - *The build:* no longer runs `go mod tidy`, which could rewrite what it builds from; it fails when the module needs tidying.
-3. **Sandboxed execution (SEC-011, NFR-SEC-005).** *Met by the Docker environment (ENV-005), as their text says; the native sandbox stays ENV-009.*
+3. **Accessibility audit (NFR-A11Y-001, NFR-A11Y-002, the audit half of NFR-A11Y-003).** *Done 2026-11-01. Every screen was audited in both themes in the built-in browser with a script (names, roles, contrast, Tab order, visible focus) and walked with real key presses; the VoiceOver pass itself is the user's, with the checklist in DEVELOPING.md.* Control names were already sound. What it found and fixed:
+   - *Moving between screens was silent:* the window's title now names the screen, the move is announced, and focus goes to the new screen; a session opened from its row keeps focus there. A skip link leads past the sidebar.
+   - *Status by colour alone:* a tool card's dot now has words. Messages have a hidden "You" or "Agent" heading to jump by, and rewound ones say so.
+   - *Contrast:* the stylesheet claimed AA, and missed it for faint text, a warning colour, a dark hover and the dark focus ring, as well as content dimmed with opacity. `a11y.test.ts` now computes every pair of tokens.
+   - *Keyboard:* the panel's tabs are one stop with arrow keys, and arrows only move focus, because opening Terminal starts a shell; the usage chart is one stop instead of one per column. Shift+Esc leaves the terminal, which keeps Tab for the shell. Tab stays inside the palette and the picture view, which now takes focus so Escape works.
+   - *Screen readers:* the terminal's output is exposed (xterm's `screenReaderMode`), a picker's highlighted entry is announced, and repeated announcements are heard again.
+   - *Text size:* all 72 sizes fixed in pixels now follow the Font size setting.
+4. **Sandboxed execution (SEC-011, NFR-SEC-005).** *Met by the Docker environment (ENV-005), as their text says; the native sandbox stays ENV-009.*
 
 ## Later (unscheduled)
 

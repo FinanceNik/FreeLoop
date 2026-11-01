@@ -69,6 +69,9 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
     if (e.key === "Escape") {
       e.preventDefault();
       close();
+    } else if (e.key === "Tab") {
+      // The dialog's only stop: the page behind it is out of reach.
+      e.preventDefault();
     } else if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) {
       e.preventDefault();
       if (n) setPick((p) => (p + 1) % n);
@@ -111,7 +114,7 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
               <span className="palette-group">{item.group}</span>
               <span className="palette-title">{item.title}</span>
               {item.detail && <span className="palette-detail muted">{item.detail}</span>}
-              {item.shortcut && <kbd className="palette-shortcut">{item.shortcut}</kbd>}
+              {item.shortcut && <kbd className="palette-shortcut" aria-hidden="true">{item.shortcut}</kbd>}
             </li>
           ))}
           {shown.length === 0 && <li className="muted palette-empty">Nothing matches.</li>}

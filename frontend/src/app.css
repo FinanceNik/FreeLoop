@@ -19,14 +19,16 @@
   --border-strong: #cfd2d9;
   --text: #1d1f23;
   --muted: #5f636b;
-  --faint: #8a8e96;
+  --faint: #686c74;
+  --input-border: #8a8e96;
+  --focus: #2563eb;
   --accent: #2563eb;
   --accent-hover: #1d55d0;
   --accent-text: #ffffff;
   --link: #1d5bd6;
   --accent-soft: rgba(37, 99, 235, 0.1);
   --ok: #18794e;
-  --warn: #a35f00;
+  --warn: #955600;
   --danger: #c42b1c;
   --danger-soft: rgba(196, 43, 28, 0.08);
   --add: rgba(24, 121, 78, 0.12);
@@ -66,9 +68,11 @@
     --border-strong: #43464d;
     --text: #e6e7ea;
     --muted: #9a9ca3;
-    --faint: #70737b;
+    --faint: #94979f;
+    --input-border: #74777f;
+    --focus: #6ea2ff;
     --accent: #2f6be0;
-    --accent-hover: #3d78ec;
+    --accent-hover: #2a62d4;
     --accent-text: #ffffff;
     --link: #6ea2ff;
     --accent-soft: rgba(110, 162, 255, 0.14);
@@ -99,9 +103,11 @@
   --border-strong: #43464d;
   --text: #e6e7ea;
   --muted: #9a9ca3;
-  --faint: #70737b;
+  --faint: #94979f;
+  --input-border: #74777f;
+  --focus: #6ea2ff;
   --accent: #2f6be0;
-  --accent-hover: #3d78ec;
+  --accent-hover: #2a62d4;
   --accent-text: #ffffff;
   --link: #6ea2ff;
   --accent-soft: rgba(110, 162, 255, 0.14);
@@ -223,7 +229,7 @@ input,
 select,
 textarea {
   background: var(--input);
-  border: 1px solid var(--border);
+  border: 1px solid var(--input-border);
   border-radius: var(--r-sm);
   padding: 6px 10px;
 }
@@ -237,7 +243,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--focus);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
@@ -322,7 +328,7 @@ fieldset {
 }
 
 .sidebar h1 {
-  font-size: 15px;
+  font-size: calc(15rem / 14);
   font-weight: 650;
   letter-spacing: -0.01em;
   margin: 0;
@@ -375,8 +381,8 @@ fieldset {
 .settings-link kbd {
   margin-left: auto;
   font: inherit;
-  font-size: 12px;
-  color: var(--faint);
+  font-size: calc(12rem / 14);
+  color: var(--muted);
 }
 
 .icon {
@@ -399,7 +405,7 @@ fieldset {
 
 .settings-nav h2 {
   margin: 14px 10px 4px;
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -419,7 +425,7 @@ fieldset {
 .settings-nav .settings-back {
   width: auto;
   padding: 4px 10px 4px 6px;
-  font-size: 13px;
+  font-size: calc(13rem / 14);
 }
 
 .settings-content {
@@ -501,7 +507,7 @@ fieldset {
   flex-wrap: wrap;
   gap: 4px 6px;
   align-items: center;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .project-group {
@@ -512,7 +518,7 @@ fieldset {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   font-weight: 600;
   color: var(--muted);
   margin: 8px 10px 4px;
@@ -550,7 +556,7 @@ fieldset {
   gap: 4px;
   border-radius: 999px;
   padding: 0 7px;
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   line-height: 18px;
   border: 1px solid var(--border-strong);
   color: var(--muted);
@@ -721,13 +727,13 @@ fieldset {
 
 .session-header h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16rem / 14);
   cursor: text;
 }
 
 .session-header p {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 /* The folder on one line; the whole path shows on hover. */
@@ -767,7 +773,7 @@ fieldset {
 /* The model, mode and token line under the actions. */
 .session-controls > span,
 .session-controls > label {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .session-controls select {
@@ -832,13 +838,13 @@ button.ghost[aria-pressed="true"] {
 .thought summary {
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .msg-thought {
   white-space: pre-wrap;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   padding: 4px 0 0 12px;
   border-left: 2px solid var(--border);
 }
@@ -913,12 +919,12 @@ button.ghost[aria-pressed="true"] {
   align-items: center;
   padding: 3px 4px 3px 10px;
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   color: var(--muted);
 }
 
 .md-code-bar button {
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   padding: 1px 8px;
   border-radius: var(--r-xs);
 }
@@ -968,7 +974,7 @@ button.ghost[aria-pressed="true"] {
 
 .tool-title {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -997,7 +1003,7 @@ button.ghost[aria-pressed="true"] {
 
 .decision {
   margin-left: auto;
-  font-size: 11px;
+  font-size: calc(11rem / 14);
 }
 
 .decision-denied,
@@ -1059,7 +1065,6 @@ button.ghost[aria-pressed="true"] {
   font-size: 0.78em;
   border: 1px solid currentColor;
   border-radius: 4px;
-  opacity: 0.7;
 }
 
 .mcp-form {
@@ -1082,12 +1087,12 @@ button.ghost[aria-pressed="true"] {
 }
 
 .mcp-field .muted {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .turn-end {
   color: var(--faint);
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   text-align: center;
   padding: 2px 0;
 }
@@ -1097,7 +1102,7 @@ button.ghost[aria-pressed="true"] {
 }
 
 .working {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   color: var(--link);
 }
 
@@ -1182,8 +1187,7 @@ button.ghost[aria-pressed="true"] {
 
 .mention-picker li.picked .muted {
   color: inherit;
-  opacity: 0.8;
-}
+  }
 
 .attached {
   display: flex;
@@ -1199,7 +1203,7 @@ button.ghost[aria-pressed="true"] {
 
 .caps {
   min-height: 1.5em;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .caps button {
@@ -1288,13 +1292,20 @@ button.ghost[aria-pressed="true"] {
   border-radius: var(--r-md);
 }
 
+.panel-tablist {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
 .panel-tabs .tab {
   border: none;
   border-radius: var(--r-sm);
   background: none;
   padding: 4px 8px;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
@@ -1333,7 +1344,7 @@ button.ghost[aria-pressed="true"] {
 }
 
 .panel-body h3 {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   font-weight: 600;
   color: var(--muted);
   margin: 16px 0 8px;
@@ -1520,7 +1531,7 @@ details.choice[open] > summary h3::after {
 
 .board-header h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16rem / 14);
 }
 
 .board {
@@ -1539,7 +1550,7 @@ details.choice[open] > summary h3::after {
 
 .board-column h3 {
   margin: 2px 4px 10px;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1581,7 +1592,7 @@ details.choice[open] > summary h3::after {
 }
 
 .board-card-where {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1589,7 +1600,7 @@ details.choice[open] > summary h3::after {
 
 .board-empty {
   padding: 4px;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .attention-item {
@@ -1890,7 +1901,7 @@ details.choice[open] > summary h3::after {
 
 .badge.skill-new,
 .badge.skill-changed {
-  color: var(--accent);
+  color: var(--link);
   border-color: var(--accent);
 }
 
@@ -1966,7 +1977,7 @@ details.choice[open] > summary h3::after {
 
 .badge.import-new,
 .badge.import-changed {
-  color: var(--accent);
+  color: var(--link);
   border-color: var(--accent);
 }
 
@@ -2002,10 +2013,32 @@ details.choice[open] > summary h3::after {
 
 /* Accessibility (NFR-A11Y-001, NFR-A11Y-002): a visible focus ring for
    keyboard users, no motion for those who asked for less, and text for
-   screen readers only. Colours meet WCAG AA in both themes. */
+   screen readers only. Colours meet WCAG AA in both themes, which
+   a11y.test.ts checks. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* Focus put here by the app, after moving to another screen. */
+.main:focus,
+.main:focus-visible {
+  outline: none;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  z-index: 100;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
 }
 
 .session-row:focus-visible,
@@ -2076,7 +2109,7 @@ details.choice[open] > summary h3::after {
 
 /* Checkpoints and rewind (SES-014) */
 .rewound {
-  opacity: 0.45;
+  color: var(--muted);
 }
 
 /* A message of the user's: the bubble, and under it the icon actions,
@@ -2105,7 +2138,7 @@ details.choice[open] > summary h3::after {
 
 .msg-actions-open {
   gap: 8px;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .msg-actions-open button {
@@ -2143,7 +2176,7 @@ details.choice[open] > summary h3::after {
 
 .search-session {
   display: block;
-  font-size: 13px;
+  font-size: calc(13rem / 14);
   padding: 2px 6px;
 }
 
@@ -2155,7 +2188,7 @@ details.choice[open] > summary h3::after {
   width: 100%;
   margin-bottom: 2px;
   text-align: left;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   background: transparent;
   border-color: transparent;
 }
@@ -2166,7 +2199,7 @@ details.choice[open] > summary h3::after {
 }
 
 .search-kind {
-  font-size: 11px;
+  font-size: calc(11rem / 14);
 }
 
 .search-snippet {
@@ -2195,7 +2228,7 @@ table.prices,
 table.usage {
   border-collapse: collapse;
   width: 100%;
-  font-size: 13px;
+  font-size: calc(13rem / 14);
 }
 
 table.prices th,
@@ -2233,7 +2266,7 @@ ul.unpriced {
   align-self: flex-start;
   margin: 2px 8px 6px;
   padding: 2px 10px;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   color: var(--muted);
 }
 
@@ -2266,7 +2299,7 @@ ul.unpriced {
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   padding: 12px 14px;
-  font-size: 15px;
+  font-size: calc(15rem / 14);
   background: transparent;
 }
 
@@ -2296,7 +2329,7 @@ ul.unpriced {
 
 .palette-group {
   flex: 0 0 5.5em;
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   color: var(--muted);
 }
 
@@ -2309,7 +2342,7 @@ ul.unpriced {
 .palette-detail {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2317,7 +2350,7 @@ ul.unpriced {
 
 .palette-shortcut {
   margin-left: auto;
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   color: var(--muted);
 }
 
@@ -2361,7 +2394,7 @@ table.hooks .hook-command {
   align-items: center;
   gap: 4px;
   padding: 1px 4px 1px 8px;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg-card);
@@ -2386,7 +2419,7 @@ table.hooks .hook-command {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bg-card);
-  font-size: 13px;
+  font-size: calc(13rem / 14);
 }
 
 .handoff summary {
@@ -2431,7 +2464,7 @@ table.hooks .hook-command {
   margin: 0;
   padding: 0;
   overflow: auto;
-  font-size: 13px;
+  font-size: calc(13rem / 14);
 }
 
 .file-row {
@@ -2489,7 +2522,7 @@ table.hooks .hook-command {
 
 .file-text {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   line-height: 1.45;
   white-space: pre;
 }
@@ -2515,14 +2548,14 @@ table.hooks .hook-command {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 /* Skills from git (SKL-006) */
 .skill-diff {
   max-height: 20em;
   overflow: auto;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -2598,7 +2631,7 @@ table.hooks .hook-command {
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   line-height: 18px;
   white-space: nowrap;
 }
@@ -2620,7 +2653,7 @@ table.hooks .hook-command {
   background: none;
   padding: 0 0 0 2px;
   color: var(--faint);
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   line-height: 1;
   cursor: pointer;
 }
@@ -2633,12 +2666,12 @@ table.hooks .hook-command {
 .tag-input {
   width: 110px;
   padding: 1px 8px;
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   border-radius: 999px;
 }
 
 .tag-add {
-  font-size: 11px;
+  font-size: calc(11rem / 14);
 }
 
 .saved-filters {
@@ -2658,7 +2691,7 @@ table.hooks .hook-command {
   align-items: center;
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .saved-filter button {
@@ -2707,7 +2740,7 @@ table.hooks .hook-command {
   background: none;
   padding: 4px 10px;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
   white-space: nowrap;
 }
 
@@ -2777,24 +2810,24 @@ table.hooks .hook-command {
 
 .usage-hero > span,
 .usage-tile > span {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .usage-hero strong {
-  font-size: 44px;
+  font-size: calc(44rem / 14);
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.01em;
 }
 
 .usage-tile strong {
-  font-size: 22px;
+  font-size: calc(22rem / 14);
   font-weight: 600;
 }
 
 .usage-note {
   margin: 4px 0 14px;
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
 }
 
 .usage-card {
@@ -2808,7 +2841,7 @@ table.hooks .hook-command {
 
 .usage-card h3 {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: calc(13rem / 14);
   font-weight: 600;
 }
 
@@ -2827,7 +2860,7 @@ table.hooks .hook-command {
   margin: 0 0 6px;
   padding: 0;
   list-style: none;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   color: var(--muted);
 }
 
@@ -2872,7 +2905,7 @@ table.hooks .hook-command {
 
 .usage-axis {
   fill: var(--faint);
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2891,6 +2924,11 @@ table.hooks .hook-command {
   fill-opacity: 0.5;
 }
 
+.usage-hit:focus-visible {
+  stroke: var(--focus);
+  stroke-width: 2px;
+}
+
 .usage-tip {
   position: absolute;
   top: 0;
@@ -2902,7 +2940,7 @@ table.hooks .hook-command {
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
   box-shadow: var(--shadow);
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   pointer-events: none;
   z-index: 5;
 }
@@ -2930,7 +2968,7 @@ table.hooks .hook-command {
 .usage-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
 }
 
 .usage-table th {
@@ -2964,7 +3002,7 @@ table.hooks .hook-command {
 }
 
 .usage-share-col .muted {
-  font-size: 11.5px;
+  font-size: calc(11.5rem / 14);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2990,7 +3028,7 @@ table.hooks .hook-command {
 .usage-table-view summary {
   cursor: pointer;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .usage-table-view table {
@@ -3037,7 +3075,7 @@ table.hooks .hook-command {
 }
 
 .review-hint {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .review-count {
@@ -3049,7 +3087,7 @@ table.hooks .hook-command {
 .review-editor {
   white-space: normal;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
   margin: 4px 8px 6px 6.4em;
   padding: 8px 10px;
   border: 1px solid var(--border-strong);
@@ -3116,7 +3154,7 @@ table.hooks .hook-command {
   padding: 0;
   border-radius: 50%;
   line-height: 1;
-  font-size: 13px;
+  font-size: calc(13rem / 14);
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
 }
@@ -3163,6 +3201,12 @@ table.hooks .hook-command {
   cursor: zoom-out;
 }
 
+.picture-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
 .picture-view img {
   max-width: 100%;
   max-height: 100%;
@@ -3180,7 +3224,7 @@ table.hooks .hook-command {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface);
-  font-size: 13px;
+  font-size: calc(13rem / 14);
 }
 
 .setup-running {
@@ -3197,7 +3241,7 @@ table.hooks .hook-command {
   overflow: auto;
   margin: 6px 0 0;
   padding: 8px;
-  font-size: 12px;
+  font-size: calc(12rem / 14);
   white-space: pre-wrap;
   background: var(--bg);
   border-radius: var(--r-sm);
@@ -3205,7 +3249,7 @@ table.hooks .hook-command {
 
 .worktree-scripts {
   margin: 4px 0 2px 24px;
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
 }
 
 .worktree-scripts-list {
@@ -3252,7 +3296,7 @@ table.hooks .hook-command {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
 }
 
 .pr-check-mark {
@@ -3337,10 +3381,6 @@ table.hooks .hook-command {
   min-width: 0;
 }
 
-.compare-archived {
-  opacity: 0.6;
-}
-
 .compare-run header {
   display: flex;
   justify-content: space-between;
@@ -3349,7 +3389,7 @@ table.hooks .hook-command {
 }
 
 .compare-model {
-  font-size: 12px;
+  font-size: calc(12rem / 14);
 }
 
 .compare-stats {
@@ -3365,7 +3405,7 @@ table.hooks .hook-command {
 }
 
 .compare-stats dt {
-  font-size: 11px;
+  font-size: calc(11rem / 14);
   color: var(--muted);
 }
 
@@ -3377,7 +3417,7 @@ table.hooks .hook-command {
 
 .compare-reply {
   margin: 0;
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 180px;
@@ -3393,7 +3433,7 @@ table.hooks .hook-command {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface);
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
 }
 
 .todo-list summary {
@@ -3448,7 +3488,7 @@ table.hooks .hook-command {
 
 .agent-review-reply {
   margin: 0;
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 200px;
@@ -3470,7 +3510,7 @@ table.hooks .hook-command {
 }
 
 .preview-note {
-  font-size: 12.5px;
+  font-size: calc(12.5rem / 14);
 }
 
 .preview-frame {

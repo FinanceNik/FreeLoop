@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toolStatusLabel } from "./a11y.ts";
 import { EngineService } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
@@ -55,6 +56,7 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
     >
       <summary>
         <span className={`dot dot-${item.status}`} aria-hidden="true" />
+        <span className="sr-only">{toolStatusLabel(item.status, waiting)} </span>
         <span className="tool-title">{item.title}</span>
         <span className="muted"> {item.tool}</span>
         {shownDecision && (
@@ -90,7 +92,7 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
               <code>{p}</code>
             </p>
           ))}
-          {!form && <input placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />}
+          {!form && <input aria-label="Note for the agent" placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />}
           <div className="approval-buttons">
             {offersAlways && (
               <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Allow always applies to">
@@ -109,7 +111,7 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
                   title={hint && !form ? `Shortcut: ${hint}` : undefined}
                 >
                   {o.name}
-                  {hint && !form && <kbd>{hint.split(" ")[0]}</kbd>}
+                  {hint && !form && <kbd aria-hidden="true">{hint.split(" ")[0]}</kbd>}
                 </button>
               );
             })}
