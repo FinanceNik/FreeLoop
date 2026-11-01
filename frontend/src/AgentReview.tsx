@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { EngineService, type Profile, type ReviewInfo, type Session } from "./api.ts";
-import { openSessionEvent } from "./SessionView.tsx";
+import { openSessionEvent } from "./ToolView.tsx";
 
 // AgentReview is the Diff tab's review by a second agent (HRN-018): another
 // profile reads the session's changes in a read-only session of its own,

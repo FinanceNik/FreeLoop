@@ -8,6 +8,7 @@ import { usePaletteActions } from "./Palette.tsx";
 import PullRequest from "./PullRequest.tsx";
 import AgentReview from "./AgentReview.tsx";
 import type { PaletteItem } from "./palette.ts";
+import { relative } from "./paths.ts";
 
 // DiffPanel is the Diff tab of the right panel (GUI-005): the files that
 // differ from the session's base commit, each with its diff, plus staging,
@@ -466,11 +467,4 @@ function CommentView({ c, note, onRemove }: { c: ReviewComment; note?: string; o
       <div className="review-comment-body">{c.body}</div>
     </div>
   );
-}
-
-// relative makes an agent's path relative to the project root, as git's are.
-function relative(path: string, root: string): string {
-  const r = root.endsWith("/") ? root : root + "/";
-  if (path.startsWith(r)) return path.slice(r.length);
-  return path.replace(/^\.\//, "");
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EngineService, type AttentionItem, type PermissionRequest } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
+import { basename } from "./paths.ts";
 
 // Attention is the list of every session that needs the user, across
 // projects (GUI-002): pending approvals answered inline, failed turns with
@@ -108,9 +109,4 @@ function RequestView({ req, onError }: { req: PermissionRequest; onError: (err: 
       </div>
     </div>
   );
-}
-
-function basename(p: string): string {
-  const parts = p.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? p;
 }

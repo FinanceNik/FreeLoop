@@ -2,7 +2,6 @@ import { Browser, Clipboard } from "@wailsio/runtime";
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
-import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
 import {
   EngineService,
   MODES,
@@ -19,13 +18,11 @@ import {
 import {
   awaitingDecision,
   buildView,
-  lineDiff,
   type Item,
-  type PermissionOption,
-  type ToolContent,
   type TranscriptEvent,
 } from "./transcript.ts";
-import { McpFormView, useMcpForm } from "./McpForm.tsx";
+import AttachedImages from "./AttachedImages.tsx";
+import ToolView, { openSessionEvent } from "./ToolView.tsx";
 import Tags from "./Tags.tsx";
 import { prepareImage, type PreparedImage } from "./imageprep.ts";
 import { MAX_IMAGES, room } from "./images.ts";
@@ -1214,211 +1211,7 @@ function MessageActions({ text, onFork, rewind }: { text: string; onFork?: () =>
   );
 }
 
-function ToolView({ item, onError }: { item: Extract<Item, { kind: "tool" }>; onError: (err: unknown) => void }) {
-  const waiting = awaitingDecision(item);
-  const [reason, setReason] = useState("");
-  const [scope, setScope] = useState("session");
-  const decided = item.permission?.decided;
-  const shownDecision = decided && decided.actor !== "policy" && !(decided.actor === "mode" && decided.outcome === "allowed");
-
-  const form = item.permission?.form;
-  const decide = (optionId: string, answers?: Record<string, unknown>) =>
-    EngineService.Decide({ requestId: item.permission!.requestId, optionId, reason, scope, answers }).catch(onError);
-  const mcpForm = useMcpForm(form, item.permission?.requestId);
-  const choose = (o: PermissionOption) => mcpForm.choose(o.optionId, o.kind, decide);
-  const offersAlways = item.permission?.options.some((o) => o.kind === "allow_always");
-
-  // Shortcuts (GUI-006) go to the first waiting card on screen only.
-  const box = useRef<HTMLDivElement>(null);
-  const shownAt = useRef(0);
-  useEffect(() => {
-    // A keypress never sends a form.
-    if (!waiting || form) return;
-    shownAt.current = Date.now();
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.repeat || e.defaultPrevented || e.isComposing) return;
-      // Only the first waiting card of the active pane (GUI-017).
-      const pane = box.current?.closest(".pane");
-      if (pane && !pane.classList.contains("pane-active")) return;
-      if ((pane ?? document).querySelector(".approval") !== box.current) return;
-      const kind = approvalShortcut(e, isTextField(e.target));
-      const opt = kind && item.permission?.options.find((o) => optionKind(o.kind) === kind);
-      if (!opt) return;
-      e.preventDefault();
-      if (Date.now() - shownAt.current < APPROVAL_GRACE_MS) return;
-      decide(opt.optionId);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [waiting, item.permission, reason, scope]);
-
-  const plan = item.tool === "present_plan" ? String((item.input as { plan?: string } | null)?.plan ?? "") : null;
-
-  return (
-    <details
-      data-tool-call={item.toolCallId}
-      className={`tool tool-${item.status} ${waiting ? "tool-waiting" : ""}`}
-      open={waiting || plan !== null || undefined}
-    >
-      <summary>
-        <span className={`dot dot-${item.status}`} aria-hidden="true" />
-        <span className="tool-title">{item.title}</span>
-        <span className="muted"> {item.tool}</span>
-        {shownDecision && (
-          <span className={`decision decision-${decided.outcome}`}>
-            {decided.outcome} by {decided.actor}
-          </span>
-        )}
-      </summary>
-      {plan !== null ? (
-        <div className="plan">{plan}</div>
-      ) : (
-        <pre className="tool-input">{JSON.stringify(item.input, null, 2)}</pre>
-      )}
-      {item.content.map((c, i) => (
-        <ContentView key={i} c={c} />
-      ))}
-      {shownDecision && decided.reason && <p className="muted">{decided.reason}</p>}
-      {decided?.persisted && (
-        <p className="muted">
-          Saved rule: <code>{decided.persisted.command || decided.persisted.path || decided.persisted.tool}</code> ({decided.persisted.scope})
-        </p>
-      )}
-      {waiting && (
-        <div className="approval" role="group" aria-label={form ? `${form.server} asks for input` : "Approve this tool call"} ref={box}>
-          {form && <McpFormView form={form} state={mcpForm} />}
-          {item.permission?.command && (
-            <p>
-              Run <code>{item.permission.command}</code>?
-            </p>
-          )}
-          {item.permission?.paths?.map((p) => (
-            <p key={p} className="muted">
-              <code>{p}</code>
-            </p>
-          ))}
-          {!form && <input placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />}
-          <div className="approval-buttons">
-            {offersAlways && (
-              <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Allow always applies to">
-                <option value="session">Always: this session</option>
-                <option value="global">Always: everywhere</option>
-              </select>
-            )}
-            {item.permission!.options.map((o) => {
-              const kind = optionKind(o.kind);
-              const hint = kind ? APPROVAL_HINTS[kind] : null;
-              return (
-                <button
-                  key={o.optionId}
-                  className={o.kind.startsWith("allow") ? "primary" : "danger"}
-                  onClick={() => choose(o)}
-                  title={hint && !form ? `Shortcut: ${hint}` : undefined}
-                >
-                  {o.name}
-                  {hint && !form && <kbd>{hint.split(" ")[0]}</kbd>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </details>
-  );
-}
-
-function ContentView({ c }: { c: ToolContent }) {
-  if (c.type === "diff") {
-    return (
-      <div className="diff">
-        <div className="muted">{c.path}</div>
-        <pre>
-          {lineDiff(c.oldText ?? "", c.newText ?? "").map((l, i) => (
-            <div key={i} className={l.sign === "+" ? "add" : l.sign === "-" ? "del" : ""}>
-              {l.sign} {l.text}
-            </div>
-          ))}
-        </pre>
-      </div>
-    );
-  }
-  if (c.type === "terminal_output") {
-    return (
-      <pre className="tool-output">
-        <span className="muted">exit {c.exitCode}</span>
-        {"\n"}
-        {c.output}
-      </pre>
-    );
-  }
-  // A link to another session, such as a subagent's (HRN-014).
-  if (c.content?.type === "resource_link" && c.content.uri?.startsWith(SESSION_URI)) {
-    const sid = c.content.uri.slice(SESSION_URI.length);
-    return (
-      <button className="link" onClick={() => openSessionEvent(sid)}>
-        {c.content.name || "Open the session"}
-      </button>
-    );
-  }
-  return <pre className="tool-output">{c.content?.text}</pre>;
-}
-
-const SESSION_URI = "freeloop://session/";
-
-// openSessionEvent asks the app to open a session, from anywhere in the
-// view.
-export const OPEN_SESSION_DOM_EVENT = "freeloop-open-session";
-export function openSessionEvent(sid: string) {
-  window.dispatchEvent(new CustomEvent(OPEN_SESSION_DOM_EVENT, { detail: sid }));
-}
-
 let pictureCount = 0;
-
-// The pictures a user message carried (SES-015), loaded from the session's
-// attachments once and kept for the rest of the app's run. They are the
-// user's own files; nothing a model writes is ever shown as an image.
-const pictureCache = new Map<string, string>();
-
-function AttachedImages({ sid, images }: { sid: string; images: { name: string; mimeType: string }[] }) {
-  const [, setLoaded] = useState(0);
-  const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    for (const img of images) {
-      const key = `${sid}/${img.name}`;
-      if (pictureCache.has(key)) continue;
-      EngineService.Attachment(sid, img.name)
-        .then((a) => {
-          if (!a.mediaType.startsWith("image/")) return;
-          pictureCache.set(key, `data:${a.mediaType};base64,${a.data}`);
-          if (live) setLoaded((n) => n + 1);
-        })
-        .catch(() => pictureCache.set(key, ""));
-    }
-    return () => {
-      live = false;
-    };
-  }, [sid, images]);
-  return (
-    <div className="msg-pictures">
-      {images.map((img, i) => {
-        const src = pictureCache.get(`${sid}/${img.name}`);
-        if (src === "") return <span key={img.name} className="muted">[picture missing]</span>;
-        if (!src) return <span key={img.name} className="msg-picture msg-picture-loading" aria-label="Loading picture" />;
-        return (
-          <button key={img.name} className="msg-picture" onClick={() => setOpen(src)} aria-label={`Show picture ${i + 1} full size`}>
-            <img src={src} alt={`Picture ${i + 1}`} />
-          </button>
-        );
-      })}
-      {open && (
-        <div className="picture-view" role="dialog" aria-label="Picture" onClick={() => setOpen(null)} onKeyDown={(e) => e.key === "Escape" && setOpen(null)}>
-          <img src={open} alt="Attached picture, full size" />
-        </div>
-      )}
-    </div>
-  );
-}
 
 // SetupCard shows the setup of the session's own worktree (SES-016): what
 // was copied and run, the end of the output, and after a failure the

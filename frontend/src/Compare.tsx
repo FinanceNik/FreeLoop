@@ -8,7 +8,8 @@ import { formatCost } from "./cost.ts";
 // Keeping one archives the others; their worktrees go, their branches
 // stay.
 
-const STATUS: Record<string, string> = { running: "Running", waiting_permission: "Needs you", idle: "Idle", error: "Error", archived: "Archived" };
+const STATUS: Record<string, string> = { running: "Running", waiting_permission: "Needs you", waiting_input: "Waiting", queued: "Queued", idle: "Idle", error: "Error", archived: "Archived" };
+const WORKING = new Set(["running", "waiting_permission", "waiting_input", "queued"]);
 
 export default function Compare({ tag, onOpen, onError }: { tag: string; onOpen: (id: string) => void; onError: (err: unknown) => void }) {
   const [runs, setRuns] = useState<CompareRun[] | null>(null);
@@ -22,7 +23,7 @@ export default function Compare({ tag, onOpen, onError }: { tag: string; onOpen:
   }, [tag]);
   // The runs' numbers move while they work, and a run can start or stop
   // at any time, so the page reads them again every few seconds.
-  const working = (runs ?? []).some((r) => r.session.status === "running" || r.session.status === "waiting_permission");
+  const working = (runs ?? []).some((r) => WORKING.has(r.session.status));
   useEffect(() => {
     const t = setInterval(load, working ? 3000 : 8000);
     return () => clearInterval(t);

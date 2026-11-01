@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { EngineService, type FileEntry, type FileView, type Session } from "./api.ts";
 import type { FileChange } from "./transcript.ts";
+import { relative } from "./paths.ts";
 
 // FilesPanel is the Files tab of the right panel (GUI-013): a read-only
 // tree of the session's folder with the files the agent edited, and those
@@ -13,12 +14,6 @@ interface Props {
   gitKey: string;
   agentEdits: FileChange[];
   onError: (err: unknown) => void;
-}
-
-function relative(path: string, root: string): string {
-  const r = root.endsWith("/") ? root : root + "/";
-  if (path.startsWith(r)) return path.slice(r.length);
-  return path.replace(/^\.\//, "");
 }
 
 export default function FilesPanel({ session, gitKey, agentEdits, onError }: Props) {

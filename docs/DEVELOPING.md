@@ -16,7 +16,7 @@ React UI (frontend/src)  ──Wails bindings──▶  EngineService (cmd/freel
                 │               │          protected paths, Local, Docker)       JSONL transcripts,
                 ▼               │          hooks)                                search index)
         provider/*  ◀───────────┘
-        (anthropic, openaicompat, ollama, scripted)
+        (anthropic, openaicompat, openairesponses, gemini, ollama, scripted)
 ```
 
 - A **session** is driven by a harness. Both harnesses emit the same versioned events (`internal/event`, `schemas/events.json`), send every side effect through the permission broker, and reach files and processes only through an `Environment`.

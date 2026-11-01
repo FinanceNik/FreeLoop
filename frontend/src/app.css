@@ -590,12 +590,6 @@ fieldset {
   }
 }
 
-.chip {
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 0.9em;
-}
-
 .chip-on {
   border-color: var(--accent);
   color: var(--link);

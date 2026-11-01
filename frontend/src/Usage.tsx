@@ -3,6 +3,7 @@ import { EngineService, type HarnessInfo, type ProjectInfo, type ProviderInfo, t
 import { byType, change, compact, daily, dailyByType, days, groupBy, OTHER, perCall, TOKEN_TYPES, topKeys, totals, value, weekStart, weeks, withoutCacheReads, type Metric, type Row } from "./analytics.ts";
 import { formatCost } from "./cost.ts";
 import UsageChart, { type Series } from "./UsageChart.tsx";
+import { basename } from "./paths.ts";
 
 // The usage dashboard (GUI-018, PRV-008): tokens and estimated cost over a
 // range, by kind of token, model, agent or project, and the sessions that
@@ -36,7 +37,6 @@ type GroupID = (typeof GROUPS)[number]["id"];
 
 const SERIES = 5; // colours; a sixth group and beyond fold into Other
 
-const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
 
 export default function Usage({ projects, providers, harnesses, onOpenSession, onOpenPrices, onError }: Props) {

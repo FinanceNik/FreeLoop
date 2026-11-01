@@ -36,10 +36,10 @@ flowchart LR
     UI["React / TypeScript UI<br/>(WKWebView)"]
     Bridge["Wails bindings + events"]
     subgraph Engine["Engine (Go, transport-agnostic API)"]
-      SM["SessionManager"]
+      SM["Session runtimes"]
       PB["PermissionBroker<br/>(modes, rules, inbox)"]
-      HR["HarnessRegistry"]
-      PR["ProviderRegistry"]
+      HR["Harness presets"]
+      PR["Providers"]
       EM["EnvironmentManager"]
       SK["SkillStore"]
       MM["MCPManager"]
@@ -70,7 +70,7 @@ flowchart LR
 
 **Why not a daemon from day one.** A separate engine daemon would let sessions survive a GUI crash and give the headless CLI for free, at the cost of an IPC layer and process lifecycle work before anything else exists. The engine API is designed transport-agnostic (section 11) and all state is persisted per event (SES-002), so a GUI crash loses nothing but in-flight streams, and the daemon split can happen at v1 with EXT-004 (OQ-003).
 
-**Concurrency.** The `SessionManager` runs each session as a goroutine group under a per-session `context.Context`. Provider calls go through a per-provider semaphore (OQ-013). *As built in M2:* `internal/engine/limit.go` wraps a session's provider so a model call takes one of the provider's `maxConcurrent` slots (default 4) and frees it when its stream ends; a call that has to wait marks the session `queued` until it gets one. Events fan out through a bus with bounded buffers; the store subscriber is synchronous (persist before publish), UI subscribers are asynchronous and may fall back to catch-up reads from the store if they lag. The race detector runs in CI; a chaos test runs ten sessions with random cancels.
+**Concurrency.** The engine (`internal/engine/runtime.go`) runs each session as a goroutine group under a per-session `context.Context`. Provider calls go through a per-provider semaphore (OQ-013). *As built in M2:* `internal/engine/limit.go` wraps a session's provider so a model call takes one of the provider's `maxConcurrent` slots (default 4) and frees it when its stream ends; a call that has to wait marks the session `queued` until it gets one. Events fan out through a bus with bounded buffers; the store subscriber is synchronous (persist before publish), UI subscribers are asynchronous and may fall back to catch-up reads from the store if they lag. The race detector runs in CI; a chaos test runs ten sessions with random cancels.
 
 ## 4. Core abstractions
 
@@ -357,7 +357,7 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
   presets/harnesses/*.yaml ACP agent presets (HRN-006, HRN-007)
   schedules.json           scheduled and recurring sessions and their last runs (SES-012)
   workspace.json           the main window's panes (GUI-017)
-  freeloop.db              SQLite: projects, environments, sessions, attention queue, tokens per day and model (PRV-008), FTS5 search index (SES-007)
+  freeloop.db              SQLite: projects, sessions, tokens per day and model (PRV-008), FTS5 search index (SES-007)
   sessions/<id>/events.jsonl   append-only transcript (SES-002); a torn last line is cut on open, a damaged line elsewhere is repaired with the original kept as events.jsonl.damaged-<time>
   sessions/<id>/attachments/   pictures attached to messages, one file per content named by its SHA-256 (SES-015)
   logs/                    local only, secrets redacted
@@ -400,22 +400,27 @@ Engine packages have unit tests. Providers are tested against recorded fixtures 
 ## 14. Repository layout
 
 ```
-cmd/freeloop/              Wails app entry point
-internal/engine/           transport-agnostic API (requests, responses, event bus)
-internal/session/          SessionManager, Session records, attention queue
-internal/harness/          Harness interface, registry, presets
+cmd/freeloop/              Wails app entry point, command line
+internal/engine/           transport-agnostic API; session runtimes (runtime.go), event bus
+internal/session/          Session and Project records
+internal/harness/          Harness interface
 internal/harness/builtin/  the built-in loop and tools
-internal/harness/acp/      ACP client adapter (vendored SDK under third_party/)
-internal/provider/         Provider interface; anthropic, openaicompat, ollama
-internal/environment/      Environment interface; local (docker at v1)
-internal/permission/       broker, modes, rules, matchers
+internal/harness/acp/      ACP client adapter (coder/acp-go-sdk; reference agent in acptest/)
+internal/provider/         Provider interface; anthropic, openaicompat, openairesponses, gemini, ollama, scripted
+internal/environment/      Environment interface; local, docker
+internal/permission/       broker, modes, rules, matchers, protected paths
+internal/event/            versioned event types
 internal/skill/            discovery, validation, import, load
-internal/mcp/              MCPManager on the official SDK
+internal/mcp/              MCP clients on the official SDK
 internal/store/            SQLite and JSONL
-internal/secrets/          Secrets interface; darwin Keychain backend
-internal/config/           YAML loading, schemas, hot reload
-internal/platform/darwin/  notifications, dialogs, open-in-editor
+internal/secrets/          Secrets interface
+internal/config/           YAML loading and validation
+internal/rpc/              headless JSON-RPC socket (EXT-004)
+internal/netguard/         local-only switch, engine-call guard
+internal/web/              HTML to text for web_fetch
+internal/archtest/         architecture boundary test
+internal/platform/darwin/  Keychain, notifications
 frontend/                  React + TypeScript
-schemas/                   events.json, profile.json, rules.json, preset.json
+schemas/                   events.json
 docs/
 ```

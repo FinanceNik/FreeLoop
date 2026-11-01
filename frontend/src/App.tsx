@@ -27,7 +27,8 @@ import * as ws from "./workspace.ts";
 import { allTags, isEmpty, matches, parseQuery, sameFilter, saveFilter, type SavedFilter, type SessionFilter } from "./filters.ts";
 import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
-import SessionView, { OPEN_SESSION_DOM_EVENT } from "./SessionView.tsx";
+import SessionView from "./SessionView.tsx";
+import { OPEN_SESSION_DOM_EVENT } from "./ToolView.tsx";
 import Board from "./Board.tsx";
 import Schedules from "./Schedules.tsx";
 import Usage from "./Usage.tsx";
@@ -45,6 +46,7 @@ import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
 import { inSettings, isSettingsShortcut } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
+import { basename } from "./paths.ts";
 
 type Screen =
   | { kind: "session"; id: string; focus?: { seq: number; n: number } }
@@ -1040,9 +1042,4 @@ export default function App() {
     </div>
     </PaletteContext.Provider>
   );
-}
-
-function basename(p: string): string {
-  const parts = p.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? p;
 }
