@@ -559,7 +559,7 @@ func (s *session) covered(kinds []permission.Kind, path, command string, spend b
 
 // ask sends a file or terminal request the agent did not ask permission
 // for to the broker, so no side effect bypasses it.
-func (s *session) ask(ctx context.Context, kind permission.Kind, title, path, command string) error {
+func (s *session) ask(ctx context.Context, kind permission.Kind, title, path, command string, contained permission.Containment) error {
 	var paths []string
 	if path != "" {
 		paths = []string{path}
@@ -567,7 +567,7 @@ func (s *session) ask(ctx context.Context, kind permission.Kind, title, path, co
 	tool := toolName(string(kind))
 	d := s.p.Broker.Request(ctx, permission.Context{Mode: s.Mode(), Root: s.env.Root()}, permission.Request{
 		SessionID: s.p.SessionID, ToolCallID: fmt.Sprintf("acp-%d", time.Now().UnixNano()), Tool: tool, Kind: kind,
-		Title: title, Paths: paths, Command: command,
+		Title: title, Paths: paths, Command: command, Contained: contained,
 	})
 	if d.Outcome != permission.Allowed {
 		msg := "permission denied"
@@ -584,7 +584,7 @@ func (s *session) ask(ctx context.Context, kind permission.Kind, title, path, co
 func (s *session) ReadTextFile(ctx context.Context, r sdk.ReadTextFileRequest) (sdk.ReadTextFileResponse, error) {
 	path := s.env.Resolve(r.Path)
 	if !s.covered([]permission.Kind{permission.KindRead, permission.KindEdit}, path, "", false) {
-		if err := s.ask(ctx, permission.KindRead, "Read "+filepath.Base(path), path, ""); err != nil {
+		if err := s.ask(ctx, permission.KindRead, "Read "+filepath.Base(path), path, "", ""); err != nil {
 			return sdk.ReadTextFileResponse{}, err
 		}
 	}
@@ -620,7 +620,7 @@ func (s *session) ReadTextFile(ctx context.Context, r sdk.ReadTextFileRequest) (
 func (s *session) WriteTextFile(ctx context.Context, r sdk.WriteTextFileRequest) (sdk.WriteTextFileResponse, error) {
 	path := s.env.Resolve(r.Path)
 	if !s.covered([]permission.Kind{permission.KindEdit, permission.KindDelete, permission.KindMove}, path, "", true) {
-		if err := s.ask(ctx, permission.KindEdit, "Write "+filepath.Base(path), path, ""); err != nil {
+		if err := s.ask(ctx, permission.KindEdit, "Write "+filepath.Base(path), path, "", ""); err != nil {
 			return sdk.WriteTextFileResponse{}, err
 		}
 	}
@@ -637,8 +637,18 @@ type terminal struct {
 
 func (s *session) CreateTerminal(ctx context.Context, r sdk.CreateTerminalRequest) (sdk.CreateTerminalResponse, error) {
 	line := strings.TrimSpace(r.Command + " " + strings.Join(r.Args, " "))
+	// This command runs here, so the sandbox can hold it, unlike the ones an
+	// agent runs itself after session/request_permission (ENV-009).
+	var contained permission.Containment
+	readOnly := false
+	if environment.IsSandboxed(s.env) {
+		contained = permission.ContainedProject
+		if s.Mode() == permission.ModePlan {
+			contained, readOnly = permission.ContainedReadOnly, true
+		}
+	}
 	if !s.covered([]permission.Kind{permission.KindExecute}, "", line, true) {
-		if err := s.ask(ctx, permission.KindExecute, "Run "+line, "", line); err != nil {
+		if err := s.ask(ctx, permission.KindExecute, "Run "+line, "", line, contained); err != nil {
 			return sdk.CreateTerminalResponse{}, err
 		}
 	}
@@ -656,6 +666,7 @@ func (s *session) CreateTerminal(ctx context.Context, r sdk.CreateTerminalReques
 	if r.OutputByteLimit != nil && *r.OutputByteLimit > 0 {
 		spec.MaxOutput = *r.OutputByteLimit
 	}
+	spec.ReadOnly = readOnly
 	tctx, cancel := context.WithCancel(context.Background())
 	t := &terminal{cancel: cancel, done: make(chan struct{})}
 	go func() {

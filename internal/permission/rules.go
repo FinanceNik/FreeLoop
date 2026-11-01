@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 )
@@ -343,6 +344,89 @@ func (r Rule) Matches(req Request, root string) bool {
 		return true
 	}
 	return true
+}
+
+// DeniedPathPatterns turns path deny rules into regular expressions over
+// absolute paths, for a sandbox: without an approval to stop a command, a deny
+// rule has to hold for the shell as well (ENV-009). read lists what no command
+// may touch, and write what it may read but not change.
+func DeniedPathPatterns(rules []Rule, root string) (read, write []string) {
+	covers := func(r Rule, tools ...string) bool {
+		return slices.ContainsFunc(tools, func(t string) bool {
+			ok, _ := path.Match(r.Tool, t)
+			return ok
+		})
+	}
+	for _, r := range rules {
+		if r.Effect != Deny || r.Path == "" {
+			continue
+		}
+		re := pathRegex(filepath.ToSlash(r.Path), root, r.Literal)
+		switch {
+		case covers(r, "read_file", "grep", "glob", "list_dir"):
+			read = append(read, re)
+		case covers(r, "write_file", "edit_file"):
+			write = append(write, re)
+		}
+	}
+	return read, write
+}
+
+// pathRegex writes a rule's path as an anchored regular expression that ignores
+// case, as path rules do, and also covers what is under the path.
+func pathRegex(pattern, root string, literal bool) string {
+	var b strings.Builder
+	b.WriteString("^")
+	if !strings.HasPrefix(pattern, "/") {
+		b.WriteString(regexp.QuoteMeta(root) + "/")
+	}
+	segments := strings.Split(pattern, "/")
+	for i, seg := range segments {
+		if !literal && seg == "**" {
+			if i == len(segments)-1 {
+				b.WriteString(".*")
+			} else {
+				b.WriteString("(.*/)?")
+			}
+			continue
+		}
+		b.WriteString(segmentRegex(seg, literal))
+		if i < len(segments)-1 {
+			b.WriteString("/")
+		}
+	}
+	b.WriteString("(/.*)?$")
+	return b.String()
+}
+
+func segmentRegex(seg string, literal bool) string {
+	var b strings.Builder
+	runes := []rune(seg)
+	for i := 0; i < len(runes); i++ {
+		c := runes[i]
+		switch {
+		case !literal && c == '*':
+			b.WriteString("[^/]*")
+		case !literal && c == '?':
+			b.WriteString("[^/]")
+		case !literal && c == '[':
+			// path.Match's class, copied; one left open matches itself.
+			end := slices.Index(runes[i+1:], ']')
+			if end <= 0 {
+				b.WriteString(`\[`)
+				continue
+			}
+			b.WriteString(strings.ReplaceAll(string(runes[i:i+end+2]), `"`, ""))
+			i += end + 1
+		case c == '"':
+			b.WriteString(".")
+		case unicode.IsLetter(c) && unicode.ToLower(c) != unicode.ToUpper(c):
+			b.WriteString("[" + string(unicode.ToLower(c)) + string(unicode.ToUpper(c)) + "]")
+		default:
+			b.WriteString(regexp.QuoteMeta(string(c)))
+		}
+	}
+	return b.String()
 }
 
 // RuleFor is the rule "Allow always" creates for req: the literal command,

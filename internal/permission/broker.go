@@ -77,15 +77,32 @@ type Request struct {
 	Title      string          `json:"title"`
 	Input      json.RawMessage `json:"input,omitempty"`
 	// Paths the call reads or writes, absolute and clean.
-	Paths   []string  `json:"paths,omitempty"`
-	Command string    `json:"command,omitempty"`
-	Options []Option  `json:"options"`
-	Created time.Time `json:"createdAt"`
+	Paths   []string `json:"paths,omitempty"`
+	Command string   `json:"command,omitempty"`
+	// Contained says the caller will run this command in the sandbox, and so
+	// it needs no approval (ENV-009). Only a caller that runs the command
+	// itself can promise that; an ACP agent's own request never can.
+	Contained Containment `json:"contained,omitempty"`
+	// LeavesSandbox asks to run a command outside the sandbox: no rule covers
+	// it, so it always reaches the user.
+	LeavesSandbox bool      `json:"leavesSandbox,omitempty"`
+	Options       []Option  `json:"options"`
+	Created       time.Time `json:"createdAt"`
 	// Form is set when the request asks the user for input rather than
 	// for permission: an MCP server's elicitation (MCP-008). It is always
 	// put to the user; no rule, mode or hook answers it.
 	Form *Form `json:"form,omitempty"`
 }
+
+// Containment is how a command is held in the sandbox.
+type Containment string
+
+const (
+	// ContainedProject can write the project.
+	ContainedProject Containment = "project"
+	// ContainedReadOnly cannot, so plan mode can run it too.
+	ContainedReadOnly Containment = "read_only"
+)
 
 // Form is an MCP server's request for input: fields described by a JSON
 // schema, or a URL for the user to open.
@@ -128,6 +145,8 @@ const (
 	ActorRule          Actor = "rule"
 	// ActorHook is a pre_tool_use or permission_request hook (EXT-005).
 	ActorHook Actor = "hook"
+	// ActorSandbox ran a command because it cannot leave the sandbox (ENV-009).
+	ActorSandbox Actor = "sandbox"
 )
 
 // Hooks runs the user's hooks for a request (EXT-005). Each returns a
@@ -328,14 +347,19 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		case req.Kind == KindSwitchMode:
 			return Decision{}, false
 		case req.Kind.reads() || req.Kind == KindThink:
+		case req.Kind == KindExecute && req.Contained == ContainedReadOnly:
+			return allow(ActorSandbox, "it runs in the sandbox, read-only")
 		default:
 			return deny(ActorMode, "plan mode is read-only until the plan is approved")
 		}
 	}
-	if req.Kind != KindSwitchMode {
+	if req.Kind != KindSwitchMode && !req.LeavesSandbox {
 		if r := match(Allow); r != nil {
 			return byRule(r)
 		}
+	}
+	if req.Kind == KindExecute && req.Contained != "" {
+		return allow(ActorSandbox, "it runs in the sandbox")
 	}
 	if pc.Mode == ModeAcceptEdits && req.Kind.writes() && len(req.Paths) > 0 && !outside {
 		return allow(ActorMode, "accept-edits mode allows edits inside the project")

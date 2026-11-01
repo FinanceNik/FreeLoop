@@ -30,6 +30,8 @@ type LocalOptions struct {
 	Shell []string
 	Env   map[string]string
 	Guard Guard
+	// Sandbox, when set, confines every Exec (ENV-009).
+	Sandbox *SandboxOptions
 }
 
 // Local is a folder on this machine.
@@ -39,6 +41,8 @@ type Local struct {
 	shell []string
 	env   map[string]string
 	fs    *localFS
+	// sandbox, when set, confines every Exec.
+	sandbox *SandboxOptions
 }
 
 // NewLocal returns a local environment rooted at opts.Root, which must be an
@@ -65,7 +69,7 @@ func NewLocal(opts LocalOptions) (*Local, error) {
 	if len(shell) == 0 {
 		shell = []string{"zsh", "-lc"}
 	}
-	l := &Local{id: opts.ID, root: root, shell: shell, env: opts.Env}
+	l := &Local{id: opts.ID, root: root, shell: shell, env: opts.Env, sandbox: opts.Sandbox}
 	l.fs = &localFS{env: l, guard: opts.Guard}
 	return l, nil
 }
@@ -123,19 +127,25 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	var cmd *exec.Cmd
+	var argv []string
 	if len(spec.Argv) > 0 && spec.LoginShell {
-		args := append(append(append([]string{}, l.shell[1:]...), `exec "$0" "$@"`), spec.Argv...)
-		cmd = exec.Command(l.shell[0], args...)
+		argv = append(append(append([]string{l.shell[0]}, l.shell[1:]...), `exec "$0" "$@"`), spec.Argv...)
 	} else if len(spec.Argv) > 0 {
-		cmd = exec.Command(spec.Argv[0], spec.Argv[1:]...)
+		argv = spec.Argv
 	} else {
-		args := append(append([]string{}, l.shell[1:]...), spec.Command)
-		cmd = exec.Command(l.shell[0], args...)
+		argv = append(append([]string{}, l.shell...), spec.Command)
 	}
+	argv, sandboxEnv, err := l.confined(spec, argv)
+	if err != nil {
+		return ExecResult{}, err
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cwd
 	cmd.Env = baseEnv()
 	for k, v := range l.env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	for k, v := range sandboxEnv {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	for k, v := range spec.Env {

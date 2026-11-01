@@ -3,6 +3,7 @@ package permission
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
@@ -40,6 +41,10 @@ func NewPolicy(home, appDataDir string) *Policy {
 	p.neverWrite = p.neverRead
 	return p
 }
+
+// NeverRead lists the locations nothing may read, in all their spellings, for a
+// sandbox to hold too (ENV-009).
+func (p *Policy) NeverRead() []string { return slices.Clone(p.neverRead) }
 
 // canonical returns the spellings of p that checks must cover.
 func canonical(p string) []string { return environment.Spellings(p) }

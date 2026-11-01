@@ -476,6 +476,12 @@ func (s *session) toolSpecs(mode permission.Mode) []provider.ToolSpec {
 			continue
 		}
 		plan := t.kind == permission.KindSwitchMode
+		// In a sandbox the shell can run read-only, so plan mode has it too.
+		shell := t.spec.Name == "shell" && environment.IsSandboxed(s.env)
+		if shell {
+			out = append(out, sandboxedShellSpec())
+			continue
+		}
 		if (mode == permission.ModePlan && (t.readOnly || plan)) || (mode != permission.ModePlan && !plan) {
 			out = append(out, t.spec)
 		}
@@ -609,6 +615,7 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 	d := s.p.Broker.Request(ctx, permission.Context{Mode: mode, Root: s.env.Root()}, permission.Request{
 		SessionID: s.p.SessionID, ToolCallID: c.ToolCallID, Tool: cmp.Or(prepared.permTool, c.ToolName), Kind: kind,
 		Title: title, Input: c.Input, Paths: prepared.paths, Command: prepared.command, Options: prepared.options,
+		Contained: prepared.contained, LeavesSandbox: prepared.leaves,
 	})
 	switch d.Outcome {
 	case permission.Cancelled:
@@ -672,6 +679,12 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 		sb.WriteString("\n# Mode: plan\n\nYou are in plan mode: you can read and search but not change anything. Investigate, then call present_plan with a concrete plan. Once the user approves it you can make changes.\n")
 	case permission.ModeBypass:
 		sb.WriteString("\n# Mode: bypass\n\nTool calls run without asking the user. Be careful with destructive commands.\n")
+	}
+	if environment.IsSandboxed(s.env) {
+		sb.WriteString("\n# Sandbox\n\nShell commands run in a sandbox and need no approval: they can write in the project, read little outside it, and reach only localhost. Temp files and caches work. Installing packages or anything else needing the internet will fail; if a command really needs that, call shell with outside_sandbox: true and why, and the user decides. Do not try to get around the sandbox.\n")
+		if mode == permission.ModePlan {
+			sb.WriteString("In plan mode shell commands are read-only too, so you can inspect the project with them.\n")
+		}
 	}
 	if s.p.Skills != nil {
 		sb.WriteString(SkillsIndex(s.p.Skills.Enabled()))

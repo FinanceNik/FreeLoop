@@ -59,6 +59,13 @@ type ExecSpec struct {
 	// SeparateStderr keeps standard error apart, in ExecResult.Stderr;
 	// Output then holds standard output only (hooks, EXT-005).
 	SeparateStderr bool
+	// In a sandboxed environment (ENV-009): Network replaces its reach for the
+	// user's own commands; ReadOnly also keeps the project from being written;
+	// OutsideSandbox runs the command unconfined, once the user has approved
+	// that.
+	Network        Network
+	ReadOnly       bool
+	OutsideSandbox bool
 }
 
 // ExecResult is a finished command.

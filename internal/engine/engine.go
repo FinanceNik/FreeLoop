@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/mcp"
@@ -34,6 +35,9 @@ var ErrNotFound = store.ErrNotFound
 type Options struct {
 	DataDir string
 	Secrets secrets.Store
+	// Confiner enforces the native sandbox (ENV-009). Without one, a sandboxed
+	// environment runs nothing.
+	Confiner environment.Confiner
 	// Home is the user's home directory, for the protected-path policy.
 	// Default os.UserHomeDir().
 	Home string
@@ -65,9 +69,10 @@ type ConfigChange struct {
 
 // Engine is safe for concurrent use.
 type Engine struct {
-	dataDir string
-	home    string
-	dev     bool
+	dataDir  string
+	home     string
+	confiner environment.Confiner
+	dev      bool
 	// gh is the GitHub CLI pull requests are opened with (SES-011); tests
 	// point it at a fake.
 	gh      string
@@ -165,6 +170,7 @@ func Open(opts Options) (*Engine, error) {
 		dev:           opts.Dev,
 		bus:           newBus(),
 		secrets:       opts.Secrets,
+		confiner:      opts.Confiner,
 		cfg:           cfg,
 		issues:        map[string][]config.Issue{issueConfig: issues},
 		onChange:      opts.OnConfigChange,

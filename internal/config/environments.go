@@ -47,7 +47,23 @@ type Environment struct {
 	Devcontainer bool   `yaml:"devcontainer,omitempty" json:"devcontainer"`
 	Setup        string `yaml:"setup,omitempty" json:"setup"`
 	Health       string `yaml:"health,omitempty" json:"health"`
+	// Sandbox confines a local environment's commands to the project (ENV-009).
+	Sandbox *Sandbox `yaml:"sandbox,omitempty" json:"sandbox"`
 }
+
+// Sandbox is how a local environment's commands are confined.
+type Sandbox struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// Network is localhost (the default) or none.
+	Network string `yaml:"network,omitempty" json:"network"`
+	// Read and Write are more folders the commands can reach, absolute or
+	// under ~/. The never-readable locations stay closed whatever these say.
+	Read  []string `yaml:"read,omitempty" json:"read"`
+	Write []string `yaml:"write,omitempty" json:"write"`
+}
+
+// SandboxOn reports whether the environment confines its commands.
+func (e Environment) SandboxOn() bool { return e.Sandbox != nil && e.Sandbox.Enabled }
 
 var varName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
@@ -64,6 +80,19 @@ func (e Environment) Validate() error {
 		return errors.New("a docker environment needs an image, or devcontainer: true")
 	case e.DefaultMode != "" && (!permission.Mode(e.DefaultMode).Valid() || e.DefaultMode == string(permission.ModeBypass)):
 		return fmt.Errorf("defaultMode %q must be ask, accept_edits or plan", e.DefaultMode)
+	}
+	if e.Sandbox != nil {
+		switch {
+		case e.Kind != "local" && e.Sandbox.Enabled:
+			return errors.New("sandbox: only a local environment has one; a docker environment has its container")
+		case e.Sandbox.Network != "" && e.Sandbox.Network != "localhost" && e.Sandbox.Network != "none":
+			return fmt.Errorf("sandbox: network %q must be localhost or none", e.Sandbox.Network)
+		}
+		for _, p := range slices.Concat(e.Sandbox.Read, e.Sandbox.Write) {
+			if p == "/" || p == "~" || p == "~/" || (!strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "~/")) {
+				return fmt.Errorf("sandbox: %q must be a folder given absolute or under ~/, not all of it", p)
+			}
+		}
 	}
 	for k := range e.Env {
 		if !varName.MatchString(k) {

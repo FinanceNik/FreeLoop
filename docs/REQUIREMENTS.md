@@ -143,7 +143,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **SEC-008** · MVP · **Process isolation for external harnesses and MCP servers.** Separate processes; environment scrubbed to the configured variables plus a minimal base; stdio only. *Accept:* `env` printed from inside an external harness shows no app secrets other than those configured for its environment.
 - **SEC-009** · MVP · **No undeclared network.** Outbound connections only to configured providers, MCP servers and harness endpoints; no telemetry; update checks opt-in. *Accept:* with no providers configured, a network monitor shows zero outbound connections from the app over 10 minutes.
 - **SEC-010** · MVP · **Untrusted tool output.** The built-in harness frames tool results and fetched content as data; instructions found there never change permission state or trigger actions without the usual approval. *Accept:* an `AGENTS.md`-style instruction planted in a file read by the agent cannot cause an auto-approved write.
-- **SEC-011** · v1 · **Sandboxed execution.** Through the Docker environment (ENV-005); native macOS sandboxing later (ENV-009). *Accept:* per ENV-005.
+- **SEC-011** · v1 · **Sandboxed execution.** Through the Docker environment (ENV-005) or macOS's own sandbox (ENV-009). *Accept:* per ENV-005 and ENV-009.
 - **SEC-012** · v1 · **Signed and notarized builds, pinned dependencies, SBOM.** *Accept:* Gatekeeper opens the downloaded app without warnings; the release includes an SBOM.
 - **SEC-013** · MVP · **Reads outside the project root.** File reads, directory listings and searches outside the session's project root require approval in every mode except `bypass`; a fixed list of never-readable locations (`~/.ssh`, `~/.gnupg`, `~/.aws`, browser profiles, the Keychain database directory, the app's own config directory) is refused in every mode including `bypass`. *Accept:* in `accept-edits` mode a `read_file` of `~/.zshrc` prompts; a read of `~/.ssh/id_ed25519` is refused and recorded even in `bypass`.
 
@@ -182,7 +182,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **NFR-SEC-002** · MVP · Every side-effecting action is attributable in the transcript (SEC-007).
 - **NFR-SEC-003** · MVP · Threat model documented in `docs/SECURITY.md` before the first public release: prompt injection, malicious skills, malicious MCP servers, hostile repos, local attacker with the same user account.
 - **NFR-SEC-004** · v1 · Builds are reproducible from a tagged commit, signed and notarized; dependencies pinned with checksums.
-- **NFR-SEC-005** · v1 · Sandboxing available for shell execution (Docker environment); roadmap to native sandbox.
+- **NFR-SEC-005** · v1 · Sandboxing available for shell execution (Docker environment, or the native sandbox, ENV-009).
 
 ### Privacy (NFR-PRIV)
 
@@ -217,7 +217,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 
 ## Cut from MVP, and why
 
-- Docker, SSH and sandboxed environments (ENV-005 to ENV-010): the local folder covers the daily workflow; environments are the largest matrix of edge cases and would double the MVP.
+- Docker, SSH and sandboxed environments (ENV-005 to ENV-010, ENV-009 since built): the local folder covers the daily workflow; environments are the largest matrix of edge cases and would double the MVP.
 - Verified presets for Gemini CLI, Codex CLI, Goose, OpenCode (HRN-007): the generic ACP client ships in MVP, so these are configuration plus quirk handling, best done once real users ask.
 - Custom code harnesses and the SDK (HRN-011, EXT-003): declarative profiles cover the "switch harnesses" need for the first months; the SDK is cheap once ACP is stable in the app.
 - Worktree per session and PR creation (SES-010, SES-011): the primary workflow is parallel sessions across repos, not within one repo.

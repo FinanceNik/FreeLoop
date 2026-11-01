@@ -24,6 +24,11 @@ interface Form {
   devcontainer: boolean;
   setup: string;
   health: string;
+  // The native sandbox (ENV-009).
+  sandbox: boolean;
+  sandboxNetwork: string;
+  sandboxRead: string; // one path per line
+  sandboxWrite: string;
 }
 
 function toForm(e?: EnvironmentInfo): Form {
@@ -43,7 +48,18 @@ function toForm(e?: EnvironmentInfo): Form {
     devcontainer: e?.devcontainer ?? false,
     setup: e?.setup ?? "",
     health: e?.health ?? "",
+    sandbox: e?.sandbox?.enabled ?? false,
+    sandboxNetwork: e?.sandbox?.network || "localhost",
+    sandboxRead: (e?.sandbox?.read ?? []).join("\n"),
+    sandboxWrite: (e?.sandbox?.write ?? []).join("\n"),
   };
+}
+
+function lines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function parseVars(text: string): Record<string, string> {
@@ -88,6 +104,7 @@ export default function Environments({ environments, onChanged, onError }: Props
       devcontainer: form.devcontainer,
       setup: form.setup,
       health: form.health,
+      sandbox: form.kind === "local" && form.sandbox ? { enabled: true, network: form.sandboxNetwork, read: lines(form.sandboxRead), write: lines(form.sandboxWrite) } : null,
     })
       .then(() => {
         setForm(null);
@@ -98,7 +115,7 @@ export default function Environments({ environments, onChanged, onError }: Props
   };
 
   const remove = (env: EnvironmentInfo) => {
-    const what = env.id === "local" ? "Reset the default environment" : `Delete ${env.name}`;
+    const what = env.builtin ? `Reset ${env.name}` : `Delete ${env.name}`;
     if (!confirm(`${what}? Its secrets are removed from the Keychain.`)) return;
     EngineService.DeleteEnvironment(env.id).then(onChanged).catch(onError);
   };
@@ -110,17 +127,18 @@ export default function Environments({ environments, onChanged, onError }: Props
       <h2>Environments</h2>
       <p className="muted">
         An environment is what a session's commands run with: variables, secrets, the tools the agent may use and the mode new
-        sessions start in. Commands run on this Mac in the session's project folder. Secrets are stored in the macOS Keychain,
+        sessions start in. Commands run on this Mac in the session's project folder, in a sandbox if the environment has one. Secrets are stored in the macOS Keychain,
         handed to commands as variables when they start, and redacted from transcripts.
       </p>
       <ul className="provider-list">
         {environments.map((env) => (
           <li key={env.id} className="card">
             <div>
-              <strong>{env.name}</strong> <span className="muted">{env.id === "local" ? "default" : env.id}</span>
+              <strong>{env.name}</strong> <span className="muted">{env.id === "local" ? "default" : env.builtin ? "built in" : env.id}</span>
               <div className="muted">
                 {Object.keys(env.env ?? {}).length} variables · {(env.secretNames ?? []).length} secrets
                 {(env.secretNames ?? []).length > 0 && ` (${(env.secretNames ?? []).join(", ")})`}
+                {env.sandbox?.enabled && ` · sandboxed${env.sandbox.network === "none" ? ", no network" : ""}`}
                 {env.kind === "docker" && ` · Docker: ${env.devcontainer ? "the project's devcontainer.json" : env.image}`}
                 {(env.disabledTools ?? []).length > 0 && ` · tools off: ${(env.disabledTools ?? []).join(", ")}`}
                 {(env.rules ?? []).length > 0 &&
@@ -131,7 +149,7 @@ export default function Environments({ environments, onChanged, onError }: Props
             <div className="row">
               <button onClick={() => setForm(toForm(env))}>Edit</button>
               <button className="danger" onClick={() => remove(env)}>
-                {env.id === "local" ? "Reset" : "Delete"}
+                {env.builtin ? "Reset" : "Delete"}
               </button>
             </div>
           </li>
@@ -205,6 +223,37 @@ export default function Environments({ environments, onChanged, onError }: Props
               <option value="docker">In a Docker container per session</option>
             </select>
           </label>
+          {form.kind === "local" && (
+            <fieldset>
+              <legend>Sandbox</legend>
+              <label className="row">
+                <input type="checkbox" checked={form.sandbox} onChange={(e) => setForm({ ...form, sandbox: e.target.checked })} /> Run commands in a sandbox
+              </label>
+              <p className="muted">
+                The built-in agent's commands then run without asking, because they can only write in the project and read little outside it. Leaving the
+                sandbox always asks. An external agent's own tools are not covered; for those, use a Docker environment.
+              </p>
+              {form.sandbox && (
+                <>
+                  <label>
+                    Network
+                    <select value={form.sandboxNetwork} onChange={(e) => setForm({ ...form, sandboxNetwork: e.target.value })}>
+                      <option value="localhost">This Mac only: tests and dev servers work, and so does anything else listening here</option>
+                      <option value="none">None</option>
+                    </select>
+                  </label>
+                  <label>
+                    More folders it can read <span className="muted">(one per line, absolute or under ~/)</span>
+                    <textarea rows={2} value={form.sandboxRead} onChange={(e) => setForm({ ...form, sandboxRead: e.target.value })} placeholder="~/tools" />
+                  </label>
+                  <label>
+                    More folders it can write <span className="muted">(one per line)</span>
+                    <textarea rows={2} value={form.sandboxWrite} onChange={(e) => setForm({ ...form, sandboxWrite: e.target.value })} />
+                  </label>
+                </>
+              )}
+            </fieldset>
+          )}
           {form.kind === "docker" && (
             <fieldset>
               <legend>Container</legend>

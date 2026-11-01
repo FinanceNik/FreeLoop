@@ -222,7 +222,7 @@ func TestScriptsRunInTheContainer(t *testing.T) {
 	// A worktree a container has had does not go back to the Mac.
 	moved := other
 	moved.EnvironmentID = ""
-	e.emit(other.ID, event.EnvHealth, map[string]string{"status": "healthy"})
+	e.emit(other.ID, event.EnvHealth, map[string]string{"status": "healthy", "container": containerName(other.ID)})
 	if _, _, err := e.scriptHost(ctx, moved); err == nil {
 		t.Error("a worktree a container had would run its commands on the Mac")
 	}

@@ -250,7 +250,7 @@ func (e *Engine) runSetup(ctx context.Context, ses session.Session, scripts conf
 			return fail(err)
 		}
 		defer done()
-		res, err := env.Exec(ctx, environment.ExecSpec{Command: scripts.Setup, Env: e.scriptEnv(ses), Timeout: environment.MaxTimeout, MaxOutput: 256 << 10})
+		res, err := env.Exec(ctx, environment.ExecSpec{Command: scripts.Setup, Env: e.scriptEnv(ses), Timeout: environment.MaxTimeout, MaxOutput: 256 << 10, Network: environment.NetworkAll})
 		d.Output = tail(res.Output, setupOutput)
 		switch {
 		case err != nil:
@@ -315,7 +315,12 @@ func (e *Engine) containerStarted(ctx context.Context, sid string) bool {
 	if err != nil {
 		return true
 	}
-	return slices.ContainsFunc(evs, func(ev event.Event) bool { return ev.Type == event.EnvHealth })
+	return slices.ContainsFunc(evs, func(ev event.Event) bool {
+		var d struct {
+			Container string `json:"container"`
+		}
+		return ev.Type == event.EnvHealth && (json.Unmarshal(ev.Data, &d) != nil || d.Container != "")
+	})
 }
 
 // scriptHost returns where a session's setup and archive commands run, and
@@ -337,6 +342,16 @@ func (e *Engine) scriptHost(ctx context.Context, ses session.Session) (environme
 	if cfg.Kind != string(environment.KindDocker) {
 		if e.containerStarted(ctx, ses.ID) {
 			return nil, nil, errors.New("a container has had this worktree and the session's environment is no longer Docker, so this command does not run on this Mac")
+		}
+		if cfg.SandboxOn() {
+			sandboxed, err := e.sandboxEnv(ctx, ses, cfg, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := sandboxed.CheckSandbox(ctx); err != nil {
+				return nil, nil, err
+			}
+			return sandboxed, func() {}, nil
 		}
 		host, err := e.localEnv(ses.Worktree, nil)
 		return host, func() {}, err
@@ -407,7 +422,7 @@ func (e *Engine) runArchiveScript(ctx context.Context, ses session.Session) {
 		return
 	}
 	defer done()
-	res, err := env.Exec(ctx, environment.ExecSpec{Command: cmd, Env: e.scriptEnv(ses), Timeout: archiveTimeout})
+	res, err := env.Exec(ctx, environment.ExecSpec{Command: cmd, Env: e.scriptEnv(ses), Timeout: archiveTimeout, Network: environment.NetworkAll})
 	switch {
 	case err != nil:
 		notice(err.Error(), res.Output)

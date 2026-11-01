@@ -165,6 +165,12 @@ func TestUnaskedWritesGoThroughTheBroker(t *testing.T) {
 func TestAgentCannotLoosenTheMode(t *testing.T) {
 	rec := &recorder{}
 	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit}, mode: permission.ModePlan, preset: config.HarnessPreset{Name: "Agent"}}
+	// A refused change tells the agent again in the background, which reads these.
+	set := func(m permission.Mode, a approval) {
+		s.mu.Lock()
+		s.mode, s.approved = m, a
+		s.mu.Unlock()
+	}
 	for _, m := range []permission.Mode{permission.ModeBypass, permission.ModeAcceptEdits, permission.ModeAsk} {
 		s.agentMode(m)
 		if s.Mode() != permission.ModePlan {
@@ -178,7 +184,7 @@ func TestAgentCannotLoosenTheMode(t *testing.T) {
 		t.Error("the user was not told")
 	}
 
-	s.approved = approval{kind: permission.KindSwitchMode, until: time.Now().Add(time.Minute)}
+	set(permission.ModePlan, approval{kind: permission.KindSwitchMode, until: time.Now().Add(time.Minute)})
 	s.agentMode(permission.ModeBypass)
 	if s.Mode() != permission.ModePlan {
 		t.Error("an approved switch reached bypass")
@@ -191,14 +197,13 @@ func TestAgentCannotLoosenTheMode(t *testing.T) {
 	if s.Mode() != permission.ModeAcceptEdits {
 		t.Error("the approval was used twice")
 	}
-	s.approved = approval{kind: permission.KindEdit, until: time.Now().Add(time.Minute)}
-	s.mode = permission.ModePlan
+	set(permission.ModePlan, approval{kind: permission.KindEdit, until: time.Now().Add(time.Minute)})
 	s.agentMode(permission.ModeAsk)
 	if s.Mode() != permission.ModePlan {
 		t.Error("an approval of something else loosened the mode")
 	}
 
-	s.mode = permission.ModeAcceptEdits
+	set(permission.ModeAcceptEdits, approval{})
 	s.agentMode(permission.ModePlan)
 	if s.Mode() != permission.ModePlan {
 		t.Error("the agent could not tighten the mode")
@@ -211,26 +216,30 @@ func TestAgentReportsItsMode(t *testing.T) {
 	rec := &recorder{}
 	preset := config.HarnessPreset{Name: "Agent", Modes: map[string]string{"ask": "asks", "accept_edits": "asks", "plan": "reads", "bypass": "asks"}}
 	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit}, mode: permission.ModeAcceptEdits, preset: preset}
+	set := func(m permission.Mode) {
+		s.mu.Lock()
+		s.mode = m
+		s.mu.Unlock()
+	}
 	s.agentReported("asks")
 	if s.Mode() != permission.ModeAcceptEdits {
 		t.Errorf("reporting the mode it is in left %s", s.Mode())
 	}
-	s.mode = permission.ModePlan
+	set(permission.ModePlan)
 	s.agentReported("asks")
 	if s.Mode() != permission.ModePlan {
 		t.Errorf("a loosening report took effect: %s", s.Mode())
 	}
-	s.mode = permission.ModeAsk
+	set(permission.ModeAsk)
 	s.agentReported("reads")
 	if s.Mode() != permission.ModePlan {
 		t.Errorf("tightening left %s", s.Mode())
 	}
 	// With no mapping for it there is no agent to call back, so this ends here.
-	s.preset.Modes = map[string]string{"ask": "asks"}
-	s.mode = permission.ModeAsk
-	s.agentReported("yolo")
-	if s.Mode() != permission.ModeAsk || !strings.Contains(rec.text(event.Notice), "yolo") {
-		t.Errorf("an unnamed mode: %s, %s", s.Mode(), rec.text(event.Notice))
+	u := &session{p: harness.Params{SessionID: "x", Emit: rec.emit}, mode: permission.ModeAsk, preset: config.HarnessPreset{Name: "Agent", Modes: map[string]string{"ask": "asks"}}}
+	u.agentReported("yolo")
+	if u.Mode() != permission.ModeAsk || !strings.Contains(rec.text(event.Notice), "yolo") {
+		t.Errorf("an unnamed mode: %s, %s", u.Mode(), rec.text(event.Notice))
 	}
 }
 

@@ -117,6 +117,13 @@ func (e *Engine) openTerminalSized(ctx context.Context, sid, command string, col
 	spec := environment.TerminalSpec{Cols: cols, Rows: rows}
 	if command != "" {
 		spec.Argv = environment.LoginCommand(r.env, command)
+		// The run command stays in the sandbox, or it would run what a command
+		// in it wrote. What the user types in a terminal is their own.
+		if l, ok := r.env.(*environment.Local); ok {
+			if spec.Argv, spec.Env, err = l.ConfineCommand(spec.Argv, environment.NetworkAll); err != nil {
+				return TerminalInfo{}, err
+			}
+		}
 	}
 	t, err := opener.OpenTerminal(context.WithoutCancel(ctx), spec)
 	if err != nil {

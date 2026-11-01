@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -424,5 +426,87 @@ func TestDenyRulesIgnoreCaseAndHideFromSearch(t *testing.T) {
 	}
 	if b.Hidden("s", root, filepath.Join(root, "src", "main.go")) {
 		t.Error("an unrelated file is hidden")
+	}
+}
+
+// ENV-009: a command the caller holds in the sandbox needs no approval, deny
+// rules still win, and leaving the sandbox always asks.
+func TestSandboxedCommands(t *testing.T) {
+	root := t.TempDir()
+	policy := NewPolicy(t.TempDir(), t.TempDir())
+	emit := func(string, event.Type, any) {}
+	b := NewBroker(policy, emit)
+	b.SetRules(staticRules{
+		{Effect: Deny, Tool: "shell", Command: "rm -rf *"},
+		{Effect: Allow, Tool: "shell", Command: "npm install"},
+	}, nil)
+	req := func(command string, c Containment, leaves bool) Request {
+		return Request{SessionID: "s", ToolCallID: "t", Tool: "shell", Kind: KindExecute, Title: command, Command: command, Contained: c, LeavesSandbox: leaves}
+	}
+	settle := func(mode Mode, r Request) (Decision, bool) {
+		return b.evaluate(Context{Mode: mode, Root: root}, r)
+	}
+	if d, ok := settle(ModeAsk, req("go test", ContainedProject, false)); !ok || d.Outcome != Allowed || d.Actor != ActorSandbox {
+		t.Errorf("a contained command: %+v, %v", d, ok)
+	}
+	if d, ok := settle(ModeAsk, req("rm -rf x", ContainedProject, false)); !ok || d.Outcome != Denied || d.Actor != ActorRule {
+		t.Errorf("a deny rule: %+v, %v", d, ok)
+	}
+	if _, ok := settle(ModeAsk, req("go test", "", false)); ok {
+		t.Error("a command not contained was settled without the user")
+	}
+	if _, ok := settle(ModeAsk, req("npm install", "", true)); ok {
+		t.Error("an allow rule covered leaving the sandbox")
+	}
+	if d, ok := settle(ModeAsk, req("npm install", "", false)); !ok || d.Actor != ActorRule {
+		t.Errorf("an allow rule on a normal command: %+v, %v", d, ok)
+	}
+	if d, ok := settle(ModePlan, req("go test", ContainedProject, false)); !ok || d.Outcome != Denied {
+		t.Errorf("a writable sandbox in plan mode: %+v, %v", d, ok)
+	}
+	if d, ok := settle(ModePlan, req("git log", ContainedReadOnly, false)); !ok || d.Outcome != Allowed || d.Actor != ActorSandbox {
+		t.Errorf("a read-only sandbox in plan mode: %+v, %v", d, ok)
+	}
+	if d, ok := settle(ModePlan, req("git log", "", true)); !ok || d.Outcome != Denied {
+		t.Errorf("leaving the sandbox in plan mode: %+v, %v", d, ok)
+	}
+}
+
+type staticRules []Rule
+
+func (s staticRules) Rules(string) ([]Rule, error) { return s, nil }
+
+// ENV-009: deny rules on paths reach the sandbox's profile, ignoring case and
+// covering what is under them.
+func TestDeniedPathPatterns(t *testing.T) {
+	read, write := DeniedPathPatterns([]Rule{
+		{Effect: Deny, Tool: "read_file", Path: "secrets.txt", Literal: true},
+		{Effect: Deny, Tool: "*", Path: "**/*.pem"},
+		{Effect: Deny, Tool: "write_file", Path: "prod/**"},
+		{Effect: Allow, Tool: "read_file", Path: "open.txt"},
+		{Effect: Deny, Tool: "shell", Command: "x"},
+		{Effect: Deny, Tool: "read_file", Path: `/abs/a"b`},
+	}, "/repo")
+	if len(read) != 3 || len(write) != 1 {
+		t.Fatalf("read %v, write %v", read, write)
+	}
+	match := func(re, p string, want bool) {
+		t.Helper()
+		if regexp.MustCompile(re).MatchString(p) != want {
+			t.Errorf("%s on %s: want %v", re, p, want)
+		}
+	}
+	match(read[0], "/repo/secrets.txt", true)
+	match(read[0], "/repo/SECRETS.TXT", true)
+	match(read[0], "/repo/secrets.txt/inner", true)
+	match(read[0], "/repo/other/secrets.txt", false)
+	match(read[0], "/other/secrets.txt", false)
+	match(read[1], "/repo/key.pem", true)
+	match(read[1], "/repo/a/b/key.PEM", true)
+	match(read[1], "/repo/key.pemx", false)
+	match(write[0], "/repo/prod/a/b", true)
+	match(write[0], "/repo/production", false)
+	if strings.Contains(read[2], `"`) {
+		t.Errorf("a quote reached the profile: %s", read[2])
 	}
 }

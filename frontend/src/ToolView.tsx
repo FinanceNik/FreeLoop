@@ -61,7 +61,7 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
         <span className="muted"> {item.tool}</span>
         {shownDecision && (
           <span className={`decision decision-${decided.outcome}`}>
-            {decided.outcome} by {decided.actor}
+            {decided.actor === "sandbox" ? "sandboxed" : `${decided.outcome} by ${decided.actor}`}
           </span>
         )}
       </summary>

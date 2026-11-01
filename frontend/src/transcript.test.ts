@@ -291,3 +291,14 @@ test("the latest plan from any harness is the to-do list (HRN-017)", () => {
   ]);
   assert.deepEqual(buildView([]).plan, []);
 });
+
+test("commands the sandbox ran stay out of the decided list (ENV-009)", () => {
+  const evs = [
+    { type: "tool_call", data: { toolCallId: "a", title: "go test", status: "completed", kind: "execute", tool: "shell" } },
+    { type: "permission_decided", data: { toolCallId: "a", requestId: "r1", outcome: "allowed", actor: "sandbox" } },
+    { type: "tool_call", data: { toolCallId: "b", title: "npm install", status: "completed", kind: "execute", tool: "shell" } },
+    { type: "permission_decided", data: { toolCallId: "b", requestId: "r2", outcome: "allowed", actor: "user" } },
+  ].map((e, i) => ({ ...e, seq: i + 1, sessionId: "s", at: "" }));
+  const data = panelData(buildView(evs as never));
+  assert.deepEqual(data.decided.map((i) => i.toolCallId), ["b"]);
+});

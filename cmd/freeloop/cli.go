@@ -29,7 +29,7 @@ func isCommand(arg string) bool { return slices.Contains(commands, arg) }
 const usage = `freeloop <command> [arguments]
 
   sessions                       list sessions
-  new <folder> [-title t] [-profile p] [-provider id] [-model m] [-mode m]
+  new <folder> [-title t] [-profile p] [-provider id] [-model m] [-mode m] [-environment e]
                                  start a session in a project folder; prints its ID
   prompt <session> <text…>       send a message and print the reply as it comes
   events <session> [-after n]    print a session's events as JSON lines
@@ -98,6 +98,7 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 		mode := fs.String("mode", "", "ask, accept_edits or plan")
 		prov := fs.String("provider", "", "the provider's ID (the Settings default when empty)")
 		model := fs.String("model", "", "the model")
+		environmentID := fs.String("environment", "", "the environment's ID, such as sandboxed")
 		if len(args) < 2 {
 			return fmt.Errorf("usage: freeloop new <folder> [-title t] [-profile p] [-mode m]")
 		}
@@ -109,7 +110,7 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 			return err
 		}
 		var s session.Session
-		if err := c.Call("sessions.create", engine.CreateSessionRequest{Title: *title, ProjectRoot: root, ProfileID: *profile, Mode: *mode, ProviderID: *prov, Model: *model}, &s); err != nil {
+		if err := c.Call("sessions.create", engine.CreateSessionRequest{Title: *title, ProjectRoot: root, ProfileID: *profile, Mode: *mode, ProviderID: *prov, Model: *model, EnvironmentID: *environmentID}, &s); err != nil {
 			return err
 		}
 		fmt.Fprintln(out, s.ID)

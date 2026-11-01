@@ -248,7 +248,9 @@ What the M3 list still holds and needs no account of the user's.
 
 ### Feature order, part 13 (planned 2026-11-01): the native sandbox (ENV-009)
 
-*Planned, not built.* An approved shell command can today read or write anywhere the user can, and Docker is too heavy to use for every session. A sandbox closes that hole, and also removes most approvals: a command that cannot leave the project does not need asking about. No new dependency.
+*Built 2026-11-01 with OQ-028's recommended defaults. The containment tests (`internal/platform/darwin/seatbelt_test.go`) and an end-to-end session (`internal/engine/sandbox_test.go`) run against the real Seatbelt; real projects' toolchains beyond this repository's are the user's check. As built, a built-in "Local, sandboxed" environment offers it in the new-session form; the file tools still ask as their mode says, since the sandbox holds shell commands only. Beyond the plan, an environment-specific deny rule on a path also closes it to the shell, other programs can no longer be signalled or have their command lines read, and files other tools act on later (`.mcp.json`, `.claude`, `.envrc`, `.vscode`, devcontainer files) are read-only.*
+
+An approved shell command can today read or write anywhere the user can, and Docker is too heavy to use for every session. A sandbox closes that hole, and also removes most approvals: a command that cannot leave the project does not need asking about. No new dependency.
 
 **Tried first, on macOS 26.7 with a draft profile (`sandbox-exec`, Seatbelt):**
 
@@ -257,7 +259,7 @@ What the M3 list still holds and needs no account of the user's.
 | Works | Git status and commit, `zsh -l`, Python, `cc`, Node, Go tests, the engine's full test suite (with a pty allowed), the frontend's tests and Vite build |
 | Refused | Writes outside the project, `.git/config`, `.git/hooks`, `.git/commondir`, `.freeloop/`; a hard link or symlink out; reading `~/.ssh`, `~/Documents`, `~/.zsh_history`; the internet, DNS, the SSH agent |
 | Needed more than file and network rules | With `(allow default)` alone, `open` launched an app **outside the sandbox**, and the clipboard stayed readable. `(deny mach-lookup)` closed `open`, `pbpaste`, AppleScript and `launchctl submit`. Reading a Keychain item was refused too |
-| Fails | `swift build`, writing clang's module cache in `~/.cache`; nested `sandbox-exec` exits 71, so a tool or agent using Seatbelt itself cannot run inside |
+| Fails | Nested `sandbox-exec` exits 71, so a tool or agent using Seatbelt itself cannot run inside. `swift build` needs `--disable-sandbox` and its cache paths given: `swift build --disable-sandbox --cache-path "$XDG_CACHE_HOME/sw" --config-path "$XDG_CACHE_HOME/swc" --security-path "$XDG_CACHE_HOME/sws"` works |
 | Cost | About 8 ms per command; a cold Go cache on first use |
 
 Apple marks `sandbox-exec` deprecated with no replacement for this use. It still works, and other agent tools rely on it. So it fails closed (below), and the profile stays in one file.
@@ -276,7 +278,7 @@ Apple marks `sandbox-exec` deprecated with no replacement for this use. It still
 2. **A setting on the environment.** `sandbox: {enabled, network, read, write}` on a local environment (`config.Environment`, `Environments.tsx`). The runtime's `r.env` is confined and `r.host`, used for the app's own guarded git, is not. A worktree also gets its main checkout's `.git` writable, except config and hooks, as `gitMounts` does for Docker. Caches and temp as above; health shown like Docker's.
 3. **Fewer approvals.** The broker allows a `Contained` command in `ask` and `accept_edits`, recorded as decided by the sandbox, after deny rules and hooks. The `shell` tool gains `outside_sandbox` with a reason, which always asks and is never covered by a rule. A failed command that looks like a sandbox refusal gets a note for the model saying how to ask. The tool card says Sandboxed, and an approval to leave it says so plainly.
 4. **Plan mode that can look.** A read-only profile (no project writes) lets `shell` run in plan mode, so a review can run `git log` or the tests' listing instead of being refused.
-5. **Docs and the known gaps.** SECURITY.md, including what it does not cover (below); a checklist for Swift and Xcode, starting with `CLANG_MODULE_CACHE_PATH`.
+5. **Docs and the known gaps.** SECURITY.md, including what it does not cover (below).
 
 **Not in this plan:**
 
@@ -285,7 +287,7 @@ Apple marks `sandbox-exec` deprecated with no replacement for this use. It still
 - *Per-host network rules*, which are ENV-010.
 - *What the project's own files do later:* a sandboxed command can still edit a Makefile that you run yourself, as in Docker.
 
-Open choices are in OQ-028.
+OQ-028 records the defaults.
 
 ## Later (unscheduled)
 

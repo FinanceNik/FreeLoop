@@ -176,6 +176,15 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		if env, err = e.dockerEnv(ctx, ses, project, envCfg, vars, host, pluginDir); err != nil {
 			return nil, err
 		}
+	} else if envCfg.SandboxOn() {
+		sandboxed, err := e.sandboxEnv(ctx, ses, envCfg, vars)
+		if err != nil {
+			return nil, err
+		}
+		if err := e.startSandbox(ctx, sid, sandboxed); err != nil {
+			return nil, err
+		}
+		env = sandboxed
 	}
 	// A container started for a runtime that then fails to start stops
 	// again instead of running on.

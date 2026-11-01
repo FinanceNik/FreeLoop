@@ -111,6 +111,10 @@ The templates live in `internal/harness/templates` as `.tmpl` files; their tests
 - Add the kind to `config.Environment.Validate`, build it in `Engine.runtimeFor` (`internal/engine/runtime.go`, see `dockerEnv`), and stop or remove what it starts with the session.
 - Keep the app's own git commands on the host (`runtime.host`), and keep anything the host reads and acts on (the project's `.freeloop/`, `.git/config`, hooks) out of the reach of commands in the environment.
 
+## The native sandbox
+
+`config.Environment.Sandbox` turns it on (ENV-009). `internal/engine/sandbox.go` decides what a session's commands reach, `environment.Local` wraps `Exec` with a `Confiner`, and `internal/platform/darwin/seatbelt.go` is the only macOS-specific part. Only `Exec` is confined; `Spawn` is not, so agents and MCP servers stay outside. A caller that runs a command itself sets `permission.Request.Contained`, which is what lets the broker skip the approval. Never set it for a request an agent will carry out on its own. If a tool fails in the sandbox, first look for what it writes under home: most fixes are a variable in `SandboxCaches` or a folder in `sandboxTools`. Add anything that closes a way out to `TestSeatbeltRefuses`, with a control if the refusal could have another cause.
+
 ## Adding an event type
 
 Add the constant to `internal/event/event.go` (in `ACPTypes` or `FreeloopTypes`) and to `schemas/events.json`, with a `$defs` entry for its data; the schema test checks both lists agree, and the store refuses unknown types. Fold it into the view in `frontend/src/transcript.ts` with a `node --test` case, and decide whether the search index (`internal/store/search.go`) and the Markdown export (`internal/engine/export.go`) should show it.

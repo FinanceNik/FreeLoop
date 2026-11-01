@@ -36,7 +36,10 @@ type call struct {
 	// permTool names the call for the broker when it differs from the
 	// tool, as skill:<name> for load_skill (SEC-002).
 	permTool string
-	run      func(ctx context.Context, d permission.Decision) (result, error)
+	// contained and leaves are the shell's standing with the sandbox (ENV-009).
+	contained permission.Containment
+	leaves    bool
+	run       func(ctx context.Context, d permission.Decision) (result, error)
 }
 
 // result is what a tool returns: text for the model and display content for
@@ -355,13 +358,35 @@ func shellTool() *tool {
 		prepare: func(s *session, input json.RawMessage) (*call, error) {
 			var in struct {
 				Command string
-				Timeout int `json:"timeout_seconds"`
+				Timeout int    `json:"timeout_seconds"`
+				Outside bool   `json:"outside_sandbox"`
+				Why     string `json:"why"`
 			}
 			if err := decode(input, &in, "command"); err != nil {
 				return nil, err
 			}
-			return &call{title: in.Command, command: in.Command, run: func(ctx context.Context, _ permission.Decision) (result, error) {
-				res, err := s.env.Exec(ctx, environment.ExecSpec{Command: in.Command, Timeout: time.Duration(in.Timeout) * time.Second})
+			c := &call{title: in.Command, command: in.Command}
+			spec := environment.ExecSpec{Command: in.Command, Timeout: time.Duration(in.Timeout) * time.Second}
+			sandboxed := environment.IsSandboxed(s.env)
+			switch {
+			case sandboxed && in.Outside:
+				// Once only: no rule or "always" covers leaving the sandbox.
+				c.leaves, spec.OutsideSandbox = true, true
+				c.options = []permission.Option{
+					{ID: "allow_once", Name: "Allow once, outside the sandbox", Kind: "allow_once"},
+					{ID: "reject_once", Name: "Deny", Kind: "reject_once"},
+				}
+				c.title = "Outside the sandbox: " + in.Command
+				if in.Why != "" {
+					c.title += " (" + in.Why + ")"
+				}
+			case sandboxed && s.Mode() == permission.ModePlan:
+				c.contained, spec.ReadOnly = permission.ContainedReadOnly, true
+			case sandboxed:
+				c.contained = permission.ContainedProject
+			}
+			c.run = func(ctx context.Context, _ permission.Decision) (result, error) {
+				res, err := s.env.Exec(ctx, spec)
 				if err != nil {
 					return result{}, err
 				}
@@ -375,10 +400,40 @@ func shellTool() *tool {
 				if res.Truncated {
 					sb.WriteString("\n[output truncated]")
 				}
+				if c.contained != "" && res.ExitCode != 0 && sandboxRefusal(res.Output) {
+					sb.WriteString(sandboxNote)
+				}
 				return result{text: sb.String(), content: []any{map[string]any{"type": "terminal_output", "exitCode": res.ExitCode, "output": res.Output}}}, nil
-			}}, nil
+			}
+			return c, nil
 		},
 	}
+}
+
+// sandboxedShellSpec is the shell tool as a sandboxed session sees it.
+func sandboxedShellSpec() provider.ToolSpec {
+	return provider.ToolSpec{
+		Name:        "shell",
+		Description: "Run a shell command in the project root (zsh login shell), in a sandbox: it can write only in the project, read little outside it, and reach only localhost. Returns the exit code and combined output, capped at 30 KB.",
+		InputSchema: schema([]string{"command"}, map[string]any{
+			"command":         str("The command line."),
+			"timeout_seconds": num("Timeout in seconds. Default 120, maximum 600."),
+			"outside_sandbox": map[string]any{"type": "boolean", "description": "Ask the user to run this one command outside the sandbox, only after the sandbox has refused something it really needs, such as installing a package."},
+			"why":             str("With outside_sandbox: why it needs to, for the user."),
+		}),
+	}
+}
+
+const sandboxNote = "\n[This ran in a sandbox, which may have refused it. If it really needs the internet or files outside the project, call shell again with outside_sandbox: true and why; the user decides.]"
+
+// sandboxRefusal reports output that looks like the sandbox said no.
+func sandboxRefusal(output string) bool {
+	for _, s := range []string{"Operation not permitted", "Could not resolve host", "ENOTFOUND", "getaddrinfo", "nodename nor servname", "no such host"} {
+		if strings.Contains(output, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // loadSkill reads an enabled skill (SKL-004): the body of its SKILL.md and

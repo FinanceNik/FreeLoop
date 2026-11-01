@@ -38,6 +38,10 @@ type EnvironmentInfo struct {
 	Devcontainer bool   `json:"devcontainer"`
 	Setup        string `json:"setup"`
 	Health       string `json:"health"`
+	// Sandbox says how a local environment's commands are confined (ENV-009).
+	Sandbox *config.Sandbox `json:"sandbox"`
+	// Builtin is an environment every install has; deleting it only resets it.
+	Builtin bool `json:"builtin"`
 	// Missing says why a docker environment cannot run here.
 	Missing string `json:"missing,omitempty"`
 }
@@ -57,7 +61,8 @@ func envInfo(c config.Environment) EnvironmentInfo {
 		rules = []permission.Rule{}
 	}
 	info := EnvironmentInfo{ID: c.ID, Name: c.Name, Kind: c.Kind, Env: env, SecretNames: names, DisabledTools: tools, DefaultMode: c.DefaultMode, Rules: rules,
-		Image: c.Image, Devcontainer: c.Devcontainer, Setup: c.Setup, Health: c.Health}
+		Image: c.Image, Devcontainer: c.Devcontainer, Setup: c.Setup, Health: c.Health, Sandbox: c.Sandbox,
+		Builtin: c.ID == DefaultEnvironmentID || c.ID == SandboxedEnvironmentID}
 	if c.Kind == string(environment.KindDocker) {
 		if _, err := environment.FindDocker(); err != nil {
 			info.Missing = err.Error()
@@ -73,6 +78,9 @@ func (e *Engine) loadEnvironments() {
 	}
 	if !slices.ContainsFunc(envs, func(c config.Environment) bool { return c.ID == DefaultEnvironmentID }) {
 		envs = append([]config.Environment{defaultEnvironment()}, envs...)
+	}
+	if !slices.ContainsFunc(envs, func(c config.Environment) bool { return c.ID == SandboxedEnvironmentID }) {
+		envs = slices.Insert(envs, 1, sandboxedEnvironment())
 	}
 	e.mu.Lock()
 	e.envs = envs
@@ -118,6 +126,8 @@ type SaveEnvironmentRequest struct {
 	Devcontainer bool   `json:"devcontainer"`
 	Setup        string `json:"setup"`
 	Health       string `json:"health"`
+	// Sandbox is for a local environment (ENV-009).
+	Sandbox *config.Sandbox `json:"sandbox"`
 }
 
 func secretRef(envID, name string) secrets.Ref {
@@ -162,6 +172,8 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 	if kind == string(environment.KindDocker) {
 		next.Image, next.Devcontainer = strings.TrimSpace(req.Image), req.Devcontainer
 		next.Setup, next.Health = strings.TrimSpace(req.Setup), strings.TrimSpace(req.Health)
+	} else if req.Sandbox != nil && req.Sandbox.Enabled {
+		next.Sandbox = req.Sandbox
 	}
 	if len(req.Env) > 0 {
 		next.Env = map[string]string{}

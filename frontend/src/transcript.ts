@@ -504,7 +504,7 @@ export interface PanelData {
 }
 
 // panelData collects what the right panel shows: approvals waiting and
-// decided (mode approvals left out as noise), and the files the agent's
+// decided (mode and sandbox approvals left out as noise), and the files the agent's
 // finished edits touched, from the diffs in the transcript.
 export function panelData(view: SessionView): PanelData {
   const pending: ToolItem[] = [];
@@ -516,7 +516,7 @@ export function panelData(view: SessionView): PanelData {
     if (item.kind !== "tool") continue;
     if (awaitingDecision(item)) pending.push(item);
     const d = item.permission?.decided;
-    if (d && !(d.actor === "mode" && d.outcome === "allowed")) decided.push(item);
+    if (d && !(d.actor === "mode" && d.outcome === "allowed") && d.actor !== "sandbox") decided.push(item);
     if (item.status !== "completed") continue;
     for (const c of item.content) {
       if (c.type !== "diff" || !c.path) continue;

@@ -542,6 +542,11 @@ export default function NewSession({ providers, projects, environments, profiles
               </option>
             ))}
           </select>
+          {env?.sandbox?.enabled ? (
+            <span className="muted">The built-in agent's commands run without asking, and can only write in the project. Leaving the sandbox always asks.</span>
+          ) : (
+            env?.kind === "local" && <span className="muted">Commands ask each time, and run with your full access. Choose a sandboxed environment to confine them to the project.</span>
+          )}
         </label>
         <label>
           Permission mode
