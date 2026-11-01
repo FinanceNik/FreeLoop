@@ -84,7 +84,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **ENV-006** · v1 · **External harness inside an environment.** ACP over stdio tunnelled through `docker exec` (and later `ssh`). *Accept:* the Claude Code harness runs inside a devcontainer with its own login state.
 - **ENV-007** · v1 · **Setup and health.** Post-create script, health check, "environment is unhealthy" state surfaced on the session. *Accept:* a failing health check blocks new sessions with a reason.
 - **ENV-008** · later · **SSH remote environment.** Exec and file access over SSH/SFTP.
-- **ENV-009** · later · **Sandboxed local execution.** Restricted file-system and network for the shell tool on macOS without Docker.
+- **ENV-009** · v1 · **Sandboxed local execution.** Restricted file-system and network for the shell tool on macOS without Docker. *Accept:* in a sandboxed environment a command writes in the project and runs its tests without an approval; it cannot write outside the project or to `.git/config`, `.git/hooks` or `.freeloop/`, read `~/.ssh` or `~/Documents`, reach the internet, or start another app; leaving the sandbox always asks; if the sandbox cannot be applied, commands do not run.
 - **ENV-010** · later · **Network policy per environment.** Allow/deny lists for outbound hosts.
 
 ### GUI and UX (GUI)

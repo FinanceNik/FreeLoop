@@ -246,9 +246,50 @@ What the M3 list still holds and needs no account of the user's.
    - *Text size:* all 72 sizes fixed in pixels now follow the Font size setting, and ⌘+ and ⌘- change it from anywhere (OQ-027). The app has its own menu without the View menu's zoom items, which claimed those keys and ⌘0.
 4. **Sandboxed execution (SEC-011, NFR-SEC-005).** *Met by the Docker environment (ENV-005), as their text says; the native sandbox stays ENV-009.*
 
+### Feature order, part 13 (planned 2026-11-01): the native sandbox (ENV-009)
+
+*Planned, not built.* An approved shell command can today read or write anywhere the user can, and Docker is too heavy to use for every session. A sandbox closes that hole, and also removes most approvals: a command that cannot leave the project does not need asking about. No new dependency.
+
+**Tried first, on macOS 26.7 with a draft profile (`sandbox-exec`, Seatbelt):**
+
+| | Result in the sandbox |
+|---|---|
+| Works | Git status and commit, `zsh -l`, Python, `cc`, Node, Go tests, the engine's full test suite (with a pty allowed), the frontend's tests and Vite build |
+| Refused | Writes outside the project, `.git/config`, `.git/hooks`, `.git/commondir`, `.freeloop/`; a hard link or symlink out; reading `~/.ssh`, `~/Documents`, `~/.zsh_history`; the internet, DNS, the SSH agent |
+| Needed more than file and network rules | With `(allow default)` alone, `open` launched an app **outside the sandbox**, and the clipboard stayed readable. `(deny mach-lookup)` closed `open`, `pbpaste`, AppleScript and `launchctl submit`. Reading a Keychain item was refused too |
+| Fails | `swift build`, writing clang's module cache in `~/.cache`; nested `sandbox-exec` exits 71, so a tool or agent using Seatbelt itself cannot run inside |
+| Cost | About 8 ms per command; a cold Go cache on first use |
+
+Apple marks `sandbox-exec` deprecated with no replacement for this use. It still works, and other agent tools rely on it. So it fails closed (below), and the profile stays in one file.
+
+**Rules the design must keep:**
+
+- *Fail closed.* If `sandbox-exec` is missing or will not apply the profile, a sandboxed environment refuses to run commands and says so. It never falls back to running them unconfined. A self-test at session start also checks that a write outside the project is refused.
+- *Auto-running only what is really contained.* An ACP agent asks permission and then runs the command in its own process, outside the sandbox. So a request only skips approval when its caller guarantees containment (`Request.Contained`, set by the built-in `shell` tool and ACP's `terminal/*`, never by `session/request_permission`). Otherwise the sandbox would approve commands it does not contain.
+- *No shared caches.* A shared Go build cache is a way out: a sandboxed command could poison what the user's own builds later use. `GOCACHE`, `XDG_CACHE_HOME`, `npm_config_cache`, `PIP_CACHE_DIR` and `TMPDIR` point to a per-project folder under `~/Library/Caches/Freeloop/sandbox/`, used only inside the sandbox.
+- *Nothing run outside may execute what the sandbox wrote.* As with Docker (OQ-026), setup and archive commands and hooks run in the sandbox, with network allowed for setup.
+- *Deny rules still win*, and `.freeloop/` can only tighten what the sandbox allows.
+
+**Slices, each landing on its own:**
+
+1. **The profile and its proof.** `internal/platform/darwin/seatbelt.go` writes the profile from typed options, keeping macOS code in its one package (NFR-XPLAT-002); `environment.LocalOptions` takes a `Confine` function that wraps a command's argv. Absolute `/usr/bin/sandbox-exec`, never from PATH. `TestSeatbelt*` turns the table above into a containment test, which skips off macOS. The profile uses the policy's never-readable list, the app's data folder included; home is unreadable except the project, shell startup files and an allow-list of toolchains (`~/go`, `~/.nvm`, `~/.cargo`, `~/.rustup`, `~/.pyenv`, `~/.local/bin`, `~/Library/Developer`, git's config).
+2. **A setting on the environment.** `sandbox: {enabled, network, read, write}` on a local environment (`config.Environment`, `Environments.tsx`). The runtime's `r.env` is confined and `r.host`, used for the app's own guarded git, is not. A worktree also gets its main checkout's `.git` writable, except config and hooks, as `gitMounts` does for Docker. Caches and temp as above; health shown like Docker's.
+3. **Fewer approvals.** The broker allows a `Contained` command in `ask` and `accept_edits`, recorded as decided by the sandbox, after deny rules and hooks. The `shell` tool gains `outside_sandbox` with a reason, which always asks and is never covered by a rule. A failed command that looks like a sandbox refusal gets a note for the model saying how to ask. The tool card says Sandboxed, and an approval to leave it says so plainly.
+4. **Plan mode that can look.** A read-only profile (no project writes) lets `shell` run in plan mode, so a review can run `git log` or the tests' listing instead of being refused.
+5. **Docs and the known gaps.** SECURITY.md, including what it does not cover (below); a checklist for Swift and Xcode, starting with `CLANG_MODULE_CACHE_PATH`.
+
+**Not in this plan:**
+
+- *An external agent's own tools.* Only its `terminal/*` requests are contained. Wrapping the whole agent would need a test per agent, and fails for one that uses Seatbelt itself. SECURITY.md will say so, and the Docker environment stays the answer for those.
+- *MCP servers and the integrated terminal*, which stay unconfined as today.
+- *Per-host network rules*, which are ENV-010.
+- *What the project's own files do later:* a sandboxed command can still edit a Makefile that you run yourself, as in Docker.
+
+Open choices are in OQ-028.
+
 ## Later (unscheduled)
 
-ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
+ENV-008 SSH, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
 
 ## Cut order
 
