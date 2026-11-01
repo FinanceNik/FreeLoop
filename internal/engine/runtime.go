@@ -251,6 +251,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		NoInstructions: prof.Instructions == "none",
 		Commands:       commands,
 		Trusted:        func() bool { return e.trusted(ses.ProjectID) },
+		Web:            sessionWeb{e: e},
 		MCP:            sessionMCP{e: e, sid: sid, projectID: ses.ProjectID, root: ses.ProjectRoot, profileID: ses.ProfileID},
 		Skills:         sessionSkills{e: e, projectID: ses.ProjectID, root: ses.ProjectRoot, profileID: ses.ProfileID},
 		SkillPlugin:    plugin,

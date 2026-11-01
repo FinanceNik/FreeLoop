@@ -306,15 +306,27 @@ func freeLoopbackPort() (int, error) {
 // network. Every request's host is checked before it is sent, proxied ones
 // too, and a direct connection's address once more after it is made.
 func oauthClient(serverURL string) *http.Client {
-	base, ok := http.DefaultTransport.(*http.Transport)
-	if !ok {
-		return &http.Client{Timeout: 30 * time.Second}
-	}
-	t := base.Clone()
 	u, _ := url.Parse(serverURL)
 	if u != nil && hostIsPrivate(u.Hostname()) {
-		return &http.Client{Transport: t, Timeout: 30 * time.Second}
+		if base, ok := http.DefaultTransport.(*http.Transport); ok {
+			return &http.Client{Transport: base.Clone(), Timeout: 30 * time.Second}
+		}
+		return &http.Client{Timeout: 30 * time.Second}
 	}
+	return publicClient()
+}
+
+// publicClient is an HTTP client that reaches public addresses only: every
+// request's host is checked before it is sent, each redirect's too, and a
+// direct connection's address once more after it is made, so a name that
+// resolves differently the second time gets no further. It goes through
+// http.DefaultTransport, so the local-only switch covers it.
+func publicClient() *http.Client {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return &http.Client{Transport: publicOnly{http.DefaultTransport}, Timeout: 30 * time.Second}
+	}
+	t := base.Clone()
 	dial := t.DialContext
 	if dial == nil {
 		dial = (&net.Dialer{Timeout: 30 * time.Second}).DialContext
@@ -333,7 +345,7 @@ func oauthClient(serverURL string) *http.Client {
 		}
 		if ap, err := netip.ParseAddrPort(c.RemoteAddr().String()); err == nil && privateAddr(ap.Addr()) {
 			c.Close()
-			return nil, fmt.Errorf("refused %s: a remote server's sign-in may not reach a private address", addr)
+			return nil, fmt.Errorf("refused %s: this request may not reach a private address", addr)
 		}
 		return c, nil
 	}
@@ -346,7 +358,7 @@ type publicOnly struct{ next http.RoundTripper }
 
 func (p publicOnly) RoundTrip(r *http.Request) (*http.Response, error) {
 	if hostIsPrivate(r.URL.Hostname()) {
-		return nil, fmt.Errorf("refused %s: a remote server's sign-in may not reach a private address", r.URL.Host)
+		return nil, fmt.Errorf("refused %s: this request may not reach a private address", r.URL.Host)
 	}
 	return p.next.RoundTrip(r)
 }

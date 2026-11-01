@@ -64,6 +64,18 @@ type Config struct {
 	Updates Updates `yaml:"updates,omitempty" json:"updates"`
 	// Filters are the sidebar's saved filters (SES-013).
 	Filters []Filter `yaml:"filters,omitempty" json:"filters"`
+	// Web holds the web_search endpoint (HRN-017, OQ-025).
+	Web Web `yaml:"web,omitempty" json:"web"`
+}
+
+// Web settings for the built-in harness's web_search tool.
+type Web struct {
+	// SearchURL is the search endpoint, with {query} where the query goes;
+	// web_search is offered only when it is set.
+	SearchURL string `yaml:"searchURL,omitempty" json:"searchURL"`
+	// SearchHeader names the header that carries the key the Keychain
+	// holds for it, such as X-Subscription-Token; empty for none.
+	SearchHeader string `yaml:"searchHeader,omitempty" json:"searchHeader"`
 }
 
 // Filter is a named set of sidebar filters (SES-013); a session shows when

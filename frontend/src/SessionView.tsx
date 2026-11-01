@@ -831,6 +831,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             addPictures([...e.dataTransfer.files]);
           }}
         >
+          {view.plan.length > 0 && <TodoList entries={view.plan} running={view.running} />}
           {attaching !== null && (
             <div className="mention-picker attach-picker" role="dialog" aria-label="Attach a resource">
               <input
@@ -1468,5 +1469,28 @@ function SetupCard({ sid, item, onError }: { sid: string; item: Extract<Item, { 
         </div>
       )}
     </div>
+  );
+}
+
+// TodoList is the agent's latest to-do list (HRN-017), from the built-in
+// harness or any external agent's plan. It folds to one line once the turn
+// is over.
+function TodoList({ entries, running }: { entries: { content: string; status: string }[]; running: boolean }) {
+  const done = entries.filter((e) => e.status === "completed").length;
+  const current = entries.find((e) => e.status === "in_progress");
+  if (!running && done === entries.length) return null;
+  return (
+    <details className="todo-list" open={running}>
+      <summary>
+        To-do · {done} of {entries.length} done{current ? ` · ${current.content}` : ""}
+      </summary>
+      <ul>
+        {entries.map((e, i) => (
+          <li key={i} className={`todo-${e.status}`}>
+            <span aria-hidden="true">{e.status === "completed" ? "✓" : e.status === "in_progress" ? "•" : "○"}</span> {e.content}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

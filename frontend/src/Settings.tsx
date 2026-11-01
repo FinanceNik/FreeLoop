@@ -181,6 +181,40 @@ export default function Settings({ config, providers, environments, profiles, pr
           </details>
         )}
 
+        <h3>Web search</h3>
+        <p className="muted">
+          The built-in agent's <code>web_search</code> tool queries this endpoint, and the tool is offered only when one is set: Freeloop has no search
+          engine of its own to send your queries to. A self-hosted SearXNG and the Brave Search API both work. Each search asks you first.
+        </p>
+        <label>
+          Search address <span className="muted">(with {"{query}"} where the query goes)</span>
+          <input
+            value={form.web?.searchURL ?? ""}
+            placeholder="http://localhost:8888/search?format=json&q={query}"
+            onChange={(e) => setForm({ ...form, web: { ...form.web, searchURL: e.target.value } })}
+          />
+        </label>
+        <label>
+          Key header <span className="muted">(optional, such as X-Subscription-Token)</span>
+          <input value={form.web?.searchHeader ?? ""} onChange={(e) => setForm({ ...form, web: { ...form.web, searchHeader: e.target.value } })} />
+        </label>
+        {form.web?.searchHeader && (
+          <label>
+            Key <span className="muted">(kept in the Keychain; saved at once)</span>
+            <input
+              type="password"
+              autoComplete="off"
+              placeholder="Leave empty to keep the current key"
+              onBlur={(e) => {
+                const key = e.target.value.trim();
+                if (!key) return;
+                e.target.value = "";
+                EngineService.SetWebSearchKey(key).catch(onError);
+              }}
+            />
+          </label>
+        )}
+
         <h3>Updates</h3>
         <label className="row">
           <input

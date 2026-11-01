@@ -15,6 +15,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider"
+	"github.com/FinanceNik/Freeloop/internal/web"
 )
 
 // Info describes a harness.
@@ -78,6 +79,9 @@ type Params struct {
 	// Subagents runs the task tool's child agents (HRN-014); nil offers no
 	// task tool, as for a subagent itself.
 	Subagents Subagents
+	// Web backs the web_fetch and web_search tools (HRN-017); nil offers
+	// neither.
+	Web WebSource
 	// MCPServers are passed to an external agent on session creation, so
 	// it uses the same servers (MCP-004). Secrets are resolved.
 	MCPServers []MCPServerSpec
@@ -85,6 +89,24 @@ type Params struct {
 	// starting a new one (SES-003).
 	ExternalID string
 	Emit       Emitter
+}
+
+// WebSource reads the web for the built-in harness (HRN-017). The broker
+// has approved a call before it gets here.
+type WebSource interface {
+	// Fetch returns a public page as text.
+	Fetch(ctx context.Context, url string) (WebPage, error)
+	// CanSearch reports whether a search endpoint is configured.
+	CanSearch() bool
+	Search(ctx context.Context, query string) ([]web.Result, error)
+}
+
+// WebPage is a fetched page.
+type WebPage struct {
+	URL       string
+	Title     string
+	Text      string
+	Truncated bool
 }
 
 // MCPServerSpec is an MCP server as an external agent receives it.

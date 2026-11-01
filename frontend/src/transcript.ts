@@ -172,6 +172,13 @@ export interface SessionView {
   context: { tokens: number; window: number } | null;
   // The worktree setup's latest status (SES-016), null when none ran.
   setup: string | null;
+  // The agent's latest to-do list, from any harness (HRN-017).
+  plan: PlanEntry[];
+}
+
+export interface PlanEntry {
+  content: string;
+  status: string; // pending, in_progress or completed
 }
 
 export interface AvailableCommand {
@@ -205,6 +212,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   const calls: ModelCall[] = [];
   let turnCalls: ModelCall[] = [];
   let setup: string | null = null;
+  let plan: PlanEntry[] = [];
   let current = { providerId: "", model: "" };
 
   const last = () => items[items.length - 1];
@@ -244,6 +252,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       }
       case "pull_request":
         items.push({ kind: "pull_request", key, rev, url: d.url ?? "", title: d.title ?? "", base: d.base ?? "", head: d.head ?? "", draft: !!d.draft });
+        break;
+      case "plan":
+        plan = Array.isArray(d.entries) ? d.entries.filter((x: PlanEntry) => typeof x?.content === "string").map((x: PlanEntry) => ({ content: x.content, status: String(x.status ?? "pending") })) : [];
         break;
       case "worktree_setup": {
         setup = d.status ?? null;
@@ -429,7 +440,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       if (seq > r.from && seq < r.to && !items[i].rewound) items[i] = { ...items[i], rewound: true, rev: r.to };
     }
   }
-  return { items, usage, calls, git, mode, status, running, commands, context, setup };
+  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan };
 }
 
 function replaceTool(

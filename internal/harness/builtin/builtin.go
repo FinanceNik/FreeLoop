@@ -472,6 +472,9 @@ func (s *session) toolSpecs(mode permission.Mode) []provider.ToolSpec {
 		if t.spec.Name == "load_skill" && !skills {
 			continue
 		}
+		if (t.spec.Name == "web_fetch" && s.p.Web == nil) || (t.spec.Name == "web_search" && (s.p.Web == nil || !s.p.Web.CanSearch())) {
+			continue
+		}
 		plan := t.kind == permission.KindSwitchMode
 		if (mode == permission.ModePlan && (t.readOnly || plan)) || (mode != permission.ModePlan && !plan) {
 			out = append(out, t.spec)

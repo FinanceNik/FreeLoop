@@ -7,7 +7,7 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-const TOOLS = ["read_file", "list_dir", "glob", "grep", "write_file", "edit_file", "shell"];
+const TOOLS = ["read_file", "list_dir", "glob", "grep", "write_file", "edit_file", "shell", "web_fetch", "web_search"];
 
 interface Form {
   id: string;

@@ -119,6 +119,9 @@ func (s *EngineService) KeepCompare(ctx context.Context, tag, sessionID string) 
 	return s.eng.KeepCompare(ctx, tag, sessionID)
 }
 
+// SetWebSearchKey keeps the search endpoint's key in the Keychain (HRN-017).
+func (s *EngineService) SetWebSearchKey(key string) error { return s.eng.SetWebSearchKey(key) }
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

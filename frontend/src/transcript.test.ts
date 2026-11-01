@@ -278,3 +278,16 @@ test("the worktree setup is one card that follows its run (SES-016)", () => {
     ["failed", "done"],
   );
 });
+
+test("the latest plan from any harness is the to-do list (HRN-017)", () => {
+  const ev = (seq: number, data: object) => ({ v: 1, seq, ts: "2026-11-01T10:00:00Z", sid: "s", type: "plan", data });
+  const v = buildView([
+    ev(1, { entries: [{ content: "old", status: "pending" }] }),
+    ev(2, { entries: [{ content: "read", status: "completed", priority: "high" }, { content: "write", status: "in_progress" }, { bad: 1 }] }),
+  ]);
+  assert.deepEqual(v.plan, [
+    { content: "read", status: "completed" },
+    { content: "write", status: "in_progress" },
+  ]);
+  assert.deepEqual(buildView([]).plan, []);
+});

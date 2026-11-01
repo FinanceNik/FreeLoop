@@ -81,7 +81,7 @@ func decode(input json.RawMessage, v any, required ...string) error {
 }
 
 func tools() []*tool {
-	return []*tool{readFile(), listDir(), globTool(), grepTool(), writeFile(), editFile(), shellTool(), presentPlan(), loadSkill(), taskTool()}
+	return []*tool{readFile(), listDir(), globTool(), grepTool(), writeFile(), editFile(), shellTool(), presentPlan(), loadSkill(), taskTool(), webFetch(), webSearch(), todoWrite()}
 }
 
 func readFile() *tool {

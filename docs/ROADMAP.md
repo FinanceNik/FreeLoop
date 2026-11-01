@@ -216,6 +216,14 @@ The second tier of the comparison with other agent apps; each builds on the GitH
 
 Order: 2, 1, 3. Checks extend the pull request section that exists; the issue picker adds a form control; the compare runs touch session creation and add a page.
 
+### Feature order, part 11 (planned 2026-11-01)
+
+The rest of the comparison with other agent apps, apart from the side-by-side panes. No new dependency.
+
+1. **Web and to-do tools (HRN-017, OQ-025).** *Built 2026-11-01; tested with local pages, a local search endpoint and scripted calls; a real page and a real search endpoint are the user's check.* `web_fetch` and `web_search` go through a new `harness.WebSource` the engine implements (`internal/engine/web.go`, with HTML turned to text in `internal/web`): the fetch client refuses private addresses at every redirect and after dialling, reads at most 5 MB and returns at most 50 KB of text. Both have kind `fetch`, so the broker asks every time and plan mode refuses them; the URL or query is the call's rule target, so "Allow always" covers that exact one and never the whole tool. `web_search` is offered only with `web.searchURL` set in Settings, since the app has no search engine of its own to send queries to (OQ-025). `todo_write` emits ACP's `plan` event; the view shows the latest plan from any harness above the message box.
+2. **Review by a second agent (HRN-018).** The Diff tab's "Ask for a review" picks a profile; `Engine.RequestReview` makes a session in plan mode, a child of the first in the same worktree, tagged `review`, and sends it the diff against the base commit. `Engine.Reviews` lists a session's reviews with their status and reply; "Use these findings" puts the reply in the first session's message box.
+3. **App preview (GUI-020).** A Preview tab with a sandboxed frame on a `localhost` address, by default the session's `FREELOOP_PORT`, with Reload and Open in browser; `Engine.PortOpen` says when nothing is listening. Rules for the address are pure functions in `frontend/src/preview.ts`.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
