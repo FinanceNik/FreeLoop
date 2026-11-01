@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,5 +155,61 @@ func TestDockerWorktreeGit(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(common, "hooks", "pre-commit")); err == nil {
 		t.Error("a hook was planted")
+	}
+}
+
+// OQ-026: with a real daemon, the setup and archive commands see Linux, the
+// session's port and the environment's variables, and the setup's files are
+// there when the session's own commands run. Skipped without Docker.
+func TestDockerWorktreeScripts(t *testing.T) {
+	ctx := context.Background()
+	docker, err := environment.FindDocker()
+	if err != nil {
+		t.Skip(err)
+	}
+	if err := hostRun(docker, "info"); err != nil {
+		t.Skip("no Docker daemon is running")
+	}
+	cache, _ := os.UserCacheDir()
+	base, err := os.MkdirTemp(cache, "freeloop-docker-scripts-")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer os.RemoveAll(base)
+	repo := filepath.Join(base, "repo")
+	os.MkdirAll(filepath.Join(repo, ProjectDir), 0o755)
+	gitIn(t, repo, "init", "-q")
+	gitIn(t, repo, "config", "user.name", "t")
+	gitIn(t, repo, "config", "user.email", "t@t")
+	os.WriteFile(filepath.Join(repo, "a.txt"), []byte("a\n"), 0o644)
+	gitIn(t, repo, "add", "a.txt")
+	gitIn(t, repo, "commit", "-qm", "one")
+	os.WriteFile(filepath.Join(repo, ProjectDir, config.WorktreeFileName), []byte(
+		"setup: echo \"$(uname -s) $FREELOOP_PORT $GREETING\" > setup.txt\narchive: uname -s > archived.txt\n"), 0o644)
+	dir := filepath.Join(base, "data")
+	e := openTest(t, dir)
+	defer e.Close()
+	e.SetProjectTrust(ctx, repo, true)
+	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
+	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "box.yaml"), []byte("name: Box\nkind: docker\nimage: alpine:3.20\nenv:\n  GREETING: hi\n"), 0o600)
+	e.loadEnvironments()
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: DemoProviderID, EnvironmentID: "box", Worktree: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hostRun(docker, "rm", "-f", containerName(ses.ID))
+	if err := e.waitSetup(ctx, ses.ID); err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("Linux %d hi\n", ses.PortBase)
+	if b, _ := os.ReadFile(filepath.Join(ses.Worktree, "setup.txt")); string(b) != want {
+		t.Errorf("setup.txt = %q, want %q", b, want)
+	}
+	if err := e.ArchiveSession(ctx, ses.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	// The worktree stays: it holds files that are not committed.
+	if b, _ := os.ReadFile(filepath.Join(ses.Worktree, "archived.txt")); string(b) != "Linux\n" {
+		t.Errorf("archived.txt = %q", b)
 	}
 }

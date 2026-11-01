@@ -117,3 +117,113 @@ func TestWorktreeScripts(t *testing.T) {
 	}
 	t.Error("the archive command did not run")
 }
+
+// standInDocker puts a docker on PATH that records its calls in the returned
+// file and keeps one container's state.
+func standInDocker(t *testing.T) (calls string) {
+	t.Helper()
+	dir := t.TempDir()
+	calls, state := filepath.Join(dir, "calls"), filepath.Join(dir, "state")
+	os.WriteFile(filepath.Join(dir, "docker"), []byte(`#!/bin/sh
+echo "$*" >> '`+calls+`'
+case "$1" in
+inspect) cat '`+state+`' 2>/dev/null || exit 1 ;;
+run|start) echo running > '`+state+`' ;;
+stop) echo exited > '`+state+`' ;;
+exec) case "$*" in *" ls -A "*) echo a.txt ;; esac ;;
+esac
+`), 0o755)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return calls
+}
+
+// OQ-026: in a Docker environment the setup and archive commands run in the
+// session's container, never on the Mac, where they could run what the
+// container wrote into the worktree; it stops again when no session uses it.
+// The copy still comes from the main checkout, on the host.
+func TestScriptsRunInTheContainer(t *testing.T) {
+	ctx := context.Background()
+	calls := standInDocker(t)
+	repo := gitRepo(t)
+	marker := filepath.Join(t.TempDir(), "ran")
+	os.MkdirAll(filepath.Join(repo, ProjectDir), 0o755)
+	os.WriteFile(filepath.Join(repo, ".env"), []byte("SECRET=1\n"), 0o600)
+	os.WriteFile(filepath.Join(repo, ProjectDir, config.WorktreeFileName), []byte(
+		"copy: [.env]\nsetup: touch "+marker+"-setup\narchive: touch "+marker+"-archive\n"), 0o644)
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	e.SetProjectTrust(ctx, repo, true)
+	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
+	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "box.yaml"), []byte("name: Box\nkind: docker\nimage: alpine:3.20\n"), 0o600)
+	e.loadEnvironments()
+
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: DemoProviderID, EnvironmentID: "box", Worktree: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.waitSetup(ctx, ses.ID); err != nil {
+		t.Fatal(err)
+	}
+	log := func() string {
+		b, _ := os.ReadFile(calls)
+		return string(b)
+	}
+	ranIn := func(what string) {
+		t.Helper()
+		for _, line := range strings.Split(log(), "\n") {
+			if strings.HasPrefix(line, "exec ") && strings.Contains(line, marker+"-"+what) {
+				return
+			}
+		}
+		t.Errorf("the %s command did not run in the container:\n%s", what, log())
+	}
+	ranIn("setup")
+	if !strings.HasSuffix(strings.TrimSpace(log()), containerName(ses.ID)) || !strings.Contains(log(), "stop ") {
+		t.Errorf("the container was left running:\n%s", log())
+	}
+	if b, err := os.ReadFile(filepath.Join(ses.Worktree, ".env")); err != nil || string(b) != "SECRET=1\n" {
+		t.Errorf("the copied file: %q, %v", b, err)
+	}
+
+	// A retry after the container has run stays in the container too.
+	os.Remove(calls)
+	if err := e.RetrySetup(ctx, ses.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.waitSetup(ctx, ses.ID); err != nil {
+		t.Fatal(err)
+	}
+	ranIn("setup")
+
+	os.Remove(calls)
+	if err := e.ArchiveSession(ctx, ses.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	ranIn("archive")
+	for _, what := range []string{"setup", "archive"} {
+		if _, err := os.Stat(marker + "-" + what); err == nil {
+			t.Errorf("the %s command ran on the Mac", what)
+		}
+	}
+
+	// A container that never started has nothing to clean up.
+	os.WriteFile(filepath.Join(repo, ProjectDir, config.WorktreeFileName), []byte("archive: touch "+marker+"-archive\n"), 0o644)
+	other, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: DemoProviderID, EnvironmentID: "box", Worktree: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(calls)
+	e.runArchiveScript(ctx, other)
+	if strings.Contains(log(), "exec ") || strings.Contains(log(), "run ") {
+		t.Errorf("a container started for nothing:\n%s", log())
+	}
+
+	// A worktree a container has had does not go back to the Mac.
+	moved := other
+	moved.EnvironmentID = ""
+	e.emit(other.ID, event.EnvHealth, map[string]string{"status": "healthy"})
+	if _, _, err := e.scriptHost(ctx, moved); err == nil {
+		t.Error("a worktree a container had would run its commands on the Mac")
+	}
+}

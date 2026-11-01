@@ -221,3 +221,24 @@ func TestSymlinkOnPath(t *testing.T) {
 		}
 	}
 }
+
+// The refusal happens before docker is asked to create anything.
+func TestDockerRefusesASymlinkedReadOnlyPath(t *testing.T) {
+	bin := t.TempDir()
+	calls := filepath.Join(bin, "calls")
+	os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\necho \"$*\" >> '"+calls+"'\n[ \"$1\" = inspect ] && exit 1\nexit 0\n"), 0o755)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	root := Canonical(t.TempDir())
+	os.Symlink(t.TempDir(), filepath.Join(root, ".freeloop"))
+	d, err := NewDocker(DockerOptions{ID: "d", Container: "c", Root: root, Image: "alpine:3.20", Guard: denyGuard{},
+		ReadOnly: []string{filepath.Join(root, ".freeloop") + "/"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Start(context.Background()); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Errorf("start = %v", err)
+	}
+	if b, _ := os.ReadFile(calls); strings.Contains(string(b), "run ") {
+		t.Errorf("a container was created:\n%s", b)
+	}
+}

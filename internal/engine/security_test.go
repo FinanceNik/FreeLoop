@@ -13,7 +13,6 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/permission"
-	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
 // nestedRepo puts a repository at repo/sub whose own config runs a filter
@@ -304,47 +303,6 @@ func TestWorktreeCopyStaysInside(t *testing.T) {
 	}
 	if fi, err := os.Stat(filepath.Join(dst, "dir", "own.txt")); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Errorf("own.txt: %v, %v", fi, err)
-	}
-}
-
-// Review finding: setup and archive commands run on the Mac, so once a
-// session's container has run, what it wrote into the worktree would run
-// outside the container.
-func TestScriptsStayOffTheMacOnceAContainerRan(t *testing.T) {
-	ctx := context.Background()
-	repo := gitRepo(t)
-	os.MkdirAll(filepath.Join(repo, ProjectDir), 0o755)
-	marker := filepath.Join(t.TempDir(), "archived")
-	os.WriteFile(filepath.Join(repo, ProjectDir, config.WorktreeFileName), []byte("archive: touch "+marker+"\nsetup: true\n"), 0o644)
-	e := openTest(t, t.TempDir())
-	defer e.Close()
-	e.SetProjectTrust(ctx, repo, true)
-	envInfo, err := e.SaveEnvironment(SaveEnvironmentRequest{Name: "Box", Kind: "docker", Image: "alpine:3.20"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	wt := t.TempDir()
-	base := session.Session{Worktree: wt, ProjectRoot: repo, EnvironmentID: envInfo.ID}
-	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: DemoProviderID, EnvironmentID: envInfo.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	base.ID, base.ProjectID = ses.ID, ses.ProjectID
-	if e.containerRan(ctx, base) {
-		t.Error("a container counted as run before it started")
-	}
-	e.emit(ses.ID, event.EnvHealth, map[string]string{"status": "healthy"})
-	if !e.containerRan(ctx, base) {
-		t.Error("a started container did not count")
-	}
-	e.runArchiveScript(ctx, base)
-	if _, err := os.Stat(marker); err == nil {
-		t.Error("the archive command ran on the Mac after the container")
-	}
-	local := base
-	local.EnvironmentID = ""
-	if e.containerRan(ctx, local) {
-		t.Error("a local session counted as having a container")
 	}
 }
 

@@ -170,14 +170,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	// An external agent that takes skills gets the session's (SKL-008).
-	plugin, pluginDir := "", ""
-	if preset.Skills == config.SkillsClaudePlugin {
-		if plugin, err = e.skillPlugin(sid, project, prof); err != nil {
-			log.Printf("engine: the skills of session %s: %v", sid, err)
-			plugin = ""
-		}
-		pluginDir = config.SessionPluginDir(e.dataDir, sid)
-	}
+	plugin, pluginDir := e.sessionPlugin(sid, preset, project, prof)
 	var env environment.Environment = host
 	if envCfg.Kind == string(environment.KindDocker) {
 		if env, err = e.dockerEnv(ctx, ses, project, envCfg, vars, host, pluginDir); err != nil {

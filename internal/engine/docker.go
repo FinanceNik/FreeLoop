@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
@@ -19,9 +22,9 @@ import (
 // Docker environments (ENV-005, ENV-006, ENV-007): each session of a docker
 // environment runs in its own container, created when the session first
 // runs from the environment's image or the project's devcontainer.json,
-// with the session's folder bind-mounted at the same path. Commands and
-// external agents run inside it; files are read and written on the host;
-// the app's own git commands stay on the host.
+// with the session's folder bind-mounted at the same path. Commands, external
+// agents and a worktree's scripts run inside it; files are read and written on
+// the host; the app's own git commands stay on the host.
 
 // dockerStartTimeout covers pulling or building an image and the setup
 // command on a container's first start.
@@ -30,6 +33,51 @@ const dockerStartTimeout = 20 * time.Minute
 // containerName is a session's container.
 func containerName(sid string) string {
 	return "freeloop-" + strings.ReplaceAll(sid, "_", "-")
+}
+
+// sessionPlugin writes the skill plugin of a session whose agent takes one
+// (SKL-008) and returns it and its folder, both empty otherwise.
+func (e *Engine) sessionPlugin(sid string, preset config.HarnessPreset, project session.Project, prof config.Profile) (plugin, dir string) {
+	if preset.Skills != config.SkillsClaudePlugin {
+		return "", ""
+	}
+	plugin, err := e.skillPlugin(sid, project, prof)
+	if err != nil {
+		log.Printf("engine: the skills of session %s: %v", sid, err)
+		plugin = ""
+	}
+	return plugin, config.SessionPluginDir(e.dataDir, sid)
+}
+
+// sessionContainer starts a session's container for work outside a turn. It
+// is the container the session's runtime uses: same options and mounts, since
+// a container keeps those for good.
+func (e *Engine) sessionContainer(ctx context.Context, ses session.Session, cfg config.Environment) (*environment.Docker, error) {
+	var preset config.HarnessPreset
+	if ses.HarnessID != builtin.ID {
+		var err error
+		if preset, err = e.preset(ses.HarnessID); err != nil {
+			return nil, err
+		}
+	}
+	project := e.sessionProject(ctx, ses)
+	prof, err := e.profileFor(project, ses.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	vars, err := e.resolveEnv(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if ses.PortBase > 0 {
+		vars["FREELOOP_PORT"] = strconv.Itoa(ses.PortBase)
+	}
+	host, err := e.localEnv(ses.WorkRoot(), vars)
+	if err != nil {
+		return nil, err
+	}
+	_, pluginDir := e.sessionPlugin(ses.ID, preset, project, prof)
+	return e.dockerEnv(ctx, ses, project, cfg, vars, host, pluginDir)
 }
 
 var devcontainerFiles = []string{".devcontainer/devcontainer.json", ".devcontainer.json"}

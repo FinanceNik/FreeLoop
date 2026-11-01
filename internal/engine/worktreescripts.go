@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,9 +27,10 @@ import (
 // as the worktree exists, and the session's first prompt waits until they
 // are done. Each worktree session also gets a block of ports, so two dev
 // servers never collide, and a run command started in a terminal tab.
-// Commands run on this Mac in the worktree, with the session environment's
-// variables and secrets, like the agent's own commands; an untrusted
-// project runs nothing.
+// Commands run where the agent's own do, with the session environment's
+// variables and secrets: on this Mac in the worktree, or in the session's
+// container (scriptHost); an untrusted project runs nothing. Files are copied
+// on the host, because the main checkout is not in the container.
 
 // Ports: each worktree session gets portBlock ports from FirstPort up, the
 // lowest block no session that is not archived holds.
@@ -202,7 +204,7 @@ func (e *Engine) startSetup(ses session.Session) {
 	e.setups.runs[ses.ID] = run
 	e.setups.mu.Unlock()
 	e.bg.Go(func() {
-		ctx, cancel := context.WithTimeout(e.scheduleCtx, environment.MaxTimeout+time.Minute)
+		ctx, cancel := context.WithTimeout(e.scheduleCtx, dockerStartTimeout+environment.MaxTimeout+time.Minute)
 		defer cancel()
 		err := e.runSetup(ctx, ses, scripts)
 		e.setups.mu.Lock()
@@ -243,11 +245,12 @@ func (e *Engine) runSetup(ctx context.Context, ses session.Session, scripts conf
 		}
 	}
 	if scripts.Setup != "" {
-		host, err := e.localEnv(ses.Worktree, nil)
+		env, done, err := e.scriptHost(ctx, ses)
 		if err != nil {
 			return fail(err)
 		}
-		res, err := host.Exec(ctx, environment.ExecSpec{Command: scripts.Setup, Env: e.scriptEnv(ses), Timeout: environment.MaxTimeout, MaxOutput: 256 << 10})
+		defer done()
+		res, err := env.Exec(ctx, environment.ExecSpec{Command: scripts.Setup, Env: e.scriptEnv(ses), Timeout: environment.MaxTimeout, MaxOutput: 256 << 10})
 		d.Output = tail(res.Output, setupOutput)
 		switch {
 		case err != nil:
@@ -301,30 +304,57 @@ func (e *Engine) RetrySetup(ctx context.Context, sid string) error {
 			return errors.New("the setup is still running")
 		}
 	}
-	if e.containerRan(ctx, ses) {
-		return errors.New("the setup runs on this Mac, and a command in this session's container could have changed the files it uses; run it in the session instead")
-	}
 	e.startSetup(ses)
 	return nil
 }
 
-// containerRan reports a session whose container has started. Setup and
-// archive commands run on the Mac with the environment's secrets, so from
-// then on they could be running what a command in the container wrote into
-// the worktree, such as a Makefile: that would be a way out of the container.
-func (e *Engine) containerRan(ctx context.Context, ses session.Session) bool {
-	envID := ses.EnvironmentID
-	if envID == "" {
-		envID = DefaultEnvironmentID
-	}
-	if c, err := e.environment(envID); err == nil && c.Kind != "docker" {
-		return false
-	}
-	evs, err := e.store.Events(ctx, ses.ID, 0)
+// containerStarted reports a session whose container has been started, and
+// so may have changed its worktree.
+func (e *Engine) containerStarted(ctx context.Context, sid string) bool {
+	evs, err := e.store.Events(ctx, sid, 0)
 	if err != nil {
 		return true
 	}
 	return slices.ContainsFunc(evs, func(ev event.Event) bool { return ev.Type == event.EnvHealth })
+}
+
+// scriptHost returns where a session's setup and archive commands run, and
+// what to call when they end. In a Docker environment that is the session's
+// container, started for them and stopped again unless the session is using
+// it. On the Mac they would run with the environment's secrets whatever a
+// command in the container wrote into the worktree, such as a Makefile: a way
+// out of the container. For the same reason they do not run on the Mac in a
+// worktree a container has had, should its environment have changed since.
+func (e *Engine) scriptHost(ctx context.Context, ses session.Session) (environment.Environment, func(), error) {
+	envID := ses.EnvironmentID
+	if envID == "" {
+		envID = DefaultEnvironmentID
+	}
+	cfg, err := e.environment(envID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if cfg.Kind != string(environment.KindDocker) {
+		if e.containerStarted(ctx, ses.ID) {
+			return nil, nil, errors.New("a container has had this worktree and the session's environment is no longer Docker, so this command does not run on this Mac")
+		}
+		host, err := e.localEnv(ses.Worktree, nil)
+		return host, func() {}, err
+	}
+	d, err := e.sessionContainer(ctx, ses, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return d, func() {
+		e.mu.Lock()
+		inUse := e.runtimes[ses.ID] != nil || e.starting[ses.ID] != nil
+		e.mu.Unlock()
+		if !inUse {
+			sctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			d.Stop(sctx)
+		}
+	}, nil
 }
 
 // SkipSetup lets a session whose setup failed start anyway.
@@ -361,23 +391,30 @@ func (e *Engine) runArchiveScript(ctx context.Context, ses session.Session) {
 	if cmd == "" || !environment.IsDir(ses.Worktree) {
 		return
 	}
-	if e.containerRan(ctx, ses) {
-		e.emit(ses.ID, event.Notice, event.NoticeData{Message: "The archive command did not run: it runs on this Mac, and a command in this session's container could have changed the files it uses."})
+	notice := func(why, output string) {
+		e.emit(ses.ID, event.Notice, event.NoticeData{Message: fmt.Sprintf("The archive command %s: %s", why, tail(output, 500))})
+	}
+	// A container that never started has nothing to clean up, and starting
+	// one now could mean pulling its image.
+	if c, err := e.environment(cmp.Or(ses.EnvironmentID, DefaultEnvironmentID)); err == nil && c.Kind == string(environment.KindDocker) && !e.containerStarted(ctx, ses.ID) {
 		return
 	}
-	host, err := e.localEnv(ses.Worktree, nil)
+	ctx, cancel := context.WithTimeout(ctx, archiveTimeout+time.Minute)
+	defer cancel()
+	env, done, err := e.scriptHost(ctx, ses)
 	if err != nil {
+		notice("did not run", err.Error())
 		return
 	}
-	res, err := host.Exec(ctx, environment.ExecSpec{Command: cmd, Env: e.scriptEnv(ses), Timeout: archiveTimeout})
-	if err != nil || res.ExitCode != 0 || res.TimedOut {
-		why := fmt.Sprintf("exited with %d", res.ExitCode)
-		if err != nil {
-			why = err.Error()
-		} else if res.TimedOut {
-			why = "did not finish in a minute"
-		}
-		e.emit(ses.ID, event.Notice, event.NoticeData{Message: fmt.Sprintf("The archive command %s: %s", why, tail(res.Output, 500))})
+	defer done()
+	res, err := env.Exec(ctx, environment.ExecSpec{Command: cmd, Env: e.scriptEnv(ses), Timeout: archiveTimeout})
+	switch {
+	case err != nil:
+		notice(err.Error(), res.Output)
+	case res.TimedOut:
+		notice("did not finish in a minute", res.Output)
+	case res.ExitCode != 0:
+		notice(fmt.Sprintf("exited with %d", res.ExitCode), res.Output)
 	}
 }
 
