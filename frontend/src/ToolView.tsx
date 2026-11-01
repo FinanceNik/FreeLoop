@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toolStatusLabel } from "./a11y.ts";
 import { EngineService } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
-import { APPROVAL_GRACE_MS, APPROVAL_HINTS, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
+import { APPROVAL_GRACE_MS, approvalHint, approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
 import { awaitingDecision, lineDiff, type Item, type PermissionOption, type ToolContent } from "./transcript.ts";
 
 // ToolView is one tool call in the conversation: what it asked and did and,
@@ -102,7 +102,7 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
             )}
             {item.permission!.options.map((o) => {
               const kind = optionKind(o.kind);
-              const hint = kind ? APPROVAL_HINTS[kind] : null;
+              const hint = kind ? approvalHint(kind) : null;
               return (
                 <button
                   key={o.optionId}

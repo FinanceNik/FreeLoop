@@ -1,3 +1,5 @@
+import { pressed, type Keys } from "./shortcuts.ts";
+
 // The settings area: the configuration pages, grouped, behind one sidebar
 // entry. The pages share a column listing them, like a macOS settings
 // window; the sidebar keeps its room for sessions.
@@ -47,8 +49,8 @@ export function inSettings(kind: string): boolean {
 }
 
 // ⌘, opens the settings, as in every Mac app.
-export function isSettingsShortcut(k: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }): boolean {
-  return k.metaKey && !k.ctrlKey && !k.altKey && !k.shiftKey && k.key === ",";
+export function isSettingsShortcut(k: Keys): boolean {
+  return pressed(k, "settings");
 }
 
 // The Font size setting's range; config.go holds the same one.
@@ -57,9 +59,8 @@ export const MAX_FONT_SIZE = 20;
 
 // textSizeAfter is the Font size that ⌘+ or ⌘- asks for, or null for any other
 // key (NFR-A11Y-002). ⌘+ is ⌘= without Shift, on most keyboards.
-export function textSizeAfter(k: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean }, current: number): number | null {
-  if (!k.metaKey || k.ctrlKey || k.altKey) return null;
-  if (k.key === "+" || k.key === "=") return Math.min(current + 1, MAX_FONT_SIZE);
-  if (k.key === "-") return Math.max(current - 1, MIN_FONT_SIZE);
+export function textSizeAfter(k: Keys, current: number): number | null {
+  if (pressed(k, "textLarger")) return Math.min(current + 1, MAX_FONT_SIZE);
+  if (pressed(k, "textSmaller")) return Math.max(current - 1, MIN_FONT_SIZE);
   return null;
 }

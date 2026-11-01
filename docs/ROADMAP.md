@@ -289,9 +289,17 @@ Apple marks `sandbox-exec` deprecated with no replacement for this use. It still
 
 OQ-028 records the defaults.
 
+### Feature order, part 14 (built 2026-11-01)
+
+What the open "later" list held that follows from the sandbox or needs no account. No new dependency.
+
+1. **Listed hosts for the sandbox (ENV-010).** *Tested on the real sandbox and internet with curl, npm, Python, git, Node and Go, gated by `FREELOOP_SANDBOX_NET=1`.* A local proxy per session (`netguard.Egress`) forwards to the hosts an environment lists and refuses the rest. The sandbox still lets commands reach only this Mac, so a tool that ignores the proxy gets no connection at all. TLS is not opened, a password keeps other programs off it, names resolving to private addresses are refused, and it obeys local-only. A refused host is a notice saying how to add it. Package managers get a project's own cache, since fetching writes where the user's builds read; Go still reads the user's modules first. It covers the local sandbox only, not Docker.
+2. **Browsing an MCP registry (MCP-009).** *Tested against a stand-in and in the browser against the official registry.* Nothing connects until the user chooses an address on that page, which keeps to the rule that outbound traffic goes to endpoints the user set. A result only fills in the add-server form, pinned to its version, and the server starts after the usual confirmation of its exact command (MCP-005). Only npm and PyPI packages and https Streamable HTTP remotes can be added; the rest are named. Identifiers and versions that are not plain are refused, and secrets go to the Keychain.
+3. **Shortcuts (SET-006).** *Checked in the browser with real key presses.* Settings changes the palette, Settings, Needs attention, text size and the approval letters; `ui.shortcuts` in `config.yaml` holds what changed. macOS's and the app's fixed keys are refused, and so is a key already in use.
+
 ## Later (unscheduled)
 
-ENV-008 SSH, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
+ENV-008 SSH, PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
 
 ## Cut order
 

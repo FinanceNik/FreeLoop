@@ -72,7 +72,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **MCP-006** · v1 · **OAuth for remote servers.** OAuth 2.1 authorization code flow with PKCE per the MCP authorization spec; client registration through Client ID Metadata Documents with Dynamic Client Registration as a fallback; issuer validation; tokens in the Keychain, one item per server. *Accept:* a remote server requiring OAuth is usable after one browser round trip.
 - **MCP-007** · v1 · **Resources and prompts.** Attach a resource to the composer; run a server prompt as a slash command. *Accept:* a resource's content appears in the next user turn; a prompt with arguments renders a form.
 - **MCP-008** · v1 · **Input-required round trips.** Under MCP 2026-07-28 a server asks for more input by returning an `input_required` result (the Multi Round-Trip Request pattern that replaced server-initiated elicitation); the request is shown in the approval inbox as a form and the original call is retried with the answers. Older servers' `elicitation/create` requests take the same path. *Accept:* a server that asks for a confirmation blocks until the user answers in the inbox, then completes.
-- **MCP-009** · later · **Server registry browsing.** Search and install from the MCP registry.
+- **MCP-009** · v1 · **Server registry browsing.** Search a registry the user chose and add a server from it. *Accept:* nothing connects before an address is set; a result fills in the add-server form pinned to a version, and it starts only after the usual confirmation.
 
 ### Environments (ENV)
 
@@ -85,7 +85,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **ENV-007** · v1 · **Setup and health.** Post-create script, health check, "environment is unhealthy" state surfaced on the session. *Accept:* a failing health check blocks new sessions with a reason.
 - **ENV-008** · later · **SSH remote environment.** Exec and file access over SSH/SFTP.
 - **ENV-009** · v1 · **Sandboxed local execution.** Restricted file-system and network for the shell tool on macOS without Docker. *Accept:* in a sandboxed environment a command writes in the project and runs its tests without an approval; it cannot write outside the project or to `.git/config`, `.git/hooks` or `.freeloop/`, read `~/.ssh` or `~/Documents`, reach the internet, or start another app; leaving the sandbox always asks; if the sandbox cannot be applied, commands do not run.
-- **ENV-010** · later · **Network policy per environment.** Allow/deny lists for outbound hosts.
+- **ENV-010** · v1 · **Network policy per environment.** A sandboxed environment can list the hosts its commands reach. *Accept:* with `registry.npmjs.org` listed, `npm view` works and `curl https://example.com` is refused and reported; a command ignoring the proxy gets no connection.
 
 ### GUI and UX (GUI)
 
@@ -154,7 +154,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **SET-003** · MVP · **Import from Claude Code.** Permission rules from `settings.json`, MCP servers (MCP-002) and skills (SKL-003), previewed, one-way. *Accept:* the preview lists each item with its destination; nothing is written back to `~/.claude`.
 - **SET-004** · MVP · **Defaults.** Default provider and model, profile, permission mode, notification preferences, editor to open files in. *Accept:* a new session uses the defaults without extra clicks.
 - **SET-005** · v1 · **Backup and export of config without secrets.** *Accept:* restoring the export on a fresh install recreates all providers (prompting for keys) and profiles.
-- **SET-006** · later · **Keyboard shortcut customization.**
+- **SET-006** · v1 · **Keyboard shortcut customization.** *Accept:* the palette, Settings, attention, text size and approval letters can be changed in Settings; a reserved or used key is refused with the reason.
 
 ### Extensibility (EXT)
 

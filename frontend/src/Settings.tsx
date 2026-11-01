@@ -1,4 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
+import ShortcutsEditor from "./ShortcutsEditor.tsx";
+import { bindingOf, keyLabel } from "./shortcuts.ts";
 import { Browser } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
 import { HookTable } from "./Hooks.tsx";
@@ -99,8 +101,14 @@ export default function Settings({ config, providers, environments, profiles, pr
             value={form.ui.fontSize}
             onChange={(e) => setForm({ ...form, ui: { ...form.ui, fontSize: Number(e.target.value) } })}
           />
-          <span className="muted">⌘+ and ⌘- change this from anywhere in the app.</span>
+          <span className="muted">
+            {keyLabel(bindingOf("textLarger"))} and {keyLabel(bindingOf("textSmaller"))} change this from anywhere in the app.
+          </span>
         </label>
+
+        <h3>Keyboard shortcuts</h3>
+        <ShortcutsEditor value={form.ui.shortcuts ?? {}} onChange={(shortcuts) => setForm({ ...form, ui: { ...form.ui, shortcuts } })} />
+        <p className="muted">⌘1 to ⌘9 open the sessions listed first, and ⌘↩, ⌘⇧↩ and ⌘⇧⌫ answer an approval from anywhere; those stay as they are.</p>
 
         <h3>Defaults for new sessions</h3>
         <label>

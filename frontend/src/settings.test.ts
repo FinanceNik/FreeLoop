@@ -26,7 +26,7 @@ test("command-comma opens the settings", () => {
 });
 
 
-const keys = (key: string, more = {}) => ({ key, metaKey: true, ctrlKey: false, altKey: false, ...more });
+const keys = (key: string, more = {}) => ({ key, metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, ...more });
 
 test("the text size shortcuts", () => {
   assert.equal(textSizeAfter(keys("="), 14), 15);

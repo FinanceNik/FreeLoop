@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { screenName } from "./a11y.ts";
+import { ariaKeys, bindingOf, keyLabel, pressed, setBindings } from "./shortcuts.ts";
 import { Browser, Events, Window } from "@wailsio/runtime";
 import {
   CONFIG_EVENT_NAME,
@@ -93,6 +94,7 @@ export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([]);
   const [config, setConfig] = useState<Config | null>(null);
+  setBindings(config?.ui.shortcuts);
   const fontPending = useRef<number | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "none" });
   const mainBox = useRef<HTMLElement>(null);
@@ -389,12 +391,14 @@ export default function App() {
   const listedRef = useRef<Session[]>([]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (STANDALONE || !e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || !/^[0-9]$/.test(e.key)) return;
-      e.preventDefault();
-      if (e.key === "0") {
+      if (STANDALONE) return;
+      if (pressed(e, "attention")) {
+        e.preventDefault();
         setScreen({ kind: "attention" });
         return;
       }
+      if (!e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || !/^[1-9]$/.test(e.key)) return;
+      e.preventDefault();
       const s = listedRef.current[Number(e.key) - 1];
       if (s) openRef.current(s.id);
     };
@@ -424,7 +428,7 @@ export default function App() {
   const paletteRef = useRef<() => PaletteItem[]>(() => []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || e.key.toLowerCase() !== "k") return;
+      if (!pressed(e, "palette")) return;
       e.preventDefault();
       setPalette((open) => (open ? null : paletteRef.current()));
     };
@@ -598,7 +602,7 @@ export default function App() {
     const items: PaletteItem[] = [
       ...collect(),
       { id: "app:new", title: "New session", group: "Action", keywords: "create start", run: () => setScreen({ kind: "new" }) },
-      page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: "⌘0", detail: attentionCount ? `${attentionCount} waiting` : undefined }),
+      page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: keyLabel(bindingOf("attention")), detail: attentionCount ? `${attentionCount} waiting` : undefined }),
       page("board", "Board", () => setScreen({ kind: "board" }), { keywords: "cards overview columns kanban" }),
       page("providers", "Providers", () => setScreen({ kind: "providers" }), { keywords: "api keys models" }),
       page("profiles", "Profiles", () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
@@ -707,8 +711,8 @@ export default function App() {
           <button
             className={`attention-link ${attentionCount > 0 ? "attention-link-on" : ""}`}
             aria-current={screen.kind === "attention" ? "page" : undefined}
-            aria-keyshortcuts="Meta+0"
-            title="⌘0"
+            aria-keyshortcuts={ariaKeys(bindingOf("attention"))}
+            title={keyLabel(bindingOf("attention"))}
             onClick={() => {
               refreshAttention();
               setScreen({ kind: "attention" });
@@ -915,12 +919,12 @@ export default function App() {
             <button
               className="settings-link"
               aria-current={inSettings(screen.kind) ? "page" : undefined}
-              aria-keyshortcuts="Meta+,"
+              aria-keyshortcuts={ariaKeys(bindingOf("settings"))}
               onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen({ kind: "settings" }))}
             >
               <Icon name="general" />
               Settings
-              <kbd aria-hidden="true">⌘,</kbd>
+              <kbd aria-hidden="true">{keyLabel(bindingOf("settings"))}</kbd>
             </button>
           </footer>
         </aside>

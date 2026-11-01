@@ -3521,3 +3521,40 @@ table.hooks .hook-command {
   border-radius: var(--r-sm);
   background: #fff;
 }
+
+/* Keyboard shortcuts (SET-006). */
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shortcut-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 4px 0;
+}
+
+.shortcut-list .error-text {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.shortcut-key {
+  min-width: 72px;
+  font-family: var(--mono);
+}
+
+.shortcut-listening {
+  border-color: var(--focus);
+}
+
+/* The MCP registry (MCP-009): a long description needs the card's width. */
+.registry-list li {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
