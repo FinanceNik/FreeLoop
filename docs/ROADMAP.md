@@ -224,6 +224,16 @@ The rest of the comparison with other agent apps, apart from the side-by-side pa
 2. **Review by a second agent (HRN-018).** *Built 2026-11-01; tested with a scripted reviewer and checked in the browser with the demo provider.* The Diff tab's "Ask for a review" picks a profile; `Engine.RequestReview` makes a session in plan mode, a child of the first in the same worktree, tagged `review`, and sends it the diff against the base commit. `Engine.Reviews` lists a session's reviews with their status and reply; "Use these findings" puts the reply in the first session's message box.
 3. **App preview (GUI-020).** *Built 2026-11-01; checked in the browser, and in the packaged app's WebKit with a hostile page in the frame, which is what showed the desktop build needed its own guard on engine calls (see SECURITY.md).* A Preview tab with a sandboxed frame on a `localhost` address, by default the session's `FREELOOP_PORT`, with Reload and Open in browser; `Engine.PortOpen` says when nothing is listening. Rules for the address are pure functions in `frontend/src/preview.ts`.
 
+### Feature order, part 12 (planned 2026-11-01)
+
+What the M3 list still holds and needs no account of the user's.
+
+1. **Verified presets for other agents (HRN-007).** *Built 2026-11-01. `make verify-agents` runs each real agent at its pinned version against a local stand-in for its model: all four ask through the broker, write when allowed, not when denied, and not in plan mode. A real model and a real key are the user's check, as is signing in to Codex with a ChatGPT plan.* Gemini CLI 0.66.0, Codex through `@agentclientprotocol/codex-acp` 2.5.0, goose 1.57.0 and OpenCode 1.19.5. Each maps every mode but plan to the agent's mode that asks, so actions reach the broker. The runs found what reading the docs could not:
+   - goose and Codex default to modes that approve by themselves, and OpenCode needs `OPENCODE_PERMISSION` to ask at all.
+   - A read of a missing file returned a generic error where ACP has "not found" (fixed for every agent), and Gemini CLI still cannot recognize that one, so its preset answers with no content.
+   - Gemini CLI sends `[MODE_UPDATE]` as agent text, which the preset hides.
+   - An agent that switches itself to a mode the preset does not name is told the session's mode again.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, ENV-009 native sandbox, ENV-010 network policy, PRV-013, HRN-015, SKL-009, MCP-009, SET-006, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

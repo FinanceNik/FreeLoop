@@ -42,6 +42,13 @@ type HarnessPreset struct {
 	// (SKL-008): SkillsClaudePlugin passes them as a local plugin folder in
 	// session/new's _meta.claudeCode.options.plugins; empty, not at all.
 	Skills string `yaml:"skills,omitempty" json:"skills"`
+	// HideText lists starts of messages the agent sends for machines, not
+	// people, which the conversation leaves out.
+	HideText []string `yaml:"hideText,omitempty" json:"hideText"`
+	// MissingFileIsEmpty answers an agent's read of a file that is not there
+	// with no content instead of the protocol's "not found", for an agent that
+	// cannot recognize that error when it reads a file before creating it.
+	MissingFileIsEmpty bool `yaml:"missingFileIsEmpty,omitempty" json:"missingFileIsEmpty"`
 	// Builtin is set for presets that ship with the app.
 	Builtin bool `yaml:"-" json:"builtin"`
 }
@@ -71,7 +78,64 @@ func BuiltinPresets() []HarnessPreset {
 		Notes:       "Needs Node.js. Sign in once by running claude in a terminal; Freeloop never sees or stores the login.",
 		Skills:      SkillsClaudePlugin,
 		Builtin:     true,
+	}, {
+		ID:          "gemini-cli",
+		Name:        "Gemini CLI",
+		Description: "Google's agent, with a Gemini API key.",
+		Command:     "npx",
+		Args:        []string{"-y", "@google/gemini-cli@0.66.0", "--acp"},
+		Modes:       askingModes("default", "plan"),
+		Notes:       "Needs Node.js and a Gemini API key: add GEMINI_API_KEY as a secret of the session's environment. Sign-in with a personal Google account no longer works for this agent.",
+		HideText:    []string{"[MODE_UPDATE]"},
+		// 0.66.0 gets the error as a plain object, so its check for one that
+		// means "not found" fails, and it refuses to create the file.
+		MissingFileIsEmpty: true,
+		Builtin:            true,
+	}, {
+		ID:          "codex",
+		Name:        "Codex CLI",
+		Description: "OpenAI's agent, with an API key or your ChatGPT plan.",
+		Command:     "npx",
+		Args:        []string{"-y", "@agentclientprotocol/codex-acp@2.5.0"},
+		// Its read-only mode is the one that asks before an edit, and the app
+		// decides what to allow; its default asks only about what it finds
+		// unsafe.
+		Modes:   askingModes("read-only", "read-only"),
+		Env:     map[string]string{"NO_BROWSER": "1", "DEFAULT_AUTH_REQUEST": `{"methodId":"api-key"}`},
+		Notes:   "Needs Node.js. Add CODEX_API_KEY or OPENAI_API_KEY as a secret of the session's environment, or sign in once by running codex login in a terminal; Freeloop never sees or stores the login.",
+		Builtin: true,
+	}, {
+		ID:          "goose",
+		Name:        "goose",
+		Description: "Block's open-source agent, on the provider you set up for it.",
+		Command:     "goose",
+		Args:        []string{"acp"},
+		// Its default approves every tool call. It has no read-only mode that
+		// keeps reading: plan is chat, with no tools at all.
+		Modes:   askingModes("approve", "chat"),
+		Notes:   "Install it (brew install block-goose-cli; tested with 1.57.0) and choose its provider and key once by running goose configure in a terminal.",
+		Builtin: true,
+	}, {
+		ID:          "opencode",
+		Name:        "OpenCode",
+		Description: "The open-source agent, on the providers you set up for it.",
+		Command:     "npx",
+		Args:        []string{"-y", "opencode-ai@1.19.5", "acp"},
+		Modes:       askingModes("build", "plan"),
+		// Its default allows every tool without asking.
+		Env:     map[string]string{"OPENCODE_PERMISSION": `{"*":"ask"}`},
+		Notes:   "Needs Node.js. Add a provider once by running opencode auth login in a terminal, or add its API key as a secret of the session's environment. Without one it uses OpenCode's own hosted free models, so your prompts and code go there.",
+		Builtin: true,
 	}}
+}
+
+// askingModes maps the app's modes to an agent's: plan to its read-only mode,
+// and all the others to the mode in which it asks before acting, so every
+// action reaches the permission broker, which applies the session's real mode
+// (SEC-003). An agent left to approve its own edits would act out of the
+// app's sight, whichever folder they land in.
+func askingModes(asks, readOnly string) map[string]string {
+	return map[string]string{"ask": asks, "accept_edits": asks, "plan": readOnly, "bypass": asks}
 }
 
 // Validate reports a preset that cannot run.

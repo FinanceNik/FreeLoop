@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -201,5 +202,72 @@ func TestAgentCannotLoosenTheMode(t *testing.T) {
 	s.agentMode(permission.ModePlan)
 	if s.Mode() != permission.ModePlan {
 		t.Error("the agent could not tighten the mode")
+	}
+}
+
+// HRN-007: several of the app's modes can share one of the agent's, and a mode
+// the preset does not name changes nothing.
+func TestAgentReportsItsMode(t *testing.T) {
+	rec := &recorder{}
+	preset := config.HarnessPreset{Name: "Agent", Modes: map[string]string{"ask": "asks", "accept_edits": "asks", "plan": "reads", "bypass": "asks"}}
+	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit}, mode: permission.ModeAcceptEdits, preset: preset}
+	s.agentReported("asks")
+	if s.Mode() != permission.ModeAcceptEdits {
+		t.Errorf("reporting the mode it is in left %s", s.Mode())
+	}
+	s.mode = permission.ModePlan
+	s.agentReported("asks")
+	if s.Mode() != permission.ModePlan {
+		t.Errorf("a loosening report took effect: %s", s.Mode())
+	}
+	s.mode = permission.ModeAsk
+	s.agentReported("reads")
+	if s.Mode() != permission.ModePlan {
+		t.Errorf("tightening left %s", s.Mode())
+	}
+	// With no mapping for it there is no agent to call back, so this ends here.
+	s.preset.Modes = map[string]string{"ask": "asks"}
+	s.mode = permission.ModeAsk
+	s.agentReported("yolo")
+	if s.Mode() != permission.ModeAsk || !strings.Contains(rec.text(event.Notice), "yolo") {
+		t.Errorf("an unnamed mode: %s, %s", s.Mode(), rec.text(event.Notice))
+	}
+}
+
+// HRN-007: a file that is not there is the protocol's "not found", which is
+// what an agent about to create it checks for, and not a failure.
+func TestReadingAMissingFile(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+	env, _ := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root)})
+	rec := &recorder{}
+	broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
+	s := &session{p: harness.Params{SessionID: "x", Broker: broker, Emit: rec.emit}, env: env, mode: permission.ModeAsk, terms: map[string]*terminal{}}
+	_, err := s.ReadTextFile(context.Background(), sdk.ReadTextFileRequest{Path: filepath.Join(env.Root(), "new.txt")})
+	var re *sdk.RequestError
+	if !errors.As(err, &re) || re.Code != resourceNotFound {
+		t.Errorf("reading a missing file: %v", err)
+	}
+	s.preset.MissingFileIsEmpty = true
+	res, err := s.ReadTextFile(context.Background(), sdk.ReadTextFileRequest{Path: filepath.Join(env.Root(), "new.txt")})
+	if err != nil || res.Content != "" {
+		t.Errorf("with MissingFileIsEmpty: %q, %v", res.Content, err)
+	}
+}
+
+// HRN-007: a message an agent sends for machines stays out of the conversation.
+func TestHiddenAgentText(t *testing.T) {
+	rec := &recorder{}
+	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit}, preset: config.HarnessPreset{HideText: []string{"[MODE_UPDATE]"}}}
+	for _, text := range []string{"[MODE_UPDATE] plan", "real words"} {
+		if err := s.SessionUpdate(context.Background(), sdk.SessionNotification{SessionId: "x", Update: sdk.UpdateAgentMessageText(text)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := rec.text(event.AgentMessageChunk)
+	if strings.Contains(got, "MODE_UPDATE") || !strings.Contains(got, "real words") {
+		t.Errorf("conversation = %s", got)
 	}
 }

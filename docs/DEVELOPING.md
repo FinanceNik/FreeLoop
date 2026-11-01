@@ -69,7 +69,13 @@ modes:                            # the app's modes to the agent's session modes
   plan: plan
 notes: Sign in once with `my-agent login` in a terminal.
 skills: claude-plugin             # optional: the agent takes the session's skills as a Claude Code plugin (SKL-008)
+hideText: ["[DEBUG]"]             # optional: starts of agent messages meant for machines, left out of the conversation
+missingFileIsEmpty: true          # optional: for an agent that cannot recognize ACP's "not found" when reading a file it will create
 ```
+
+Read the agent's real mode IDs from its `session/new` reply, not its docs, and choose the mode in which it **asks**, for `accept_edits` and `bypass` too if need be: the broker applies the session's real mode to what it asks, while a mode that approves by itself acts out of the app's sight. `plan` must be a mode that cannot write; with none, leave it out, and the app refuses to use the agent for reviews.
+
+The built-in presets are checked by `make verify-agents`, which runs each real agent at its pinned version on a local stand-in for its model; add a case to `TestPresetScenarios` (`internal/harness/acp/presets_test.go`) with a new one, and rerun it when you change a version.
 
 The agent runs in the session's environment, its file and terminal requests go through the environment and the permission broker like everything else, and it signs in on its own: Freeloop never reads, stores or forwards a vendor's tokens (HRN-008). Presets that ship with the app are in `config.BuiltinPresets`; a file with the same ID replaces one. To test a preset, run the HRN-005 scenario from REQUIREMENTS.md against it; `internal/harness/acp/acptest` is a reference agent for the client's own tests.
 

@@ -10,7 +10,7 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 export CGO_CFLAGS := -O2 -g -mmacosx-version-min=14.0
 export CGO_LDFLAGS := -mmacosx-version-min=14.0
 
-.PHONY: help tools dev build package dmg bindings test test-keychain memcheck frontend-test lint fmt clean
+.PHONY: help tools dev build package dmg bindings test test-keychain verify-agents memcheck frontend-test lint fmt clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -44,6 +44,9 @@ test: ## Run Go engine tests (race detector on) and frontend tests
 
 memcheck: package ## Measure idle memory with ten sessions against the 300 MB budget (NFR-PERF-004; opens the app)
 	scripts/memcheck.sh bin/Freeloop.app/Contents/MacOS/Freeloop 300
+
+verify-agents: ## Run the HRN-005 scenario with each preset's real agent on a local stand-in model (HRN-007; downloads the agents)
+	scripts/verify-agents.sh
 
 test-keychain: ## Run the Keychain backend test against the real login keychain
 	FREELOOP_KEYCHAIN_TEST=1 go test -count=1 -run '^TestKeychain$$' ./internal/platform/darwin/

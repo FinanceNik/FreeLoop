@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"maps"
 	"path/filepath"
@@ -32,6 +33,9 @@ import (
 // StartTimeout bounds starting the agent: spawning, initialize and
 // session/new. npx may download the agent on first use.
 const StartTimeout = 2 * time.Minute
+
+// resourceNotFound is ACP's error code for a file or session that is not there.
+const resourceNotFound = -32002
 
 // Harness runs the agent a preset names.
 type Harness struct {
@@ -123,7 +127,11 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 	ns, err := s.conn.NewSession(ctx, sdk.NewSessionRequest{Cwd: s.env.Root(), McpServers: s.mcpServers(), Meta: s.sessionMeta()})
 	if err != nil {
 		if len(init.AuthMethods) > 0 {
-			err = fmt.Errorf("%w; sign in with the agent's own command first (Freeloop does not handle its login)", err)
+			how := "sign in with the agent's own command first (Freeloop does not handle its login)"
+			if s.preset.Notes != "" {
+				how = s.preset.Notes
+			}
+			err = fmt.Errorf("%w; %s", err, how)
 		}
 		return fail("new session", err)
 	}
@@ -197,6 +205,9 @@ func (s *session) applyMode(ctx context.Context) {
 	m := s.mode
 	s.mu.Unlock()
 	id, ok := s.preset.Modes[string(m)]
+	if s.conn == nil {
+		return // not started
+	}
 	if !ok {
 		if m == permission.ModePlan {
 			s.p.Emit(event.Notice, event.NoticeData{Message: s.preset.Name + " has no plan mode to switch to. What it asks the app is held read-only; tools of its own may still change files."})
@@ -205,6 +216,8 @@ func (s *session) applyMode(ctx context.Context) {
 	}
 	if _, err := s.conn.SetSessionMode(ctx, sdk.SetSessionModeRequest{SessionId: s.id, ModeId: sdk.SessionModeId(id)}); err != nil {
 		log.Printf("acp: set mode %s: %v", id, err)
+		// What holds the agent back is its own mode, so this is the user's to know.
+		s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("%s did not accept its %s mode (%v). What it asks the app still follows the session's mode; tools of its own may not.", s.preset.Name, id, err)})
 	}
 }
 
@@ -219,6 +232,41 @@ func modeLooseness(m permission.Mode) int {
 		return 3
 	}
 	return 1
+}
+
+// agentReported takes the agent's own name for its mode. Several of the app's
+// modes can share one of the agent's, so one that matches the session's mode
+// changes nothing, and otherwise the tightest match counts. A mode the preset
+// does not name is one the app has no terms for, such as one that approves by
+// itself: the agent is told the session's mode again.
+func (s *session) agentReported(id string) {
+	if len(s.preset.Modes) == 0 {
+		return
+	}
+	if s.preset.Modes[string(s.Mode())] == id {
+		return
+	}
+	var found permission.Mode
+	for _, m := range permission.Modes {
+		if s.preset.Modes[string(m)] == id && (found == "" || modeLooseness(m) < modeLooseness(found)) {
+			found = m
+		}
+	}
+	if found != "" {
+		s.agentMode(found)
+		return
+	}
+	s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("%s switched itself to its %s mode, which this app has no name for; the session's mode stays %s.", s.preset.Name, id, s.Mode())})
+	s.restoreMode()
+}
+
+// restoreMode tells the agent the session's mode, outside its notification.
+func (s *session) restoreMode() {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		s.applyMode(ctx)
+	}()
 }
 
 // agentMode takes a mode the agent reports. The mode decides what the
@@ -236,11 +284,7 @@ func (s *session) agentMode(m permission.Mode) {
 		s.mu.Unlock()
 		if refused {
 			s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("The agent tried to change the mode from %s to %s on its own; the mode stays %s.", cur, m, cur)})
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				s.applyMode(ctx)
-			}()
+			s.restoreMode()
 		}
 		return
 	}
@@ -383,18 +427,21 @@ func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) er
 	delete(m, "sessionUpdate")
 	delete(m, "_meta")
 	t := event.Type(typ)
+	if t == event.AgentMessageChunk && len(s.preset.HideText) > 0 {
+		if c, ok := m["content"].(map[string]any); ok {
+			text, _ := c["text"].(string)
+			if slices.ContainsFunc(s.preset.HideText, func(p string) bool { return strings.HasPrefix(text, p) }) {
+				return nil
+			}
+		}
+	}
 	switch {
 	case t == event.UsageUpdate:
 		return nil
 	case t == event.CurrentModeUpdate:
 		// The agent's mode, back in the app's terms when the preset maps it.
 		id, _ := m["currentModeId"].(string)
-		for app, agent := range s.preset.Modes {
-			if agent == id {
-				s.agentMode(permission.Mode(app))
-				break
-			}
-		}
+		s.agentReported(id)
 		return nil
 	case t == event.ToolCall:
 		kind, _ := m["kind"].(string)
@@ -542,6 +589,13 @@ func (s *session) ReadTextFile(ctx context.Context, r sdk.ReadTextFileRequest) (
 		}
 	}
 	b, err := s.env.FS().ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		if s.preset.MissingFileIsEmpty {
+			return sdk.ReadTextFileResponse{}, nil
+		}
+		// In the protocol's terms: an agent can tell that from a failure.
+		return sdk.ReadTextFileResponse{}, &sdk.RequestError{Code: resourceNotFound, Message: "Resource not found", Data: map[string]any{"path": r.Path}}
+	}
 	if err != nil {
 		return sdk.ReadTextFileResponse{}, err
 	}
