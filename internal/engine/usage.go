@@ -75,7 +75,10 @@ type UsageRow struct {
 	CostOutput     float64 `json:"costOutput"`
 	CostCacheRead  float64 `json:"costCacheRead"`
 	CostCacheWrite float64 `json:"costCacheWrite"`
-	Priced         bool    `json:"priced"`
+	// SavedByCache is what the cache reads would have cost as plain input
+	// tokens, less what they did.
+	SavedByCache float64 `json:"savedByCache"`
+	Priced       bool    `json:"priced"`
 }
 
 // UsageReport is the usage the analytics view works from (PRV-008): one row
@@ -111,6 +114,7 @@ func (e *Engine) UsageReport(ctx context.Context, days int) (UsageReport, error)
 			r.CostOutput = p.Cost(0, u.OutputTokens, 0, 0)
 			r.CostCacheRead = p.Cost(0, 0, u.CacheReadTokens, 0)
 			r.CostCacheWrite = p.Cost(0, 0, 0, u.CacheWriteTokens)
+			r.SavedByCache = max(0, p.Cost(u.CacheReadTokens, 0, 0, 0)-r.CostCacheRead)
 		}
 		rep.Rows = append(rep.Rows, r)
 	}

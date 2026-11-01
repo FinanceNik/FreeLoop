@@ -468,6 +468,21 @@ var migrations = []string{
 	// block of ports (SES-016).
 	`ALTER TABLE projects ADD COLUMN worktree_scripts TEXT NOT NULL DEFAULT '';
 	ALTER TABLE sessions ADD COLUMN port_base INTEGER NOT NULL DEFAULT 0;`,
+	// Activity per hour and session (GUI-021), folded from the transcripts
+	// up to activity_seq, so existing sessions fill it in when first asked.
+	`CREATE TABLE activity (
+		day        TEXT NOT NULL,
+		hour       INTEGER NOT NULL,
+		session_id TEXT NOT NULL,
+		kind       TEXT NOT NULL,
+		name       TEXT NOT NULL,
+		count      INTEGER NOT NULL,
+		failures   INTEGER NOT NULL,
+		millis     INTEGER NOT NULL,
+		PRIMARY KEY (day, hour, session_id, kind, name)
+	);
+	CREATE INDEX activity_day ON activity (day);
+	ALTER TABLE sessions ADD COLUMN activity_seq INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.
@@ -516,6 +531,9 @@ func (s *Store) DeleteSession(ctx context.Context, sid string) error {
 	}
 	if err := deleteIndex(ctx, s.db, sid); err != nil {
 		return fmt.Errorf("store: delete search index: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM activity WHERE session_id = ? AND kind = 'asked'`, sid); err != nil {
+		return fmt.Errorf("store: delete asked commands: %w", err)
 	}
 	if err := os.RemoveAll(s.sessionDir(sid)); err != nil {
 		return fmt.Errorf("store: remove transcript: %w", err)

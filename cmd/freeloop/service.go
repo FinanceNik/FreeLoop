@@ -46,6 +46,16 @@ func (s *EngineService) RunSchedule(ctx context.Context, id string) (string, err
 	return s.eng.RunSchedule(ctx, id)
 }
 
+// ActivityReport returns what the agents did, for the analytics view (GUI-021).
+func (s *EngineService) ActivityReport(ctx context.Context, days int) (engine.ActivityReport, error) {
+	return s.eng.ActivityReport(ctx, days)
+}
+
+// AllowRepeated makes a rule from a question the user keeps answering (GUI-021).
+func (s *EngineService) AllowRepeated(tool, command, path string) error {
+	return s.eng.AllowRepeated(tool, command, path)
+}
+
 // UsageReport returns the usage rows the analytics view groups (PRV-008).
 func (s *EngineService) UsageReport(ctx context.Context, days int) (engine.UsageReport, error) {
 	return s.eng.UsageReport(ctx, days)

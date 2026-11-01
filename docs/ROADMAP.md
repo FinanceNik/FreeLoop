@@ -297,6 +297,10 @@ What the open "later" list held that follows from the sandbox or needs no accoun
 2. **Browsing an MCP registry (MCP-009).** *Tested against a stand-in and in the browser against the official registry.* Nothing connects until the user chooses an address on that page, which keeps to the rule that outbound traffic goes to endpoints the user set. A result only fills in the add-server form, pinned to its version, and the server starts after the usual confirmation of its exact command (MCP-005). Only npm and PyPI packages and https Streamable HTTP remotes can be added; the rest are named. Identifiers and versions that are not plain are refused, and secrets go to the Keychain.
 3. **Shortcuts (SET-006).** *Checked in the browser with real key presses.* Settings changes the palette, Settings, Needs attention, text size and the approval letters; `ui.shortcuts` in `config.yaml` holds what changed. macOS's and the app's fixed keys are refused, and so is a key already in use.
 
+### Feature order, part 15 (built 2026-11-01)
+
+1. **Deeper analytics (GUI-021).** *Built 2026-11-01; checked in the browser in both themes, the rule action and the counting against real demo transcripts, the charts on seeded scratch history, since no real history of weeks exists here.* The usage page gets the tabs Tokens and cost, Activity, Approvals and Efficiency, and filters for project, provider or agent, model and tag across all of them. The engine folds each session's transcript into counts per hour (`internal/engine/activity.go`, the `activity` table) when the page asks, a session at a time, only for sessions that moved on, so a running turn pays nothing and past sessions count from the first look. The insights are pure (`frontend/src/activity.ts`). Not in: an activity CSV (Export CSV still covers tokens and cost), and turns per model are shared out by model calls rather than recorded, since the transcript does not say which model a turn used.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
