@@ -79,6 +79,16 @@ The built-in presets are checked by `make verify-agents`, which runs each real a
 
 The agent runs in the session's environment, its file and terminal requests go through the environment and the permission broker like everything else, and it signs in on its own: Freeloop never reads, stores or forwards a vendor's tokens (HRN-008). Presets that ship with the app are in `config.BuiltinPresets`; a file with the same ID replaces one. To test a preset, run the HRN-005 scenario from REQUIREMENTS.md against it; `internal/harness/acp/acptest` is a reference agent for the client's own tests.
 
+## Making a release
+
+`make release` writes `bin/release`: the DMG, its bill of materials (`Freeloop.sbom.cdx.json`, CycloneDX 1.6), the tools it was built with (`BUILDINFO.txt`), and checksums (`SHA256SUMS`, and `APP-FILES.sha256` for every file in the bundle).
+
+`make verify-repro REF=<tag>` builds a commit twice from clean clones and compares every file; CI does this for tags. To check a release yourself, check out its tag and install what `BUILDINFO.txt` names: the same Go (`go.mod`'s toolchain fetches it), Node and Xcode command line tools, since the linker and the SDK shape the binary. Then run `make package` and compare `bin/Freeloop.app` with `APP-FILES.sha256`.
+
+Two things differ by design. A DMG is stamped with the time, so compare the app inside it. A signature from a Developer ID (OQ-009) is dated, so remove it first (`codesign --remove-signature`) and sign both ad hoc.
+
+The bill lists what is in the app: Go modules from the binary's build information, and the frontend's packages from its lockfile without those only its build uses. It does not list the agents a preset downloads when you use it (their versions are in `internal/config/presets.go`), nor the operating system's frameworks.
+
 ## Writing your own harness
 
 To build an agent of your own rather than wrap an existing one (HRN-011, EXT-003), start from a template: Profiles → "New harness…", give it a name, pick Python (standard library only) or Go (on `github.com/coder/acp-go-sdk`) and a folder. Freeloop writes the agent into `<folder>/<name>/`, registers a preset that runs it (`python3 <dir>/agent.py`, or `go -C <dir> run .`) and opens the agent file in your editor. Then:

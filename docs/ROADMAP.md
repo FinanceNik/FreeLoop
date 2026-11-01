@@ -233,6 +233,11 @@ What the M3 list still holds and needs no account of the user's.
    - A read of a missing file returned a generic error where ACP has "not found" (fixed for every agent), and Gemini CLI still cannot recognize that one, so its preset answers with no content.
    - Gemini CLI sends `[MODE_UPDATE]` as agent text, which the preset hides.
    - An agent that switches itself to a mode the preset does not name is told the session's mode again.
+2. **What a release can be checked against (SEC-012, NFR-SEC-004, the parts needing no account).** *Built 2026-11-01. `make verify-repro` on 6dfb484: two cold builds from clean clones at different paths, with separate Go caches, matched in all 6 compared files (the five of the bundle, signature included, and the SBOM). Both ran on one Mac; a build on another with the same tools is the user's check, and the signed, notarized half waits on OQ-009.*
+   - *SBOM:* `make release` writes `bin/release` with the DMG, a CycloneDX 1.6 bill of materials (`internal/sbom`, `cmd/freeloop-sbom`, from the binary's own build information and the frontend's lockfile), `BUILDINFO.txt` and checksums. No new dependency.
+   - *Pins:* an exact `toolchain` in `go.mod`, CI's actions pinned to commits, and `internal/archtest/pins_test.go` holding those, npm's exact versions and checksums, and a budget of four shipped npm packages. `make verify-deps` checks modules against `go.sum` in CI.
+   - *The build:* no longer runs `go mod tidy`, which could rewrite what it builds from; it fails when the module needs tidying.
+3. **Sandboxed execution (SEC-011, NFR-SEC-005).** *Met by the Docker environment (ENV-005), as their text says; the native sandbox stays ENV-009.*
 
 ## Later (unscheduled)
 
