@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Browser } from "@wailsio/runtime";
-import { EngineService, type MCPServer, type MCPServerInfo } from "./api.ts";
+import { EngineService, type MCPServer, type MCPServerInfo, type RegistryOption, type RegistryServer } from "./api.ts";
+import McpRegistry from "./McpRegistry.tsx";
 
 // MCP servers (MCP-001, MCP-005): stdio commands and Streamable HTTP
 // endpoints in mcp.yaml. A server runs only after the user approves exactly
@@ -54,6 +55,37 @@ function toForm(s?: MCPServerInfo): Form {
   };
 }
 
+// registryForm fills in the add-server form from a registry's listing. Values it
+// marks secret become secrets to fill in, which go to the Keychain.
+export function registryForm(server: RegistryServer, option: RegistryOption): Form {
+  const plain = (option.transport === "http" ? (option.headers ?? []) : (option.variables ?? [])).filter((v) => !v.secret && (v.required || v.default));
+  const secret = (option.transport === "http" ? (option.headers ?? []) : (option.variables ?? [])).filter((v) => v.secret);
+  const sep = option.transport === "http" ? ": " : "=";
+  return {
+    ...toForm(),
+    id: registryId(server.name),
+    name: server.title || server.name,
+    transport: option.transport,
+    command: option.command,
+    args: (option.args ?? []).join("\n"),
+    url: option.url,
+    env: option.transport === "http" ? "" : plain.map((v) => `${v.name}${sep}${v.default}`).join("\n"),
+    headers: option.transport === "http" ? plain.map((v) => `${v.name}${sep}${v.default}`).join("\n") : "",
+    added: secret.map((v) => ({ name: v.name, value: "" })),
+  };
+}
+
+// registryId makes an ID from a registry name such as io.github.acme/files.
+export function registryId(name: string): string {
+  const last = name.slice(name.lastIndexOf("/") + 1);
+  return (
+    last
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "server"
+  );
+}
+
 function pairs(text: string, sep: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of text.split("\n")) {
@@ -75,6 +107,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
   const [servers, setServers] = useState<MCPServerInfo[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [browsing, setBrowsing] = useState(false);
   const load = () =>
     EngineService.ListMCPServers()
       .then((l) => setServers(l ?? []))
@@ -130,6 +163,19 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
       })
       .catch(onError);
   };
+
+  if (browsing && !form) {
+    return (
+      <McpRegistry
+        onClose={() => setBrowsing(false)}
+        onError={onError}
+        onPick={(server, option) => {
+          setBrowsing(false);
+          setForm(registryForm(server, option));
+        }}
+      />
+    );
+  }
 
   if (form) {
     const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm({ ...form, [k]: v });
@@ -346,6 +392,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
         <button className="primary" onClick={() => setForm(toForm())}>
           Add a server
         </button>
+        <button onClick={() => setBrowsing(true)}>Browse a registry…</button>
         <button onClick={onImport}>Import from Claude Code…</button>
       </div>
     </section>

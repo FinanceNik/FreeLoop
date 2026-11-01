@@ -325,6 +325,17 @@ func (s *EngineService) ListMCPServers() []engine.MCPServerInfo {
 	return s.eng.ListMCPServers()
 }
 
+// SearchMCPRegistry returns a page of a server registry (MCP-009).
+func (s *EngineService) SearchMCPRegistry(ctx context.Context, query, cursor string) (engine.RegistryPage, error) {
+	return s.eng.SearchMCPRegistry(ctx, query, cursor)
+}
+
+func (s *EngineService) MCPRegistryAddress() string { return s.eng.MCPRegistryAddress() }
+
+func (s *EngineService) SetMCPRegistryAddress(address string) error {
+	return s.eng.SetMCPRegistryAddress(address)
+}
+
 func (s *EngineService) SaveMCPServer(req engine.SaveMCPServerRequest) (engine.MCPServerInfo, error) {
 	return s.eng.SaveMCPServer(req)
 }

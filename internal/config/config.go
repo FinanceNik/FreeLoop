@@ -66,6 +66,14 @@ type Config struct {
 	Filters []Filter `yaml:"filters,omitempty" json:"filters"`
 	// Web holds the web_search endpoint (HRN-017, OQ-025).
 	Web Web `yaml:"web,omitempty" json:"web"`
+	// MCP holds the server registry to browse (MCP-009).
+	MCP MCPSettings `yaml:"mcp,omitempty" json:"mcp"`
+}
+
+// MCPSettings are settings for MCP as a whole; the servers are in mcp.yaml.
+type MCPSettings struct {
+	// RegistryURL is a server registry to browse; empty, nothing connects.
+	RegistryURL string `yaml:"registryURL,omitempty" json:"registryURL"`
 }
 
 // Web settings for the built-in harness's web_search tool.
@@ -136,6 +144,9 @@ type UI struct {
 	Theme string `yaml:"theme" json:"theme"`
 	// FontSize is the base font size in points, 11 to 20.
 	FontSize int `yaml:"fontSize,omitempty" json:"fontSize"`
+	// Shortcuts are the user's changes to the app's keyboard shortcuts, by name
+	// (SET-006). A name left out keeps its default.
+	Shortcuts map[string]string `yaml:"shortcuts,omitempty" json:"shortcuts"`
 	// Onboarded is set once the first-run guide was finished or skipped
 	// (GUI-010).
 	Onboarded bool `yaml:"onboarded,omitempty" json:"onboarded"`
