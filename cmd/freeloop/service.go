@@ -122,6 +122,21 @@ func (s *EngineService) KeepCompare(ctx context.Context, tag, sessionID string) 
 // SetWebSearchKey keeps the search endpoint's key in the Keychain (HRN-017).
 func (s *EngineService) SetWebSearchKey(key string) error { return s.eng.SetWebSearchKey(key) }
 
+// RequestReview sends a session's changes to another profile (HRN-018).
+func (s *EngineService) RequestReview(ctx context.Context, req engine.ReviewRequest) (session.Session, error) {
+	return s.eng.RequestReview(ctx, req)
+}
+
+// Reviews lists a session's reviews.
+func (s *EngineService) Reviews(ctx context.Context, sessionID string) ([]engine.ReviewInfo, error) {
+	return s.eng.Reviews(ctx, sessionID)
+}
+
+// ReviewFindings writes a reviewer's reply as a message.
+func (s *EngineService) ReviewFindings(ctx context.Context, reviewerID string) (string, error) {
+	return s.eng.ReviewFindings(ctx, reviewerID)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

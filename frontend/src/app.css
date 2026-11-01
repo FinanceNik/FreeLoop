@@ -3426,3 +3426,37 @@ table.hooks .hook-command {
 .todo-in_progress {
   font-weight: 600;
 }
+
+/* Review by a second agent (HRN-018). */
+.agent-review input {
+  flex: 1;
+  min-width: 140px;
+}
+
+.agent-review-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-review-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.agent-review-reply {
+  margin: 0;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 200px;
+  overflow: auto;
+}

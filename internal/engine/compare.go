@@ -190,6 +190,11 @@ func (e *Engine) diffStat(ctx context.Context, ses session.Session) (files, adde
 
 // lastReply is the end of the agent's last message in a session.
 func (e *Engine) lastReply(ctx context.Context, sid string) string {
+	return tail(e.fullReply(ctx, sid), 800)
+}
+
+// fullReply is the agent's last message in a session.
+func (e *Engine) fullReply(ctx context.Context, sid string) string {
 	evs, err := e.store.Events(ctx, sid, 0)
 	if err != nil {
 		return ""
@@ -217,7 +222,7 @@ func (e *Engine) lastReply(ctx context.Context, sid string) string {
 		last.Reset()
 		last.WriteString(cur.String())
 	}
-	return tail(strings.TrimSpace(last.String()), 800)
+	return strings.TrimSpace(last.String())
 }
 
 // KeepCompare keeps one run of a comparison and archives the others.

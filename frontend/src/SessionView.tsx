@@ -1367,7 +1367,7 @@ const SESSION_URI = "freeloop://session/";
 // openSessionEvent asks the app to open a session, from anywhere in the
 // view.
 export const OPEN_SESSION_DOM_EVENT = "freeloop-open-session";
-function openSessionEvent(sid: string) {
+export function openSessionEvent(sid: string) {
   window.dispatchEvent(new CustomEvent(OPEN_SESSION_DOM_EVENT, { detail: sid }));
 }
 

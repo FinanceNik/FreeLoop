@@ -6,6 +6,7 @@ import type { FileChange } from "./transcript.ts";
 import { showTool } from "./SessionPanel.tsx";
 import { usePaletteActions } from "./Palette.tsx";
 import PullRequest from "./PullRequest.tsx";
+import AgentReview from "./AgentReview.tsx";
 import type { PaletteItem } from "./palette.ts";
 
 // DiffPanel is the Diff tab of the right panel (GUI-005): the files that
@@ -265,6 +266,7 @@ export default function DiffPanel({ session, gitKey, agentEdits, onReview, onErr
         </p>
       )}
       <p className="muted">Commits from the panel do not run git hooks.</p>
+      {files.length > 0 && !session.parentId && <AgentReview session={session} gitKey={gitKey} onMessage={onReview} onError={onError} />}
       <PullRequest session={session} gitKey={gitKey} onMessage={onReview} onError={onError} />
     </div>
   );
