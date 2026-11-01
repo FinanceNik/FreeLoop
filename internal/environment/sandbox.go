@@ -54,6 +54,9 @@ type Confinement struct {
 	ReadAlways []string
 	Network    Network
 	ReadOnly   bool
+	// Certificates lets commands ask the system to verify TLS certificates, as
+	// Go does, for an environment that can reach listed hosts (ENV-010).
+	Certificates bool
 }
 
 // Confiner wraps a command line so that it runs confined. An error means it
@@ -69,6 +72,11 @@ type SandboxOptions struct {
 	// Env replaces, for confined commands only, the variables that name caches
 	// and temp files, so nothing is written where the user's own tools read.
 	Env map[string]string
+	// NetworkEnv goes only with commands that have the sandbox's own network,
+	// not those given NetworkAll: the variables of an egress proxy (ENV-010).
+	NetworkEnv map[string]string
+	// Reach says in words where commands can connect, for the agent.
+	Reach string
 	// Live adds what can change during a session: the deny rules.
 	Live func(*Confinement)
 	// Probe is a path a confined command must not be able to create.
@@ -106,7 +114,32 @@ func (l *Local) confined(spec ExecSpec, argv []string) ([]string, map[string]str
 	if err != nil {
 		return nil, nil, fmt.Errorf("the sandbox cannot run this command, so it did not run: %w", err)
 	}
-	return out, l.sandbox.Env, nil
+	env := maps.Clone(l.sandbox.Env)
+	if c.Network != NetworkAll && len(l.sandbox.NetworkEnv) > 0 {
+		if env == nil {
+			env = map[string]string{}
+		}
+		maps.Copy(env, l.sandbox.NetworkEnv)
+	}
+	return out, env, nil
+}
+
+// SandboxReach says where this environment's commands can connect.
+func SandboxReach(env Environment) string {
+	if l, ok := env.(*Local); ok && l.sandbox != nil && l.sandbox.Reach != "" {
+		return l.sandbox.Reach
+	}
+	return "only this Mac's localhost"
+}
+
+// ProxyEnv is what points the usual tools at an egress proxy. Node needs asking,
+// and npm has its own names. A tool that ignores all of these gets no connection.
+func ProxyEnv(proxy string) map[string]string {
+	env := map[string]string{"NODE_USE_ENV_PROXY": "1", "npm_config_proxy": proxy, "npm_config_https_proxy": proxy, "PIP_PROXY": proxy, "NO_PROXY": "localhost,127.0.0.1,::1", "no_proxy": "localhost,127.0.0.1,::1"}
+	for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
+		env[k] = proxy
+	}
+	return env
 }
 
 // ConfineCommand returns a command line confined for a terminal that runs one

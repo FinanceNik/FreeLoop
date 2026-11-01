@@ -343,7 +343,7 @@ func publicClient() *http.Client {
 				return c, nil
 			}
 		}
-		if ap, err := netip.ParseAddrPort(c.RemoteAddr().String()); err == nil && privateAddr(ap.Addr()) {
+		if ap, err := netip.ParseAddrPort(c.RemoteAddr().String()); err == nil && netguard.PrivateAddr(ap.Addr()) {
 			c.Close()
 			return nil, fmt.Errorf("refused %s: this request may not reach a private address", addr)
 		}
@@ -380,7 +380,7 @@ func hostIsPrivate(host string) bool {
 		return false
 	}
 	for _, ip := range ips {
-		if privateAddr(ip) {
+		if netguard.PrivateAddr(ip) {
 			return true
 		}
 	}
@@ -392,13 +392,7 @@ func privateHost(host string) bool {
 		return true
 	}
 	ip, err := netip.ParseAddr(host)
-	return err == nil && privateAddr(ip)
-}
-
-func privateAddr(ip netip.Addr) bool {
-	ip = ip.Unmap()
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() ||
-		netip.MustParsePrefix("100.64.0.0/10").Contains(ip)
+	return err == nil && netguard.PrivateAddr(ip)
 }
 
 // webPage reports an https address, or an http one on this Mac.

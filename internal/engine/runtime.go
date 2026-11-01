@@ -59,6 +59,8 @@ type runtime struct {
 	// again, and a caller that fetched it earlier fetches a new one.
 	stopped bool
 	cancel  context.CancelFunc
+	// closeEgress stops the session's proxy to its listed hosts (ENV-010).
+	closeEgress func()
 	// handoff goes with the session's first prompt (HRN-012).
 	handoff *harness.Resource
 	// turn is the running turn's context, which Stop cancels; hooks run
@@ -82,6 +84,9 @@ func (r *runtime) stop() {
 	}
 	if r.hs != nil {
 		r.hs.Close()
+	}
+	if r.closeEgress != nil {
+		r.closeEgress()
 	}
 	// A session's container stops with it and starts again on its next
 	// prompt.
@@ -172,19 +177,21 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	// An external agent that takes skills gets the session's (SKL-008).
 	plugin, pluginDir := e.sessionPlugin(sid, preset, project, prof)
 	var env environment.Environment = host
+	closeEgress := func() {}
 	if envCfg.Kind == string(environment.KindDocker) {
 		if env, err = e.dockerEnv(ctx, ses, project, envCfg, vars, host, pluginDir); err != nil {
 			return nil, err
 		}
 	} else if envCfg.SandboxOn() {
-		sandboxed, err := e.sandboxEnv(ctx, ses, envCfg, vars)
+		sandboxed, closeIt, err := e.sandboxEnv(ctx, ses, envCfg, vars)
 		if err != nil {
 			return nil, err
 		}
 		if err := e.startSandbox(ctx, sid, sandboxed); err != nil {
+			closeIt()
 			return nil, err
 		}
-		env = sandboxed
+		env, closeEgress = sandboxed, closeIt
 	}
 	// A container started for a runtime that then fails to start stops
 	// again instead of running on.
@@ -193,6 +200,9 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		e.mu.Lock()
 		inUse := e.runtimes[sid] != nil
 		e.mu.Unlock()
+		if !ready && !inUse {
+			closeEgress()
+		}
 		if d, ok := env.(*environment.Docker); ok && !ready && !inUse {
 			sctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
@@ -204,7 +214,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
-	r := &runtime{env: env, host: host, base: ses.BaseCommit, sid: sid, harnessID: ses.HarnessID, projectID: ses.ProjectID, profileID: ses.ProfileID, handoff: pendingHandoff(events)}
+	r := &runtime{env: env, host: host, closeEgress: closeEgress, base: ses.BaseCommit, sid: sid, harnessID: ses.HarnessID, projectID: ses.ProjectID, profileID: ses.ProfileID, handoff: pendingHandoff(events)}
 	if preset.Watch != "" {
 		r.agentFiles = config.DirFingerprint(preset.Watch)
 	}

@@ -54,8 +54,12 @@ type Environment struct {
 // Sandbox is how a local environment's commands are confined.
 type Sandbox struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
-	// Network is localhost (the default) or none.
+	// Network is localhost (the default), none, or hosts: localhost and the
+	// hosts listed in Hosts (ENV-010).
 	Network string `yaml:"network,omitempty" json:"network"`
+	// Hosts are names such as registry.npmjs.org or *.github.com, with
+	// :port for a port other than 80 and 443.
+	Hosts []string `yaml:"hosts,omitempty" json:"hosts"`
 	// Read and Write are more folders the commands can reach, absolute or
 	// under ~/. The never-readable locations stay closed whatever these say.
 	Read  []string `yaml:"read,omitempty" json:"read"`
@@ -64,6 +68,10 @@ type Sandbox struct {
 
 // SandboxOn reports whether the environment confines its commands.
 func (e Environment) SandboxOn() bool { return e.Sandbox != nil && e.Sandbox.Enabled }
+
+// sandboxHost is a name with at least two labels, or a wildcard over one; a
+// wildcard alone would be no list at all.
+var sandboxHost = regexp.MustCompile(`^(\*\.)?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:[0-9]{1,5})?$`)
 
 var varName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
@@ -85,8 +93,15 @@ func (e Environment) Validate() error {
 		switch {
 		case e.Kind != "local" && e.Sandbox.Enabled:
 			return errors.New("sandbox: only a local environment has one; a docker environment has its container")
-		case e.Sandbox.Network != "" && e.Sandbox.Network != "localhost" && e.Sandbox.Network != "none":
-			return fmt.Errorf("sandbox: network %q must be localhost or none", e.Sandbox.Network)
+		case e.Sandbox.Network != "" && e.Sandbox.Network != "localhost" && e.Sandbox.Network != "none" && e.Sandbox.Network != "hosts":
+			return fmt.Errorf("sandbox: network %q must be localhost, none or hosts", e.Sandbox.Network)
+		case e.Sandbox.Network == "hosts" && len(e.Sandbox.Hosts) == 0:
+			return errors.New("sandbox: network hosts needs at least one host")
+		}
+		for _, h := range e.Sandbox.Hosts {
+			if !sandboxHost.MatchString(h) {
+				return fmt.Errorf("sandbox: %q is not a host name such as registry.npmjs.org or *.github.com", h)
+			}
 		}
 		for _, p := range slices.Concat(e.Sandbox.Read, e.Sandbox.Write) {
 			if p == "/" || p == "~" || p == "~/" || (!strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "~/")) {

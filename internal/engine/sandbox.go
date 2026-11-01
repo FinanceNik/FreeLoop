@@ -3,12 +3,14 @@ package engine
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
@@ -43,24 +45,53 @@ var sandboxProtected = []string{
 }
 
 // sandboxEnv returns the session's environment confined as its settings say.
-func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config.Environment, vars map[string]string) (*environment.Local, error) {
+func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config.Environment, vars map[string]string) (*environment.Local, func(), error) {
 	root := ses.WorkRoot()
 	host, err := e.localEnv(root, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	root = host.Root()
 	home := environment.Canonical(e.home)
 	cacheBase := filepath.Join(home, "Library", "Caches", "Freeloop")
 	cache, tmp, cacheEnv, err := environment.SandboxCaches(filepath.Join(cacheBase, "sandbox", cmp.Or(ses.ProjectID, "default")))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	c := environment.Confinement{
 		Home: home, Write: []string{root}, Scratch: []string{cache, tmp, "/private/tmp"},
 		NoAccess:   e.broker.Policy().NeverRead(),
 		ReadAlways: []string{filepath.Join(environment.Canonical(e.dataDir), config.SkillsDir)},
 		Network:    environment.Network(cmp.Or(cfg.Sandbox.Network, string(environment.NetworkLocalhost))),
+	}
+	// The sandbox still lets commands reach only this Mac; the listed hosts are
+	// through a proxy here, which refuses the rest (ENV-010).
+	closeEgress := func() {}
+	var networkEnv map[string]string
+	reach := ""
+	switch cfg.Sandbox.Network {
+	case "none":
+		reach = "nothing, not even localhost"
+	case "hosts":
+		c.Network, c.Certificates = environment.NetworkLocalhost, true
+		sid := ses.ID
+		egress, err := netguard.StartEgress(cfg.Sandbox.Hosts, func(h string) {
+			e.emit(sid, event.Notice, event.NoticeData{Message: fmt.Sprintf("A command tried to reach %s, which the sandbox's list of hosts does not include. Add it in the environment's settings to allow it.", h)})
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		e.remember(egress.Token())
+		closeEgress = egress.Close
+		networkEnv = environment.ProxyEnv(egress.URL())
+		// Fetching means writing where a package manager keeps its downloads,
+		// which the user's own builds read, so this project gets its own. Go can
+		// still take what the user already has, without the network.
+		networkEnv["GOMODCACHE"] = filepath.Join(cache, "go-mod")
+		networkEnv["GOPROXY"] = "file://" + filepath.Join(home, "go", "pkg", "mod", "cache", "download") + ",https://proxy.golang.org"
+		networkEnv["GOFLAGS"] = "-modcacherw"
+		networkEnv["CARGO_HOME"] = filepath.Join(cache, "cargo")
+		reach = "localhost and these hosts, through a proxy the usual tools pick up by themselves: " + strings.Join(cfg.Sandbox.Hosts, ", ")
 	}
 	for _, p := range sandboxTools {
 		c.Read = append(c.Read, filepath.Join(home, filepath.FromSlash(p)))
@@ -76,10 +107,10 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 	}
 	c.Protected = append(c.Protected, e.gitProtected(ctx, host, &c)...)
 	sid := ses.ID
-	return environment.NewLocal(environment.LocalOptions{
+	env, err := environment.NewLocal(environment.LocalOptions{
 		ID: cfg.ID, Root: root, Env: vars, Guard: e.broker.Policy().Guard(root),
 		Sandbox: &environment.SandboxOptions{
-			Confiner: e.confiner, Base: c, Env: cacheEnv,
+			Confiner: e.confiner, Base: c, Env: cacheEnv, NetworkEnv: networkEnv, Reach: reach,
 			Probe: filepath.Join(cacheBase, ".sandbox-probe"),
 			Live: func(c *environment.Confinement) {
 				rules, err := e.rules.Rules(sid)
@@ -92,6 +123,11 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 			},
 		},
 	})
+	if err != nil {
+		closeEgress()
+		return nil, nil, err
+	}
+	return env, closeEgress, nil
 }
 
 // gitProtected keeps a repository's config and hooks out of reach, as gitMounts

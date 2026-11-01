@@ -203,7 +203,16 @@ func TestSandboxSettings(t *testing.T) {
 	if err != nil || info.Sandbox == nil || info.Sandbox.Network != "none" {
 		t.Fatalf("saved = %+v, %v", info, err)
 	}
-	for _, bad := range []config.Sandbox{{Enabled: true, Network: "everywhere"}, {Enabled: true, Read: []string{"/"}}, {Enabled: true, Write: []string{"~"}}, {Enabled: true, Write: []string{"relative"}}} {
+	if _, err := e.SaveEnvironment(SaveEnvironmentRequest{Name: "Listed", Kind: "local", Sandbox: &config.Sandbox{Enabled: true, Network: "hosts", Hosts: []string{"registry.npmjs.org", "*.github.com", "git.example.com:8443"}}}); err != nil {
+		t.Errorf("a list of hosts: %v", err)
+	}
+	for _, bad := range []config.Sandbox{
+		{Enabled: true, Network: "hosts"},
+		{Enabled: true, Network: "hosts", Hosts: []string{"*"}},
+		{Enabled: true, Network: "hosts", Hosts: []string{"*.com.*"}},
+		{Enabled: true, Network: "hosts", Hosts: []string{"localhost"}},
+		{Enabled: true, Network: "hosts", Hosts: []string{"a.example.com/path"}},
+		{Enabled: true, Network: "everywhere"}, {Enabled: true, Read: []string{"/"}}, {Enabled: true, Write: []string{"~"}}, {Enabled: true, Write: []string{"relative"}}} {
 		s := bad
 		if _, err := e.SaveEnvironment(SaveEnvironmentRequest{Name: "Bad", Kind: "local", Sandbox: &s}); err == nil {
 			t.Errorf("%+v was accepted", bad)
@@ -296,5 +305,64 @@ func TestSandboxPlanModeAndWorktree(t *testing.T) {
 	}
 	if out, err := exec.Command("git", "-C", repo, "config", "--get", "core.fsmonitor").Output(); err == nil {
 		t.Errorf("core.fsmonitor was set: %s", out)
+	}
+}
+
+// ENV-010: a session with a list of hosts is told it, starts a proxy, and is told
+// when a command is refused. No internet: the refused host never leaves the proxy.
+func TestSandboxHostList(t *testing.T) {
+	ctx := context.Background()
+	if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
+		t.Skip(err)
+	}
+	home := environment.Canonical(t.TempDir())
+	repo := filepath.Join(home, "repo")
+	os.MkdirAll(repo, 0o755)
+	e, err := Open(Options{DataDir: filepath.Join(home, "data"), Secrets: secrets.NewMemory(), Home: home, Confiner: darwin.Seatbelt{}, WatchInterval: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	info, err := e.SaveEnvironment(SaveEnvironmentRequest{Name: "Packages", Kind: "local", Sandbox: &config.Sandbox{Enabled: true, Network: "hosts", Hosts: []string{"registry.example.invalid"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	withScript(e, "s",
+		scripted.Step{Calls: []scripted.Call{{Name: "shell", Input: map[string]any{"command": "echo $HTTPS_PROXY > proxy.txt; curl -sS -m 5 -o /dev/null https://other.example.invalid/"}}}},
+		scripted.Step{Text: "done"},
+	)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: "s", Model: "m", EnvironmentID: info.ID, Mode: "ask"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Prompt(ctx, ses.ID, "go")
+	waitIdle(t, ch, ses.ID)
+	b, _ := os.ReadFile(filepath.Join(repo, "proxy.txt"))
+	if !strings.Contains(string(b), "127.0.0.1") {
+		t.Errorf("the proxy variable: %q", b)
+	}
+	evs, _ := e.Events(ctx, ses.ID, 0)
+	noticed := false
+	for _, ev := range evs {
+		var n event.NoticeData
+		if ev.Type == event.Notice && json.Unmarshal(ev.Data, &n) == nil && strings.Contains(n.Message, "other.example.invalid") {
+			noticed = true
+		}
+	}
+	if !noticed {
+		t.Error("the user was not told of the refused host")
+	}
+	// The proxy goes with the session.
+	proxy := strings.TrimSpace(string(b))
+	e.stopRuntime(ses.ID)
+	r, err := e.localEnv(repo, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, _ := r.Exec(ctx, environment.ExecSpec{Command: "curl -sS -m 3 -x '" + proxy + "' http://registry.example.invalid/"})
+	if res.ExitCode == 0 || !strings.Contains(res.Output, "connect") && !strings.Contains(res.Output, "Failed") {
+		t.Errorf("the proxy outlived its session: exit %d: %s", res.ExitCode, res.Output)
 	}
 }

@@ -66,6 +66,9 @@ func SeatbeltProfile(c environment.Confinement) (string, error) {
 	w("(allow process-info* (target same-sandbox))")
 	w("(deny sysctl-read (sysctl-name-prefix \"kern.procargs\"))")
 
+	if c.Certificates {
+		w("(allow mach-lookup (global-name \"com.apple.trustd.agent\") (global-name \"com.apple.trustd\"))")
+	}
 	switch c.Network {
 	case environment.NetworkAll:
 		// Name lookups and certificate checks are services too.

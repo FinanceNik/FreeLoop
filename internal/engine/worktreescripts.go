@@ -344,14 +344,15 @@ func (e *Engine) scriptHost(ctx context.Context, ses session.Session) (environme
 			return nil, nil, errors.New("a container has had this worktree and the session's environment is no longer Docker, so this command does not run on this Mac")
 		}
 		if cfg.SandboxOn() {
-			sandboxed, err := e.sandboxEnv(ctx, ses, cfg, nil)
+			sandboxed, closeIt, err := e.sandboxEnv(ctx, ses, cfg, nil)
 			if err != nil {
 				return nil, nil, err
 			}
 			if err := sandboxed.CheckSandbox(ctx); err != nil {
+				closeIt()
 				return nil, nil, err
 			}
-			return sandboxed, func() {}, nil
+			return sandboxed, closeIt, nil
 		}
 		host, err := e.localEnv(ses.Worktree, nil)
 		return host, func() {}, err

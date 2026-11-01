@@ -411,10 +411,10 @@ func shellTool() *tool {
 }
 
 // sandboxedShellSpec is the shell tool as a sandboxed session sees it.
-func sandboxedShellSpec() provider.ToolSpec {
+func sandboxedShellSpec(reach string) provider.ToolSpec {
 	return provider.ToolSpec{
 		Name:        "shell",
-		Description: "Run a shell command in the project root (zsh login shell), in a sandbox: it can write only in the project, read little outside it, and reach only localhost. Returns the exit code and combined output, capped at 30 KB.",
+		Description: "Run a shell command in the project root (zsh login shell), in a sandbox: it can write only in the project, read little outside it, and reach " + reach + ". Returns the exit code and combined output, capped at 30 KB.",
 		InputSchema: schema([]string{"command"}, map[string]any{
 			"command":         str("The command line."),
 			"timeout_seconds": num("Timeout in seconds. Default 120, maximum 600."),
@@ -428,7 +428,7 @@ const sandboxNote = "\n[This ran in a sandbox, which may have refused it. If it 
 
 // sandboxRefusal reports output that looks like the sandbox said no.
 func sandboxRefusal(output string) bool {
-	for _, s := range []string{"Operation not permitted", "Could not resolve host", "ENOTFOUND", "getaddrinfo", "nodename nor servname", "no such host"} {
+	for _, s := range []string{"Operation not permitted", "Could not resolve host", "ENOTFOUND", "getaddrinfo", "nodename nor servname", "no such host", "CONNECT tunnel failed", "list of hosts"} {
 		if strings.Contains(output, s) {
 			return true
 		}

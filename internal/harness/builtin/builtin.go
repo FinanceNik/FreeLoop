@@ -479,7 +479,7 @@ func (s *session) toolSpecs(mode permission.Mode) []provider.ToolSpec {
 		// In a sandbox the shell can run read-only, so plan mode has it too.
 		shell := t.spec.Name == "shell" && environment.IsSandboxed(s.env)
 		if shell {
-			out = append(out, sandboxedShellSpec())
+			out = append(out, sandboxedShellSpec(environment.SandboxReach(s.env)))
 			continue
 		}
 		if (mode == permission.ModePlan && (t.readOnly || plan)) || (mode != permission.ModePlan && !plan) {
@@ -681,7 +681,7 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 		sb.WriteString("\n# Mode: bypass\n\nTool calls run without asking the user. Be careful with destructive commands.\n")
 	}
 	if environment.IsSandboxed(s.env) {
-		sb.WriteString("\n# Sandbox\n\nShell commands run in a sandbox and need no approval: they can write in the project, read little outside it, and reach only localhost. Temp files and caches work. Installing packages or anything else needing the internet will fail; if a command really needs that, call shell with outside_sandbox: true and why, and the user decides. Do not try to get around the sandbox.\n")
+		fmt.Fprintf(&sb, "\n# Sandbox\n\nShell commands run in a sandbox and need no approval: they can write in the project, read little outside it, and reach %s. Temp files and caches work. Anything needing to go further will fail; if a command really needs that, call shell with outside_sandbox: true and why, and the user decides. Do not try to get around the sandbox.\n", environment.SandboxReach(s.env))
 		if mode == permission.ModePlan {
 			sb.WriteString("In plan mode shell commands are read-only too, so you can inspect the project with them.\n")
 		}

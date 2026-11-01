@@ -29,6 +29,7 @@ interface Form {
   sandboxNetwork: string;
   sandboxRead: string; // one path per line
   sandboxWrite: string;
+  sandboxHosts: string; // one per line (ENV-010)
 }
 
 function toForm(e?: EnvironmentInfo): Form {
@@ -52,7 +53,28 @@ function toForm(e?: EnvironmentInfo): Form {
     sandboxNetwork: e?.sandbox?.network || "localhost",
     sandboxRead: (e?.sandbox?.read ?? []).join("\n"),
     sandboxWrite: (e?.sandbox?.write ?? []).join("\n"),
+    sandboxHosts: (e?.sandbox?.hosts ?? []).join("\n"),
   };
+}
+
+// The registries npm, pip, Go and cargo fetch from, and GitHub for what they
+// fetch there. Offered, never assumed: the list is the user's.
+const PACKAGE_HOSTS = [
+  "registry.npmjs.org",
+  "registry.yarnpkg.com",
+  "pypi.org",
+  "files.pythonhosted.org",
+  "proxy.golang.org",
+  "sum.golang.org",
+  "index.crates.io",
+  "static.crates.io",
+  "github.com",
+  "codeload.github.com",
+  "objects.githubusercontent.com",
+];
+
+function mergeLines(text: string, more: string[]): string {
+  return [...new Set([...lines(text), ...more])].join("\n");
 }
 
 function lines(text: string): string[] {
@@ -104,7 +126,7 @@ export default function Environments({ environments, onChanged, onError }: Props
       devcontainer: form.devcontainer,
       setup: form.setup,
       health: form.health,
-      sandbox: form.kind === "local" && form.sandbox ? { enabled: true, network: form.sandboxNetwork, read: lines(form.sandboxRead), write: lines(form.sandboxWrite) } : null,
+      sandbox: form.kind === "local" && form.sandbox ? { enabled: true, network: form.sandboxNetwork, read: lines(form.sandboxRead), write: lines(form.sandboxWrite), hosts: form.sandboxNetwork === "hosts" ? lines(form.sandboxHosts) : [] } : null,
     })
       .then(() => {
         setForm(null);
@@ -138,7 +160,7 @@ export default function Environments({ environments, onChanged, onError }: Props
               <div className="muted">
                 {Object.keys(env.env ?? {}).length} variables · {(env.secretNames ?? []).length} secrets
                 {(env.secretNames ?? []).length > 0 && ` (${(env.secretNames ?? []).join(", ")})`}
-                {env.sandbox?.enabled && ` · sandboxed${env.sandbox.network === "none" ? ", no network" : ""}`}
+                {env.sandbox?.enabled && ` · sandboxed${env.sandbox.network === "none" ? ", no network" : env.sandbox.network === "hosts" ? `, ${(env.sandbox.hosts ?? []).length} hosts` : ""}`}
                 {env.kind === "docker" && ` · Docker: ${env.devcontainer ? "the project's devcontainer.json" : env.image}`}
                 {(env.disabledTools ?? []).length > 0 && ` · tools off: ${(env.disabledTools ?? []).join(", ")}`}
                 {(env.rules ?? []).length > 0 &&
@@ -239,9 +261,22 @@ export default function Environments({ environments, onChanged, onError }: Props
                     Network
                     <select value={form.sandboxNetwork} onChange={(e) => setForm({ ...form, sandboxNetwork: e.target.value })}>
                       <option value="localhost">This Mac only: tests and dev servers work, and so does anything else listening here</option>
+                      <option value="hosts">This Mac and the hosts listed here</option>
                       <option value="none">None</option>
                     </select>
                   </label>
+                  {form.sandboxNetwork === "hosts" && (
+                    <label>
+                      Hosts <span className="muted">(one per line, such as registry.npmjs.org or *.github.com; add :port for a port other than 80 and 443)</span>
+                      <textarea rows={4} value={form.sandboxHosts} onChange={(e) => setForm({ ...form, sandboxHosts: e.target.value })} required />
+                      <span className="muted">
+                        A tool has to use the proxy the sandbox sets up, as npm, pip, Go, git over https and curl do. Anything else gets no connection.{" "}
+                        <button type="button" className="link" onClick={() => setForm({ ...form, sandboxHosts: mergeLines(form.sandboxHosts, PACKAGE_HOSTS) })}>
+                          Add the usual package registries
+                        </button>
+                      </span>
+                    </label>
+                  )}
                   <label>
                     More folders it can read <span className="muted">(one per line, absolute or under ~/)</span>
                     <textarea rows={2} value={form.sandboxRead} onChange={(e) => setForm({ ...form, sandboxRead: e.target.value })} placeholder="~/tools" />

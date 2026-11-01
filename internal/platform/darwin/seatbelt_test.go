@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 )
 
 type fixture struct {
@@ -330,5 +331,54 @@ func TestSeatbeltNetworkAll(t *testing.T) {
 	res, _ = f.env.Exec(context.Background(), environment.ExecSpec{Command: "pbpaste", Network: environment.NetworkAll})
 	if res.ExitCode == 0 {
 		t.Error("the network setting opened the clipboard")
+	}
+}
+
+// ENV-010, on the real sandbox and internet: the usual tools reach a listed host
+// through the proxy, and nothing reaches any other, with or without the proxy.
+// FREELOOP_SANDBOX_NET=1 go test ./internal/platform/darwin -run Hosts
+func TestSeatbeltHosts(t *testing.T) {
+	if os.Getenv("FREELOOP_SANDBOX_NET") == "" {
+		t.Skip("set FREELOOP_SANDBOX_NET=1; this reaches the internet")
+	}
+	var blocked []string
+	egress, err := netguard.StartEgress([]string{"registry.npmjs.org", "github.com", "proxy.golang.org", "sum.golang.org", "pypi.org"}, func(h string) { blocked = append(blocked, h) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer egress.Close()
+	f := sandboxed(t, func(c *environment.Confinement) { c.Certificates = true })
+	env := environment.ProxyEnv(egress.URL())
+	run := func(command string) (string, int) {
+		res, err := f.env.Exec(context.Background(), environment.ExecSpec{Command: command, Env: env, Timeout: 90 * time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.Output, res.ExitCode
+	}
+	for _, command := range []string{
+		"curl -sS -m 30 -o /dev/null https://registry.npmjs.org/react/latest",
+		"npm_config_cache=$TMPDIR/npm npm view react version",
+		`python3 -I -c 'import urllib.request as u; print(u.urlopen("https://pypi.org/simple/pip/", timeout=30).status)'`,
+		"git ls-remote https://github.com/git/git.git HEAD",
+		`node -e 'fetch("https://registry.npmjs.org/react/latest").then(r=>{if(!r.ok)process.exit(1);console.log("ok")}).catch(e=>{console.error(e);process.exit(1)})'`,
+		"GOFLAGS='-mod=mod -modcacherw' GOPATH=$TMPDIR/go GOCACHE=$TMPDIR/gc go mod download -json golang.org/x/text@v0.3.0",
+	} {
+		if out, code := run(command); code != 0 {
+			t.Errorf("%s: exit %d: %.300s", command, code, out)
+		}
+	}
+	for _, command := range []string{
+		"curl -sS -m 15 -o /dev/null https://example.com",
+		"curl -sS -m 15 --noproxy '*' -o /dev/null https://registry.npmjs.org/react/latest",
+		`env -u HTTPS_PROXY -u https_proxy -u ALL_PROXY -u all_proxy curl -sS -m 15 -o /dev/null https://registry.npmjs.org/react/latest`,
+		`python3 -I -c 'import socket; socket.create_connection(("registry.npmjs.org", 443), 10)'`,
+	} {
+		if out, code := run(command); code == 0 {
+			t.Errorf("%s: was allowed: %s", command, out)
+		}
+	}
+	if len(blocked) != 1 || blocked[0] != "example.com" {
+		t.Errorf("blocked = %v", blocked)
 	}
 }
