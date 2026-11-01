@@ -10,7 +10,7 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 export CGO_CFLAGS := -O2 -g -mmacosx-version-min=14.0
 export CGO_LDFLAGS := -mmacosx-version-min=14.0
 
-.PHONY: help tools dev build package dmg bindings test test-keychain verify-agents memcheck frontend-test lint fmt clean
+.PHONY: help tools dev build package dmg release verify-repro verify-deps bindings test test-keychain verify-agents memcheck frontend-test lint fmt clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -37,6 +37,27 @@ dmg: package ## Build bin/Freeloop.dmg from bin/Freeloop.app
 	hdiutil create -volname Freeloop -srcfolder bin/dmg -ov -format UDZO -quiet bin/Freeloop.dmg
 	rm -rf bin/dmg
 	@echo "bin/Freeloop.dmg"
+
+# What a release ships besides the app: its bill of materials (SEC-012), the
+# tools it was built with, and checksums, of every file in the bundle too.
+release: dmg ## Build bin/release: the DMG, its SBOM, build information and checksums
+	rm -rf bin/release
+	mkdir -p bin/release
+	cp bin/Freeloop.dmg bin/release/
+	go run ./cmd/freeloop-sbom -binary bin/Freeloop.app/Contents/MacOS/Freeloop \
+		-version $$(sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml) < frontend/package-lock.json > bin/release/Freeloop.sbom.cdx.json
+	{ echo "commit $$(git rev-parse HEAD)"; go version; echo "node $$(node --version)"; clang --version | head -1; \
+		echo "macOS SDK $$(xcrun --show-sdk-version)"; echo "wails3 $(WAILS_VERSION)"; } > bin/release/BUILDINFO.txt
+	cd bin && find Freeloop.app -type f | LC_ALL=C sort | xargs shasum -a 256 > release/APP-FILES.sha256
+	cd bin/release && shasum -a 256 Freeloop.dmg Freeloop.sbom.cdx.json BUILDINFO.txt APP-FILES.sha256 > SHA256SUMS
+	@echo "bin/release"
+
+verify-repro: ## Build twice from clean clones and compare every file (NFR-SEC-004; REF=<tag> for a release)
+	scripts/verify-repro.sh $(REF)
+
+verify-deps: ## Check modules against go.sum and that go.mod is tidy (needs the network)
+	go mod verify
+	go mod tidy -diff
 
 test: ## Run Go engine tests (race detector on) and frontend tests
 	go test -race ./internal/...

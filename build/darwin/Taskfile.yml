@@ -11,7 +11,7 @@ tasks:
   build:
     summary: Builds the application natively on macOS
     deps:
-      - task: common:go:mod:tidy
+      - task: common:go:mod:check
       - task: common:build:frontend
         vars:
           BUILD_FLAGS:
