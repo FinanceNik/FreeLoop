@@ -5,13 +5,14 @@ import DiffPanel from "./DiffPanel.tsx";
 import FilesPanel from "./FilesPanel.tsx";
 // xterm.js is large; it loads when a terminal is first shown.
 const TerminalPanel = lazy(() => import("./TerminalPanel.tsx"));
+import PreviewPanel from "./PreviewPanel.tsx";
 
 // SessionPanel is the right panel of the main window (GUI-001): approvals,
 // the diff against the session's base commit (GUI-005), and the session's
 // details. It reads the same
 // folded transcript as the conversation, so it never disagrees with it.
 
-export type Tab = "approvals" | "diff" | "files" | "terminal" | "info";
+export type Tab = "approvals" | "diff" | "files" | "terminal" | "preview" | "info";
 
 interface Props {
   session: Session;
@@ -47,7 +48,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
   const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
 
   return (
-    <aside className={tab === "diff" || tab === "files" || tab === "terminal" ? "panel panel-wide" : "panel"} aria-label="Session panel">
+    <aside className={tab === "diff" || tab === "files" || tab === "terminal" || tab === "preview" ? "panel panel-wide" : "panel"} aria-label="Session panel">
       <div className="panel-tabs" role="tablist">
         <TabButton id="approvals" tab={tab} setTab={setTab}>
           Approvals{data.pending.length > 0 && <span className="badge badge-waiting_permission">{data.pending.length}</span>}
@@ -60,6 +61,9 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
         </TabButton>
         <TabButton id="terminal" tab={tab} setTab={setTab}>
           Terminal
+        </TabButton>
+        <TabButton id="preview" tab={tab} setTab={setTab}>
+          Preview
         </TabButton>
         <TabButton id="info" tab={tab} setTab={setTab}>
           Info
@@ -77,6 +81,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
             <TerminalPanel key={terminalNonce} session={session} onError={onError} />
           </Suspense>
         )}
+        {tab === "preview" && <PreviewPanel session={session} onError={onError} />}
         {tab === "info" && (
           <Info
             session={session}

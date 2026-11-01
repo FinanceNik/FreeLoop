@@ -112,6 +112,20 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 
 An independent review of M1 slices 1 to 4 found and reproduced these, all fixed with regression tests: protected paths compared case-sensitively on a case-insensitive file system (`.GIT`, `~/.SSH`); `glob`/`grep` and reads following symlinks past the broker; unbounded reads of non-regular files; "Allow always" saving literal input as a pattern (`rm -rf *`, a file named `**`); `Exec` hanging on a descendant that left the process group; a malformed `rules.yaml` silently dropping deny rules and being overwritten; a crash leaving an unanswered tool call that broke the session; an invalid tool input breaking every later Anthropic request; secrets streamed across chunks escaping redaction; stored keys not redacted until used; `core.fsmonitor` and content filters running through the app's git calls; commands inheriting the app's whole environment; exact rules collapsing newlines; a cancel race in the prompt queue.
 
+### Hardening review, 2026-10-31
+
+Three reviews (engine lifecycle, security boundaries, malformed input). The fixes that bear on this document: a write through a symlink whose target does not exist is refused and files open with `O_NOFOLLOW`; an external agent's reused approval covers only its own kind of action, once; prefix allow rules approve plain words only, closing zsh's `=(...)`, glob qualifiers and `${(e)...}`; path rules ignore case and searches leave out what a deny rule hides; "Allow always" never widens a call it cannot narrow to a tool-wide rule. `docs/ROADMAP.md` part 8 lists the rest.
+
+### Engine calls from a framed page, 2026-11-01
+
+Every engine method is reachable with a POST to `/wails/runtime`, and Wails checks where such a request comes from only in its server build; in the desktop build the check is `return true`. The app preview (GUI-020) puts a page the agent may have written into a frame in the app's own WebKit, so this became reachable. Tried against the packaged app with a hostile page in the frame:
+
+- A `no-cors` fetch reaches the app's URL scheme **with its origin stripped**, and without a guard it ran: the page created a session. Origin checks alone do not stop it. A page cannot set a custom header on such a request, so `x-wails-client-id`, which the app's own calls always carry, is required.
+- A fetch with custom headers gets no preflight on the custom scheme and arrives with the header, but keeps its origin, so a foreign origin is refused. Both checks are needed; each stops what the other misses.
+- A form post keeps its origin and has no header. `sendBeacon` refuses the scheme. Reading the parent's page is blocked, and the frame is sandboxed against popups and navigating the window.
+
+`netguard.RuntimeCallAllowed`, in a middleware ahead of Wails' handler in `cmd/freeloop/main.go`, enforces this. **Rerun that test after every Wails upgrade**: it depends on how WebKit delivers requests to a custom scheme, which the unit test can only describe, and the server build used for browser checks has Wails' own check and hides the problem. What stays reachable from a frame is `window.webkit.messageHandlers.external`, which Wails exposes to every frame: it can start a window drag or resize, nothing more, since `wails:event:emit` is off unless a window opts in and Freeloop's do not.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

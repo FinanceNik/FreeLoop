@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/engine"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/platform/darwin"
 	"github.com/FinanceNik/Freeloop/internal/rpc"
 )
@@ -105,6 +107,18 @@ func main() {
 		Services:    append([]application.Service{application.NewService(svc)}, desk.services()...),
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(frontend.Assets()),
+			// Engine calls come from the app's own page, never from a page
+			// in the preview frame (GUI-020).
+			Middleware: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/wails/runtime" && !netguard.RuntimeCallAllowed(r.Method, r.Header.Get("Origin"), r.Header.Get("Sec-Fetch-Site"), r.Host, r.Header.Get("x-wails-client-id")) {
+						log.Printf("refused a runtime call: %s from origin %q to %q", r.Method, r.Header.Get("Origin"), r.Host)
+						http.Error(w, "refused", http.StatusForbidden)
+						return
+					}
+					next.ServeHTTP(w, r)
+				})
+			},
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,

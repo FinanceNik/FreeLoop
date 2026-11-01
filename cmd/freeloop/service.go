@@ -137,6 +137,11 @@ func (s *EngineService) ReviewFindings(ctx context.Context, reviewerID string) (
 	return s.eng.ReviewFindings(ctx, reviewerID)
 }
 
+// PortOpen reports whether something listens on a port of this Mac (GUI-020).
+func (s *EngineService) PortOpen(ctx context.Context, port int) bool {
+	return s.eng.PortOpen(ctx, port)
+}
+
 func (s *EngineService) Workspace() config.Workspace { return s.eng.Workspace() }
 
 func (s *EngineService) SaveWorkspace(w config.Workspace) error { return s.eng.SaveWorkspace(w) }

@@ -3460,3 +3460,30 @@ table.hooks .hook-command {
   max-height: 200px;
   overflow: auto;
 }
+
+/* App preview (GUI-020). */
+.preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.preview-bar input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.preview-note {
+  font-size: 12.5px;
+}
+
+.preview-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 320px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: #fff;
+}

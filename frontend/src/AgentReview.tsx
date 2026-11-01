@@ -29,12 +29,14 @@ export default function AgentReview({ session, gitKey, onMessage, onError }: { s
       })
       .catch(onError);
   }, [session.id, gitKey]);
-  const working = reviews.some((r) => WORKING.has(r.session.status));
+  // A review that was just asked for has not started yet, so one without a
+  // reply counts as under way too.
+  const waiting = reviews.some((r) => WORKING.has(r.session.status) || !r.reply);
   useEffect(() => {
-    if (!working) return;
+    if (!waiting) return;
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
-  }, [working, session.id]);
+  }, [waiting, session.id]);
 
   const ask = () => {
     setBusy(true);
@@ -71,7 +73,7 @@ export default function AgentReview({ session, gitKey, onMessage, onError }: { s
             <li key={r.session.id}>
               <div className="row">
                 <strong>{r.session.title.replace(/^Review: /, "")}</strong>
-                <span className={`badge badge-${r.session.status}`}>{WORKING.has(r.session.status) ? "Reviewing" : "Done"}</span>
+                <span className={`badge badge-${r.session.status}`}>{WORKING.has(r.session.status) || !r.reply ? "Reviewing" : "Done"}</span>
               </div>
               {r.reply && <p className="agent-review-reply">{r.reply}</p>}
               <div className="row">
