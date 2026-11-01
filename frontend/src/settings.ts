@@ -50,3 +50,16 @@ export function inSettings(kind: string): boolean {
 export function isSettingsShortcut(k: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }): boolean {
   return k.metaKey && !k.ctrlKey && !k.altKey && !k.shiftKey && k.key === ",";
 }
+
+// The Font size setting's range; config.go holds the same one.
+export const MIN_FONT_SIZE = 11;
+export const MAX_FONT_SIZE = 20;
+
+// textSizeAfter is the Font size that ⌘+ or ⌘- asks for, or null for any other
+// key (NFR-A11Y-002). ⌘+ is ⌘= without Shift, on most keyboards.
+export function textSizeAfter(k: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean }, current: number): number | null {
+  if (!k.metaKey || k.ctrlKey || k.altKey) return null;
+  if (k.key === "+" || k.key === "=") return Math.min(current + 1, MAX_FONT_SIZE);
+  if (k.key === "-") return Math.max(current - 1, MIN_FONT_SIZE);
+  return null;
+}

@@ -134,6 +134,12 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
       EngineService.ResizeTerminal(id, next.cols, next.rows).catch(() => {});
     };
     const observer = new ResizeObserver(() => fit());
+    // The text size can change while the terminal is open.
+    const rootStyle = new MutationObserver(() => {
+      term.options.fontSize = (parseFloat(getComputedStyle(document.documentElement).fontSize) || 14) - 2;
+      fit();
+    });
+    rootStyle.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
     observer.observe(box.current!);
 
     // What it printed so far, then what it prints from now on; chunks that
@@ -167,6 +173,7 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
       off();
       input.dispose();
       observer.disconnect();
+      rootStyle.disconnect();
       term.dispose();
     };
   }, [id]);

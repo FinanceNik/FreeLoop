@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SETTINGS_GROUPS, inSettings, isSettingsShortcut } from "./settings.ts";
+import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, inSettings, isSettingsShortcut, textSizeAfter } from "./settings.ts";
 
 test("every configuration page is listed once", () => {
   const ids = SETTINGS_GROUPS.flatMap((g) => g.pages.map((p) => p.id));
@@ -23,4 +23,19 @@ test("command-comma opens the settings", () => {
   assert.equal(isSettingsShortcut({ ...k, metaKey: false }), false);
   assert.equal(isSettingsShortcut({ ...k, shiftKey: true }), false);
   assert.equal(isSettingsShortcut({ ...k, key: "." }), false);
+});
+
+
+const keys = (key: string, more = {}) => ({ key, metaKey: true, ctrlKey: false, altKey: false, ...more });
+
+test("the text size shortcuts", () => {
+  assert.equal(textSizeAfter(keys("="), 14), 15);
+  assert.equal(textSizeAfter(keys("+"), 14), 15);
+  assert.equal(textSizeAfter(keys("-"), 14), 13);
+  assert.equal(textSizeAfter(keys("="), MAX_FONT_SIZE), MAX_FONT_SIZE);
+  assert.equal(textSizeAfter(keys("-"), MIN_FONT_SIZE), MIN_FONT_SIZE);
+  assert.equal(textSizeAfter(keys("0"), 14), null);
+  assert.equal(textSizeAfter(keys("=", { metaKey: false }), 14), null);
+  assert.equal(textSizeAfter(keys("=", { altKey: true }), 14), null);
+  assert.equal(textSizeAfter(keys("-", { ctrlKey: true }), 14), null);
 });

@@ -45,7 +45,7 @@ import Onboarding from "./Onboarding.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
-import { inSettings, isSettingsShortcut } from "./settings.ts";
+import { inSettings, isSettingsShortcut, MAX_FONT_SIZE, textSizeAfter } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
 import { basename } from "./paths.ts";
 
@@ -93,6 +93,7 @@ export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([]);
   const [config, setConfig] = useState<Config | null>(null);
+  const fontPending = useRef<number | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "none" });
   const mainBox = useRef<HTMLElement>(null);
   const [heardScreen, setHeardScreen] = useState("");
@@ -249,7 +250,11 @@ export default function App() {
   // unrelated reload does not reset a half-edited settings form.
   const refreshConfig = () => {
     EngineService.Config()
-      .then((c) => setConfig((old) => (old && JSON.stringify(old) === JSON.stringify(c) ? old : c)))
+      .then((disk) => {
+        // A size chosen with ⌘+ or ⌘- and not saved yet is newer than the file.
+        const c = fontPending.current === null ? disk : { ...disk, ui: { ...disk.ui, fontSize: fontPending.current } };
+        setConfig((old) => (old && JSON.stringify(old) === JSON.stringify(c) ? old : c));
+      })
       .catch(report);
     EngineService.ConfigIssues()
       .then((list) => setIssues(list ?? []))
@@ -422,6 +427,41 @@ export default function App() {
       if (!e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || e.key.toLowerCase() !== "k") return;
       e.preventDefault();
       setPalette((open) => (open ? null : paletteRef.current()));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ⌘+ and ⌘- change the Font size setting from anywhere (NFR-A11Y-002). The
+  // text changes at once; a burst of presses is saved as one change.
+  const configNow = useRef(config);
+  configNow.current = config;
+  const fontSave = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const now = configNow.current;
+      if (!now) return;
+      const current = now.ui.fontSize || 14;
+      const next = textSizeAfter(e, current);
+      if (next === null) return;
+      // Ahead of the View menu's page zoom, which would scale the layout too.
+      e.preventDefault();
+      if (next === current) {
+        setHeardScreen(next === MAX_FONT_SIZE ? "Text is at its largest" : "Text is at its smallest");
+        return;
+      }
+      setHeardScreen(`Text size ${next}`);
+      fontPending.current = next;
+      setConfig({ ...now, ui: { ...now.ui, fontSize: next } });
+      clearTimeout(fontSave.current);
+      fontSave.current = setTimeout(() => {
+        if (!configNow.current) return;
+        EngineService.SaveSettings(configNow.current)
+          .catch(report)
+          .finally(() => {
+            if (fontPending.current === next) fontPending.current = null;
+          });
+      }, 400);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

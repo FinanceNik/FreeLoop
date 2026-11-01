@@ -243,7 +243,7 @@ What the M3 list still holds and needs no account of the user's.
    - *Contrast:* the stylesheet claimed AA, and missed it for faint text, a warning colour, a dark hover and the dark focus ring, as well as content dimmed with opacity. `a11y.test.ts` now computes every pair of tokens.
    - *Keyboard:* the panel's tabs are one stop with arrow keys, and arrows only move focus, because opening Terminal starts a shell; the usage chart is one stop instead of one per column. Shift+Esc leaves the terminal, which keeps Tab for the shell. Tab stays inside the palette and the picture view, which now takes focus so Escape works.
    - *Screen readers:* the terminal's output is exposed (xterm's `screenReaderMode`), a picker's highlighted entry is announced, and repeated announcements are heard again.
-   - *Text size:* all 72 sizes fixed in pixels now follow the Font size setting.
+   - *Text size:* all 72 sizes fixed in pixels now follow the Font size setting, and ⌘+ and ⌘- change it from anywhere (OQ-027). The app has its own menu without the View menu's zoom items, which claimed those keys and ⌘0.
 4. **Sandboxed execution (SEC-011, NFR-SEC-005).** *Met by the Docker environment (ENV-005), as their text says; the native sandbox stays ENV-009.*
 
 ## Later (unscheduled)

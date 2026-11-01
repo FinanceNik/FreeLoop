@@ -132,6 +132,7 @@ To check with VoiceOver (⌘F5), which no test can replace:
 9. In the Terminal tab, type a command and hear the output; Shift+Esc leaves it.
 10. Open ⌘K, and a picture at full size: Tab stays inside, and Escape returns you to where you were.
 11. On Usage, the arrows walk the chart's columns, and "Show as a table" reads the same data.
+12. Press ⌘+ and ⌘-: the text changes, you hear its size, and ⌘0 still opens Needs attention.
 
 ## Every change
 

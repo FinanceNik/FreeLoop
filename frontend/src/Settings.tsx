@@ -40,7 +40,10 @@ export default function Settings({ config, providers, environments, profiles, pr
       .then((r) => r && setRestored(r))
       .catch(onError);
   };
-  useEffect(() => setForm(config), [config]);
+  // ⌘+ and ⌘- change one field; the rest of the form may hold unsaved edits.
+  const { ui: { fontSize: savedFontSize, ...savedUi }, ...savedRest } = config;
+  useEffect(() => setForm(config), [JSON.stringify([savedRest, savedUi])]);
+  useEffect(() => setForm((f) => ({ ...f, ui: { ...f.ui, fontSize: savedFontSize } })), [savedFontSize]);
   // The opt-in update check (OQ-015).
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
@@ -96,6 +99,7 @@ export default function Settings({ config, providers, environments, profiles, pr
             value={form.ui.fontSize}
             onChange={(e) => setForm({ ...form, ui: { ...form.ui, fontSize: Number(e.target.value) } })}
           />
+          <span className="muted">⌘+ and ⌘- change this from anywhere in the app.</span>
         </label>
 
         <h3>Defaults for new sessions</h3>

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,28 @@ import (
 
 	"github.com/FinanceNik/Freeloop/internal/engine"
 )
+
+// appMenu is Wails' default menu without the View menu's zoom items. Those would
+// claim ⌘+, ⌘- and ⌘0, which the app uses: for the Font size setting
+// (NFR-A11Y-002) and the attention view. Zooming the page also scales the layout,
+// which the setting does not.
+func appMenu() *application.Menu {
+	menu := application.NewMenu()
+	menu.AddRole(application.AppMenu)
+	menu.AddRole(application.FileMenu)
+	menu.AddRole(application.EditMenu)
+	view := menu.AddSubmenu("View")
+	view.AddRole(application.Reload)
+	view.AddRole(application.ForceReload)
+	if os.Getenv("FREELOOP_DEV") != "" {
+		view.AddRole(application.OpenDevTools)
+	}
+	view.AddSeparator()
+	view.AddRole(application.ToggleFullscreen)
+	menu.AddRole(application.WindowMenu)
+	menu.AddRole(application.HelpMenu)
+	return menu
+}
 
 // servedBuild is false here: the page comes from the app's own URL scheme.
 const servedBuild = false
@@ -45,6 +68,7 @@ func (d *desktop) services() []application.Service {
 // start wires the window; call it once the window exists.
 func (d *desktop) start(app *application.App, win *application.WebviewWindow) {
 	d.app, d.win = app, win
+	app.Menu.Set(appMenu())
 	d.notes.OnNotificationResponse(func(r notifications.NotificationResult) {
 		if r.Error != nil {
 			return

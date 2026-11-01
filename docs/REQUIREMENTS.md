@@ -205,7 +205,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 ### Accessibility (NFR-A11Y)
 
 - **NFR-A11Y-001** · MVP · Full keyboard operation of conversation, approvals and session switching; visible focus.
-- **NFR-A11Y-002** · MVP · Labels for all controls, announced status changes for approvals, contrast at WCAG AA, respects reduced motion and system text size.
+- **NFR-A11Y-002** · MVP · Labels for all controls, announced status changes for approvals, contrast at WCAG AA, respects reduced motion, and all text follows the app's Font size setting, also from ⌘+ and ⌘- (OQ-027: web content in a macOS app does not follow the system's Text Size by itself).
 - **NFR-A11Y-003** · v1 · VoiceOver pass of all MVP screens with issues fixed.
 
 ### Reliability and maintainability (NFR-REL)
