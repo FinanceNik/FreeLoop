@@ -5,9 +5,12 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 )
@@ -152,8 +155,32 @@ func (e *Engine) FileOnHost(ctx context.Context, sid, rel string) (string, error
 		return "", err
 	}
 	abs := env.Resolve(rel)
-	if _, err := env.FS().Stat(abs); err != nil {
+	fi, err := env.FS().Stat(abs)
+	if err != nil {
 		return "", err
 	}
+	if fi.IsDir {
+		return "", errors.New("choose a file")
+	}
 	return abs, nil
+}
+
+// OpenInEditor opens a file in the user's text editor, which only ever shows it:
+// an app chosen by the file's type would run a script behind a harmless name.
+func (e *Engine) OpenInEditor(path string) error {
+	if e.editorArgv == nil {
+		return errors.New("this build cannot open files in an editor")
+	}
+	env, err := e.localEnv(filepath.Dir(path), nil)
+	if err != nil {
+		return err
+	}
+	res, err := env.Exec(context.Background(), environment.ExecSpec{Argv: e.editorArgv(path), Timeout: 30 * time.Second})
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		return fmt.Errorf("open %s: %s", path, strings.TrimSpace(res.Output))
+	}
+	return nil
 }

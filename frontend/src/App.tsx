@@ -1107,7 +1107,7 @@ export default function App() {
               {screen.kind === "providers" && (
                 <Providers
                   providers={providers}
-                  onChanged={refreshProviders}
+                  onChanged={() => (refreshProviders(), refreshConfig())}
                   onError={report}
                   agents={harnesses.filter((h) => h.kind === "acp")}
                   defaultProfileId={config?.defaults?.profileId}

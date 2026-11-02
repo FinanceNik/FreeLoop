@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -22,14 +23,26 @@ import (
 // is still skipped where filters are configured. Asking a nested repository
 // whether its files changed starts git in it, under a config this repository
 // knows nothing of; only the commit it stands at is compared.
+//
+// Even plumbing can run a program if it is allowed to fetch: a missing object in
+// a repository with a promisor remote makes rev-list or status fetch it, and an
+// ext:: URL is a command. So nothing here may fetch, whatever the config says.
+// Only the push, which has to, gets its own list of transports.
 var safeGit = []string{"git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "diff.ignoreSubmodules=dirty"}
+
+// gitEnv is the environment of the app's git commands, with more added.
+func gitEnv(more map[string]string) map[string]string {
+	out := map[string]string{"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_NO_LAZY_FETCH": "1", "GIT_ALLOW_PROTOCOL": ""}
+	maps.Copy(out, more)
+	return out
+}
 
 func git(ctx context.Context, env environment.Environment, args ...string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	res, err := env.Exec(ctx, environment.ExecSpec{
 		Argv:      append(slices.Clone(safeGit), args...),
-		Env:       map[string]string{"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1"},
+		Env:       gitEnv(nil),
 		MaxOutput: 1 << 20,
 	})
 	if err != nil || res.ExitCode != 0 || res.TimedOut {
@@ -38,13 +51,12 @@ func git(ctx context.Context, env environment.Environment, args ...string) (stri
 	return res.Output, true
 }
 
-// gitState reads branch, HEAD and the number of changed files. In an
-// untrusted project, or a repository that configures content filters, which
-// git status may run, it reads only branch and HEAD and reports the count as
-// unknown (-1).
+// gitState reads branch, HEAD and the number of changed files. In an untrusted
+// project, or a repository whose config names programs or whose common directory
+// was moved, both of which git status may act on, it reads only branch and HEAD
+// and reports the count as unknown (-1).
 func gitState(ctx context.Context, env environment.Environment, trusted bool) event.GitStateData {
-	filters, ok := repoConfigKeys(ctx, env, `^filter\.`)
-	if !trusted || len(filters) > 0 || !ok {
+	if !trusted || blocked(ctx, env) != "" {
 		if _, ok := git(ctx, env, "rev-parse", "--git-dir"); !ok {
 			return event.GitStateData{}
 		}
@@ -96,7 +108,7 @@ func gitCode(ctx context.Context, env environment.Environment, args ...string) (
 	defer cancel()
 	res, err := env.Exec(ctx, environment.ExecSpec{
 		Argv: append(slices.Clone(safeGit), args...),
-		Env:  map[string]string{"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1"},
+		Env:  gitEnv(nil),
 	})
 	if err != nil || res.TimedOut {
 		return "", 0, false

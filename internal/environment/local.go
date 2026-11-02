@@ -283,12 +283,36 @@ func realTarget(abs string) string {
 // MaxReadBytes caps what ReadFile returns.
 const MaxReadBytes = 10 << 20
 
-func (f *localFS) ReadFile(p string) ([]byte, error) {
-	abs, err := f.read(p)
+// openRead opens a file for reading exactly where the guard saw it. The path is
+// resolved once, the result is checked, and that path is opened with no symbolic
+// link followed anywhere in it, so a folder swapped for a link between the check
+// and the open, by a process racing the tool call, fails instead of leading
+// around the guard. Not blocking keeps a FIFO from hanging the open.
+func (f *localFS) openRead(abs string) (*os.File, error) {
+	real, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return nil, err
 	}
-	fi, err := os.Stat(abs)
+	if real != abs {
+		if err := f.guard.CheckRead(real); err != nil {
+			return nil, err
+		}
+	}
+	afterCheck()
+	return os.OpenFile(real, os.O_RDONLY|syscall.O_NONBLOCK|noFollow, 0)
+}
+
+func (f *localFS) ReadFile(p string) ([]byte, error) {
+	abs := f.env.Resolve(p)
+	if err := f.guard.CheckRead(abs); err != nil {
+		return nil, err
+	}
+	file, err := f.openRead(abs)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	fi, err := file.Stat()
 	if err != nil {
 		return nil, err
 	}
@@ -298,11 +322,6 @@ func (f *localFS) ReadFile(p string) ([]byte, error) {
 	if fi.Size() > MaxReadBytes {
 		return nil, fmt.Errorf("%s is %d MB; files over %d MB are not read", p, fi.Size()>>20, MaxReadBytes>>20)
 	}
-	file, err := os.Open(abs)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
 	b, err := io.ReadAll(io.LimitReader(file, MaxReadBytes+1))
 	if err == nil && len(b) > MaxReadBytes {
 		return nil, fmt.Errorf("%s grew past %d MB while reading", p, MaxReadBytes>>20)
@@ -353,31 +372,36 @@ func (f *localFS) writeMode(p string, data []byte, newMode os.FileMode) error {
 		target = real
 	}
 	// Checked before folders are made, and again once they exist, so
-	// every symlink on the way is resolved.
-	check := func() error {
-		if real := realTarget(target); real != abs {
-			return f.guard.CheckWrite(real)
+	// every symlink on the way is resolved. The second answer is the path that
+	// is written.
+	check := func() (string, error) {
+		real := realTarget(target)
+		if real != abs {
+			return real, f.guard.CheckWrite(real)
 		}
-		return nil
+		return real, nil
 	}
-	if err := check(); err != nil {
+	if _, err := check(); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
-	if err := check(); err != nil {
+	real, err := check()
+	if err != nil {
 		return err
 	}
 	mode := newMode
-	if fi, err := os.Lstat(target); err == nil {
+	if fi, err := os.Lstat(real); err == nil {
 		if !fi.Mode().IsRegular() {
 			return fmt.Errorf("%s is not a regular file", p)
 		}
 		mode = fi.Mode().Perm()
 	}
-	// O_NOFOLLOW: a link put in place since the checks is not followed.
-	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, mode)
+	afterCheck()
+	// A link put in place since the checks, here or in a folder on the way, is
+	// not followed.
+	file, err := os.OpenFile(real, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|noFollow, mode)
 	if err != nil {
 		return err
 	}
@@ -490,7 +514,7 @@ func (f *localFS) Grep(ctx context.Context, dir, expr, include string, ignoreCas
 		if include != "" && !MatchGlob(include, rel) && !MatchGlob(include, path.Base(rel)) {
 			return false
 		}
-		file, err := os.Open(abs)
+		file, err := f.openRead(abs)
 		if err != nil {
 			return false
 		}

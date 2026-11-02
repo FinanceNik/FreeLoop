@@ -28,3 +28,8 @@ export function parseAddress(input: string, appOrigin: string): PreviewAddress |
   if (!(port >= 1 && port <= 65535)) return { error: "That port does not exist." };
   return { url: u.href, port };
 }
+
+// framed reports a page shown inside another, which the app's own page never is.
+export function framed(w: { top: unknown; self: unknown }): boolean {
+  return w.top !== w.self;
+}

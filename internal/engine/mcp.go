@@ -91,7 +91,7 @@ func (e *Engine) mcpInfo(s config.MCPServer) MCPServerInfo {
 	}
 	info := MCPServerInfo{
 		MCPServer: s, SecretNames: slices.Sorted(maps.Keys(s.Secrets)), Status: e.mcp.Status(s.ID),
-		NeedsApproval: s.Approved != s.Fingerprint(), Fingerprint: s.Fingerprint(), Warning: mcp.Warning(s),
+		NeedsApproval: !e.mcpApproved(s), Fingerprint: s.Fingerprint(), Warning: mcp.Warning(s),
 		SignInURL: e.signInURL(s.ID),
 	}
 	if s.Transport == "http" {
@@ -202,12 +202,16 @@ func (e *Engine) ApproveMCPServer(ctx context.Context, id, fingerprint string) (
 	if s.Fingerprint() != fingerprint {
 		return MCPServerInfo{}, errors.New("the server's configuration changed since you looked at it; review it again")
 	}
+	mark, err := e.approvalMark(fingerprint)
+	if err != nil {
+		return MCPServerInfo{}, err
+	}
 	e.mu.Lock()
 	list := slices.Clone(e.mcpServers)
 	e.mu.Unlock()
 	for i := range list {
 		if list[i].ID == id {
-			list[i].Approved = fingerprint
+			list[i].Approved = mark
 		}
 	}
 	if err := config.SaveMCP(e.dataDir, list); err != nil {
@@ -225,7 +229,7 @@ func (e *Engine) StartMCPServer(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if s.Approved != s.Fingerprint() {
+	if !e.mcpApproved(s) {
 		return fmt.Errorf("approve %s before it runs", id)
 	}
 	l, err := e.mcpLaunch(s)
@@ -252,9 +256,9 @@ func (e *Engine) StopMCPServer(id string) { e.mcp.Stop(id) }
 func (e *Engine) mcpLaunch(s config.MCPServer) (mcp.Launch, error) {
 	l := mcp.Launch{Config: s, Env: map[string]string{}, Headers: map[string]string{}}
 	for name, refStr := range s.Secrets {
-		ref, err := secrets.ParseRef(refStr)
+		ref, err := ownRef(refStr, mcpSecretRef(s.ID, name))
 		if err != nil {
-			return l, err
+			return l, fmt.Errorf("%s: secret %s: %w", s.ID, name, err)
 		}
 		v, err := e.secrets.Get(ref)
 		if err != nil {
@@ -281,10 +285,11 @@ func (e *Engine) mcpLaunch(s config.MCPServer) (mcp.Launch, error) {
 // for everyone and those its profile adds.
 func (e *Engine) sessionServers(prof config.Profile) []config.MCPServer {
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	list := slices.Clone(e.mcpServers)
+	e.mu.Unlock()
 	var out []config.MCPServer
-	for _, s := range e.mcpServers {
-		if s.Approved == s.Fingerprint() && (s.Enabled || slices.Contains(prof.MCPServers, s.ID)) {
+	for _, s := range list {
+		if (s.Enabled || slices.Contains(prof.MCPServers, s.ID)) && e.mcpApproved(s) {
 			out = append(out, s)
 		}
 	}

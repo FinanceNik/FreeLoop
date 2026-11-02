@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseAddress } from "./preview.ts";
+import { framed, parseAddress } from "./preview.ts";
 
 const app = "wails://wails.localhost";
 
@@ -17,4 +17,12 @@ test("anything else does not", () => {
     assert.ok("error" in parseAddress(bad, app), bad);
   }
   assert.ok("error" in parseAddress("34117", "http://localhost:34117"), "the app's own page");
+});
+
+test("the app's page knows it is in a frame", () => {
+  const w = { top: null as unknown, self: null as unknown };
+  w.top = w;
+  w.self = w;
+  assert.equal(framed(w), false);
+  assert.equal(framed({ top: {}, self: {} }), true);
 });

@@ -140,6 +140,21 @@ export default function Providers({ providers, onChanged, onError, agents, defau
                 {p.baseUrl || "default endpoint"} · default model {p.defaultModel || "none"}
                 {p.hasKey ? " · key set" : ""}
               </div>
+              {p.addressChanged && (
+                <div className="banner warn row" role="alert">
+                  <span>
+                    This address was changed outside Freeloop, so the API key is not being sent. If you did not change it, something on this Mac may be trying to get your key.
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (!confirm(`Send the API key of ${p.name} to ${p.baseUrl || "its default endpoint"}?`)) return;
+                      EngineService.ConfirmProviderAddress(p.id).then(onChanged).catch(onError);
+                    }}
+                  >
+                    Use this address
+                  </button>
+                </div>
+              )}
               {tests[p.id] && (
                 <div className={tests[p.id].ok ? "ok" : "error-text"} role="status">
                   {tests[p.id].text}

@@ -92,7 +92,7 @@ func (e *Engine) dropNested(ctx context.Context, host *environment.Local, sid st
 	store := "--git-dir=" + e.checkpointStore(sid)
 	res, err := host.Exec(ctx, environment.ExecSpec{
 		Argv: append(slices.Clone(safeGit), store, "--work-tree="+host.Root(), "ls-files", "--stage", "-z"),
-		Env:  map[string]string{"GIT_CONFIG_NOSYSTEM": "1"}, MaxOutput: 64 << 20, Timeout: checkpointTimeout,
+		Env:  gitEnv(nil), MaxOutput: 64 << 20, Timeout: checkpointTimeout,
 	})
 	if err != nil {
 		return err

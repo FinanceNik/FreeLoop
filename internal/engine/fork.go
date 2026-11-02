@@ -121,7 +121,7 @@ func (e *Engine) ForkSession(ctx context.Context, sid string, seq int64) (ForkRe
 	}
 	if environment.IsDir(e.checkpointStore(sid)) {
 		if host, err := e.localEnv(src.WorkRoot(), nil); err == nil {
-			gitRun(ctx, host, time.Minute, "clone", "--quiet", "--bare", e.checkpointStore(sid), e.checkpointStore(fork.ID))
+			gitRunOver(ctx, host, time.Minute, "file", "clone", "--quiet", "--bare", e.checkpointStore(sid), e.checkpointStore(fork.ID))
 		}
 	}
 	e.emit(fork.ID, event.SessionStatus, event.SessionStatusData{Status: string(session.StatusIdle)})

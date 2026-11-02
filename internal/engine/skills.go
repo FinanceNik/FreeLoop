@@ -275,8 +275,18 @@ func (s sessionSkills) Load(name, file string) (harness.SkillContent, error) {
 	if err != nil {
 		return harness.SkillContent{}, err
 	}
+	// A project's skill comes from the repository or from what a command wrote
+	// there, and is read without asking, as reads in the project are: a link in
+	// it must not lead anywhere else.
+	own := sk.Source != skill.SourceApp
+	if own && !environment.Within(sk.Path, project.Root) {
+		return harness.SkillContent{}, fmt.Errorf("the skill %s is a link to a folder outside the project", name)
+	}
 	out := harness.SkillContent{Dir: sk.Path}
 	if file == "" {
+		if own && !environment.Within(filepath.Join(sk.Path, "SKILL.md"), sk.Path) {
+			return harness.SkillContent{}, fmt.Errorf("the SKILL.md of %s is a link out of the skill's folder", name)
+		}
 		if out.Text, err = skill.Body(fs, sk); err != nil {
 			return harness.SkillContent{}, err
 		}
@@ -287,7 +297,15 @@ func (s sessionSkills) Load(name, file string) (harness.SkillContent, error) {
 	if !filepath.IsLocal(file) {
 		return harness.SkillContent{}, fmt.Errorf("%q is not a file inside the skill", file)
 	}
-	b, err := fs.ReadFile(path.Join(sk.Dir, file))
+	at := path.Join(sk.Dir, file)
+	if own {
+		real := environment.Canonical(filepath.Join(sk.Path, filepath.FromSlash(file)))
+		if !environment.Within(real, sk.Path) {
+			return harness.SkillContent{}, fmt.Errorf("%s is a link out of the skill's folder", file)
+		}
+		at = real
+	}
+	b, err := fs.ReadFile(at)
 	if err != nil {
 		return harness.SkillContent{}, err
 	}

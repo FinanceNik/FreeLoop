@@ -61,7 +61,7 @@ func (e *Engine) readGit(g gitSource) ([]bundle, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	clone := append(append([]string{}, gitProtocols...), "clone", "--quiet", "--no-checkout", "--", g.URL, dir)
-	if res, err := gitRun(ctx, env, 4*time.Minute, clone...); err != nil || res.ExitCode != 0 {
+	if res, err := gitRunOver(ctx, env, 4*time.Minute, "https:http:ssh:git:file", clone...); err != nil || res.ExitCode != 0 {
 		return nil, fmt.Errorf("clone %s: %s", g.URL, cmp.Or(lastLine(res.Output), fmt.Sprint(err)))
 	}
 	ref := cmp.Or(g.Ref, "HEAD")

@@ -81,12 +81,21 @@ func SeatbeltProfile(c environment.Confinement) (string, error) {
 		w("(allow network-inbound (local ip \"localhost:*\"))")
 		w("(allow network-outbound (remote ip \"localhost:*\"))")
 	}
-	// A program's own Unix sockets, in its own folders. The SSH agent's and
-	// Docker's are elsewhere, and stay out of reach.
-	if c.Network != environment.NetworkAll {
-		for _, d := range append(append([]string{}, c.Write...), c.Scratch...) {
-			w("(allow network-bind network-inbound network-outbound (local unix-socket (subpath %s)) (remote unix-socket (subpath %s)))", quote(d), quote(d))
+	// A program's own Unix sockets, in its own folders, whatever else it may
+	// reach. A socket is a way into a program running outside the sandbox: the
+	// app's own API, Docker, the SSH agent, a tmux server that runs what it is
+	// told. /tmp is left out for that reason: it is where other programs keep
+	// theirs, and commands have their own TMPDIR.
+	w("(deny network* (local unix-socket) (remote unix-socket))")
+	for _, d := range append(append([]string{}, c.Write...), c.Scratch...) {
+		if d == "/tmp" || d == "/private/tmp" {
+			continue
 		}
+		w("(allow network-bind network-inbound network-outbound (local unix-socket (subpath %s)) (remote unix-socket (subpath %s)))", quote(d), quote(d))
+	}
+	// Name lookups go through this one.
+	if c.Network == environment.NetworkAll {
+		w("(allow network-outbound (remote unix-socket (literal \"/private/var/run/mDNSResponder\")))")
 	}
 
 	w("(deny file-write*)")
@@ -106,6 +115,17 @@ func SeatbeltProfile(c environment.Confinement) (string, error) {
 			return "", fmt.Errorf("a path pattern cannot hold a quote: %s", re)
 		}
 		w("(deny file-write* (regex #\"%s\"))", re)
+	}
+	// Renaming a folder needs the right to unlink it, and only the folder itself
+	// is named: what is inside stays writable.
+	if len(c.NoMove) > 0 {
+		w("(deny file-write-unlink %s)", paths("literal", c.NoMove))
+	}
+	for _, re := range c.NoMovePatterns {
+		if strings.Contains(re, `"`) {
+			return "", fmt.Errorf("a path pattern cannot hold a quote: %s", re)
+		}
+		w("(deny file-write-unlink (regex #\"%s\"))", re)
 	}
 
 	readable := append(append(append([]string{}, c.Write...), c.Scratch...), c.Read...)

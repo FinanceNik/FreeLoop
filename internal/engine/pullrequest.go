@@ -242,7 +242,7 @@ func (e *Engine) CreatePullRequest(ctx context.Context, req CreatePullRequestReq
 	}
 	// Hooks do not run (safeGit), so a pre-push hook cannot either; the ext
 	// and fd transports would run a program the remote's URL names.
-	res, err := gitRun(ctx, env, prTimeout, "-c", "protocol.ext.allow=never", "-c", "protocol.fd.allow=never", "push", "--porcelain", "--set-upstream", info.Remote, "HEAD:refs/heads/"+info.Branch)
+	res, err := gitRunOver(ctx, env, prTimeout, "https:http:ssh:git:file", "-c", "protocol.ext.allow=never", "-c", "protocol.fd.allow=never", "push", "--porcelain", "--set-upstream", info.Remote, "HEAD:refs/heads/"+info.Branch)
 	if err != nil {
 		return event.PullRequestData{}, err
 	}

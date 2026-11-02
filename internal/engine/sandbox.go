@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -131,13 +132,16 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 }
 
 // gitProtected keeps a repository's config and hooks out of reach, as gitMounts
-// does for a container. Git needs the rest of its directory to commit, which for
-// a worktree is outside the project. With no repository, .git is closed entirely:
-// one made by a command would be what the app's and the user's git then trust.
+// does for a container, and stops the folders that hold them being moved aside,
+// edited and moved back. Git needs the rest of its directory to commit, which
+// for a worktree is outside the project. With no repository, or one whose common
+// directory is not where it belongs, .git is closed entirely: one made by a
+// command would be what the app's and the user's git then trust, and a planted
+// .git/commondir must not choose what the sandbox can write.
 func (e *Engine) gitProtected(ctx context.Context, host *environment.Local, c *environment.Confinement) []string {
 	root := host.Root()
 	common, ok := git(ctx, host, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if !ok {
+	if !ok || movedCommonDir(ctx, host) {
 		return []string{filepath.Join(root, ".git")}
 	}
 	common = environment.Canonical(strings.TrimSpace(common))
@@ -146,11 +150,22 @@ func (e *Engine) gitProtected(ctx context.Context, host *environment.Local, c *e
 	if !environment.Within(common, root) {
 		c.Write = append(c.Write, common)
 	}
-	out := []string{}
+	out := []string{filepath.Join(common, "modules")}
+	worktrees := filepath.Join(common, "worktrees")
+	c.NoMove = append(c.NoMove, common, own, worktrees)
 	for _, d := range []string{common, own} {
-		for _, name := range []string{"config", "config.worktree", "hooks", "commondir", "gitdir"} {
+		for _, name := range gitActive {
 			out = append(out, filepath.Join(d, name))
 		}
+	}
+	if own == common {
+		// The main checkout has no business in its linked worktrees' folders.
+		out = append(out, worktrees)
+	} else {
+		// A worktree session writes its own folder, not the others'.
+		siblings := "^" + regexp.QuoteMeta(worktrees) + "/[^/]+"
+		c.ProtectedPatterns = append(c.ProtectedPatterns, siblings+"/("+strings.Join(gitActive, "|")+")(/.*)?$")
+		c.NoMovePatterns = append(c.NoMovePatterns, siblings+"$")
 	}
 	// A worktree's .git is a file naming its directory.
 	if own != filepath.Join(root, ".git") {
@@ -158,6 +173,9 @@ func (e *Engine) gitProtected(ctx context.Context, host *environment.Local, c *e
 	}
 	return out
 }
+
+// gitActive are the names in a git directory that decide what git runs.
+var gitActive = []string{"config", "config.worktree", "hooks", "commondir", "gitdir"}
 
 func expandHome(home, p string) string {
 	if p == "~" {

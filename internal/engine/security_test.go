@@ -363,3 +363,77 @@ func TestImportFindsMoreSecrets(t *testing.T) {
 		}
 	}
 }
+
+// plantPromisor makes git run a program when it looks for a missing object: a
+// promisor remote whose URL is a command (security review, 2026-11-02).
+func plantPromisor(t *testing.T, repo, marker, missing string) {
+	t.Helper()
+	gitIn(t, repo, "config", "core.repositoryformatversion", "1")
+	gitIn(t, repo, "config", "extensions.partialclone", "origin")
+	gitIn(t, repo, "config", "remote.origin.promisor", "true")
+	gitIn(t, repo, "config", "protocol.ext.allow", "always")
+	gitIn(t, repo, "config", "remote.origin.url", "ext::sh -c touch% "+marker)
+	os.Remove(filepath.Join(repo, ".git", "objects", missing[:2], missing[2:]))
+}
+
+// Adding a folder reads its first commit, before it is trusted.
+func TestAddingAProjectRunsNothingFromItsConfig(t *testing.T) {
+	repo := gitRepo(t)
+	os.WriteFile(filepath.Join(repo, "b.txt"), []byte("b"), 0o644)
+	gitIn(t, repo, "add", ".")
+	gitIn(t, repo, "commit", "-qm", "second")
+	marker := filepath.Join(t.TempDir(), "ran")
+	plantPromisor(t, repo, marker, strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD")))
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	if _, err := e.AddProject(context.Background(), repo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("adding an untrusted folder ran a program its config names")
+	}
+}
+
+// The automatic refresh runs in a trusted project with no click.
+func TestGitRefreshRunsNothingFromTheConfig(t *testing.T) {
+	repo := gitRepo(t)
+	marker := filepath.Join(t.TempDir(), "ran")
+	plantPromisor(t, repo, marker, strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD^{tree}")))
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	env, err := e.localEnv(repo, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := gitState(context.Background(), env, true)
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a git refresh ran a program the config names")
+	}
+	if !st.Repo || st.Dirty != -1 {
+		t.Errorf("a repository with a promisor remote should show no count: %+v", st)
+	}
+}
+
+// A moved common directory leaves .git/config untouched, so the config scan
+// alone sees nothing.
+func TestGitRefreshRefusesAMovedCommonDir(t *testing.T) {
+	repo := gitRepo(t)
+	head := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD"))
+	marker := filepath.Join(t.TempDir(), "ran")
+	evil := filepath.Join(repo, ".git", "evil")
+	os.MkdirAll(filepath.Join(evil, "objects"), 0o755)
+	os.MkdirAll(filepath.Join(evil, "refs", "heads"), 0o755)
+	os.WriteFile(filepath.Join(evil, "refs", "heads", "main"), []byte(head+"\n"), 0o644)
+	os.WriteFile(filepath.Join(evil, "config"), []byte("[core]\n\trepositoryformatversion = 1\n[extensions]\n\tpartialclone = origin\n[remote \"origin\"]\n\tpromisor = true\n\turl = ext::sh -c touch% "+marker+"\n[protocol \"ext\"]\n\tallow = always\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, ".git", "commondir"), []byte("evil\n"), 0o644)
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	env, err := e.localEnv(repo, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitState(context.Background(), env, true)
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a git refresh ran a program a planted common directory names")
+	}
+}

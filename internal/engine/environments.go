@@ -254,7 +254,7 @@ func (e *Engine) resolveEnv(c config.Environment) (map[string]string, error) {
 		vars = map[string]string{}
 	}
 	for name, ref := range c.Secrets {
-		r, err := secrets.ParseRef(ref)
+		r, err := ownRef(ref, secretRef(c.ID, name))
 		if err != nil {
 			return nil, fmt.Errorf("environment %s: secret %s: %w", c.Name, name, err)
 		}

@@ -38,6 +38,8 @@ type Options struct {
 	// Confiner enforces the native sandbox (ENV-009). Without one, a sandboxed
 	// environment runs nothing.
 	Confiner environment.Confiner
+	// EditorArgv is the command that opens a file for editing, never running it.
+	EditorArgv func(path string) []string
 	// Home is the user's home directory, for the protected-path policy.
 	// Default os.UserHomeDir().
 	Home string
@@ -83,6 +85,13 @@ type Engine struct {
 	rules   *ruleStore
 	cfg     config.Config
 	colors  config.Colors
+	// editorArgv is the command that opens a file for editing.
+	editorArgv func(path string) []string
+	// keyAddresses holds, by provider, the address its key is for.
+	keyAddresses map[string]string
+	// approvalSecret signs MCP approvals; read from the Keychain when first needed.
+	approvalOnce   sync.Mutex
+	approvalSecret []byte
 	// issues are the current problems per source file group, so a reload
 	// replaces its own and leaves the others.
 	issues   map[string][]config.Issue
@@ -172,6 +181,7 @@ func Open(opts Options) (*Engine, error) {
 		bus:           newBus(),
 		secrets:       opts.Secrets,
 		confiner:      opts.Confiner,
+		editorArgv:    opts.EditorArgv,
 		cfg:           cfg,
 		issues:        map[string][]config.Issue{issueConfig: issues},
 		onChange:      opts.OnConfigChange,
@@ -297,8 +307,15 @@ func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
 		return config.Config{}, err
 	}
 	e.mu.Lock()
+	moved := originOf(e.cfg.Web.SearchURL) != originOf(c.Web.SearchURL)
 	e.cfg = c
 	e.mu.Unlock()
+	// Changed here, so the user means it; changed in the file, the key stays put.
+	if moved && c.Web.SearchURL != "" {
+		if err := e.rebindSearchKey(c.Web.SearchURL); err != nil {
+			return config.Config{}, err
+		}
+	}
 	netguard.SetLocalOnly(c.Network.LocalOnly)
 	return c, nil
 }
@@ -331,9 +348,10 @@ const (
 	issueMCP          = "mcp"
 	issuePresets      = "presets"
 	issueColors       = "colors"
+	issueAddresses    = "addresses"
 )
 
-var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issuePresets, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors}
+var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issuePresets, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueAddresses}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()
@@ -447,7 +465,33 @@ func (e *Engine) rememberStoredSecrets() {
 			continue
 		}
 		if v, err := e.secrets.Get(ref); err == nil {
-			e.remember(v)
+			_, key, _ := unbindSecret(v)
+			e.remember(key)
+		}
+	}
+	if v, err := e.secrets.Get(webSearchKey); err == nil {
+		_, key, _ := unbindSecret(v)
+		e.remember(key)
+	}
+	e.learnKeyAddresses()
+}
+
+// learnKeyAddresses reads which address each provider's key is for, so a change
+// made while the app was closed shows at once.
+func (e *Engine) learnKeyAddresses() {
+	e.mu.Lock()
+	cfgs := slices.Clone(e.providers.configs)
+	e.mu.Unlock()
+	for _, c := range cfgs {
+		if c.APIKey == "" {
+			continue
+		}
+		if ref, err := ownRef(c.APIKey, providerRef(c.ID)); err == nil {
+			if v, err := e.secrets.Get(ref); err == nil {
+				if address, _, bound := unbindSecret(v); bound {
+					e.noteKeyAddress(c.ID, address)
+				}
+			}
 		}
 	}
 }

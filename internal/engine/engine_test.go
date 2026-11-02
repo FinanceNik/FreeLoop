@@ -336,7 +336,7 @@ func TestProvidersKeepKeysInTheKeychain(t *testing.T) {
 	if strings.Contains(string(b), "sk-ant-test") || !strings.Contains(string(b), "keychain://freeloop/providers/anthropic") {
 		t.Errorf("providers.yaml = %s", b)
 	}
-	if v, _ := mem.Get(secrets.Ref{Service: "freeloop", Account: "providers/anthropic"}); v != "sk-ant-test-0123456789" {
+	if v, _ := mem.Get(secrets.Ref{Service: "freeloop", Account: "providers/anthropic"}); !strings.Contains(v, "sk-ant-test-0123456789") {
 		t.Errorf("keychain value = %q", v)
 	}
 

@@ -68,7 +68,7 @@ func main() {
 	configChanges := make(chan engine.ConfigChange, 16)
 	notices := make(chan engine.Notice, 64)
 	eng, err := engine.Open(engine.Options{
-		DataDir: dataDir, Secrets: darwin.Keychain{}, Confiner: darwin.Seatbelt{}, Dev: os.Getenv("FREELOOP_DEV") == "1",
+		DataDir: dataDir, Secrets: darwin.Keychain{}, Confiner: darwin.Seatbelt{}, EditorArgv: darwin.EditorArgv, Dev: os.Getenv("FREELOOP_DEV") == "1",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: os.Getenv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).

@@ -293,6 +293,93 @@ func TestSeatbeltPatterns(t *testing.T) {
 	}
 }
 
+// Protecting .git/config means nothing if .git can be moved aside, edited and
+// moved back (found by a security review, 2026-11-02).
+func TestSeatbeltNoMove(t *testing.T) {
+	var gitDir string
+	f := sandboxed(t, func(c *environment.Confinement) {
+		gitDir = filepath.Join(c.Write[0], ".git")
+		c.NoMove = []string{gitDir}
+	})
+	for _, command := range []string{
+		"mv .git .g2",
+		"mv .git/config .git/config2",
+		"python3 -I -c 'import os; os.rename(\".git\", \".g2\")'",
+	} {
+		if out, code := f.run(t, command); code == 0 {
+			t.Errorf("%s succeeded: %s", command, out)
+		}
+	}
+	if out, code := f.run(t, `echo ref > .git/ORIG_HEAD && mkdir -p sub && mv sub sub2`); code != 0 {
+		t.Errorf("ordinary writes were refused: %s", out)
+	}
+	if b, err := os.ReadFile(filepath.Join(gitDir, "HEAD")); err != nil || len(b) == 0 {
+		t.Errorf(".git was changed: %v", err)
+	}
+	if !strings.Contains(mustProfile(t, environment.Confinement{Home: "/h", Write: []string{"/h/p"}, NoMovePatterns: []string{"^/h/p/x$"}}), `(deny file-write-unlink (regex #"^/h/p/x$"))`) {
+		t.Error("a pattern was left out")
+	}
+}
+
+// A Unix socket is a way into a program outside the sandbox, whatever the
+// network setting (found by a security review, 2026-11-02).
+func TestSeatbeltUnixSockets(t *testing.T) {
+	// Outside the stand-in home and project, as the app's and Docker's are.
+	dir, err := os.MkdirTemp("/private/tmp", "flsock")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer os.RemoveAll(dir)
+	sock := filepath.Join(dir, "s")
+	l, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			c.Write([]byte("hello"))
+			c.Close()
+		}
+	}()
+	connect := `python3 -I -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); print(s.recv(5).decode())' `
+	// A relative path, since a stand-in home's is longer than a socket's may be.
+	own := "import socket; s=socket.socket(socket.AF_UNIX); s.bind(\"o\"); s.listen(); c=socket.socket(socket.AF_UNIX); c.connect(\"o\"); print(\"own ok\")"
+	for _, network := range []environment.Network{environment.NetworkAll, environment.NetworkLocalhost, environment.NetworkNone} {
+		t.Run(string(network), func(t *testing.T) {
+			f := sandboxed(t, func(c *environment.Confinement) {
+				c.Scratch = append(c.Scratch, "/private/tmp")
+			})
+			exec := func(command string) (string, int) {
+				res, err := f.env.Exec(context.Background(), environment.ExecSpec{Command: command, Network: network, Timeout: 20 * time.Second})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return res.Output, res.ExitCode
+			}
+			if out, code := exec(connect + sock); code == 0 {
+				t.Errorf("reached a socket in /private/tmp: %s", out)
+			}
+			if out, code := exec(`python3 -I -c '` + own + `'`); code != 0 || !strings.Contains(out, "own ok") {
+				t.Errorf("a program's own socket failed: %d: %s", code, out)
+			}
+		})
+	}
+}
+
+func mustProfile(t *testing.T, c environment.Confinement) string {
+	t.Helper()
+	p, err := SeatbeltProfile(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestSeatbeltFailsClosed(t *testing.T) {
 	if _, err := SeatbeltProfile(environment.Confinement{}); err == nil {
 		t.Error("an empty confinement gave a profile")
@@ -380,5 +467,13 @@ func TestSeatbeltHosts(t *testing.T) {
 	}
 	if len(blocked) != 1 || blocked[0] != "example.com" {
 		t.Errorf("blocked = %v", blocked)
+	}
+}
+
+// Opening a project's file must not run it (security review, 2026-11-02).
+func TestOpenInEditorNeverRuns(t *testing.T) {
+	argv := EditorArgv("/p/README.md")
+	if argv[0] != "/usr/bin/open" || argv[1] != "-t" || argv[2] != "/p/README.md" || len(argv) != 3 {
+		t.Errorf("argv = %v", argv)
 	}
 }

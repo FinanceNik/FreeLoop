@@ -68,6 +68,8 @@ func (e *Engine) reload(changed []string) {
 			if err := e.loadProviders(); err != nil {
 				e.setIssues(issueProviders, []config.Issue{{File: config.ProvidersFileName, Message: err.Error()}})
 			}
+			e.learnKeyAddresses()
+			e.checkKeyAddresses()
 		case f == config.RulesFileName:
 			e.rules.reload()
 		case f == config.MCPFileName:

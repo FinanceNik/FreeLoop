@@ -52,6 +52,9 @@ type ProviderInfo struct {
 	HasKey       bool   `json:"hasKey"`
 	// Builtin marks providers that are not in providers.yaml.
 	Builtin bool `json:"builtin"`
+	// AddressChanged says the address is not the one the key is for: it changed
+	// outside the app, and the key is not sent until the user confirms it.
+	AddressChanged bool `json:"addressChanged"`
 	// Favorites and Hidden are the user's model lists (PRV-003).
 	Favorites []string `json:"favorites"`
 	Hidden    []string `json:"hidden"`
@@ -122,7 +125,9 @@ func (e *Engine) ListProviders() []ProviderInfo {
 	e.mu.Unlock()
 	out := []ProviderInfo{}
 	for _, c := range cfgs {
-		out = append(out, info(c))
+		pi := info(c)
+		pi.AddressChanged = e.addressChanged(c)
+		out = append(out, pi)
 	}
 	if e.dev {
 		pi := info(e.demoConfig())
@@ -154,14 +159,10 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 
 	key := ""
 	if cfg.APIKey != "" {
-		ref, err := secrets.ParseRef(cfg.APIKey)
-		if err != nil {
+		var err error
+		if key, err = e.providerKey(cfg); err != nil {
 			return nil, err
 		}
-		if key, err = e.secrets.Get(ref); err != nil {
-			return nil, fmt.Errorf("provider %s: read API key from the Keychain: %w", cfg.Name, err)
-		}
-		e.remember(key)
 	}
 	var p provider.Provider
 	switch provider.Type(cfg.Type) {
@@ -249,9 +250,19 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 	if i >= 0 {
 		cfg.APIKey, cfg.Headers, cfg.Models, cfg.MaxConcurrent = cfgs[i].APIKey, cfgs[i].Headers, cfgs[i].Models, cfgs[i].MaxConcurrent
 	}
-	if key := strings.TrimSpace(req.APIKey); key != "" {
-		ref := secrets.Ref{Service: "freeloop", Account: "providers/" + req.ID}
-		if err := e.secrets.Set(ref, key); err != nil {
+	// Saving in the app is the user saying where the key is for. A key kept for
+	// a changed address moves with it; a file changing the address does not.
+	key := strings.TrimSpace(req.APIKey)
+	if key == "" && cfg.APIKey != "" {
+		stored, err := e.secrets.Get(providerRef(req.ID))
+		if err != nil {
+			return ProviderInfo{}, fmt.Errorf("read the API key from the Keychain: %w", err)
+		}
+		_, key, _ = unbindSecret(stored)
+	}
+	if key != "" {
+		ref := providerRef(req.ID)
+		if err := e.secrets.Set(ref, bindSecret(keyAddress(cfg), key)); err != nil {
 			return ProviderInfo{}, fmt.Errorf("store the API key in the Keychain: %w", err)
 		}
 		e.remember(key)
@@ -264,6 +275,9 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 	}
 	if err := e.saveConfigs(cfgs); err != nil {
 		return ProviderInfo{}, err
+	}
+	if cfg.APIKey != "" {
+		e.noteKeyAddress(cfg.ID, keyAddress(cfg))
 	}
 	return info(cfg), nil
 }
@@ -290,12 +304,20 @@ func (e *Engine) DeleteProvider(id string) error {
 	if i < 0 {
 		return fmt.Errorf("no provider %q", id)
 	}
-	if ref, err := secrets.ParseRef(cfgs[i].APIKey); err == nil {
-		if err := e.secrets.Delete(ref); err != nil && !errors.Is(err, secrets.ErrNotFound) {
+	// Only its own item: what the file names might be another's.
+	if cfgs[i].APIKey != "" {
+		if err := e.secrets.Delete(providerRef(id)); err != nil && !errors.Is(err, secrets.ErrNotFound) {
 			return err
 		}
 	}
-	return e.saveConfigs(slices.Delete(cfgs, i, i+1))
+	e.mu.Lock()
+	delete(e.keyAddresses, id)
+	e.mu.Unlock()
+	if err := e.saveConfigs(slices.Delete(cfgs, i, i+1)); err != nil {
+		return err
+	}
+	e.checkKeyAddresses()
+	return nil
 }
 
 // TestProvider lists a provider's models, which proves the URL and key

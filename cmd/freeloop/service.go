@@ -18,8 +18,8 @@ import (
 // EngineService exposes the engine to the frontend. It is a thin adapter:
 // each method forwards to the engine and adds nothing, except ChooseFolder,
 // ExportSession, ExportConfig and ImportConfig, which show native dialogs,
-// and OpenSkill, OpenFile, OpenHarness and OpenColors, which open a file in
-// another app.
+// and OpenSkill, OpenFile, OpenHarness and OpenColors, which open a file in the
+// user's text editor.
 type EngineService struct {
 	eng  *engine.Engine
 	app  *application.App
@@ -561,6 +561,12 @@ func (s *EngineService) Config() config.Config {
 	return s.eng.Config()
 }
 
+// ConfirmProviderAddress tells the engine a provider's changed address is the
+// one its key is for.
+func (s *EngineService) ConfirmProviderAddress(id string) error {
+	return s.eng.ConfirmProviderAddress(id)
+}
+
 func (s *EngineService) Colors() config.Colors {
 	return s.eng.Colors()
 }
@@ -576,7 +582,7 @@ func (s *EngineService) OpenColors() error {
 	if err != nil {
 		return err
 	}
-	return s.app.Browser.OpenFile(path)
+	return s.eng.OpenInEditor(path)
 }
 
 func (s *EngineService) ConfigIssues() []config.Issue {
@@ -667,7 +673,7 @@ func (s *EngineService) OpenSkill(name string) error {
 	if path == "" {
 		return fmt.Errorf("the skill %s is not in Freeloop's skill folder", name)
 	}
-	return s.app.Browser.OpenFile(path)
+	return s.eng.OpenInEditor(path)
 }
 
 func (s *EngineService) ListFolder(ctx context.Context, sessionID, rel string) ([]engine.FileEntry, error) {
@@ -685,7 +691,7 @@ func (s *EngineService) OpenFile(ctx context.Context, sessionID, rel string) err
 	if err != nil {
 		return err
 	}
-	return s.app.Browser.OpenFile(path)
+	return s.eng.OpenInEditor(path)
 }
 
 func (s *EngineService) CheckSkillUpdate(ctx context.Context, name string) (engine.SkillCandidate, error) {
@@ -711,7 +717,7 @@ func (s *EngineService) OpenHarness(id string) error {
 	if path == "" {
 		return fmt.Errorf("the harness %s has no source folder", id)
 	}
-	return s.app.Browser.OpenFile(path)
+	return s.eng.OpenInEditor(path)
 }
 
 // ChooseFolder shows a native folder picker and returns the chosen path, or

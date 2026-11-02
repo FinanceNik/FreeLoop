@@ -53,11 +53,17 @@ type Changes struct {
 }
 
 func gitRun(ctx context.Context, env environment.Environment, timeout time.Duration, args ...string) (environment.ExecResult, error) {
+	return gitRunOver(ctx, env, timeout, "", args...)
+}
+
+// gitRunOver is gitRun for the few commands that must reach a repository, over
+// the transports listed: a colon-separated GIT_ALLOW_PROTOCOL, never ext or fd.
+func gitRunOver(ctx context.Context, env environment.Environment, timeout time.Duration, transports string, args ...string) (environment.ExecResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	res, err := env.Exec(ctx, environment.ExecSpec{
 		Argv:      append(slices.Clone(safeGit), args...),
-		Env:       map[string]string{"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_EDITOR": "true"},
+		Env:       gitEnv(map[string]string{"GIT_EDITOR": "true", "GIT_ALLOW_PROTOCOL": transports}),
 		MaxOutput: 1 << 20,
 		Timeout:   timeout,
 	})

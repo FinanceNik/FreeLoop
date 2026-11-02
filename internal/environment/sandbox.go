@@ -44,6 +44,12 @@ type Confinement struct {
 	// ProtectedPatterns are the same as regular expressions over absolute paths,
 	// for deny rules with wildcards.
 	ProtectedPatterns []string
+	// NoMove are folders whose contents can change but which cannot themselves be
+	// renamed or removed: protecting .git/config means nothing if .git can be moved
+	// aside, edited and moved back. NoMovePatterns are the same as regular
+	// expressions.
+	NoMove         []string
+	NoMovePatterns []string
 	// NoAccess is neither readable nor writable, and wins over the above.
 	NoAccess []string
 	// NoAccessPatterns are regular expressions over absolute paths, for deny

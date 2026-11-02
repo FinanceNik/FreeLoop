@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -340,3 +341,100 @@ func TestExecStdinAndSeparateStderr(t *testing.T) {
 		t.Errorf("interleaved = %+v", res)
 	}
 }
+
+// A folder swapped for a link after the path was checked must not lead around
+// the guard (security review, 2026-11-02).
+func TestFileToolsDoNotFollowALinkAfterTheCheck(t *testing.T) {
+	base, _ := filepath.EvalSymlinks(t.TempDir())
+	root, secret := filepath.Join(base, "project"), filepath.Join(base, "secret")
+	for _, d := range []string{filepath.Join(root, "d"), secret} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	os.WriteFile(filepath.Join(secret, "id"), []byte("PRIVATE"), 0o600)
+	os.WriteFile(filepath.Join(root, "d", "id"), []byte("public"), 0o644)
+	guard := rootOnlyGuard{root}
+	l, err := NewLocal(LocalOptions{Root: root, Guard: guard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	swap := func() {
+		afterCheck = func() {}
+		os.Rename(filepath.Join(root, "d"), filepath.Join(root, "d-aside"))
+		os.Symlink(secret, filepath.Join(root, "d"))
+	}
+	restore := func() {
+		afterCheck = func() {}
+		os.Remove(filepath.Join(root, "d"))
+		os.Rename(filepath.Join(root, "d-aside"), filepath.Join(root, "d"))
+	}
+	t.Cleanup(func() { afterCheck = func() {} })
+
+	afterCheck = swap
+	b, err := l.FS().ReadFile("d/id")
+	if err == nil || string(b) == "PRIVATE" {
+		t.Errorf("read through a swapped folder: %q, %v", b, err)
+	}
+	restore()
+
+	afterCheck = swap
+	if err := l.FS().WriteFile("d/planted", []byte("x")); err == nil {
+		t.Error("wrote through a swapped folder")
+	}
+	if _, err := os.Stat(filepath.Join(secret, "planted")); err == nil {
+		t.Error("a write landed outside the project")
+	}
+	restore()
+
+	// Ordinary use is unchanged, a link inside the project included.
+	if err := os.Symlink(filepath.Join(root, "d", "id"), filepath.Join(root, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := l.FS().ReadFile("link"); err != nil || string(b) != "public" {
+		t.Errorf("reading a link in the project: %q, %v", b, err)
+	}
+	if err := l.FS().WriteFile("link", []byte("edited")); err != nil {
+		t.Errorf("writing through a link in the project: %v", err)
+	}
+	if err := l.FS().WriteFile("new/deep/file", []byte("x")); err != nil {
+		t.Errorf("a new file in new folders: %v", err)
+	}
+}
+
+// A FIFO must not hang a read.
+func TestReadingAFIFODoesNotHang(t *testing.T) {
+	root := t.TempDir()
+	if err := syscall.Mkfifo(filepath.Join(root, "pipe"), 0o644); err != nil {
+		t.Skip(err)
+	}
+	l, err := NewLocal(LocalOptions{Root: root, Guard: rootOnlyGuard{environmentCanonical(root)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := l.FS().ReadFile("pipe")
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("a FIFO was read as a file")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reading a FIFO hung")
+	}
+}
+
+func environmentCanonical(p string) string { return Canonical(p) }
+
+type rootOnlyGuard struct{ root string }
+
+func (g rootOnlyGuard) CheckRead(p string) error {
+	if !Within(p, g.root) {
+		return ErrProtected
+	}
+	return nil
+}
+func (g rootOnlyGuard) CheckWrite(p string) error { return g.CheckRead(p) }

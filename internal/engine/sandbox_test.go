@@ -19,6 +19,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/platform/darwin"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
+	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
 // ENV-009, end to end on the real sandbox: a command in the project runs with no
@@ -364,5 +365,128 @@ func TestSandboxHostList(t *testing.T) {
 	res, _ := r.Exec(ctx, environment.ExecSpec{Command: "curl -sS -m 3 -x '" + proxy + "' http://registry.example.invalid/"})
 	if res.ExitCode == 0 || !strings.Contains(res.Output, "connect") && !strings.Contains(res.Output, "Failed") {
 		t.Errorf("the proxy outlived its session: exit %d: %s", res.ExitCode, res.Output)
+	}
+}
+
+// sandboxedProject is a trusted repository with its sandboxed environment.
+func sandboxedProject(t *testing.T) (*Engine, *environment.Local, string, string) {
+	t.Helper()
+	home := environment.Canonical(t.TempDir())
+	repo := filepath.Join(home, "Documents", "repo")
+	os.MkdirAll(repo, 0o755)
+	gitIn(t, repo, "init", "-q", "-b", "main")
+	os.WriteFile(filepath.Join(repo, "a.txt"), []byte("a\n"), 0o644)
+	gitIn(t, repo, "add", ".")
+	gitIn(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "one")
+	e, err := Open(Options{DataDir: filepath.Join(home, "data"), Secrets: secrets.NewMemory(), Home: home, Confiner: darwin.Seatbelt{}, WatchInterval: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { e.Close() })
+	p, err := e.SetProjectTrust(context.Background(), repo, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Environment{ID: "sandboxed", Kind: "local", Sandbox: &config.Sandbox{Enabled: true}}
+	env, done, err := e.sandboxEnv(context.Background(), session.Session{ID: "ses_x", ProjectID: p.ID, ProjectRoot: repo}, cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(done)
+	return e, env, repo, home
+}
+
+func inSandbox(t *testing.T, env *environment.Local, script string) (string, int) {
+	t.Helper()
+	res, err := env.Exec(context.Background(), environment.ExecSpec{Argv: []string{"/bin/sh", "-c", script}, Timeout: 30 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res.Output, res.ExitCode
+}
+
+// One sandboxed command, which needs no approval, moved .git aside, edited its
+// config and moved it back; the app's next git refresh then ran the program it
+// named, outside the sandbox (security review, 2026-11-02).
+func TestSandboxCannotMoveGitAside(t *testing.T) {
+	e, env, repo, home := sandboxedProject(t)
+	before, _ := os.ReadFile(filepath.Join(repo, ".git", "config"))
+	marker := filepath.Join(home, "escaped")
+	tree := strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD^{tree}"))
+	for _, script := range []string{
+		"mv .git .g2",
+		"cp -R .git .g2 && rm -rf .git && mv .g2 .git",
+		"mkdir -p .git2 && python3 -I -c 'import os; os.rename(\".git\", \".git2/x\")'",
+		"echo gitdir: ./evil > .git",
+		"rm -f .git/objects/" + tree[:2] + "/" + tree[2:] + "; echo x >> .git/config",
+	} {
+		out, _ := inSandbox(t, env, script)
+		t.Logf("%s: %s", script, out)
+	}
+	if b, err := os.ReadFile(filepath.Join(repo, ".git", "config")); err != nil || string(b) != string(before) {
+		t.Fatalf(".git/config changed or moved: %v", err)
+	}
+	host, _ := e.localEnv(repo, nil)
+	gitState(context.Background(), host, true)
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a command left the sandbox through the app's git")
+	}
+}
+
+// Git still has to work in the sandbox.
+func TestSandboxGitStillCommits(t *testing.T) {
+	_, env, repo, _ := sandboxedProject(t)
+	out, code := inSandbox(t, env, "echo b > b.txt && git add b.txt && git -c user.name=t -c user.email=t@t commit -qm two && git checkout -qb side && git log --oneline | wc -l")
+	if code != 0 || !strings.Contains(out, "2") {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if strings.TrimSpace(gitIn(t, repo, "rev-parse", "--abbrev-ref", "HEAD")) != "side" {
+		t.Error("the commit did not land")
+	}
+}
+
+// A planted .git/commondir chose what the next sandbox could write.
+func TestSandboxIgnoresAPlantedCommonDir(t *testing.T) {
+	e, _, repo, home := sandboxedProject(t)
+	other := filepath.Join(home, "Documents", "private")
+	os.MkdirAll(other, 0o755)
+	gitIn(t, other, "init", "-q")
+	os.WriteFile(filepath.Join(repo, ".git", "commondir"), []byte(filepath.Join(other, ".git")+"\n"), 0o644)
+	cfg := config.Environment{ID: "sandboxed", Kind: "local", Sandbox: &config.Sandbox{Enabled: true}}
+	env, done, err := e.sandboxEnv(context.Background(), session.Session{ID: "ses_y", ProjectRoot: repo}, cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+	planted := filepath.Join(other, ".git", "refs", "heads", "planted")
+	inSandbox(t, env, "echo deadbeef > "+planted)
+	if _, err := os.Stat(planted); err == nil {
+		t.Error("a planted common directory opened another repository for writing")
+	}
+}
+
+// load_skill read what the sandbox refused, through a link the sandbox let a
+// command plant, with no prompt (security review, 2026-11-02).
+func TestSkillLinksStayInTheSkill(t *testing.T) {
+	e, env, repo, home := sandboxedProject(t)
+	os.WriteFile(filepath.Join(home, ".netrc"), []byte("machine x password hunter2"), 0o600)
+	out, code := inSandbox(t, env, "mkdir -p .agents/skills/x && printf -- '---\\nname: x\\ndescription: d\\n---\\nb\\n' > .agents/skills/x/SKILL.md && printf note > .agents/skills/x/own.txt && ln -s "+home+"/.netrc .agents/skills/x/ref")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	p, err := e.store.ProjectByRoot(context.Background(), environment.Canonical(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.forgetSkills()
+	skills := sessionSkills{e: e, projectID: p.ID, root: p.Root}
+	if c, err := skills.Load("x", "ref"); err == nil || strings.Contains(c.Text, "hunter2") {
+		t.Errorf("load_skill followed a link out of the skill: %q, %v", c.Text, err)
+	}
+	if c, err := skills.Load("x", "own.txt"); err != nil || c.Text != "note" {
+		t.Errorf("a file of the skill: %q, %v", c.Text, err)
+	}
+	if c, err := skills.Load("x", ""); err != nil || !strings.Contains(c.Text, "b") {
+		t.Errorf("the skill itself: %q, %v", c.Text, err)
 	}
 }

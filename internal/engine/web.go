@@ -117,11 +117,10 @@ func (w sessionWeb) Search(ctx context.Context, query string) ([]web.Result, err
 	}
 	req.Header.Set("Accept", "application/json")
 	if cfg.SearchHeader != "" {
-		key, err := w.e.secrets.Get(webSearchKey)
+		key, err := w.e.searchKey(cfg.SearchURL)
 		if err != nil {
-			return nil, fmt.Errorf("read the search key from the Keychain: %w", err)
+			return nil, err
 		}
-		w.e.remember(key)
 		req.Header.Set(cfg.SearchHeader, key)
 	}
 	// Through http.DefaultTransport, so the local-only switch covers it. The
@@ -163,5 +162,5 @@ func (e *Engine) SetWebSearchKey(key string) error {
 		return nil
 	}
 	e.remember(key)
-	return e.secrets.Set(webSearchKey, key)
+	return e.secrets.Set(webSearchKey, bindSecret(originOf(e.Config().Web.SearchURL), key))
 }
