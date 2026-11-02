@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, MODES, type Command, type HarnessInfo, type Issue, type Profile, type ProviderInfo } from "./api.ts";
+import { EngineService, MODES, type Command, type HarnessInfo, type Issue, type OptimizerStatus, type Profile, type ProviderInfo } from "./api.ts";
+import { OPTIMIZER_OFF } from "./optimizers.ts";
 
 // Profiles (HRN-003): one YAML file each in profiles/. The form covers the
 // common fields and slash commands; rules are edited in the file.
@@ -35,11 +36,19 @@ function blank(): Profile {
     mcpServers: [],
     hooks: [],
     fallback: null,
+    optimizer: "",
     source: "",
   };
 }
 
 export default function Profiles({ profiles, harnesses, providers, onChanged, onError }: Props) {
+  // Token optimizers to choose from (HRN-019).
+  const [optimizers, setOptimizers] = useState<OptimizerStatus[]>([]);
+  useEffect(() => {
+    EngineService.ListOptimizers()
+      .then((l) => setOptimizers(l ?? []))
+      .catch(onError);
+  }, []);
   // A custom harness from a template (HRN-011).
   const [scaffold, setScaffold] = useState<{ name: string; language: string; folder: string; made?: string } | null>(null);
   const makeHarness = () => {
@@ -237,6 +246,19 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                 {EFFORTS.map((x) => (
                   <option key={x}>{x}</option>
                 ))}
+              </select>
+            </label>
+            <label hidden={!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider ?? true)}>
+              Token optimizer
+              <select value={form.optimizer} onChange={(e) => set("optimizer", e.target.value)}>
+                <option value="">From Settings</option>
+                <option value={OPTIMIZER_OFF}>Off</option>
+                {optimizers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.path ? o.name : `${o.name} (not installed)`}
+                  </option>
+                ))}
+                {form.optimizer && form.optimizer !== OPTIMIZER_OFF && !optimizers.some((o) => o.id === form.optimizer) && <option value={form.optimizer}>{form.optimizer}</option>}
               </select>
             </label>
             <label>

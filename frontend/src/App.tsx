@@ -33,6 +33,7 @@ import SessionView from "./SessionView.tsx";
 import { OPEN_SESSION_DOM_EVENT } from "./ToolView.tsx";
 import Board from "./Board.tsx";
 import Schedules from "./Schedules.tsx";
+import Optimizers from "./Optimizers.tsx";
 import Usage from "./Usage.tsx";
 import Compare from "./Compare.tsx";
 import Providers from "./Providers.tsx";
@@ -63,6 +64,7 @@ type Screen =
   | { kind: "attention" }
   | { kind: "board" }
   | { kind: "schedules" }
+  | { kind: "optimizers" }
   | { kind: "usage" }
   | { kind: "compare"; tag: string }
   | { kind: "profiles" }
@@ -646,6 +648,7 @@ export default function App() {
       page("profiles", "Profiles", () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
       page("skills", "Skills", () => setScreen({ kind: "skills" })),
       page("mcp", "MCP servers", () => setScreen({ kind: "mcp" }), { keywords: "tools" }),
+      page("optimizers", "Token optimizers", () => setScreen({ kind: "optimizers" }), { keywords: "rtk tokens compress output default" }),
       page("schedules", "Schedules", () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
       page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
       page("rules", "Permission rules", () => setScreen({ kind: "rules" }), { keywords: "allow deny" }),
@@ -1139,6 +1142,7 @@ export default function App() {
                 onSaved={setConfig} onError={report} />
               )}
               {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
+              {screen.kind === "optimizers" && config && <Optimizers config={config} version={configVersion} onSaved={setConfig} onError={report} />}
               {screen.kind === "schedules" && (
                 <Schedules projects={projects} profiles={profiles} providers={providers} harnesses={harnesses} defaults={config?.defaults} onOpenSession={(id) => openSession(id)} onError={report} />
               )}

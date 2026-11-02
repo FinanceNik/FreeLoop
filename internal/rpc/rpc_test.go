@@ -61,6 +61,13 @@ func TestHeadless(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the GUI's subscription saw nothing")
 	}
+	var optimizers []engine.OptimizerInfo
+	if err := c.Call("sessions.optimizers", map[string]any{"id": ses.ID}, &optimizers); err != nil || len(optimizers) == 0 {
+		t.Errorf("sessions.optimizers = %+v, %v", optimizers, err)
+	}
+	if err := c.Call("sessions.setOptimizer", map[string]any{"id": ses.ID, "optimizer": "no-such-optimizer"}, nil); err == nil {
+		t.Error("switched to an unknown optimizer")
+	}
 	if err := c.Call("sessions.prompt", map[string]any{"id": ses.ID, "text": "go"}, nil); err != nil {
 		t.Fatal(err)
 	}

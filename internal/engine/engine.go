@@ -184,7 +184,6 @@ func Open(opts Options) (*Engine, error) {
 	}
 	e := &Engine{
 		gh:            "gh",
-		optimizers:    config.BuiltinOptimizers(),
 		dataDir:       opts.DataDir,
 		home:          opts.Home,
 		dev:           opts.Dev,
@@ -219,6 +218,7 @@ func Open(opts Options) (*Engine, error) {
 	e.loadColors()
 	e.loadEnvironments()
 	e.loadPresets()
+	e.loadOptimizers()
 	e.loadProfiles()
 	// MCP servers run in a local environment at the user's home: they are
 	// the app's, not one project's.
@@ -365,11 +365,12 @@ const (
 	issueProfiles     = "profiles"
 	issueMCP          = "mcp"
 	issuePresets      = "presets"
+	issueOptimizers   = "optimizers"
 	issueColors       = "colors"
 	issueAddresses    = "addresses"
 )
 
-var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issuePresets, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueAddresses}
+var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueAddresses}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()
@@ -669,7 +670,11 @@ type CreateSessionRequest struct {
 	shareWorktree *session.Session
 	// parent makes the session a subagent of another (HRN-014).
 	parent string
-	// optimizer carries a parent's or source's token optimizer (HRN-019).
+	// Optimizer is the token optimizer to use, or off for none; empty takes
+	// the profile's, then the global default (HRN-019). It is run once to see
+	// that it works. optimizer is a parent's or source's choice, carried over
+	// without that.
+	Optimizer string `json:"optimizer"`
 	optimizer string
 }
 
@@ -753,6 +758,10 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 			return session.Session{}, err
 		}
 	}
+	optimizer, err := e.chooseOptimizer(ctx, req, prof, harnessID, envCfg)
+	if err != nil {
+		return session.Session{}, err
+	}
 	// The base commit is recorded now so the session's changes stay
 	// visible after unrelated commits (SES-006).
 	root, worktree, worktreeBranch := project.Root, "", ""
@@ -775,11 +784,6 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 		git = gitState(ctx, env, project.Trusted)
 	}
 	git.BaseCommit = git.Head
-	// Only the built-in harness runs its commands through an optimizer.
-	optimizer := req.optimizer
-	if harnessID != builtin.ID {
-		optimizer = ""
-	}
 	ses, err := e.store.CreateSession(ctx, session.Session{
 		Optimizer: optimizer, Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
 		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,

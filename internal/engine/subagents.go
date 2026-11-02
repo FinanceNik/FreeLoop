@@ -1,10 +1,12 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"strings"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/provider"
@@ -32,7 +34,7 @@ func (s sessionSubagents) Run(ctx context.Context, description, prompt string) (
 	}
 	req := CreateSessionRequest{
 		Title: "Subagent: " + strings.TrimSpace(description), ProjectRoot: parent.ProjectRoot, EnvironmentID: parent.EnvironmentID,
-		ProfileID: parent.ProfileID, ProviderID: parent.ProviderID, Model: parent.Model, Mode: parent.Mode, parent: parent.ID, optimizer: parent.Optimizer,
+		ProfileID: parent.ProfileID, ProviderID: parent.ProviderID, Model: parent.Model, Mode: parent.Mode, parent: parent.ID, optimizer: cmp.Or(parent.Optimizer, config.OptimizerOff),
 	}
 	if parent.Worktree != "" {
 		req.shareWorktree = &parent

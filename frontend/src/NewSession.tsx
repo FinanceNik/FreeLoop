@@ -15,7 +15,9 @@ import {
   type ProjectSettings,
   type ProviderInfo,
   type Session,
+  type OptimizerStatus,
 } from "./api.ts";
+import { inheritedLabel, OPTIMIZER_OFF } from "./optimizers.ts";
 import { orderModels } from "./models.ts";
 import type { Defaults } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
 
@@ -79,6 +81,14 @@ export default function NewSession({ providers, projects, environments, profiles
   const [caps, setCaps] = useState<ModelCaps | null>(null);
   const [capsState, setCapsState] = useState<"idle" | "loading" | "probing">("idle");
   const [capsError, setCapsError] = useState<string | null>(null);
+  // The token optimizer (HRN-019): empty takes the profile's or the default.
+  const [optimizer, setOptimizer] = useState("");
+  const [optimizers, setOptimizers] = useState<OptimizerStatus[]>([]);
+  useEffect(() => {
+    EngineService.ListOptimizers()
+      .then((l) => setOptimizers(l ?? []))
+      .catch(onError);
+  }, []);
 
   useEffect(() => {
     if (!providerId && providers[0]) {
@@ -209,7 +219,7 @@ export default function NewSession({ providers, projects, environments, profiles
     if (extra.length > 0) return compare();
     setBusy(true);
     const own = worktree && !!settings?.trusted;
-    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode, worktree: own })
+    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode, worktree: own, optimizer: usesProvider ? optimizer : "" })
       .then(async (s) => {
         if (rememberWorktree && s.projectId) await EngineService.SetProjectWorktreeDefault(s.projectId, own ? "always" : "never").catch(onError);
         if (makeDefault && s.projectId) await EngineService.SetProjectProfile(s.projectId, profileId).catch(onError);
@@ -548,6 +558,20 @@ export default function NewSession({ providers, projects, environments, profiles
             env?.kind === "local" && <span className="muted">Commands ask each time, and run with your full access. Choose a sandboxed environment to confine them to the project.</span>
           )}
         </label>
+        {usesProvider && extra.length === 0 && (
+          <label>
+            Token optimizer
+            <select value={optimizer} onChange={(e) => setOptimizer(e.target.value)}>
+              <option value="">{inheritedLabel(profile?.optimizer, defaults?.optimizer, optimizers)}</option>
+              <option value={OPTIMIZER_OFF}>Off</option>
+              {optimizers.map((o) => (
+                <option key={o.id} value={o.id} disabled={!o.path && env?.kind !== "docker"}>
+                  {o.path || env?.kind === "docker" ? o.name : `${o.name} (not installed)`}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           Permission mode
           <select value={mode} onChange={(e) => setMode(e.target.value)}>

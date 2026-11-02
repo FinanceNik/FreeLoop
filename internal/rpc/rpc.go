@@ -151,9 +151,10 @@ func (s *Server) conn(c net.Conn) {
 
 // Methods.
 type (
-	idParams struct{ ID string }
-	promptP  struct{ ID, Text string }
-	eventsP  struct {
+	idParams   struct{ ID string }
+	promptP    struct{ ID, Text string }
+	optimizerP struct{ ID, Optimizer string }
+	eventsP    struct {
 		ID    string
 		After int64
 	}
@@ -226,6 +227,18 @@ func (s *Server) call(ctx context.Context, method string, raw json.RawMessage) (
 			return nil, err
 		}
 		return s.wait(ctx, p)
+	case "sessions.optimizers":
+		var p idParams
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		return e.Optimizers(ctx, p.ID)
+	case "sessions.setOptimizer":
+		var p optimizerP
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		return struct{}{}, e.SetOptimizer(ctx, p.ID, p.Optimizer)
 	case "approvals.list":
 		return e.PendingPermissions(), nil
 	case "approvals.decide":

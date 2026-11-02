@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -70,6 +71,7 @@ func fakeOptimizer(t *testing.T, e *Engine) (logFile string) {
 	script := `#!/bin/sh
 echo "$* HOME=$HOME TELEMETRY=$FAKE_TELEMETRY DB=$FAKE_DB" >> ` + logFile + `
 case "$1" in
+--version) echo "fake 9.9.9" ;;
 rewrite)
   case "$2" in
   "git status") printf 'fake-optimizer git status'; exit 3 ;;
@@ -87,8 +89,8 @@ esac
 	e.optimizers = []config.Optimizer{{
 		ID: "fake", Name: "Fake", Program: "fake-optimizer",
 		Rewrite: []string{"rewrite"}, RewriteExits: []int{0, 3},
-		RewriteEnv:   map[string]string{"HOME": "/nonexistent"},
 		ProbeCommand: "git status", ProbeWant: "fake-optimizer git status",
+		Version: []string{"--version"},
 		Env:     map[string]string{"FAKE_TELEMETRY": "off"},
 		DataEnv: map[string]string{"FAKE_DB": "tracking.db"},
 		Install: "brew install fake",
@@ -359,5 +361,144 @@ func TestOptimizerInheritance(t *testing.T) {
 	child, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProviderID: "a", Model: "small", parent: sid, optimizer: "fake"})
 	if err != nil || child.Optimizer != "fake" {
 		t.Errorf("child has %q, %v", child.Optimizer, err)
+	}
+}
+
+// HRN-019: a new session takes what it is asked for, then its profile's, then
+// the default in Settings; off beats them, and nothing it inherits fails it.
+func TestOptimizerDefaults(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	fakeOptimizer(t, e)
+	os.MkdirAll(filepath.Join(dir, config.ProfilesDir), 0o700)
+	write := func(id, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, config.ProfilesDir, id+".yaml"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("plain", "name: Plain\n")
+	write("short", "name: Short\noptimizer: fake\n")
+	write("raw", "name: Raw\noptimizer: off\n")
+	write("gone", "name: Gone\noptimizer: missing\n")
+	e.loadProfiles()
+	root := t.TempDir()
+	start := func(req CreateSessionRequest) (string, error) {
+		req.ProjectRoot, req.ProviderID = root, DemoProviderID
+		ses, err := e.CreateSession(ctx, req)
+		return ses.Optimizer, err
+	}
+	want := func(name string, req CreateSessionRequest, optimizer string) {
+		t.Helper()
+		got, err := start(req)
+		if err != nil || got != optimizer {
+			t.Errorf("%s: %q, %v; want %q", name, got, err, optimizer)
+		}
+	}
+	want("nothing set", CreateSessionRequest{}, "")
+	want("a profile's", CreateSessionRequest{ProfileID: "short"}, "fake")
+	want("asked for", CreateSessionRequest{Optimizer: "fake"}, "fake")
+	want("a profile's that is gone starts anyway", CreateSessionRequest{ProfileID: "gone"}, "missing")
+
+	if _, err := e.SetDefaultOptimizer(ctx, "fake"); err != nil {
+		t.Fatal(err)
+	}
+	want("the default", CreateSessionRequest{}, "fake")
+	want("a profile without one", CreateSessionRequest{ProfileID: "plain"}, "fake")
+	want("a profile that says off", CreateSessionRequest{ProfileID: "raw"}, "")
+	want("off beats the default", CreateSessionRequest{Optimizer: config.OptimizerOff}, "")
+
+	// What a session inherits is what it has, off included.
+	child, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProviderID: DemoProviderID, optimizer: config.OptimizerOff})
+	if err != nil || child.Optimizer != "" {
+		t.Errorf("an off parent's child has %q, %v", child.Optimizer, err)
+	}
+
+	// Asking for one that cannot run fails, before there is a session.
+	if _, err := start(CreateSessionRequest{Optimizer: "missing"}); err == nil {
+		t.Error("asked for an unknown optimizer and got a session")
+	}
+	e.optimizers[0].Program = "freeloop-no-such-program"
+	if _, err := start(CreateSessionRequest{Optimizer: "fake"}); err == nil || !strings.Contains(err.Error(), "brew install fake") {
+		t.Errorf("asked for a missing program: %v", err)
+	}
+	if _, err := e.SetDefaultOptimizer(ctx, "fake"); err == nil {
+		t.Error("a program that is missing became the default")
+	}
+	// The default that stopped working still starts sessions; the first command
+	// says so.
+	want("a default that stopped working", CreateSessionRequest{}, "fake")
+
+	if c, err := e.SetDefaultOptimizer(ctx, config.OptimizerOff); err != nil || c.Defaults.Optimizer != "" {
+		t.Errorf("default off: %q, %v", c.Defaults.Optimizer, err)
+	}
+}
+
+// HRN-019: listing runs nothing, a check runs the program, and a file in
+// optimizers/ is picked up when it changes.
+func TestOptimizerStatusAndFiles(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	logFile := fakeOptimizer(t, e)
+	list := e.ListOptimizers(ctx)
+	if len(list) != 1 || !strings.HasSuffix(list[0].Path, "/fake-optimizer") || list[0].Install != "brew install fake" {
+		t.Fatalf("ListOptimizers = %+v", list)
+	}
+	if _, err := os.Stat(logFile); err == nil {
+		t.Error("listing ran the program")
+	}
+	c, err := e.CheckOptimizer(ctx, "fake")
+	if err != nil || !c.OK || c.Version != "fake 9.9.9" || c.Path != list[0].Path {
+		t.Errorf("CheckOptimizer = %+v, %v", c, err)
+	}
+
+	os.MkdirAll(filepath.Join(dir, config.OptimizersDir), 0o700)
+	file := filepath.Join(config.OptimizersDir, "other.yaml")
+	os.WriteFile(filepath.Join(dir, file), []byte("name: Other\nprogram: other-optimizer\nrewrite: [r]\nrewriteExits: [0]\nprobeCommand: git status\nprobeWant: other-optimizer git status\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, config.OptimizersDir, "bad.yaml"), []byte("name: Bad\n"), 0o600)
+	e.reload([]string{file})
+	if _, ok := e.findOptimizer("other"); !ok {
+		t.Error("the file was not picked up")
+	}
+	if !slices.ContainsFunc(e.ConfigIssues(), func(i config.Issue) bool { return strings.Contains(i.File, "bad.yaml") }) {
+		t.Errorf("the bad file is not reported: %+v", e.ConfigIssues())
+	}
+}
+
+// HRN-019: the install command is typed for the user to read; nothing runs it.
+func TestOptimizerInstallIsOnlyTyped(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	fakeOptimizer(t, e)
+	marker := filepath.Join(t.TempDir(), "installed")
+	e.optimizers[0].Install = "touch " + marker
+	ses, _ := demoSession(t, e, "s", "ask")
+	info, err := e.TypeOptimizerInstall(ctx, ses.ID, "fake")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.CloseTerminal(info.ID)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		out, err := e.TerminalScreen(info.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(out.Data), "installed") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("not typed: %q", out.Data)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the install command ran")
 	}
 }

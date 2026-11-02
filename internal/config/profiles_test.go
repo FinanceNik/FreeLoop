@@ -89,3 +89,27 @@ func TestYAMLMessage(t *testing.T) {
 		t.Errorf("issue = %+v", is)
 	}
 }
+
+// HRN-019: a repository cannot choose a program to run on the user's Mac, and an
+// external agent cannot use an optimizer.
+func TestProfileOptimizer(t *testing.T) {
+	if err := (Profile{ID: "p", Name: "P", Optimizer: "rtk"}).ValidateProject(); err == nil {
+		t.Error("a project profile chose an optimizer")
+	}
+	if err := (Profile{ID: "p", Name: "P", Optimizer: OptimizerOff}).ValidateProject(); err == nil {
+		t.Error("a project profile turned the optimizer off")
+	}
+	if err := (Profile{ID: "p", Name: "P", Harness: "claude-code", Optimizer: "rtk"}).Validate(); err == nil {
+		t.Error("an external agent's profile chose an optimizer")
+	}
+	if err := (Profile{ID: "p", Name: "P", Harness: "claude-code", Optimizer: OptimizerOff}).Validate(); err != nil {
+		t.Error(err)
+	}
+	if err := (Profile{ID: "p", Name: "P", Optimizer: "Not An ID"}).Validate(); err == nil {
+		t.Error("a bad optimizer ID passed")
+	}
+	p, issue := ParseProfile("p", []byte("name: P\noptimizer: off\n"), nil)
+	if issue != nil || p.Optimizer != OptimizerOff {
+		t.Errorf("optimizer: off in YAML gave %q, %+v", p.Optimizer, issue)
+	}
+}

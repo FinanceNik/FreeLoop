@@ -471,7 +471,22 @@ export default function SessionView({ session, events, focus, prices, initialDra
   useEffect(() => {
     loadOptimizers();
   }, [session.id]);
-  const setOptimizer = (id: string) => EngineService.SetOptimizer(session.id, id).catch(onError);
+  // One that cannot be used yet says why here, with a way to install it.
+  const [optimizerHelp, setOptimizerHelp] = useState<OptimizerInfo | null>(null);
+  const setOptimizer = (id: string) => {
+    const chosen = optimizers.find((o) => o.id === id);
+    if (chosen && !chosen.available) return setOptimizerHelp(chosen);
+    setOptimizerHelp(null);
+    EngineService.SetOptimizer(session.id, id).catch(onError);
+  };
+  const typeInstall = (o: OptimizerInfo) =>
+    EngineService.TypeOptimizerInstall(session.id, o.id)
+      .then(() => {
+        setOptimizerHelp(null);
+        setTerminalNonce((n) => n + 1);
+        showPanel("terminal");
+      })
+      .catch(onError);
   // The rewound message comes back to the composer for editing (SES-014).
   const fork = (seq: number) =>
     EngineService.ForkSession(session.id, seq)
@@ -733,6 +748,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                     {o.available ? o.name : `${o.name} (not available)`}
                   </option>
                 ))}
+                {session.optimizer && !optimizers.some((o) => o.id === session.optimizer) && <option value={session.optimizer}>{session.optimizer} (no such optimizer)</option>}
               </select>
             </label>
             {view.context && (
@@ -760,6 +776,15 @@ export default function SessionView({ session, events, focus, prices, initialDra
             )}
           </div>
         </header>
+        {optimizerHelp && (
+          <div className="banner row" role="status">
+            <span>{optimizerHelp.reason}</span>
+            {optimizerHelp.install && <button onClick={() => typeInstall(optimizerHelp)}>Type it in the terminal</button>}
+            <button className="link" onClick={() => setOptimizerHelp(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         {switching && (
           <form
             className="banner row model-switch"

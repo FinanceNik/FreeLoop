@@ -4,7 +4,7 @@ import { pressed, type Keys } from "./shortcuts.ts";
 // entry. The pages share a column listing them, like a macOS settings
 // window; the sidebar keeps its room for sessions.
 
-export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "rules" | "environments" | "schedules" | "settings";
+export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "optimizers" | "rules" | "environments" | "schedules" | "settings";
 
 export interface SettingsGroup {
   title: string;
@@ -24,6 +24,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     pages: [
       { id: "skills", label: "Skills", icon: "skills" },
       { id: "mcp", label: "MCP servers", icon: "mcp" },
+      { id: "optimizers", label: "Token optimizers", icon: "optimizers" },
       { id: "rules", label: "Permission rules", icon: "rules" },
     ],
   },

@@ -36,7 +36,7 @@ Rules the lint enforces (`internal/archtest`): no `os/exec` or file I/O in the e
 
 ## The command line
 
-While the app runs, the same binary is a command line for it (EXT-004): `Freeloop.app/Contents/MacOS/Freeloop help` lists the commands (link it as `freeloop` on your PATH). `freeloop new ~/code/app -provider work -model claude-x` starts a session and prints its ID, `freeloop prompt <id> "fix the failing test"` streams the reply, and `freeloop approvals` / `freeloop approve <request>` answer what waits. Scripts can speak the JSON-RPC directly; `internal/rpc` has the methods.
+While the app runs, the same binary is a command line for it (EXT-004): `Freeloop.app/Contents/MacOS/Freeloop help` lists the commands (link it as `freeloop` on your PATH). `freeloop new ~/code/app -provider work -model claude-x` starts a session and prints its ID, `freeloop prompt <id> "fix the failing test"` streams the reply, `freeloop approvals` / `freeloop approve <request>` answer what waits, and `freeloop optimizer <id> rtk` switches a session's token optimizer. Scripts can speak the JSON-RPC directly; `internal/rpc` has the methods.
 
 ## Adding a provider
 
@@ -117,7 +117,24 @@ The templates live in `internal/harness/templates` as `.tmpl` files; their tests
 
 ## Adding a token optimizer
 
-An optimizer is an entry in `config.BuiltinOptimizers`: its program, how to ask for a rewrite, a known command and what it must become, which tells it from another program with the same name, and the variables it needs. Run the program with what you add through `internal/engine/optimizers.go` before trusting it, under the sandbox too: check that exit codes survive, that refusals stay visible, and where it writes. A variable that stops it reporting home belongs in `Env`. Never use a program's own agent hook: RTK's answers "allow" when a repository's settings say so (OQ-029).
+An optimizer is a file `optimizers/<id>.yaml` in the data folder, or an entry in `config.BuiltinOptimizers` to ship it. A file with a built-in's ID replaces it:
+
+```yaml
+name: RTK
+program: rtk                # a name, found the way commands find it; never a path
+rewrite: [rewrite]          # arguments before the command to rewrite
+rewriteExits: [0, 3]        # exit codes that mean it printed a rewrite
+probeCommand: git status    # a known command...
+probeWant: rtk git status   # ...and what it must become, which tells it from another program with the same name
+version: [--version]        # optional
+env:                        # optional: added to every command while it is on
+  RTK_TELEMETRY_DISABLED: "1"
+dataEnv:                    # optional: variables pointing at files in the session's own folder
+  RTK_DB_PATH: tracking.db
+install: brew install rtk   # optional, one line: typed into a terminal for the user to run
+```
+
+Freeloop asks with `HOME` set to nothing, so the program reads no agent's settings. A rewrite may only put `program` in front of parts of the same command. Run the program with what you add through `internal/engine/optimizers.go` before trusting it, under the sandbox too: check that exit codes survive, that refusals stay visible, and where it writes. A variable that stops it reporting home belongs in `Env`. Never use a program's own agent hook: RTK's answers "allow" when a repository's settings say so (OQ-029).
 
 ## Adding an event type
 

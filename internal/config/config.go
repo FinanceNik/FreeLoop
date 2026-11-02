@@ -135,6 +135,9 @@ type Defaults struct {
 	EnvironmentID string `yaml:"environmentId,omitempty" json:"environmentId"`
 	// ProfileID is used when the project has no default profile.
 	ProfileID string `yaml:"profileId,omitempty" json:"profileId"`
+	// Optimizer is the token optimizer of new built-in sessions whose profile
+	// does not name one (HRN-019); none when empty.
+	Optimizer string `yaml:"optimizer,omitempty" json:"optimizer"`
 }
 
 // Permissions holds global permission settings.

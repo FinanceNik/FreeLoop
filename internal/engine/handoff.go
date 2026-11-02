@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
@@ -72,7 +74,7 @@ func (e *Engine) SwitchProfile(ctx context.Context, sid, profileID string) (sess
 	}
 	summary, usage, generated := e.handoffSummary(ctx, src, target.Harness, target.Provider, target.Model, renderMarkdown(src, events))
 
-	req := CreateSessionRequest{Title: src.Title + " · " + target.Name, ProjectRoot: src.ProjectRoot, EnvironmentID: src.EnvironmentID, ProfileID: profileID, optimizer: src.Optimizer}
+	req := CreateSessionRequest{Title: src.Title + " · " + target.Name, ProjectRoot: src.ProjectRoot, EnvironmentID: src.EnvironmentID, ProfileID: profileID, optimizer: cmp.Or(src.Optimizer, config.OptimizerOff)}
 	if src.Worktree != "" {
 		req.shareWorktree = &src
 	}

@@ -410,6 +410,26 @@ func (s *EngineService) Optimizers(ctx context.Context, sessionID string) ([]eng
 	return s.eng.Optimizers(ctx, sessionID)
 }
 
+// ListOptimizers, CheckOptimizer and SetDefaultOptimizer back the Settings page
+// for token optimizers (HRN-019).
+func (s *EngineService) ListOptimizers(ctx context.Context) []engine.OptimizerStatus {
+	return s.eng.ListOptimizers(ctx)
+}
+
+func (s *EngineService) CheckOptimizer(ctx context.Context, id string) (engine.OptimizerCheck, error) {
+	return s.eng.CheckOptimizer(ctx, id)
+}
+
+func (s *EngineService) SetDefaultOptimizer(ctx context.Context, id string) (config.Config, error) {
+	return s.eng.SetDefaultOptimizer(ctx, id)
+}
+
+// TypeOptimizerInstall types a token optimizer's install command into a new
+// terminal in the session, for the user to run (HRN-019).
+func (s *EngineService) TypeOptimizerInstall(ctx context.Context, sessionID, id string) (engine.TerminalInfo, error) {
+	return s.eng.TypeOptimizerInstall(ctx, sessionID, id)
+}
+
 // SetOptimizer switches a session's token optimizer (HRN-019).
 func (s *EngineService) SetOptimizer(ctx context.Context, sessionID, optimizerID string) error {
 	return s.eng.SetOptimizer(ctx, sessionID, optimizerID)

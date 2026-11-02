@@ -63,6 +63,10 @@ type Profile struct {
 	// Fallback takes a model call the profile's model keeps failing with
 	// rate limits or server errors (PRV-010).
 	Fallback *ModelRef `yaml:"fallback,omitempty" json:"fallback"`
+	// Optimizer is the token optimizer of the profile's sessions, or off for
+	// none whatever the global default is (HRN-019); the global default when
+	// empty.
+	Optimizer string `yaml:"optimizer,omitempty" json:"optimizer"`
 	// Source is the file the profile came from; empty for the built-in
 	// default.
 	Source string `yaml:"-" json:"source"`
@@ -125,6 +129,10 @@ func (p Profile) Validate() error {
 		return fieldErr("maxTurns", "%d must be between 1 and 1000", p.MaxTurns)
 	case p.Instructions != "" && p.Instructions != "project" && p.Instructions != "none":
 		return fieldErr("instructions", "%q must be project or none", p.Instructions)
+	case p.Optimizer != "" && !idPattern.MatchString(p.Optimizer):
+		return fieldErr("optimizer", "%q must be off or the ID of a token optimizer", p.Optimizer)
+	case p.Optimizer != "" && p.Optimizer != OptimizerOff && p.Harness != "" && p.Harness != "builtin":
+		return fieldErr("optimizer", "only the built-in harness can use one; an external agent runs its commands itself")
 	}
 	for i, r := range p.Rules {
 		if err := r.Validate(); err != nil {
@@ -178,6 +186,9 @@ func (p Profile) ValidateProject() error {
 	}
 	if p.Harness != "" && p.Harness != "builtin" {
 		return fieldErr("harness", "a project profile cannot choose another agent; only the built-in harness")
+	}
+	if p.Optimizer != "" {
+		return fieldErr("optimizer", "a project profile cannot choose a token optimizer; it would run a program on your Mac")
 	}
 	if p.Fallback != nil {
 		return fieldErr("fallback", "a project profile cannot send prompts to a fallback model; choose one in your own profile")

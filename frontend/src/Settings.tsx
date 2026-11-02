@@ -41,7 +41,7 @@ export default function Settings({ config, providers, environments, profiles, pr
       .then((path) => path && setBackup(path))
       .catch(onError);
   const restore = () => {
-    if (!confirm("Restore a config backup? Its settings, colors, providers, profiles, environments, rules and MCP servers replace the current ones; the replaced files are kept in the data folder's backups folder.")) return;
+    if (!confirm("Restore a config backup? Its settings, colors, providers, profiles, environments, token optimizers, rules and MCP servers replace the current ones; the replaced files are kept in the data folder's backups folder.")) return;
     EngineService.ImportConfig()
       .then((r) => r && setRestored(r))
       .catch(onError);

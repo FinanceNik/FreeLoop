@@ -22,20 +22,21 @@ import (
 // API: what it starts shows in the app at once, and approvals stay with
 // the app's permission broker.
 
-var commands = []string{"sessions", "new", "prompt", "events", "approvals", "approve", "deny", "help"}
+var commands = []string{"sessions", "new", "prompt", "events", "approvals", "approve", "deny", "optimizer", "help"}
 
 func isCommand(arg string) bool { return slices.Contains(commands, arg) }
 
 const usage = `freeloop <command> [arguments]
 
   sessions                       list sessions
-  new <folder> [-title t] [-profile p] [-provider id] [-model m] [-mode m] [-environment e]
+  new <folder> [-title t] [-profile p] [-provider id] [-model m] [-mode m] [-environment e] [-optimizer o]
                                  start a session in a project folder; prints its ID
   prompt <session> <text…>       send a message and print the reply as it comes
   events <session> [-after n]    print a session's events as JSON lines
   approvals                      list requests waiting for a decision
   approve <request> [option]     allow a request (allow_once unless an option is given)
   deny <request>                 deny a request
+  optimizer <session> [id|off]   list a session's token optimizers, or switch to one
 
 The app must be running; the command line talks to it.
 `
@@ -84,6 +85,13 @@ func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
+func marker(on bool) string {
+	if on {
+		return "*"
+	}
+	return " "
+}
+
 func command(c *rpc.Client, args []string, out io.Writer) error {
 	switch args[0] {
 	case "sessions":
@@ -106,6 +114,7 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 		prov := fs.String("provider", "", "the provider's ID (the Settings default when empty)")
 		model := fs.String("model", "", "the model")
 		environmentID := fs.String("environment", "", "the environment's ID, such as sandboxed")
+		optimizer := fs.String("optimizer", "", "a token optimizer's ID, or off (the profile's, then the Settings default when empty)")
 		if len(args) < 2 {
 			return fmt.Errorf("usage: freeloop new <folder> [-title t] [-profile p] [-mode m]")
 		}
@@ -117,10 +126,34 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 			return err
 		}
 		var s session.Session
-		if err := c.Call("sessions.create", engine.CreateSessionRequest{Title: *title, ProjectRoot: root, ProfileID: *profile, Mode: *mode, ProviderID: *prov, Model: *model, EnvironmentID: *environmentID}, &s); err != nil {
+		if err := c.Call("sessions.create", engine.CreateSessionRequest{Title: *title, ProjectRoot: root, ProfileID: *profile, Mode: *mode, ProviderID: *prov, Model: *model, EnvironmentID: *environmentID, Optimizer: *optimizer}, &s); err != nil {
 			return err
 		}
 		fmt.Fprintln(out, s.ID)
+		return nil
+	case "optimizer":
+		if len(args) < 2 || len(args) > 3 {
+			return fmt.Errorf("usage: freeloop optimizer <session> [id|off]")
+		}
+		if len(args) == 3 {
+			return c.Call("sessions.setOptimizer", map[string]any{"id": args[1], "optimizer": args[2]}, nil)
+		}
+		var ses session.Session
+		if err := c.Call("sessions.get", map[string]any{"id": args[1]}, &ses); err != nil {
+			return err
+		}
+		var list []engine.OptimizerInfo
+		if err := c.Call("sessions.optimizers", map[string]any{"id": args[1]}, &list); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s off\n", marker(ses.Optimizer == ""))
+		for _, o := range list {
+			fmt.Fprintf(out, "%s %s  %s", marker(ses.Optimizer == o.ID), o.ID, oneLine(o.Name))
+			if o.Reason != "" {
+				fmt.Fprintf(out, " (%s)", oneLine(o.Reason))
+			}
+			fmt.Fprintln(out)
+		}
 		return nil
 	case "prompt":
 		if len(args) < 3 {

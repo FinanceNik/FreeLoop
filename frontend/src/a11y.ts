@@ -10,6 +10,7 @@ const SCREEN_NAMES: Record<string, string> = {
   mcp: "MCP servers",
   new: "New session",
   onboarding: "Getting started",
+  optimizers: "Token optimizers",
   profiles: "Profiles",
   providers: "Providers",
   rules: "Permission rules",
