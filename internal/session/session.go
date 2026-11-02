@@ -61,6 +61,9 @@ type Session struct {
 	// Tags are the user's labels for the session (SES-013), set by
 	// tags_changed events.
 	Tags []string `json:"tags"`
+	// Optimizer is the token optimizer the session's shell commands go
+	// through (HRN-019), set by optimizer_changed events; empty for none.
+	Optimizer string `json:"optimizer"`
 	// PortBase is the first of ten ports a worktree session's commands
 	// get as FREELOOP_PORT (SES-016); 0 for none.
 	PortBase  int       `json:"portBase"`

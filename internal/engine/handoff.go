@@ -72,7 +72,7 @@ func (e *Engine) SwitchProfile(ctx context.Context, sid, profileID string) (sess
 	}
 	summary, usage, generated := e.handoffSummary(ctx, src, target.Harness, target.Provider, target.Model, renderMarkdown(src, events))
 
-	req := CreateSessionRequest{Title: src.Title + " · " + target.Name, ProjectRoot: src.ProjectRoot, EnvironmentID: src.EnvironmentID, ProfileID: profileID}
+	req := CreateSessionRequest{Title: src.Title + " · " + target.Name, ProjectRoot: src.ProjectRoot, EnvironmentID: src.EnvironmentID, ProfileID: profileID, optimizer: src.Optimizer}
 	if src.Worktree != "" {
 		req.shareWorktree = &src
 	}

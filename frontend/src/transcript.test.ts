@@ -198,6 +198,14 @@ test("buildView records each model call with its model, per turn", () => {
   assert.equal(v.usage.inputTokens, 60);
 });
 
+test("buildView says when the token optimizer changes", () => {
+  const v = buildView([at(1, "optimizer_changed", { optimizer: "rtk", name: "RTK" }), at(2, "optimizer_changed", { optimizer: "", name: "" })]);
+  assert.deepEqual(
+    v.items.map((i) => (i.kind === "notice" ? i.message : i.kind)),
+    ["Token optimizer set to RTK. It applies from the next command.", "Token optimizer turned off."],
+  );
+});
+
 test("buildView shows hooks that blocked or failed, not those that passed", () => {
   const v = buildView([
     at(1, "hook_ran", { event: "pre_tool_use", tool: "shell", command: "./check.sh", exitCode: 0 }),

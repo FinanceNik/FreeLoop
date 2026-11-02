@@ -43,7 +43,8 @@
         "handoff",
         "pull_request",
         "tags_changed",
-        "worktree_setup"
+        "worktree_setup",
+        "optimizer_changed"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -104,9 +105,19 @@
     {
       "if": { "properties": { "type": { "const": "worktree_setup" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/worktreeSetup" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "optimizer_changed" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/optimizerChanged" } } }
     }
   ],
   "$defs": {
+    "optimizerChanged": {
+      "type": "object",
+      "description": "The session's token optimizer (HRN-019); an empty optimizer means off.",
+      "required": ["optimizer"],
+      "properties": { "optimizer": { "type": "string" }, "name": { "type": "string" } }
+    },
     "worktreeSetup": {
       "type": "object",
       "description": "The setup of a session's own worktree (SES-016): files copied from the main checkout and the setup command, with the end of its output.",

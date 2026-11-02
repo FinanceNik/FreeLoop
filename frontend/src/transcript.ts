@@ -93,6 +93,9 @@ export interface ToolContent {
   newText?: string;
   exitCode?: number;
   output?: string;
+  // A shell command a token optimizer rewrote (HRN-019): which one, and what ran.
+  via?: string;
+  command?: string;
 }
 
 // Every item carries rev, the seq of the last event that changed it, so the
@@ -417,6 +420,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "model_changed":
         if (d.model) current = { providerId: d.providerId ?? current.providerId, model: d.model };
         items.push({ kind: "model", key, rev, model: d.model ?? "", providerId: d.providerId ?? "" });
+        break;
+      case "optimizer_changed":
+        items.push({ kind: "notice", key, rev, message: d.name ? `Token optimizer set to ${d.name}. It applies from the next command.` : "Token optimizer turned off.", warn: false });
         break;
       case "session_status":
         status = d.status ?? status;

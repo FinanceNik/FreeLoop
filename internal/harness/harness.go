@@ -82,6 +82,9 @@ type Params struct {
 	// Web backs the web_fetch and web_search tools (HRN-017); nil offers
 	// neither.
 	Web WebSource
+	// Optimizer rewrites the shell tool's approved commands so their output
+	// costs fewer tokens (HRN-019); nil for none.
+	Optimizer CommandOptimizer
 	// MCPServers are passed to an external agent on session creation, so
 	// it uses the same servers (MCP-004). Secrets are resolved.
 	MCPServers []MCPServerSpec
@@ -89,6 +92,21 @@ type Params struct {
 	// starting a new one (SES-003).
 	ExternalID string
 	Emit       Emitter
+}
+
+// CommandOptimizer is asked about every shell command the broker has approved,
+// so switching it applies from the next command (HRN-019).
+type CommandOptimizer interface {
+	Rewrite(ctx context.Context, command string) Rewrite
+}
+
+// Rewrite is what to run for an approved command. Via names the optimizer when
+// Command differs from what was approved; it is empty when the command stays
+// as it is. Env is added to the command either way, while an optimizer is on.
+type Rewrite struct {
+	Command string
+	Via     string
+	Env     map[string]string
 }
 
 // WebSource reads the web for the built-in harness (HRN-017). The broker

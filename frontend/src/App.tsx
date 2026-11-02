@@ -334,6 +334,7 @@ export default function App() {
           s.providerId = d.providerId || s.providerId;
         }
         if (ev.type === "session_info_update" && d.title) s.title = d.title;
+        if (ev.type === "optimizer_changed") s.optimizer = d.optimizer ?? "";
         if (ev.type === "tags_changed") s.tags = (ev.data as { tags?: string[] }).tags ?? [];
         return [s, ...list.slice(0, i), ...list.slice(i + 1)];
       });

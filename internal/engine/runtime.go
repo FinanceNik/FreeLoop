@@ -44,6 +44,8 @@ type runtime struct {
 	host *environment.Local
 	// noCheckpoints is set once a snapshot failed (SES-014).
 	noCheckpoints bool
+	// optimizer rewrites a built-in session's commands (HRN-019).
+	optimizer *sessionOptimizer
 
 	// Git state, refreshed after tool calls and turns (SES-006).
 	gitMu   sync.Mutex
@@ -292,6 +294,8 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		if caps, err := e.ModelCapabilities(ctx, ses.ProviderID, ses.Model, false); err == nil {
 			params.ContextWindow = caps.ContextWindow
 		}
+		r.optimizer = &sessionOptimizer{e: e, sid: sid, env: env}
+		params.Optimizer = r.optimizer
 		hs, err = builtin.Harness{}.NewSession(ctx, params)
 	} else {
 		params.MCPServers = e.agentServers(prof)

@@ -352,6 +352,7 @@ func shellTool() *tool {
 			InputSchema: schema([]string{"command"}, map[string]any{
 				"command":         str("The command line."),
 				"timeout_seconds": num("Timeout in seconds. Default 120, maximum 600."),
+				"raw":             flag("Run the command exactly as written, with its complete output. Use it when an optimizer the user chose has shortened output you need in full."),
 			}),
 		},
 		kind: permission.KindExecute,
@@ -361,6 +362,7 @@ func shellTool() *tool {
 				Timeout int    `json:"timeout_seconds"`
 				Outside bool   `json:"outside_sandbox"`
 				Why     string `json:"why"`
+				Raw     bool   `json:"raw"`
 			}
 			if err := decode(input, &in, "command"); err != nil {
 				return nil, err
@@ -386,6 +388,13 @@ func shellTool() *tool {
 				c.contained = permission.ContainedProject
 			}
 			c.run = func(ctx context.Context, _ permission.Decision) (result, error) {
+				// The broker approved in.Command; a rewrite never reaches it, and
+				// a command the user let out of the sandbox runs as they read it.
+				via := ""
+				if s.p.Optimizer != nil && !in.Raw && !c.leaves {
+					rw := s.p.Optimizer.Rewrite(ctx, in.Command)
+					spec.Command, spec.Env, via = rw.Command, rw.Env, rw.Via
+				}
 				res, err := s.env.Exec(ctx, spec)
 				if err != nil {
 					return result{}, err
@@ -403,7 +412,11 @@ func shellTool() *tool {
 				if c.contained != "" && res.ExitCode != 0 && sandboxRefusal(res.Output) {
 					sb.WriteString(sandboxNote)
 				}
-				return result{text: sb.String(), content: []any{map[string]any{"type": "terminal_output", "exitCode": res.ExitCode, "output": res.Output}}}, nil
+				output := map[string]any{"type": "terminal_output", "exitCode": res.ExitCode, "output": res.Output}
+				if via != "" {
+					output["via"], output["command"] = via, spec.Command
+				}
+				return result{text: sb.String(), content: []any{output}}, nil
 			}
 			return c, nil
 		},
@@ -420,6 +433,7 @@ func sandboxedShellSpec(reach string) provider.ToolSpec {
 			"timeout_seconds": num("Timeout in seconds. Default 120, maximum 600."),
 			"outside_sandbox": map[string]any{"type": "boolean", "description": "Ask the user to run this one command outside the sandbox, only after the sandbox has refused something it really needs, such as installing a package."},
 			"why":             str("With outside_sandbox: why it needs to, for the user."),
+			"raw":             flag("Run the command exactly as written, with its complete output. Use it when an optimizer the user chose has shortened output you need in full."),
 		}),
 	}
 }

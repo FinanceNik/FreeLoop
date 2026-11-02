@@ -32,7 +32,7 @@ func (s sessionSubagents) Run(ctx context.Context, description, prompt string) (
 	}
 	req := CreateSessionRequest{
 		Title: "Subagent: " + strings.TrimSpace(description), ProjectRoot: parent.ProjectRoot, EnvironmentID: parent.EnvironmentID,
-		ProfileID: parent.ProfileID, ProviderID: parent.ProviderID, Model: parent.Model, Mode: parent.Mode, parent: parent.ID,
+		ProfileID: parent.ProfileID, ProviderID: parent.ProviderID, Model: parent.Model, Mode: parent.Mode, parent: parent.ID, optimizer: parent.Optimizer,
 	}
 	if parent.Worktree != "" {
 		req.shareWorktree = &parent

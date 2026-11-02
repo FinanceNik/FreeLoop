@@ -66,6 +66,8 @@ const (
 	// WorktreeSetup reports the setup of a session's own worktree
 	// (SES-016).
 	WorktreeSetup Type = "worktree_setup"
+	// OptimizerChanged records the session's token optimizer (HRN-019).
+	OptimizerChanged Type = "optimizer_changed"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -79,7 +81,7 @@ var ACPTypes = []Type{
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
-	PullRequest, TagsChanged, WorktreeSetup,
+	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged,
 }
 
 // AllTypes returns every known variant.
@@ -209,6 +211,13 @@ type NoticeData struct {
 type ModelChangedData struct {
 	ProviderID string `json:"providerId"`
 	Model      string `json:"model"`
+}
+
+// OptimizerChangedData is the payload of optimizer_changed (HRN-019); an
+// empty Optimizer means off.
+type OptimizerChangedData struct {
+	Optimizer string `json:"optimizer"`
+	Name      string `json:"name"`
 }
 
 // AvailableCommandsData is the payload of available_commands_update: the

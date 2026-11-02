@@ -68,7 +68,7 @@ func (e *Engine) ForkSession(ctx context.Context, sid string, seq int64) (ForkRe
 	ses := session.Session{
 		Title: src.Title + " (fork)", HarnessID: src.HarnessID, ProjectID: src.ProjectID, ProjectRoot: src.ProjectRoot,
 		EnvironmentID: src.EnvironmentID, BaseCommit: src.BaseCommit, Branch: src.Branch, ProviderID: src.ProviderID,
-		Model: src.Model, Mode: src.Mode, ProfileID: src.ProfileID,
+		Model: src.Model, Mode: src.Mode, ProfileID: src.ProfileID, Optimizer: src.Optimizer,
 	}
 	// Like any new session, a fork never starts in bypass (SEC-001).
 	if permission.Mode(ses.Mode) == permission.ModeBypass {

@@ -6,6 +6,7 @@ import {
   EngineService,
   MODES,
   type EnvironmentInfo,
+  type OptimizerInfo,
   type HarnessInfo,
   type ProjectInfo,
   type ProviderInfo,
@@ -460,6 +461,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
   };
 
   const setMode = (m: string) => EngineService.SetMode(session.id, m).catch(onError);
+  // Token optimizers (HRN-019). They are looked for again whenever the list is
+  // opened, so one installed a moment ago shows up.
+  const [optimizers, setOptimizers] = useState<OptimizerInfo[]>([]);
+  const loadOptimizers = () =>
+    EngineService.Optimizers(session.id)
+      .then((list) => setOptimizers(list ?? []))
+      .catch(onError);
+  useEffect(() => {
+    loadOptimizers();
+  }, [session.id]);
+  const setOptimizer = (id: string) => EngineService.SetOptimizer(session.id, id).catch(onError);
   // The rewound message comes back to the composer for editing (SES-014).
   const fork = (seq: number) =>
     EngineService.ForkSession(session.id, seq)
@@ -537,6 +549,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
       ),
     ...MODES.filter((m) => m.id !== mode && (m.id !== "bypass" || canBypass)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
     ...(session.providerId ? [act("model", "Switch model…", () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
+    ...[{ id: "", name: "Off" }, ...optimizers]
+      .filter((o) => o.id !== session.optimizer)
+      .map((o) => act(`optimizer:${o.id}`, `Token optimizer: ${o.name}`, () => setOptimizer(o.id), { keywords: "tokens rtk compress output" })),
     act("panel", panelOpen ? "Hide the panel" : "Show the panel", togglePanel, { keywords: "right sidebar" }),
     ...(onClosePane ? [act("close-pane", "Close this pane", onClosePane, { keywords: "workspace split" })] : []),
     act("approvals", "Show approvals", () => showPanel("approvals"), { keywords: "panel decided" }),
@@ -705,6 +720,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 {MODES.filter((m) => m.id !== "bypass" || canBypass || mode === "bypass").map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label title="Runs this session's shell commands through a program that shortens their output, to spend fewer tokens. You still approve the command as the model wrote it.">
+              Optimizer{" "}
+              <select value={session.optimizer} onChange={(e) => setOptimizer(e.target.value)} onFocus={loadOptimizers}>
+                <option value="">Off</option>
+                {optimizers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.available ? o.name : `${o.name} (not available)`}
                   </option>
                 ))}
               </select>

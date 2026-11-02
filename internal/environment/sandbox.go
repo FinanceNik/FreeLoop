@@ -177,6 +177,19 @@ func (l *Local) CheckSandbox(ctx context.Context) error {
 	return fmt.Errorf("the sandbox would not start (exit %d): %s; commands will not run; the session needs another environment", res.ExitCode, res.Output)
 }
 
+// PrivateCache makes a folder under the app's caches that only the user reads.
+func PrivateCache(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("environment: %w", err)
+	}
+	return nil
+}
+
+// RemoveCache deletes a folder made under the app's caches.
+func RemoveCache(dir string) error {
+	return os.RemoveAll(dir)
+}
+
 // SandboxCaches makes the folders a project's confined commands keep caches and
 // temp files in, and returns the variables that send them there. They are used
 // only inside the sandbox: a command in it could poison a cache the user's own

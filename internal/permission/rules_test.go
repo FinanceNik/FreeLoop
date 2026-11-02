@@ -61,6 +61,8 @@ func TestRuleMatching(t *testing.T) {
 		{"deny sees through a backslash", Rule{Effect: Deny, Tool: "shell", Command: "git push *"}, shell(`\git push`), true},
 		{"deny sees through env and paths", Rule{Effect: Deny, Tool: "shell", Command: "git push *"}, shell("env -i /usr/bin/git push"), true},
 		{"deny sees through git -C", Rule{Effect: Deny, Tool: "shell", Command: "git push *"}, shell("git -C . push origin main"), true},
+		{"deny sees through rtk", Rule{Effect: Deny, Tool: "shell", Command: "git push *"}, shell("rtk git push origin main"), true},
+		{"deny sees through rtk proxy", Rule{Effect: Deny, Tool: "shell", Command: "git push *"}, shell("rtk proxy git push origin main"), true},
 		{"deny sees through git -c and --no-pager", Rule{Effect: Deny, Tool: "shell", Command: "git push *"}, shell("git -c core.x=y --no-pager push"), true},
 		{"deny sees through git --git-dir=", Rule{Effect: Deny, Tool: "shell", Command: "git push *"}, shell("git --git-dir=.git --work-tree . push"), true},
 		{"git options do not make a deny overreach", Rule{Effect: Deny, Tool: "shell", Command: "git push *"}, shell("git -C push status"), false},

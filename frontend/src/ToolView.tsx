@@ -46,6 +46,8 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
     return () => window.removeEventListener("keydown", onKey);
   }, [waiting, item.permission, reason, scope]);
 
+  // A token optimizer ran this command in a shorter form (HRN-019).
+  const via = item.content.find((c) => c.via)?.via;
   const plan = item.tool === "present_plan" ? String((item.input as { plan?: string } | null)?.plan ?? "") : null;
 
   return (
@@ -59,6 +61,7 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
         <span className="sr-only">{toolStatusLabel(item.status, waiting)} </span>
         <span className="tool-title">{item.title}</span>
         <span className="muted"> {item.tool}</span>
+        {via && <span className="muted"> · via {via}</span>}
         {shownDecision && (
           <span className={`decision decision-${decided.outcome}`}>
             {decided.actor === "sandbox" ? "sandboxed" : `${decided.outcome} by ${decided.actor}`}
@@ -140,7 +143,10 @@ function ContentView({ c }: { c: ToolContent }) {
   if (c.type === "terminal_output") {
     return (
       <pre className="tool-output">
-        <span className="muted">exit {c.exitCode}</span>
+        <span className="muted">
+          exit {c.exitCode}
+          {c.via && ` · via ${c.via}: ${c.command}`}
+        </span>
         {"\n"}
         {c.output}
       </pre>

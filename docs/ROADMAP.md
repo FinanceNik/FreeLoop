@@ -305,6 +305,18 @@ What the open "later" list held that follows from the sandbox or needs no accoun
 
 1. **Custom colors (GUI-022).** *Checked in the browser: both directions between the editor and `colors.json`, a bad value, broken JSON, a restart, both appearances and Reset. The color picker's panel and "Open colors.json" need the native window, so they were not tried.* Settings → Appearance changes the app's colors for each appearance, live, and `colors.json` in the data folder holds the same set.
 
+### Token optimizers (planned 2026-11-02)
+
+Rewriting shell commands so their output costs fewer tokens (HRN-019, OQ-029). No new dependency; the program is the user's to install.
+
+1. **The built-in harness and the session dropdown.** *Built 2026-11-02; tested with a stand-in program, with real RTK 1.1.0 unconfined and under the real Seatbelt sandbox, and in the browser with the demo provider. Real models' behaviour with shortened output, Docker and a Homebrew-installed binary are not checked.* `internal/engine/optimizers.go` asks the program for a rewrite after approval and checks it (`validRewrite`); the shell tool has a permanent `raw` option, so the tool list and the prompt cache do not change with the switch; `optimizer_changed` records the choice; the Optimizer dropdown is in the session header and the ⌘K palette.
+2. Defaults in Settings and profiles, the new-session form, the command line and the RPC socket, optimizers in `optimizers/<id>.yaml`.
+3. Measured savings per session from `rtk gain`, the Usage tab by optimizer, on and off in Compare (HRN-016).
+4. Claude Code through a hook of Freeloop's own, a narrow allow list for rewritten read-only commands, and a warning when a global `rtk init -g` hook is present, which Freeloop cannot switch off.
+5. Custom harnesses through `terminal/create`.
+
+Not in: output filters (`rtk pipe` shortened a 22 KB `git log` to 259 bytes in the test, which looks wrong), and gateways that sit in front of the model (they raise HRN-008 questions).
+
 ## Later (unscheduled)
 
 ENV-008 SSH, PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

@@ -74,10 +74,12 @@ type ConfigChange struct {
 
 // Engine is safe for concurrent use.
 type Engine struct {
-	dataDir  string
-	home     string
-	confiner environment.Confiner
-	dev      bool
+	// optimizers are the token optimizers sessions can choose (HRN-019).
+	optimizers []config.Optimizer
+	dataDir    string
+	home       string
+	confiner   environment.Confiner
+	dev        bool
 	// gh is the GitHub CLI pull requests are opened with (SES-011); tests
 	// point it at a fake.
 	gh      string
@@ -182,6 +184,7 @@ func Open(opts Options) (*Engine, error) {
 	}
 	e := &Engine{
 		gh:            "gh",
+		optimizers:    config.BuiltinOptimizers(),
 		dataDir:       opts.DataDir,
 		home:          opts.Home,
 		dev:           opts.Dev,
@@ -666,6 +669,8 @@ type CreateSessionRequest struct {
 	shareWorktree *session.Session
 	// parent makes the session a subagent of another (HRN-014).
 	parent string
+	// optimizer carries a parent's or source's token optimizer (HRN-019).
+	optimizer string
 }
 
 // CreateSession creates an idle session and records its initial status as
@@ -770,8 +775,13 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 		git = gitState(ctx, env, project.Trusted)
 	}
 	git.BaseCommit = git.Head
+	// Only the built-in harness runs its commands through an optimizer.
+	optimizer := req.optimizer
+	if harnessID != builtin.ID {
+		optimizer = ""
+	}
 	ses, err := e.store.CreateSession(ctx, session.Session{
-		Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
+		Optimizer: optimizer, Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
 		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
 		Worktree: worktree, WorktreeBranch: worktreeBranch, ParentID: req.parent, PortBase: portBase,
 	})

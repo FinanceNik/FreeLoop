@@ -115,6 +115,10 @@ The templates live in `internal/harness/templates` as `.tmpl` files; their tests
 
 `config.Environment.Sandbox` turns it on (ENV-009). `internal/engine/sandbox.go` decides what a session's commands reach, `environment.Local` wraps `Exec` with a `Confiner`, and `internal/platform/darwin/seatbelt.go` is the only macOS-specific part. Only `Exec` is confined; `Spawn` is not, so agents and MCP servers stay outside. A caller that runs a command itself sets `permission.Request.Contained`, which is what lets the broker skip the approval. Never set it for a request an agent will carry out on its own. If a tool fails in the sandbox, first look for what it writes under home: most fixes are a variable in `SandboxCaches` or a folder in `sandboxTools`. Add anything that closes a way out to `TestSeatbeltRefuses`, with a control if the refusal could have another cause. A host list (ENV-010) adds `netguard.Egress`: its variables are in `environment.ProxyEnv`, and `FREELOOP_SANDBOX_NET=1 go test ./internal/platform/darwin` tries real tools against the real internet.
 
+## Adding a token optimizer
+
+An optimizer is an entry in `config.BuiltinOptimizers`: its program, how to ask for a rewrite, a known command and what it must become, which tells it from another program with the same name, and the variables it needs. Run the program with what you add through `internal/engine/optimizers.go` before trusting it, under the sandbox too: check that exit codes survive, that refusals stay visible, and where it writes. A variable that stops it reporting home belongs in `Env`. Never use a program's own agent hook: RTK's answers "allow" when a repository's settings say so (OQ-029).
+
 ## Adding an event type
 
 Add the constant to `internal/event/event.go` (in `ACPTypes` or `FreeloopTypes`) and to `schemas/events.json`, with a `$defs` entry for its data; the schema test checks both lists agree, and the store refuses unknown types. Fold it into the view in `frontend/src/transcript.ts` with a `node --test` case, and decide whether the search index (`internal/store/search.go`) and the Markdown export (`internal/engine/export.go`) should show it.

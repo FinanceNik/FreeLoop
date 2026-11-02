@@ -203,6 +203,12 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 			}
 		case event.ModelChanged:
 			note("Model changed to " + str("model") + ".")
+		case event.OptimizerChanged:
+			if name := str("name"); name != "" {
+				note("Token optimizer set to " + name + ".")
+			} else {
+				note("Token optimizer turned off.")
+			}
 		case event.Rewind:
 			note("Rewound to an earlier checkpoint; the turns after it were undone.")
 		case event.PullRequest:

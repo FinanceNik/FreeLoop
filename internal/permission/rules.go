@@ -151,6 +151,8 @@ func exactForm(cmd string) string { return strings.TrimSpace(blanks.ReplaceAllSt
 var wrappers = map[string]string{
 	"env": "uCS", "command": "", "exec": "a", "nohup": "", "time": "fo", "builtin": "", "nice": "n", "sudo": "ughpCrtUD", "doas": "uC",
 	"ionice": "cnp", "stdbuf": "ioe", "caffeinate": "tw", "xargs": "EILPdnsJR", "watch": "n", "timeout": "ks",
+	// A token optimizer's front end (HRN-019).
+	"rtk": "",
 }
 
 // keywords come before a command without being one.
@@ -202,6 +204,10 @@ func simpleCommands(cmd string, depth int) []string {
 				}
 				// timeout's first word is the time.
 				if filepath.Base(f) == "timeout" && len(fields) > 0 {
+					fields = fields[1:]
+				}
+				// rtk proxy runs what follows it unfiltered.
+				if filepath.Base(f) == "rtk" && len(fields) > 0 && fields[0] == "proxy" {
 					fields = fields[1:]
 				}
 			default:

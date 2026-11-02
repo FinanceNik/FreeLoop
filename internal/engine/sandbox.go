@@ -46,6 +46,12 @@ var sandboxTools = []string{
 // sandbox writing one could otherwise run with the user's full rights later.
 var sandboxProtected = append([]string{ProjectDir}, permission.ActedOnLater...)
 
+// projectCache is the project's folder in the app's caches, where a sandboxed
+// command can write.
+func (e *Engine) projectCache(projectID string) string {
+	return filepath.Join(environment.Canonical(e.home), "Library", "Caches", "Freeloop", "sandbox", cmp.Or(projectID, "default"))
+}
+
 // sandboxEnv returns the session's environment confined as its settings say.
 func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config.Environment, vars map[string]string) (*environment.Local, func(), error) {
 	root := ses.WorkRoot()
@@ -56,7 +62,7 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 	root = host.Root()
 	home := environment.Canonical(e.home)
 	cacheBase := filepath.Join(home, "Library", "Caches", "Freeloop")
-	cache, tmp, cacheEnv, err := environment.SandboxCaches(filepath.Join(cacheBase, "sandbox", cmp.Or(ses.ProjectID, "default")))
+	cache, tmp, cacheEnv, err := environment.SandboxCaches(e.projectCache(ses.ProjectID))
 	if err != nil {
 		return nil, nil, err
 	}

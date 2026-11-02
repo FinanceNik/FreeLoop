@@ -405,6 +405,16 @@ func (s *EngineService) SetModel(ctx context.Context, sessionID, providerID, mod
 	return s.eng.SetModel(ctx, sessionID, providerID, model)
 }
 
+// Optimizers lists the token optimizers a session can use (HRN-019).
+func (s *EngineService) Optimizers(ctx context.Context, sessionID string) ([]engine.OptimizerInfo, error) {
+	return s.eng.Optimizers(ctx, sessionID)
+}
+
+// SetOptimizer switches a session's token optimizer (HRN-019).
+func (s *EngineService) SetOptimizer(ctx context.Context, sessionID, optimizerID string) error {
+	return s.eng.SetOptimizer(ctx, sessionID, optimizerID)
+}
+
 // ProfileYAML, CheckProfileYAML and SaveProfileYAML back the profile YAML
 // editor (GUI-009).
 func (s *EngineService) ProfileYAML(id string) (string, error) {
