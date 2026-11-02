@@ -94,9 +94,18 @@ function panelOpenInitially(): boolean {
 }
 
 export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane }: Props) {
-  const [panelOpen, setPanelOpen] = useState(panelOpenInitially);
+  // Beside other panes the panel starts closed and only the active pane shows
+  // it; the remembered choice is for a session alone in the window.
+  const split = !!onClosePane;
+  const [panelOpen, setPanelOpen] = useState(() => !split && panelOpenInitially());
+  const wasSplit = useRef(split);
+  useEffect(() => {
+    if (wasSplit.current !== split) setPanelOpen(!split && panelOpenInitially());
+    wasSplit.current = split;
+  }, [split]);
   const togglePanel = () =>
     setPanelOpen((open) => {
+      if (split) return !open;
       try {
         localStorage.setItem(PANEL_KEY, open ? "0" : "1");
       } catch {
@@ -104,6 +113,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       }
       return !open;
     });
+  const layoutBox = useRef<HTMLDivElement>(null);
   const [panelTab, setPanelTab] = useState<PanelTab>("approvals");
   // The commands an untrusted project's hooks would run, shown before the
   // user trusts it (EXT-005).
@@ -348,7 +358,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   useEffect(() => {
     if (!focus || shown.current === focus.n) return;
     const key = itemForSeq(view.items, focus.seq);
-    const el = key && document.querySelector<HTMLElement>(`[data-item="${key}"]`);
+    const el = key && layoutBox.current?.querySelector<HTMLElement>(`[data-item="${key}"]`);
     if (!el) return;
     shown.current = focus.n;
     holdBottom.current = true;
@@ -527,6 +537,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     ...MODES.filter((m) => m.id !== mode && (m.id !== "bypass" || allowBypass)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
     ...(session.providerId ? [act("model", "Switch model…", () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
     act("panel", panelOpen ? "Hide the panel" : "Show the panel", togglePanel, { keywords: "right sidebar" }),
+    ...(onClosePane ? [act("close-pane", "Close this pane", onClosePane, { keywords: "workspace split" })] : []),
     act("approvals", "Show approvals", () => showPanel("approvals"), { keywords: "panel decided" }),
     act("diff", "Show changes", () => showPanel("diff"), { keywords: "diff git commit stage panel" }),
     act("files", "Show files", () => showPanel("files"), { keywords: "tree browse viewer open" }),
@@ -574,7 +585,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   };
 
   return (
-    <div className="session-layout">
+    <div ref={layoutBox} className="session-layout">
       <section className="session">
         <header className="session-header">
           <div>
@@ -664,9 +675,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   </button>
                 </div>
               </details>
-              <button className="ghost" onClick={togglePanel} aria-pressed={panelOpen} title="Show or hide the right panel">
+              <button className="ghost" onClick={togglePanel} aria-pressed={panelOpen && (active || !split)} title="Show or hide the right panel">
                 Panel
               </button>
+              {onClosePane && (
+                <button className="ghost pane-close" onClick={onClosePane} aria-label="Close this pane" title="Close this pane">
+                  ×
+                </button>
+              )}
               {exported && (
                 <span className="ok" role="status" title={exported}>
                   Exported
@@ -905,7 +921,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </ul>
           )}
           {slash !== null && slashMatches.length > 0 && (
-            <ul className="mention-picker" id="composer-options" role="listbox" aria-label="Commands">
+            <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label="Commands">
               {slashMatches.map((c, i) => (
                 <li
                   key={c.name}
@@ -925,7 +941,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </ul>
           )}
           {mention && (
-            <ul className="mention-picker" id="composer-options" role="listbox" aria-label="Files">
+            <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label="Files">
               {files === null && <li className="muted">Listing files…</li>}
               {files !== null && matches.length === 0 && <li className="muted">No matching files</li>}
               {matches.map((f, i) => (
@@ -950,7 +966,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             ref={input}
             aria-label="Message"
             aria-autocomplete="list"
-            aria-controls={pickerOptions > 0 ? "composer-options" : undefined}
+            aria-controls={pickerOptions > 0 ? `composer-options-${session.id}` : undefined}
             aria-activedescendant={pickerOptions > 0 ? `composer-option-${pick}` : undefined}
             onPaste={(e) => {
               const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
@@ -1018,7 +1034,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           </div>
         </div>
       </section>
-      {panelOpen && (
+      {panelOpen && (active || !split) && (
         <SessionPanel
           session={session}
           tab={panelTab}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { closePane, cycle, focusPane, forget, openIn, placeIn, restore, setLayout, SINGLE, tabbed, type WorkspaceState } from "./workspace.ts";
+import { chooseLayout, closePane, cycle, focusPane, forget, openIn, placeIn, restore, setLayout, SINGLE, tabbed, type WorkspaceState } from "./workspace.ts";
 
 const w = (layout: 1 | 2 | 3 | 4, panes: (string | null)[], active = 0): WorkspaceState => ({ layout, panes, active });
 
@@ -57,4 +57,11 @@ test("narrow windows turn the panes into tabs", () => {
   assert.equal(tabbed(w(2, ["a", "b"]), 700), true);
   assert.equal(tabbed(w(2, ["a", "b"]), 1000), false);
   assert.equal(tabbed(w(1, ["a"]), 300), false);
+});
+
+test("a pane added with the layout control is the one the next session goes into", () => {
+  assert.deepEqual(chooseLayout(w(1, ["a"]), 2), w(2, ["a", null], 1));
+  assert.deepEqual(chooseLayout(w(2, ["a", null], 0), 3), w(3, ["a", null, null], 1));
+  assert.deepEqual(chooseLayout(w(3, ["a", "b", "c"], 2), 2), w(2, ["c", "a"], 0));
+  assert.deepEqual(openIn(chooseLayout(w(1, ["a"]), 2), "b", "active"), w(2, ["a", "b"], 1));
 });

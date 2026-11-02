@@ -1411,6 +1411,179 @@ button.ghost[aria-pressed="true"] {
   }
 }
 
+/* The workspace (GUI-017): up to four sessions side by side. */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.panes {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 1px;
+  background: var(--border);
+}
+
+.panes[data-layout="2"],
+.panes[data-layout="3"],
+.panes[data-layout="4"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.panes[data-layout="3"] > .pane:first-child {
+  grid-row: span 2;
+}
+
+.panes[data-layout="4"] {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.pane {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.pane[hidden] {
+  display: none;
+}
+
+.pane-split {
+  container-type: size;
+}
+
+/* Short panes keep their room for the conversation. */
+@container (max-height: 640px) {
+  .pane-split .composer textarea {
+    min-height: 40px;
+    height: 40px;
+    padding: 8px 12px;
+  }
+
+  .pane-split .session-header {
+    padding-block: 8px;
+  }
+}
+
+/* A line around the pane the keyboard goes to, drawn over its contents. */
+.pane-split.pane-active::after,
+.pane-drop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border: 1px solid var(--focus);
+}
+
+.pane-drop::after {
+  border-width: 2px;
+  background: var(--accent-soft);
+}
+
+.pane-close {
+  padding-inline: 8px;
+}
+
+/* A panel that does not fit beside a pane's conversation floats over it. */
+@container (max-width: 860px) {
+  .pane-split .panel,
+  .pane-split .panel.panel-wide {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(344px, 85%);
+    box-shadow: var(--shadow);
+    z-index: 5;
+  }
+}
+
+.pane-empty ul {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.pane-empty .row {
+  justify-content: center;
+}
+
+.pane-offer {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Windows too narrow for the panes side by side show them as tabs. */
+.pane-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border);
+}
+
+.pane-tab {
+  flex: 0 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.pane-tab-on {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+
+.layout-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 8px 8px;
+  padding: 0 10px;
+}
+
+.layout-switch .muted {
+  margin-right: auto;
+}
+
+.layout-switch button {
+  display: flex;
+  padding: 3px 5px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.layout-switch button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+
+.session-row[data-shown]:not([aria-current]) {
+  background: var(--surface);
+}
+
 /* First-run guide: the two ways to run agents (GUI-010). */
 .choice {
   margin-bottom: 14px;

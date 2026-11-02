@@ -38,6 +38,10 @@ export default function SettingsNav({ current, onOpen, onBack }: Props) {
 // Line icons on a 16-point grid, drawn in the text colour.
 const PATHS: Record<string, string> = {
   back: "M10 3.5 5.5 8l4.5 4.5",
+  "panes-1": "M2.5 3.5h11v9h-11z",
+  "panes-2": "M2.5 3.5h11v9h-11zM8 3.5v9",
+  "panes-3": "M2.5 3.5h11v9h-11zM8 3.5v9M8 8h5.5",
+  "panes-4": "M2.5 3.5h11v9h-11zM8 3.5v9M2.5 8h11",
   providers: "M8 2.5 13 5.25v5.5L8 13.5 3 10.75v-5.5L8 2.5ZM3 5.25 8 8l5-2.75M8 8v5.5",
   profiles: "M3 4h10M3 8h10M3 12h6",
   skills: "M8 2.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 11l-3.4 2 .8-3.9-2.9-2.6 3.9-.4L8 2.5Z",

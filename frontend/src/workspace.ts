@@ -39,6 +39,15 @@ export function setLayout(w: WorkspaceState, layout: Layout): WorkspaceState {
   return { layout, panes, active: 0 };
 }
 
+// chooseLayout is the layout control: a pane added this way is empty and
+// becomes active, so the next session opened goes into it.
+export function chooseLayout(w: WorkspaceState, layout: Layout): WorkspaceState {
+  const next = setLayout(w, layout);
+  if (layout <= w.layout) return next;
+  const empty = next.panes.indexOf(null);
+  return empty >= 0 ? { ...next, active: empty } : next;
+}
+
 // openIn shows a session: where it already is, else in the active pane
 // ("active"), or in the first empty pane, adding one when all are full and
 // there are fewer than four ("new").

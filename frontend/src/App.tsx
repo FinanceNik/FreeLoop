@@ -43,6 +43,7 @@ import Settings from "./Settings.tsx";
 import Attention from "./Attention.tsx";
 import Profiles from "./Profiles.tsx";
 import Onboarding from "./Onboarding.tsx";
+import Workspace, { SESSION_DRAG_TYPE } from "./Workspace.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
@@ -379,7 +380,7 @@ export default function App() {
         setWork(w);
         for (const sid of w.panes) if (sid && !transcriptsRef.current[sid]) catchUp(sid);
         const sid = w.panes[w.active];
-        if (sid) setScreen((sc) => (sc.kind === "none" ? { kind: "session", id: sid } : sc));
+        if (sid || (w.layout > 1 && sessions.length > 0)) setScreen((sc) => (sc.kind === "none" ? { kind: "session", id: sid ?? "" } : sc));
       })
       .catch(() => {});
   }, [sessionsLoaded]);
@@ -394,6 +395,9 @@ export default function App() {
     if (sessionsLoaded) setWork((w) => ws.forget(w, (sid) => sessions.some((x) => x.id === sid)));
   }, [sessions, sessionsLoaded]);
 
+  // A pane chosen with the keyboard takes the keyboard: its composer.
+  const focusActivePane = () => requestAnimationFrame(() => document.querySelector<HTMLElement>(".pane-active textarea")?.focus());
+
   // ⌥⌘1 to ⌥⌘4 make a pane active, ⌥⌘← and ⌥⌘→ move between panes.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -403,9 +407,11 @@ export default function App() {
       if (digit && Number(digit[1]) <= w.layout) {
         e.preventDefault();
         activatePaneRef.current(Number(digit[1]) - 1);
+        focusActivePane();
       } else if ((e.code === "ArrowRight" || e.code === "ArrowLeft") && w.layout > 1) {
         e.preventDefault();
         showWorkRef.current(ws.cycle(w, e.code === "ArrowRight" ? 1 : -1));
+        focusActivePane();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -629,6 +635,11 @@ export default function App() {
       ...collect(),
       { id: "app:new", title: "New session", group: "Action", keywords: "create start", run: () => setScreen({ kind: "new" }) },
       page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: keyLabel(bindingOf("attention")), detail: attentionCount ? `${attentionCount} waiting` : undefined }),
+      ...(STANDALONE
+        ? []
+        : ([1, 2, 3, 4] as const).map((n) =>
+            page(`panes-${n}`, n === 1 ? "One pane" : `${n} panes side by side`, () => showWork(ws.chooseLayout(workRef.current, n)), { keywords: "workspace layout split columns grid" }),
+          )),
       page("board", "Board", () => setScreen({ kind: "board" }), { keywords: "cards overview columns kanban" }),
       page("providers", "Providers", () => setScreen({ kind: "providers" }), { keywords: "api keys models" }),
       page("profiles", "Profiles", () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
@@ -715,6 +726,46 @@ export default function App() {
     return items;
   };
 
+  const sessionView = (s: Session, active = true, onClosePane?: () => void) => (
+    <SessionView
+      key={s.id}
+      session={s}
+      focus={screen.kind === "session" && screen.id === s.id ? screen.focus : undefined}
+      initialDraft={forkDraft?.sid === s.id ? forkDraft.text : undefined}
+      profiles={profiles}
+      onForked={(sid, text) => {
+        setForkDraft({ sid, text });
+        refreshSessions();
+        openSession(sid);
+      }}
+      prices={config?.prices ?? []}
+      knownTags={tagsInUse}
+      onOpenCompare={(tag) => setScreen({ kind: "compare", tag })}
+      events={transcripts[s.id]?.events ?? []}
+      provider={providers.find((p) => p.id === s.providerId)}
+      providers={providers}
+      environment={environments.find((x) => x.id === (s.environmentId || "local"))}
+      harness={harnesses.find((h) => h.id === s.harnessId)}
+      project={projects.find((p) => p.id === s.projectId)}
+      onProjectsChanged={refreshProjects}
+      configVersion={configVersion}
+      allowBypass={config?.permissions.allowBypass ?? false}
+      onError={report}
+      onOpenWindow={STANDALONE ? undefined : () => openWindow(s.id)}
+      active={active}
+      onClosePane={onClosePane}
+      onDeleted={() => {
+        if (STANDALONE) {
+          Window.Close().catch(() => {});
+          return;
+        }
+        if (workRef.current.layout > 1) showWork(ws.forget(workRef.current, (sid) => sid !== s.id));
+        else setScreen({ kind: "none" });
+        refreshSessions();
+      }}
+    />
+  );
+
   return (
     <PaletteContext.Provider value={registry}>
     <div className={STANDALONE ? "app standalone" : "app"}>
@@ -753,6 +804,21 @@ export default function App() {
           <button className="attention-link" aria-current={screen.kind === "usage" ? "page" : undefined} onClick={() => setScreen({ kind: "usage" })}>
             Usage
           </button>
+          <div className="layout-switch" role="group" aria-label="Sessions side by side">
+            <span className="muted">Panes</span>
+            {([1, 2, 3, 4] as const).map((n) => (
+              <button
+                key={n}
+                className="ghost"
+                aria-pressed={work.layout === n}
+                aria-label={n === 1 ? "One pane" : `${n} panes`}
+                title={n === 1 ? "One session" : `${n} sessions side by side`}
+                onClick={() => showWork(ws.chooseLayout(work, n))}
+              >
+                <Icon name={`panes-${n}`} />
+              </button>
+            ))}
+          </div>
           <div className="filters">
             <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
             <div className="row">
@@ -852,7 +918,14 @@ export default function App() {
                         className="session-row"
                         aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
                         aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
-                        onClick={() => openSession(s.id)}
+                        data-shown={!STANDALONE && screen.kind === "session" && work.panes.includes(s.id) ? "" : undefined}
+                        title="⌘-click or drag to open it beside what is open"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData(SESSION_DRAG_TYPE, s.id);
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onClick={(e) => openSession(s.id, undefined, e.metaKey ? "new" : "active")}
                       >
                         <span className="session-title">{s.title}</span>
                         <span className="session-meta">
@@ -977,40 +1050,16 @@ export default function App() {
           </div>
         )}
 
-        {screen.kind === "session" && selected && (
-          <SessionView
-            key={selected.id}
-            session={selected}
-            focus={screen.focus}
-            initialDraft={forkDraft?.sid === selected.id ? forkDraft.text : undefined}
-            profiles={profiles}
-            onForked={(sid, text) => {
-              setForkDraft({ sid, text });
-              refreshSessions();
-              openSession(sid);
-            }}
-            prices={config?.prices ?? []}
-            knownTags={tagsInUse}
-            onOpenCompare={(tag) => setScreen({ kind: "compare", tag })}
-            events={transcripts[selected.id]?.events ?? []}
-            provider={providers.find((p) => p.id === selected.providerId)}
-            providers={providers}
-            environment={environments.find((x) => x.id === (selected.environmentId || "local"))}
-            harness={harnesses.find((h) => h.id === selected.harnessId)}
-            project={projects.find((p) => p.id === selected.projectId)}
-            onProjectsChanged={refreshProjects}
-            configVersion={configVersion}
-            allowBypass={config?.permissions.allowBypass ?? false}
-            onError={report}
-            onOpenWindow={STANDALONE ? undefined : () => openWindow(selected.id)}
-            onDeleted={() => {
-              if (STANDALONE) {
-                Window.Close().catch(() => {});
-                return;
-              }
-              setScreen({ kind: "none" });
-              refreshSessions();
-            }}
+        {STANDALONE && selected && screen.kind === "session" && sessionView(selected)}
+        {!STANDALONE && screen.kind === "session" && (
+          <Workspace
+            work={work}
+            sessions={sessions}
+            renderSession={sessionView}
+            onActivate={activatePane}
+            onPlace={(sid, i) => showWork(ws.placeIn(workRef.current, sid, i))}
+            onClose={(i) => showWork(ws.closePane(workRef.current, i))}
+            onNew={() => setScreen({ kind: "new" })}
           />
         )}
         {screen.kind === "new" && (
