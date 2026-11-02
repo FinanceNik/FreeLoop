@@ -21,6 +21,7 @@ func Fingerprint(dir string) map[string]string {
 	add(ProvidersFileName)
 	add(RulesFileName)
 	add(MCPFileName)
+	add(ColorsFileName)
 	for _, sub := range []string{EnvironmentsDir, ProfilesDir, PresetsDir} {
 		if entries, err := os.ReadDir(filepath.Join(dir, sub)); err == nil {
 			for _, e := range entries {

@@ -46,6 +46,7 @@ import Onboarding from "./Onboarding.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
+import { applyColors, type ColorSet } from "./colors.ts";
 import { inSettings, isSettingsShortcut, MAX_FONT_SIZE, textSizeAfter } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
 import { basename } from "./paths.ts";
@@ -248,6 +249,25 @@ export default function App() {
     root.style.setProperty("--font-size", `${config.ui.fontSize || 14}px`);
   }, [config?.ui.theme, config?.ui.fontSize]);
 
+  // The user's colors (GUI-022). A change shows at once and is saved a moment
+  // later; until then it is newer than the file, so a reload leaves it alone.
+  const [colors, setColors] = useState<ColorSet>({});
+  const colorsPending = useRef(false);
+  const colorSave = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => applyColors(colors), [colors]);
+  const changeColors = (next: ColorSet) => {
+    colorsPending.current = true;
+    setColors(next);
+    clearTimeout(colorSave.current);
+    colorSave.current = setTimeout(() => {
+      EngineService.SaveColors({ version: 1, light: next.light ?? {}, dark: next.dark ?? {} })
+        .catch(report)
+        .finally(() => {
+          colorsPending.current = false;
+        });
+    }, 300);
+  };
+
   // A config object only replaces the current one when it differs, so an
   // unrelated reload does not reset a half-edited settings form.
   const refreshConfig = () => {
@@ -256,6 +276,12 @@ export default function App() {
         // A size chosen with ⌘+ or ⌘- and not saved yet is newer than the file.
         const c = fontPending.current === null ? disk : { ...disk, ui: { ...disk.ui, fontSize: fontPending.current } };
         setConfig((old) => (old && JSON.stringify(old) === JSON.stringify(c) ? old : c));
+      })
+      .catch(report);
+    EngineService.Colors()
+      .then((disk) => {
+        if (colorsPending.current) return;
+        setColors((old) => (JSON.stringify([old.light, old.dark]) === JSON.stringify([disk.light, disk.dark]) ? old : (disk as ColorSet)));
       })
       .catch(report);
     EngineService.ConfigIssues()
@@ -1058,7 +1084,9 @@ export default function App() {
                   onProjectsChanged={refreshProjects}
                   onImport={() => setScreen({ kind: "import" })}
                   onProviders={() => setScreen({ kind: "providers" })}
-                  onSaved={setConfig} onError={report} />
+                  colors={colors}
+                onColors={changeColors}
+                onSaved={setConfig} onError={report} />
               )}
               {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
               {screen.kind === "schedules" && (

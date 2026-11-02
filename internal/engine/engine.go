@@ -82,6 +82,7 @@ type Engine struct {
 	broker  *permission.Broker
 	rules   *ruleStore
 	cfg     config.Config
+	colors  config.Colors
 	// issues are the current problems per source file group, so a reload
 	// replaces its own and leaves the others.
 	issues   map[string][]config.Issue
@@ -195,6 +196,7 @@ func Open(opts Options) (*Engine, error) {
 	e.rules.scopedRules = e.scopedRules
 	e.broker.SetRules(e.rules, e.rules)
 	e.broker.SetHooks(engineHooks{e})
+	e.loadColors()
 	e.loadEnvironments()
 	e.loadPresets()
 	e.loadProfiles()
@@ -328,9 +330,10 @@ const (
 	issueProfiles     = "profiles"
 	issueMCP          = "mcp"
 	issuePresets      = "presets"
+	issueColors       = "colors"
 )
 
-var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issuePresets, issueProfiles, issueMCP, issueRules, issueCapabilities}
+var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issuePresets, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()

@@ -301,6 +301,10 @@ What the open "later" list held that follows from the sandbox or needs no accoun
 
 1. **Deeper analytics (GUI-021).** *Built 2026-11-01; checked in the browser in both themes, the rule action and the counting against real demo transcripts, the charts on seeded scratch history, since no real history of weeks exists here.* The usage page gets the tabs Tokens and cost, Activity, Approvals and Efficiency, and filters for project, provider or agent, model and tag across all of them. The engine folds each session's transcript into counts per hour (`internal/engine/activity.go`, the `activity` table) when the page asks, a session at a time, only for sessions that moved on, so a running turn pays nothing and past sessions count from the first look. The insights are pure (`frontend/src/activity.ts`). Not in: an activity CSV (Export CSV still covers tokens and cost), and turns per model are shared out by model calls rather than recorded, since the transcript does not say which model a turn used.
 
+### Custom colors (built 2026-11-02)
+
+1. **Custom colors (GUI-022).** *Checked in the browser: both directions between the editor and `colors.json`, a bad value, broken JSON, a restart, both appearances and Reset. The color picker's panel and "Open colors.json" need the native window, so they were not tried.* Settings → Appearance changes the app's colors for each appearance, live, and `colors.json` in the data folder holds the same set.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

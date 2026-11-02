@@ -18,7 +18,8 @@ import (
 // EngineService exposes the engine to the frontend. It is a thin adapter:
 // each method forwards to the engine and adds nothing, except ChooseFolder,
 // ExportSession, ExportConfig and ImportConfig, which show native dialogs,
-// and OpenSkill, OpenFile and OpenHarness, which open a file in another app.
+// and OpenSkill, OpenFile, OpenHarness and OpenColors, which open a file in
+// another app.
 type EngineService struct {
 	eng  *engine.Engine
 	app  *application.App
@@ -558,6 +559,24 @@ func (s *EngineService) DeleteSession(ctx context.Context, sessionID string) err
 
 func (s *EngineService) Config() config.Config {
 	return s.eng.Config()
+}
+
+func (s *EngineService) Colors() config.Colors {
+	return s.eng.Colors()
+}
+
+func (s *EngineService) SaveColors(c config.Colors) (config.Colors, error) {
+	return s.eng.SaveColors(c)
+}
+
+// OpenColors opens the colors file in the app the user opens JSON with
+// (GUI-022).
+func (s *EngineService) OpenColors() error {
+	path, err := s.eng.ColorsFile()
+	if err != nil {
+		return err
+	}
+	return s.app.Browser.OpenFile(path)
 }
 
 func (s *EngineService) ConfigIssues() []config.Issue {

@@ -34,6 +34,9 @@ const maxBundleFile = 1 << 20
 
 // backedUp reports whether rel (with /) is a file a bundle may hold.
 func backedUp(rel string) bool {
+	if rel == ColorsFileName {
+		return true
+	}
 	if strings.Contains(rel, "..") || strings.HasPrefix(rel, "/") || !strings.HasSuffix(rel, ".yaml") {
 		return false
 	}

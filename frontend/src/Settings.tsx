@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
+import ColorEditor from "./ColorEditor.tsx";
+import type { ColorSet } from "./colors.ts";
 import { bindingOf, keyLabel } from "./shortcuts.ts";
 import { Browser } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
@@ -15,11 +17,13 @@ interface Props {
   onProjectsChanged: () => void;
   onImport: () => void;
   onProviders: () => void;
+  colors: ColorSet;
+  onColors: (c: ColorSet) => void;
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
 }
 
-export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onProviders, onSaved, onError }: Props) {
+export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
   // Connections local-only mode refused (NFR-OFF-003).
@@ -37,7 +41,7 @@ export default function Settings({ config, providers, environments, profiles, pr
       .then((path) => path && setBackup(path))
       .catch(onError);
   const restore = () => {
-    if (!confirm("Restore a config backup? Its settings, providers, profiles, environments, rules and MCP servers replace the current ones; the replaced files are kept in the data folder's backups folder.")) return;
+    if (!confirm("Restore a config backup? Its settings, colors, providers, profiles, environments, rules and MCP servers replace the current ones; the replaced files are kept in the data folder's backups folder.")) return;
     EngineService.ImportConfig()
       .then((r) => r && setRestored(r))
       .catch(onError);
@@ -105,6 +109,9 @@ export default function Settings({ config, providers, environments, profiles, pr
             {keyLabel(bindingOf("textLarger"))} and {keyLabel(bindingOf("textSmaller"))} change this from anywhere in the app.
           </span>
         </label>
+
+        <h3>Colors</h3>
+        <ColorEditor colors={colors} onChange={onColors} onError={onError} />
 
         <h3>Keyboard shortcuts</h3>
         <ShortcutsEditor value={form.ui.shortcuts ?? {}} onChange={(shortcuts) => setForm({ ...form, ui: { ...form.ui, shortcuts } })} />
