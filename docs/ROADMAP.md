@@ -315,6 +315,8 @@ Rewriting shell commands so their output costs fewer tokens (HRN-019, OQ-029). N
 4. Claude Code through a hook of Freeloop's own, a narrow allow list for rewritten read-only commands, and a warning when a global `rtk init -g` hook is present, which Freeloop cannot switch off.
 5. Custom harnesses through `terminal/create`.
 
+A hardening pass on 2026-11-02 tried 130 commands raw and through real RTK in identical repositories, and tried to get hidden commands past the check in zsh. See `docs/SECURITY.md`. An independent review added more. RTK turned a `git diff --output` file into its own summary and showed 10 of 31 commits for `git log` with no note, so those stay as written; pipes, redirections and substitutions no longer are rewritten; RTK runs a repository's copy of `tsc`, `jest`, `gradle` and others, so a rewrite now takes a list of tools and must be the approved text after the program's name; files need approval; a repository's settings no longer reach the program; a sandboxed session could read an unconfined session's stored output, and no longer can; `rtk bypass`, `run`, `err`, `summary` and `test` no longer get past deny rules. Known limits: `rtk recall` hints go stale after a fork or after switching the optimizer off.
+
 Not in: output filters (`rtk pipe` shortened a 22 KB `git log` to 259 bytes in the test, which looks wrong), and gateways that sit in front of the model (they raise HRN-008 questions).
 
 ## Later (unscheduled)

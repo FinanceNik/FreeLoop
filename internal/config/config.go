@@ -63,6 +63,9 @@ type Config struct {
 	Prices []Price `yaml:"prices,omitempty" json:"prices"`
 	// Hooks run for every session (EXT-005).
 	Hooks []Hook `yaml:"hooks,omitempty" json:"hooks"`
+	// OptimizerApprovals record the token optimizer files the user approved, by
+	// ID, with a mark only the app can compute (HRN-019).
+	OptimizerApprovals map[string]string `yaml:"optimizerApprovals,omitempty" json:"optimizerApprovals"`
 	// Network holds the local-only switch (NFR-OFF-003).
 	Network Network `yaml:"network,omitempty" json:"network"`
 	// Updates holds the opt-in update check (SEC-009, OQ-015).

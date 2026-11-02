@@ -155,6 +155,9 @@ var wrappers = map[string]string{
 	"rtk": "",
 }
 
+// rtkRunners are rtk's commands that run the command after them.
+var rtkRunners = []string{"proxy", "bypass", "run", "err", "test", "summary"}
+
 // keywords come before a command without being one.
 var keywords = []string{"!", "if", "then", "elif", "else", "do", "while", "until", "time"}
 
@@ -192,6 +195,10 @@ func simpleCommands(cmd string, depth int) []string {
 			case strings.Contains(f, "=") && !strings.HasPrefix(f, "="):
 				fields = fields[1:] // VAR=value
 			case wrapper:
+				// A rule can name rtk itself, which runs what follows it.
+				if filepath.Base(f) == "rtk" {
+					out = append(out, "rtk "+strings.Join(fields[1:], " "))
+				}
 				fields = fields[1:]
 				// Wrapper options such as env -i, and those with a value, such as
 				// env -u NAME and sudo -u root.
@@ -206,9 +213,11 @@ func simpleCommands(cmd string, depth int) []string {
 				if filepath.Base(f) == "timeout" && len(fields) > 0 {
 					fields = fields[1:]
 				}
-				// rtk proxy runs what follows it unfiltered.
-				if filepath.Base(f) == "rtk" && len(fields) > 0 && fields[0] == "proxy" {
-					fields = fields[1:]
+				// Some of rtk's own commands run what follows them.
+				if filepath.Base(f) == "rtk" {
+					for len(fields) > 0 && (slices.Contains(rtkRunners, fields[0]) || strings.HasPrefix(fields[0], "-")) {
+						fields = fields[1:]
+					}
 				}
 			default:
 				goto done

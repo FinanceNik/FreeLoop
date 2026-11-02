@@ -565,8 +565,8 @@ export default function NewSession({ providers, projects, environments, profiles
               <option value="">{inheritedLabel(profile?.optimizer, defaults?.optimizer, optimizers)}</option>
               <option value={OPTIMIZER_OFF}>Off</option>
               {optimizers.map((o) => (
-                <option key={o.id} value={o.id} disabled={!o.path && env?.kind !== "docker"}>
-                  {o.path || env?.kind === "docker" ? o.name : `${o.name} (not installed)`}
+                <option key={o.id} value={o.id} disabled={o.needsApproval || (!o.path && env?.kind !== "docker")}>
+                  {o.needsApproval ? `${o.name} (not approved)` : o.path || env?.kind === "docker" ? o.name : `${o.name} (not installed)`}
                 </option>
               ))}
             </select>

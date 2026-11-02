@@ -391,8 +391,8 @@ func shellTool() *tool {
 				// The broker approved in.Command; a rewrite never reaches it, and
 				// a command the user let out of the sandbox runs as they read it.
 				via := ""
-				if s.p.Optimizer != nil && !in.Raw && !c.leaves {
-					rw := s.p.Optimizer.Rewrite(ctx, in.Command)
+				if s.p.Optimizer != nil && !c.leaves {
+					rw := s.p.Optimizer.Rewrite(ctx, in.Command, in.Raw)
 					spec.Command, spec.Env, via = rw.Command, rw.Env, rw.Via
 				}
 				res, err := s.env.Exec(ctx, spec)
@@ -408,6 +408,9 @@ func shellTool() *tool {
 				sb.WriteString(res.Output)
 				if res.Truncated {
 					sb.WriteString("\n[output truncated]")
+				}
+				if via != "" && res.ExitCode == 127 {
+					fmt.Fprintf(&sb, "\n[This ran through %s, which may be missing. Call shell again with raw: true to run the command as written.]", via)
 				}
 				if c.contained != "" && res.ExitCode != 0 && sandboxRefusal(res.Output) {
 					sb.WriteString(sandboxNote)

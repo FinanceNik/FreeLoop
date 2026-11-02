@@ -21,6 +21,7 @@ const goodOptimizer = `name: Short
 program: short
 rewrite: [rewrite]
 rewriteExits: [0]
+rewrites: {git: git}
 probeCommand: git status
 probeWant: short git status
 install: brew install short
@@ -47,23 +48,29 @@ func TestLoadOptimizers(t *testing.T) {
 
 func TestOptimizerValidate(t *testing.T) {
 	good := func() Optimizer {
-		return Optimizer{ID: "x", Name: "X", Program: "x", Rewrite: []string{"r"}, RewriteExits: []int{0}, ProbeCommand: "git status", ProbeWant: "x git status"}
+		return Optimizer{ID: "x", Name: "X", Program: "x", Rewrite: []string{"r"}, RewriteExits: []int{0}, Rewrites: map[string]string{"git": "git"}, ProbeCommand: "git status", ProbeWant: "x git status"}
 	}
 	if err := good().Validate(); err != nil {
 		t.Fatal(err)
 	}
 	for name, change := range map[string]func(*Optimizer){
-		"the off word":      func(o *Optimizer) { o.ID = OptimizerOff },
-		"no name":           func(o *Optimizer) { o.Name = " " },
-		"a path":            func(o *Optimizer) { o.Program = "/tmp/x" },
-		"a shell word":      func(o *Optimizer) { o.Program = "x;y" },
-		"no rewrite":        func(o *Optimizer) { o.Rewrite = nil },
-		"no exits":          func(o *Optimizer) { o.RewriteExits = nil },
-		"no probe":          func(o *Optimizer) { o.ProbeCommand = "" },
-		"another program":   func(o *Optimizer) { o.ProbeWant = "y git status" },
-		"a runnable line":   func(o *Optimizer) { o.Install = "brew install x\nrm -rf ~" },
-		"a bad variable":    func(o *Optimizer) { o.Env = map[string]string{"A B": "1"} },
-		"a path in dataEnv": func(o *Optimizer) { o.DataEnv = map[string]string{"A": "../../x"} },
+		"the off word":       func(o *Optimizer) { o.ID = OptimizerOff },
+		"no name":            func(o *Optimizer) { o.Name = " " },
+		"a path":             func(o *Optimizer) { o.Program = "/tmp/x" },
+		"a shell word":       func(o *Optimizer) { o.Program = "x;y" },
+		"no rewrite":         func(o *Optimizer) { o.Rewrite = nil },
+		"no programs":        func(o *Optimizer) { o.Rewrites = nil },
+		"a path to rewrite":  func(o *Optimizer) { o.Rewrites = map[string]string{"./git": "git"} },
+		"no exits":           func(o *Optimizer) { o.RewriteExits = nil },
+		"no probe":           func(o *Optimizer) { o.ProbeCommand = "" },
+		"another program":    func(o *Optimizer) { o.ProbeWant = "y git status" },
+		"a runnable line":    func(o *Optimizer) { o.Install = "brew install x\nrm -rf ~" },
+		"an invisible mark":  func(o *Optimizer) { o.Install = "brew install\u202e x" },
+		"a bad variable":     func(o *Optimizer) { o.Env = map[string]string{"X_A B": "1"} },
+		"another's variable": func(o *Optimizer) { o.Env = map[string]string{"PATH": "/evil"} },
+		"a loader variable":  func(o *Optimizer) { o.Env = map[string]string{"DYLD_INSERT_LIBRARIES": "/evil"} },
+		"another's data":     func(o *Optimizer) { o.DataEnv = map[string]string{"ZDOTDIR": "x"} },
+		"a path in dataEnv":  func(o *Optimizer) { o.DataEnv = map[string]string{"X_A": "../../x"} },
 	} {
 		o := good()
 		change(&o)

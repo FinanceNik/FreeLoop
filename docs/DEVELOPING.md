@@ -127,14 +127,17 @@ rewriteExits: [0, 3]        # exit codes that mean it printed a rewrite
 probeCommand: git status    # a known command...
 probeWant: rtk git status   # ...and what it must become, which tells it from another program with the same name
 version: [--version]        # optional
-env:                        # optional: added to every command while it is on
+rewrites: {git: git, cat: read}  # the tools it may rewrite, and its word for each
+leaveAlone: [--output]      # optional: options that keep a command from being rewritten
+leaveAloneCommands: [git log]  # optional: commands it shortens in a way the reader cannot tell
+env:                        # optional: added to every command while it is on; names start with the program's
   RTK_TELEMETRY_DISABLED: "1"
 dataEnv:                    # optional: variables pointing at files in the session's own folder
   RTK_DB_PATH: tracking.db
 install: brew install rtk   # optional, one line: typed into a terminal for the user to run
 ```
 
-Freeloop asks with `HOME` set to nothing, so the program reads no agent's settings. A rewrite may only put `program` in front of parts of the same command. Run the program with what you add through `internal/engine/optimizers.go` before trusting it, under the sandbox too: check that exit codes survive, that refusals stay visible, and where it writes. A variable that stops it reporting home belongs in `Env`. Never use a program's own agent hook: RTK's answers "allow" when a repository's settings say so (OQ-029).
+A file runs only after the user approves it on the Settings page, and any change ends that. Freeloop asks from `/` with `HOME` set to nothing, so the program reads no project's or agent's settings. Only plain lines are asked about, and a rewrite must be `program` and the same command. Before listing a tool in `rewrites`, try it raw and rewritten in identical repositories, and with a copy of the tool planted in the repository, since a program may prefer that copy; that is how the `--output` and `tsc` problems were found. Run the program with what you add through `internal/engine/optimizers.go` before trusting it, under the sandbox too: check that exit codes survive, that refusals stay visible, and where it writes. A variable that stops it reporting home belongs in `Env`. Never use a program's own agent hook: RTK's answers "allow" when a repository's settings say so (OQ-029).
 
 ## Adding an event type
 

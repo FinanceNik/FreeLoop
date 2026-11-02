@@ -255,7 +255,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                 <option value={OPTIMIZER_OFF}>Off</option>
                 {optimizers.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.path ? o.name : `${o.name} (not installed)`}
+                    {o.needsApproval ? `${o.name} (not approved)` : o.path ? o.name : `${o.name} (not installed)`}
                   </option>
                 ))}
                 {form.optimizer && form.optimizer !== OPTIMIZER_OFF && !optimizers.some((o) => o.id === form.optimizer) && <option value={form.optimizer}>{form.optimizer}</option>}

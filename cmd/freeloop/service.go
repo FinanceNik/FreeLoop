@@ -420,6 +420,12 @@ func (s *EngineService) CheckOptimizer(ctx context.Context, id string) (engine.O
 	return s.eng.CheckOptimizer(ctx, id)
 }
 
+// ApproveOptimizer approves an optimizer file as the Settings page showed it. It
+// is here and not on the socket: the user approves, not another process.
+func (s *EngineService) ApproveOptimizer(ctx context.Context, id, fingerprint string) (config.Config, error) {
+	return s.eng.ApproveOptimizer(ctx, id, fingerprint)
+}
+
 func (s *EngineService) SetDefaultOptimizer(ctx context.Context, id string) (config.Config, error) {
 	return s.eng.SetDefaultOptimizer(ctx, id)
 }

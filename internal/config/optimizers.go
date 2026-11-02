@@ -2,6 +2,9 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -42,8 +45,21 @@ type Optimizer struct {
 	ProbeWant    string `yaml:"probeWant"`
 	// Version are the arguments that print its version.
 	Version []string `yaml:"version,omitempty"`
+	// Rewrites maps the programs it may rewrite to the program's word for each:
+	// git to git, cat to read. Nothing else is asked about or accepted. Which
+	// tool runs must stay the same: for tsc or gradle, RTK prefers a copy in the
+	// repository, so the approved command would have run the repository's code.
+	Rewrites map[string]string `yaml:"rewrites"`
+	// LeaveAlone are options that keep a command from being rewritten, because
+	// the program changes what they do. An entry matches the word itself and
+	// the word followed by =.
+	LeaveAlone []string `yaml:"leaveAlone,omitempty"`
+	// LeaveAloneCommands are commands it shortens in a way the reader cannot
+	// tell, whose words appear in this order: git log matches git -C x log too.
+	LeaveAloneCommands []string `yaml:"leaveAloneCommands,omitempty"`
 	// Env is added to every command while the optimizer is on, and DataEnv
-	// points variables at files in the session's own folder.
+	// points variables at files in the session's own folder. Their names start
+	// with the program's name, so they cannot change how anything else runs.
 	Env     map[string]string `yaml:"env,omitempty"`
 	DataEnv map[string]string `yaml:"dataEnv,omitempty"`
 	// Install tells the user how to get the program. It is typed into a
@@ -60,6 +76,17 @@ func BuiltinOptimizers() []Optimizer {
 		Rewrite: []string{"rewrite"}, RewriteExits: []int{0, 3},
 		ProbeCommand: "git status", ProbeWant: "rtk git status",
 		Version: []string{"--version"},
+		// Tried raw and rewritten in identical repositories, with copies of each
+		// planted in the repository. Others, such as gh and curl, await the same.
+		Rewrites: map[string]string{
+			"git": "git", "ls": "ls", "cat": "read", "head": "read", "tail": "read", "grep": "grep", "rg": "rg",
+			"find": "find", "wc": "wc", "diff": "diff", "go": "go", "cargo": "cargo",
+		},
+		// RTK writes its own summary to the file: 114 bytes for a 1975-byte
+		// diff.
+		LeaveAlone: []string{"--output", "--output-file"},
+		// RTK shows 10 of 31 commits and says nothing.
+		LeaveAloneCommands: []string{"git log"},
 		Env: map[string]string{
 			"RTK_TELEMETRY_DISABLED":    "1",
 			"RTK_ONRAMP_DISABLED":       "1",
@@ -89,28 +116,55 @@ func (o Optimizer) Validate() error {
 		return errors.New("rewrite: the arguments that ask for a rewrite are required")
 	case len(o.RewriteExits) == 0:
 		return errors.New("rewriteExits: the exit codes of a rewrite are required")
+	case len(o.Rewrites) == 0:
+		return errors.New("rewrites: the programs it may rewrite are required")
 	case strings.TrimSpace(o.ProbeCommand) == "":
 		return errors.New("probeCommand: a command to try it with is required")
 	case !strings.HasPrefix(o.ProbeWant, o.Program+" "):
 		return fmt.Errorf("probeWant must be what probeCommand becomes, starting with %s", o.Program)
-	case strings.ContainsFunc(o.Install, unicode.IsControl):
-		// A newline would run it the moment it is typed into a terminal.
-		return errors.New("install must be one line")
+	case strings.ContainsFunc(o.Install, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }):
+		// A newline would run it the moment it is typed into a terminal, and an
+		// invisible character could make it read as something else.
+		return errors.New("install must be one line of plain text")
 	}
+	for from, to := range o.Rewrites {
+		if !programName.MatchString(from) || !programName.MatchString(to) {
+			return fmt.Errorf("rewrites: %s: %s must be program names, without a path", from, to)
+		}
+	}
+	prefix := o.varPrefix()
 	for k := range o.Env {
-		if !varName.MatchString(k) {
-			return fmt.Errorf("env: %q is not a valid variable name", k)
+		if !varName.MatchString(k) || !strings.HasPrefix(k, prefix) {
+			return fmt.Errorf("env: %q must be a variable name starting with %s", k, prefix)
 		}
 	}
 	for k, file := range o.DataEnv {
-		if !varName.MatchString(k) {
-			return fmt.Errorf("dataEnv: %q is not a valid variable name", k)
+		if !varName.MatchString(k) || !strings.HasPrefix(k, prefix) {
+			return fmt.Errorf("dataEnv: %q must be a variable name starting with %s", k, prefix)
 		}
 		if file == "" || file == "." || file == ".." || file != filepath.Base(file) {
 			return fmt.Errorf("dataEnv: %s must name a file, without a path", k)
 		}
 	}
 	return nil
+}
+
+// varPrefix is what the names of its variables start with: RTK_ for rtk. PATH,
+// ZDOTDIR, DYLD_INSERT_LIBRARIES or GIT_SSH_COMMAND would reach every command.
+func (o Optimizer) varPrefix() string {
+	return strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9]`).ReplaceAllString(o.Program, "_")) + "_"
+}
+
+// Fingerprint identifies what the optimizer runs. A file's optimizer runs only
+// after the user approved exactly this (HRN-019).
+func (o Optimizer) Fingerprint() string {
+	o.Source = ""
+	b, err := json.Marshal(o)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 
 // LoadOptimizers returns the built-in optimizers with those in optimizers/ on

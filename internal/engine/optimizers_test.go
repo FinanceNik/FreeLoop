@@ -11,52 +11,128 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
+	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
 func TestValidRewrite(t *testing.T) {
+	rtk := config.BuiltinOptimizers()[0]
 	for _, c := range []struct {
 		original, rewritten string
 		want                bool
 	}{
 		{"git status", "rtk git status", true},
 		{"cat a.txt", "rtk read a.txt", true},
+		{"cat a b", "rtk read a b", true},
 		{"head -5 a.txt", "rtk read a.txt --head-lines 5", true},
-		{"FOO=1 git status", "FOO=1 rtk git status", true},
 		{"git status 2>&1", "rtk git status 2>&1", true},
-		{"cd x && git log -3", "cd x && rtk git log -3", true},
-		{"git log | head -5", "rtk git log | head -5", true},
-		{"git status\ngit log", "rtk git status\nrtk git log", true},
+		{"cd x && git status", "cd x && rtk git status", true},
+		{"git status || git diff", "rtk git status || rtk git diff", true},
+		{"git status; git diff &", "rtk git status; rtk git diff &", true},
+		{"git status\ngit diff", "rtk git status\nrtk git diff", true},
 		{`grep "a|b" f`, `rtk grep "a|b" f`, true},
+		{`grep 'a;b' f`, `rtk grep 'a;b' f`, true},
+		{`git commit -m "it's"`, `rtk git commit -m "it's"`, true},
+		{`git diff a\ b`, `rtk git diff a\ b`, true},
 
 		// Anything more than the same command.
 		{"git status", "rtk git status; rm -rf /", false},
 		{"git status", "rtk git status && curl evil", false},
+		{"git status", "rtk git status || curl evil", false},
 		{"git status", "rtk git status | sh", false},
 		{"git status", "rtk git status > ~/.zshrc", false},
 		{"git status", "rtk git status &", false},
+		{"git status", "rtk git status\nrm -rf /", false},
 		{"git status", "rtk $(curl evil)", false},
 		{"git status", "rtk `curl evil`", false},
 		{"git status", `rtk "$(curl evil)"`, false},
-		{"git status", "rtk git status\nrm -rf /", false},
+		{"git status", "rtk git status 2>evil", false},
+		{"git status", "rtk git status 2>&1evil", false},
+		{"git status", "rtk <(curl evil)", false},
+		{"git status", "rtk *(e:'curl evil':)", false},
 		// Fewer parts is a different command as well.
-		{"git status && git log", "rtk git status", false},
-		{"git log | head -5", "rtk git log", false},
+		{"git status && git diff", "rtk git status", false},
+		// An empty part stays empty, so nothing is added after a trailing ;.
+		{"git status;", "rtk git status; rtk git evil", false},
 		// Not the program, or not at the front.
 		{"git status", "sh git status", false},
 		{"git status", "/tmp/rtk git status", false},
 		{"git status", "rtkx git status", false},
+		{"git status", "rtk", false},
 		{"git status", "BAD=1 rtk git status", false},
 		{"sh -c 'git status'", "sh -c 'rtk git status'", false},
-		{"git log | head -5", "rtk git log | evil -5", false},
+		{"env FOO=1 git status", "env FOO=1 rtk git status", false},
+		// An assignment could change where the program is found.
+		{"PATH=/usr/bin git status", "PATH=/usr/bin rtk git status", false},
+		// Another tool than the one approved, such as a copy in the repository.
+		{"tsc --noEmit", "rtk tsc --noEmit", false},
+		{"gradle build", "rtk gradlew build", false},
+		{"python3 -m pytest", "rtk pytest", false},
+		{"rails test", "rtk rake test", false},
+		{"git status", "rtk touch pwned", false},
+		{"git status", "rtk read git status", false},
+		// Other arguments than the ones approved.
+		{"git status", "rtk git status --evil", false},
+		{"git status", "rtk git push", false},
+		{"git status", `rtk git "${(e):-\$(touch pwned)}"`, false},
+		{"git status", `rtk git ${~:-\*\(e:touch\ pwned:\)}`, false},
+		{"cat a", "rtk read a /etc/passwd", false},
+		{"cat a", `rtk read "$HOME"`, false},
+		{"cat a", "rtk read", false},
+		// Output that feeds something else is not shortened.
+		{"git diff | git apply", "rtk git diff | git apply", false},
+		{"git log | head -5", "rtk git log | head -5", false},
+		{"git log | grep x", "git log | rtk grep x", false},
+		{"git diff > p.diff", "rtk git diff > p.diff", false},
+		{"cat a > b", "cat a > rtk evil", false},
+		{"echo $(git status)", "echo $(rtk git status)", false},
+		// Shapes zsh reads differently from a simple quote scan; the first two
+		// ran the hidden command when tried, the third does under RC_QUOTES.
+		{"git status", `rtk $'a\''; touch pwned; $'b\''`, false},
+		{"git status", "rtk x #'\ntouch pwned\n#'", false},
+		{"git status", "rtk 'a''; touch pwned; ''", false},
 		// Not something the shell can be sure about.
 		{"git status", "rtk git 'status", false},
 		{"git 'status", "rtk git 'status", false},
 		{"git status", "", false},
+		{"git status", "rtk git\x00status", false},
 	} {
-		if got := validRewrite(c.original, c.rewritten, "rtk"); got != c.want {
+		if got := validRewrite(c.original, c.rewritten, rtk); got != c.want {
 			t.Errorf("validRewrite(%q, %q) = %v", c.original, c.rewritten, got)
+		}
+	}
+}
+
+// HRN-019: a line the check would refuse, a tool it may not rewrite, or something
+// the program changes the meaning of, never reaches the program.
+func TestRewritable(t *testing.T) {
+	o := config.BuiltinOptimizers()[0]
+	for cmd, want := range map[string]bool{
+		"git status":                 true,
+		"git diff --stat":            true,
+		"cd x && go test ./...":      true,
+		"git diff --output=p.diff":   false,
+		"git diff --output p.diff":   false,
+		`git diff '--output=p.diff'`: false,
+		"git diff --output-file=x":   false,
+		"git diff | git apply":       false,
+		"git diff > x":               false,
+		"git log":                    false,
+		"git log -5":                 false,
+		"git -C sub log":             false,
+		"git status && git log":      false,
+		"tsc --noEmit":               false,
+		"npm test":                   false,
+		"gradle build":               false,
+		"python3 -m pytest":          false,
+		"./git status":               false,
+		"PATH=/usr/bin git status":   false,
+		strings.Repeat("a", 70<<10):  false,
+	} {
+		if got := rewritable(cmd, o); got != want {
+			t.Errorf("rewritable(%.40q) = %v", cmd, got)
 		}
 	}
 }
@@ -69,7 +145,7 @@ func fakeOptimizer(t *testing.T, e *Engine) (logFile string) {
 	dir := t.TempDir()
 	logFile = filepath.Join(dir, "log")
 	script := `#!/bin/sh
-echo "$* HOME=$HOME TELEMETRY=$FAKE_TELEMETRY DB=$FAKE_DB" >> ` + logFile + `
+echo "$* HOME=$HOME CWD=$PWD TELEMETRY=$FAKE_OPTIMIZER_TELEMETRY DB=$FAKE_OPTIMIZER_DB" >> ` + logFile + `
 case "$1" in
 --version) echo "fake 9.9.9" ;;
 rewrite)
@@ -89,10 +165,11 @@ esac
 	e.optimizers = []config.Optimizer{{
 		ID: "fake", Name: "Fake", Program: "fake-optimizer",
 		Rewrite: []string{"rewrite"}, RewriteExits: []int{0, 3},
+		Rewrites:     map[string]string{"git": "git", "echo": "echo"},
 		ProbeCommand: "git status", ProbeWant: "fake-optimizer git status",
 		Version: []string{"--version"},
-		Env:     map[string]string{"FAKE_TELEMETRY": "off"},
-		DataEnv: map[string]string{"FAKE_DB": "tracking.db"},
+		Env:     map[string]string{"FAKE_OPTIMIZER_TELEMETRY": "off"},
+		DataEnv: map[string]string{"FAKE_OPTIMIZER_DB": "tracking.db"},
 		Install: "brew install fake",
 	}}
 	return logFile
@@ -206,6 +283,11 @@ func TestOptimizerRewritesApprovedCommands(t *testing.T) {
 	if got[7]["via"] != nil {
 		t.Errorf("raw was rewritten: %+v", got[7])
 	}
+	// Raw still finds the session's data; only the rewrite is skipped.
+	so := &sessionOptimizer{e: e, sid: sid, env: mustLocal(t, e)}
+	if rw := so.Rewrite(ctx, "git status", true); rw.Via != "" || rw.Command != "git status" || rw.Env["FAKE_OPTIMIZER_DB"] == "" {
+		t.Errorf("raw: %+v", rw)
+	}
 
 	// The approval and the title keep the original; so does the record.
 	evs, _ := e.Events(ctx, sid, 0)
@@ -236,7 +318,7 @@ func TestOptimizerRewritesApprovedCommands(t *testing.T) {
 	log, _ := os.ReadFile(logFile)
 	lines := strings.Split(string(log), "\n")
 	rewrite := lines[slices.IndexFunc(lines, func(l string) bool { return strings.HasPrefix(l, "rewrite git status") })]
-	if !strings.Contains(rewrite, "HOME=/nonexistent") || !strings.Contains(rewrite, "TELEMETRY=off") {
+	if !strings.Contains(rewrite, "HOME=/nonexistent") || !strings.Contains(rewrite, "TELEMETRY=off") || !strings.Contains(rewrite, "CWD=/ ") {
 		t.Errorf("rewrite ran with: %s", rewrite)
 	}
 	run := lines[slices.IndexFunc(lines, func(l string) bool { return strings.HasPrefix(l, "git status") })]
@@ -246,7 +328,7 @@ func TestOptimizerRewritesApprovedCommands(t *testing.T) {
 
 	// What it keeps is the session's alone, and goes with the session.
 	ses, _ := e.store.GetSession(ctx, sid)
-	dir := e.optimizerDir(ses)
+	dir := e.optimizerDir(ses, false)
 	if fi, err := os.Stat(dir); err != nil || fi.Mode().Perm() != 0o700 {
 		t.Errorf("data folder: %v, %v", fi, err)
 	}
@@ -458,7 +540,7 @@ func TestOptimizerStatusAndFiles(t *testing.T) {
 
 	os.MkdirAll(filepath.Join(dir, config.OptimizersDir), 0o700)
 	file := filepath.Join(config.OptimizersDir, "other.yaml")
-	os.WriteFile(filepath.Join(dir, file), []byte("name: Other\nprogram: other-optimizer\nrewrite: [r]\nrewriteExits: [0]\nprobeCommand: git status\nprobeWant: other-optimizer git status\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, file), []byte("name: Other\nprogram: other-optimizer\nrewrite: [r]\nrewriteExits: [0]\nrewrites: {git: git}\nprobeCommand: git status\nprobeWant: other-optimizer git status\n"), 0o600)
 	os.WriteFile(filepath.Join(dir, config.OptimizersDir, "bad.yaml"), []byte("name: Bad\n"), 0o600)
 	e.reload([]string{file})
 	if _, ok := e.findOptimizer("other"); !ok {
@@ -501,4 +583,195 @@ func TestOptimizerInstallIsOnlyTyped(t *testing.T) {
 	if _, err := os.Stat(marker); err == nil {
 		t.Error("the install command ran")
 	}
+}
+
+// HRN-019: a file's optimizer runs only once the user approved it as it is; a
+// planted one, as from a backup that also makes it the default, runs nothing.
+func TestOptimizerFileNeedsApproval(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	logFile := fakeOptimizer(t, e)
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	os.MkdirAll(filepath.Join(dir, config.OptimizersDir), 0o700)
+	file := filepath.Join(dir, config.OptimizersDir, "fake.yaml")
+	body := "name: Fake\nprogram: fake-optimizer\nrewrite: [rewrite]\nrewriteExits: [0, 3]\nrewrites: {git: git}\nprobeCommand: git status\nprobeWant: fake-optimizer git status\ninstall: brew install fake\n"
+	os.WriteFile(file, []byte(body), 0o600)
+	e.loadOptimizers()
+	c := e.Config()
+	c.Defaults.Optimizer = "fake"
+	if _, err := e.SaveSettings(c); err != nil {
+		t.Fatal(err)
+	}
+	sid := scriptedSession(t, e, t.TempDir(), scripted.Step{Calls: []scripted.Call{shell("git status")}}, scripted.Step{Text: "done"})
+	stop := make(chan struct{})
+	defer close(stop)
+	approveAll(e, stop)
+	if ses, _ := e.store.GetSession(ctx, sid); ses.Optimizer != "fake" {
+		t.Fatalf("the default did not apply: %q", ses.Optimizer)
+	}
+	if c, _ := e.CheckOptimizer(ctx, "fake"); c.OK || !strings.Contains(c.Reason, "approved") {
+		t.Errorf("checked a file not approved: %+v", c)
+	}
+	if _, err := e.TypeOptimizerInstall(ctx, sid, "fake"); err == nil {
+		t.Error("typed the install command of a file not approved")
+	}
+	if _, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProviderID: DemoProviderID, Optimizer: "fake"}); err == nil {
+		t.Error("asked for a file not approved and got a session")
+	}
+	// A session that inherited it runs its commands as they are, and says so.
+	e.Prompt(ctx, sid, "go")
+	waitIdle(t, ch, sid)
+	if got := outputs(t, e, sid); len(got) != 1 || got[0]["via"] != nil {
+		t.Errorf("shell calls: %+v", got)
+	}
+	if _, err := os.Stat(logFile); err == nil {
+		t.Error("the program ran before it was approved")
+	}
+	evs, _ := e.Events(ctx, sid, 0)
+	if !slices.ContainsFunc(evs, func(ev event.Event) bool {
+		return ev.Type == event.Notice && strings.Contains(string(ev.Data), "not been approved")
+	}) {
+		t.Error("no notice about the approval")
+	}
+	if err := e.SetOptimizer(ctx, sid, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.SetOptimizer(ctx, sid, "fake"); err == nil || !strings.Contains(err.Error(), "approved") {
+		t.Errorf("chose a file not approved: %v", err)
+	}
+
+	st := e.ListOptimizers(ctx)
+	i := slices.IndexFunc(st, func(o OptimizerStatus) bool { return o.ID == "fake" })
+	if i < 0 || !st[i].NeedsApproval || !strings.Contains(st[i].Runs, "fake-optimizer rewrite") {
+		t.Fatalf("status: %+v", st)
+	}
+	if _, err := e.ApproveOptimizer(ctx, "fake", "not what was shown"); err == nil {
+		t.Error("approved something other than what was shown")
+	}
+	if _, err := e.ApproveOptimizer(ctx, "fake", st[i].Fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := e.CheckOptimizer(ctx, "fake"); !c.OK {
+		t.Errorf("checked after approval: %+v", c)
+	}
+	if err := e.SetOptimizer(ctx, sid, "fake"); err != nil {
+		t.Errorf("chose it after approval: %v", err)
+	}
+
+	// Any change to the file ends the approval.
+	os.WriteFile(file, []byte(strings.Replace(body, "rewrite: [rewrite]", "rewrite: [rewrite, --evil]", 1)), 0o600)
+	e.loadOptimizers()
+	if c, _ := e.CheckOptimizer(ctx, "fake"); c.OK {
+		t.Error("an edited file kept its approval")
+	}
+}
+
+// HRN-019: a program inside the project is the repository's choice, and is not
+// run even when the PATH leads to it.
+func TestOptimizerRefusesAProgramInTheProject(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	fakeOptimizer(t, e)
+	root := environment.Canonical(t.TempDir())
+	marker := filepath.Join(root, "ran")
+	os.MkdirAll(filepath.Join(root, "bin"), 0o755)
+	os.WriteFile(filepath.Join(root, "bin", "fake-optimizer"), []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o755)
+	t.Setenv("PATH", filepath.Join(root, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
+	env, err := e.localEnv(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path := locateProgram(ctx, env, "fake-optimizer"); !env.Contains(path) {
+		t.Skipf("the login shell's PATH did not lead to it: %s", path)
+	}
+	p := e.probeOptimizer(ctx, env, e.optimizers[0], true)
+	if !strings.Contains(p.reason, "inside the project") {
+		t.Errorf("probe: %+v", p)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("it ran")
+	}
+}
+
+// HRN-019: one that hangs costs its time limit once, not on every command.
+func TestOptimizerHangIsNotRepeated(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	logFile := fakeOptimizer(t, e)
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	sid := scriptedSession(t, e, t.TempDir(),
+		scripted.Step{Calls: []scripted.Call{shell("echo slow")}},
+		scripted.Step{Calls: []scripted.Call{shell("echo slow")}},
+		scripted.Step{Calls: []scripted.Call{shell("echo slow")}},
+		scripted.Step{Text: "done"},
+	)
+	stop := make(chan struct{})
+	defer close(stop)
+	approveAll(e, stop)
+	if err := e.SetOptimizer(ctx, sid, "fake"); err != nil {
+		t.Fatal(err)
+	}
+	e.Prompt(ctx, sid, "go")
+	waitIdle(t, ch, sid)
+	if got := outputs(t, e, sid); len(got) != 3 {
+		t.Fatalf("shell calls: %+v", got)
+	}
+	log, _ := os.ReadFile(logFile)
+	if n := strings.Count(string(log), "rewrite echo slow"); n != 1 {
+		t.Errorf("asked %d times", n)
+	}
+}
+
+// HRN-019: what an unconfined session's commands kept is out of a sandboxed
+// session's reach.
+func TestOptimizerDataIsApartFromTheSandbox(t *testing.T) {
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	ses := session.Session{ID: "ses_1", ProjectID: "prj_1"}
+	free, boxed := e.optimizerDir(ses, false), e.optimizerDir(ses, true)
+	if strings.HasPrefix(free, e.projectCache(ses.ProjectID)) {
+		t.Errorf("an unconfined session's data is in the sandbox's caches: %s", free)
+	}
+	if !strings.HasPrefix(boxed, filepath.Join(e.projectCache(ses.ProjectID), "cache")) {
+		t.Errorf("a sandboxed session's data is out of its reach: %s", boxed)
+	}
+}
+
+// HRN-019: a stop while it is being looked for says nothing about the program.
+func TestOptimizerStopIsNotAFailure(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	fakeOptimizer(t, e)
+	sid := scriptedSession(t, e, t.TempDir(), scripted.Step{Text: "done"})
+	if err := e.SetOptimizer(ctx, sid, "fake"); err != nil {
+		t.Fatal(err)
+	}
+	so := &sessionOptimizer{e: e, sid: sid, env: mustLocal(t, e)}
+	stopped, cancel := context.WithCancel(ctx)
+	cancel()
+	if rw := so.Rewrite(stopped, "git status", false); rw.Via != "" {
+		t.Errorf("rewrote while stopped: %+v", rw)
+	}
+	if len(so.warned) != 0 {
+		t.Errorf("warned: %v", so.warned)
+	}
+	if rw := so.Rewrite(ctx, "git status", false); rw.Via != "Fake" {
+		t.Errorf("the next command was not rewritten: %+v", rw)
+	}
+}
+
+func mustLocal(t *testing.T, e *Engine) environment.Environment {
+	t.Helper()
+	env, err := e.localEnv(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return env
 }

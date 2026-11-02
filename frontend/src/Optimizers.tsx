@@ -4,7 +4,8 @@ import { EngineService, type Config, type OptimizerCheck, type OptimizerStatus }
 
 // The Settings page for token optimizers (HRN-019): which are installed, and
 // what new sessions use. Listing them runs nothing, since another program can
-// have the same name; Check and choosing one do.
+// have the same name; Check and choosing one do. A file's optimizer also has to be
+// approved first, as MCP servers are, since it arrives without asking.
 
 interface Props {
   config: Config;
@@ -33,6 +34,13 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
         refresh();
       })
       .catch(onError);
+  const approve = (o: OptimizerStatus) =>
+    EngineService.ApproveOptimizer(o.id, o.fingerprint)
+      .then((c) => {
+        onSaved(c);
+        refresh();
+      })
+      .catch(onError);
   const setDefault = (id: string) => EngineService.SetDefaultOptimizer(id).then(onSaved).catch(onError);
   const copy = (id: string, text: string) =>
     Clipboard.SetText(text)
@@ -56,7 +64,7 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
             <option value="">Off</option>
             {(list ?? []).map((o) => (
               <option key={o.id} value={o.id}>
-                {o.path ? o.name : `${o.name} (not installed)`}
+                {o.needsApproval ? `${o.name} (not approved)` : o.path ? o.name : `${o.name} (not installed)`}
               </option>
             ))}
             {chosen && list && !list.some((o) => o.id === chosen) && <option value={chosen}>{chosen} (no such optimizer)</option>}
@@ -74,13 +82,23 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
               {o.source ? `From ${o.source} in the data folder. ` : ""}
               {o.path ? `Found at ${o.path}.` : "Not installed."}
             </p>
-            {!o.path && o.install && (
+            {o.needsApproval && (
+              <>
+                <p>
+                  Not approved. This would run <code>{o.runs}</code> for every command of a session that uses it.
+                </p>
+                <p className="row">
+                  <button onClick={() => approve(o)}>Approve</button>
+                </p>
+              </>
+            )}
+            {!o.path && o.install && !o.needsApproval && (
               <p className="row">
                 <code>{o.install}</code>
                 <button onClick={() => copy(o.id, o.install)}>{copied === o.id ? "Copied" : "Copy"}</button>
               </p>
             )}
-            {o.path && (
+            {o.path && !o.needsApproval && (
               <p className="row">
                 <button onClick={() => check(o.id)}>Check it</button>
                 {c && <span className={c.ok ? "muted" : "error-text"}>{c.ok ? `Works${c.version ? `: ${c.version}` : ""}.` : c.reason}</span>}
@@ -90,7 +108,7 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
         );
       })}
       <p className="muted">
-        To add another, put a file in the <code>optimizers</code> folder of the data folder. Freeloop only uses a program's way of rewriting a command, and runs the original command if the rewrite does anything more. <code>docs/DEVELOPING.md</code> lists the fields.
+        To add another, put a file in the <code>optimizers</code> folder of the data folder and approve it here. Freeloop runs the original command if a rewrite does anything more, and leaves commands with pipes or redirections as they are. <code>docs/DEVELOPING.md</code> lists the fields.
       </p>
     </section>
   );

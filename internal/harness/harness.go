@@ -97,7 +97,9 @@ type Params struct {
 // CommandOptimizer is asked about every shell command the broker has approved,
 // so switching it applies from the next command (HRN-019).
 type CommandOptimizer interface {
-	Rewrite(ctx context.Context, command string) Rewrite
+	// Rewrite is asked with raw set when the model wants the command as written:
+	// nothing rewrites it, but the variables stay, so rtk recall finds its data.
+	Rewrite(ctx context.Context, command string, raw bool) Rewrite
 }
 
 // Rewrite is what to run for an approved command. Via names the optimizer when

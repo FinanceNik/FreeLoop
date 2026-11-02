@@ -154,8 +154,10 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 	if err := config.RemoveSessionPlugin(e.dataDir, sid); err != nil {
 		log.Printf("engine: remove the skills of deleted session %s: %v", sid, err)
 	}
-	if err := environment.RemoveCache(e.optimizerDir(ses)); err != nil {
-		log.Printf("engine: remove the optimizer data of deleted session %s: %v", sid, err)
+	for _, sandboxed := range []bool{false, true} {
+		if err := environment.RemoveCache(e.optimizerDir(ses, sandboxed)); err != nil {
+			log.Printf("engine: remove the optimizer data of deleted session %s: %v", sid, err)
+		}
 	}
 	// Whatever the environment is now (it may have been deleted or changed
 	// kind), a container the session had, and an image built for it, go.
