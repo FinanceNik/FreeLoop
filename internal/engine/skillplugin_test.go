@@ -54,6 +54,7 @@ func TestExternalAgentSkills(t *testing.T) {
 		[]byte("name: Plain agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n"), 0o600)
 	e.loadPresets()
 	e.loadProfiles()
+	approvePending(t, e)
 
 	now := time.Now().UTC()
 	must := func(err error) {

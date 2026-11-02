@@ -138,6 +138,12 @@ func askingModes(asks, readOnly string) map[string]string {
 	return map[string]string{"ask": asks, "accept_edits": asks, "plan": readOnly, "bypass": asks}
 }
 
+// Fingerprint identifies what a preset runs. One from a file runs only after the
+// user approved exactly this.
+func (p HarnessPreset) Fingerprint() string {
+	return commandFingerprint("preset", p)
+}
+
 // Validate reports a preset that cannot run.
 func (p HarnessPreset) Validate() error {
 	switch {

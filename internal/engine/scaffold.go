@@ -80,6 +80,16 @@ func (e *Engine) ScaffoldHarness(ctx context.Context, req ScaffoldRequest) (Scaf
 	}
 	e.loadPresets()
 	e.loadProfiles()
+	// The app wrote it, for the user asking for it just now.
+	if saved, err := e.preset(id); err == nil {
+		mark, err := e.approvalMark(saved.Fingerprint())
+		if err == nil {
+			err = e.addApprovals([]string{mark})
+		}
+		if err != nil {
+			return ScaffoldResult{}, err
+		}
+	}
 	return ScaffoldResult{Preset: p, Dir: dir, Entry: filepath.Join(dir, entry)}, nil
 }
 

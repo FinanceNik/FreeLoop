@@ -1,4 +1,5 @@
-import type { Hook } from "./api.ts";
+import { useEffect, useState } from "react";
+import { EngineService, type Config, type Hook, type PendingCommand } from "./api.ts";
 
 // The global hooks in Settings (EXT-005). Profiles carry their own in their
 // YAML; a trusted project's are in .freeloop/hooks.yaml.
@@ -9,6 +10,45 @@ const EVENTS = [
   { id: "permission_request", name: "Before asking you" },
   { id: "post_tool_use", name: "After a tool call" },
 ];
+
+// Hooks and agents from files that wait for approval (SET-005): a backup or
+// another program can put them there, so they run nothing until approved.
+export function PendingCommands({ version, onSaved, onError }: { version: unknown; onSaved: (c: Config) => void; onError: (err: unknown) => void }) {
+  const [list, setList] = useState<PendingCommand[]>([]);
+  const refresh = () =>
+    EngineService.PendingCommands()
+      .then((l) => setList(l ?? []))
+      .catch(onError);
+  useEffect(() => {
+    refresh();
+  }, [JSON.stringify(version)]);
+  const approve = (c: PendingCommand) =>
+    EngineService.ApproveCommand(c.fingerprint)
+      .then((saved) => {
+        onSaved(saved);
+        refresh();
+      })
+      .catch(onError);
+  if (list.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>Waiting for your approval</h3>
+      <p className="muted">
+        These are in the app's config files, but were not written or approved in the app: they may come from a restored backup, or from a file edited outside the app. They run nothing until you approve them as they are now. Approve only what you recognize.
+      </p>
+      {list.map((c, i) => (
+        <div className="row" key={i}>
+          <span>
+            {c.kind === "hook" ? `Hook (${EVENTS.find((e) => e.id === c.event)?.name ?? c.event})` : "Agent"} from {c.source} runs <code>{c.runs}</code>
+          </span>
+          <button type="button" onClick={() => approve(c)}>
+            Approve
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function HookTable({ hooks, onChange }: { hooks: Hook[]; onChange: (h: Hook[]) => void }) {
   const set = (i: number, patch: Partial<Hook>) => onChange(hooks.map((h, j) => (j === i ? { ...h, ...patch } : h)));

@@ -77,7 +77,14 @@ func (e *Engine) SaveProfile(p config.Profile) (config.Profile, error) {
 			return config.Profile{}, fmt.Errorf("tools[%d]: unknown tool %q", i, t)
 		}
 	}
+	marks, err := e.writtenMarks(p.Hooks)
+	if err != nil {
+		return config.Profile{}, err
+	}
 	if err := config.SaveProfile(e.dataDir, p); err != nil {
+		return config.Profile{}, err
+	}
+	if err := e.addApprovals(marks); err != nil {
 		return config.Profile{}, err
 	}
 	e.loadProfiles()
@@ -151,7 +158,17 @@ func (e *Engine) CheckProfileYAML(id, text string) []config.Issue {
 
 // SaveProfileYAML writes text as profiles/<id>.yaml once it is valid.
 func (e *Engine) SaveProfileYAML(id, text string) error {
+	var marks []string
+	if p, issue := config.ParseProfile(id, []byte(text), builtin.ToolNames()); issue == nil {
+		var err error
+		if marks, err = e.writtenMarks(p.Hooks); err != nil {
+			return err
+		}
+	}
 	if err := config.WriteProfileFile(e.dataDir, id, text, builtin.ToolNames()); err != nil {
+		return err
+	}
+	if err := e.addApprovals(marks); err != nil {
 		return err
 	}
 	e.loadProfiles()

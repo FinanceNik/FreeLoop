@@ -56,7 +56,7 @@ func (e *Engine) sessionContainer(ctx context.Context, ses session.Session, cfg 
 	var preset config.HarnessPreset
 	if ses.HarnessID != builtin.ID {
 		var err error
-		if preset, err = e.preset(ses.HarnessID); err != nil {
+		if preset, err = e.runnablePreset(ses.HarnessID); err != nil {
 			return nil, err
 		}
 	}

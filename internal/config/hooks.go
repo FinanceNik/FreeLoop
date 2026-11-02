@@ -2,6 +2,9 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -54,6 +57,24 @@ const (
 
 // HooksFileName is a project's hooks file in .freeloop/.
 const HooksFileName = "hooks.yaml"
+
+// Fingerprint identifies what a hook runs, wherever it is listed. A hook from
+// the app's config files runs only after the user approved exactly this.
+func (h Hook) Fingerprint() string {
+	h.Source = ""
+	return commandFingerprint("hook", h)
+}
+
+// commandFingerprint hashes a command's settings; kind keeps a mark for one kind
+// from counting for another.
+func commandFingerprint(kind string, v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(append([]byte(kind+"\x00"), b...))
+	return hex.EncodeToString(sum[:])
+}
 
 // Validate reports the first setting that cannot work.
 func (h Hook) Validate() error {

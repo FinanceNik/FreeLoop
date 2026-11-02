@@ -18,7 +18,8 @@ import (
 // .freeloop/hooks.yaml. They run in the session's environment, inside its
 // container for a Docker session, with the event as JSON on stdin. They are
 // the user's own commands, like the diff panel's git actions, so they do
-// not go through the permission broker; they are the broker's: its
+// not go through the permission broker, which is why one from a file runs only
+// once the user approved it (approvals.go); they are the broker's: its
 // pre_tool_use and permission_request hooks can deny a call, never allow
 // one. See config.Hook for the exit-code contract.
 
@@ -62,15 +63,22 @@ func (e *Engine) hooksOf(ctx context.Context, r *runtime) []config.Hook {
 	for i := range hooks {
 		hooks[i].Source = config.FileName
 	}
+	hooks = e.approvedHooks(r, hooks)
 	project, err := e.store.GetProject(ctx, r.projectID)
 	if err != nil {
 		return hooks
 	}
 	if prof, err := e.profileFor(project, r.profileID); err == nil {
+		var own []config.Hook
 		for _, h := range prof.Hooks {
 			h.Source = "profile " + prof.Name
-			hooks = append(hooks, h)
+			own = append(own, h)
 		}
+		// A trusted project's profile is covered by that trust.
+		if !strings.HasPrefix(r.profileID, config.ProjectProfilePrefix) {
+			own = e.approvedHooks(r, own)
+		}
+		hooks = append(hooks, own...)
 	}
 	return append(hooks, e.projectConfig(project).Hooks...)
 }

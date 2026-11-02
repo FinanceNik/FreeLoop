@@ -207,6 +207,7 @@ func TestReviewNeedsAReadOnlyMode(t *testing.T) {
 	e.mu.Lock()
 	e.presets = append(e.presets, config.HarnessPreset{ID: "noplan", Name: "No plan", Command: "true", Modes: map[string]string{"ask": "default"}})
 	e.mu.Unlock()
+	approvePending(t, e)
 	if _, err := e.SaveProfile(config.Profile{ID: "noplan", Name: "No plan", Harness: "noplan"}); err != nil {
 		t.Fatal(err)
 	}

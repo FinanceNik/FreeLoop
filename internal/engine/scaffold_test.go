@@ -28,6 +28,10 @@ func TestScaffoldHarness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The user asked for it here, so it waits for no approval.
+	if got := e.PendingCommands(); len(got) != 0 {
+		t.Errorf("pending = %+v", got)
+	}
 	if res.Preset.ID != "my-agent" || res.Preset.Watch != res.Dir || !strings.HasSuffix(res.Entry, "agent.py") {
 		t.Fatalf("result = %+v", res)
 	}

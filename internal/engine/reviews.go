@@ -92,7 +92,7 @@ func (e *Engine) RequestReview(ctx context.Context, req ReviewRequest) (session.
 	// An external agent's own tools do not pass through the app, so only its
 	// own plan mode keeps it read-only, and the review promises that.
 	if prof.Harness != "" && prof.Harness != builtin.ID {
-		preset, err := e.preset(prof.Harness)
+		preset, err := e.runnablePreset(prof.Harness)
 		if err != nil {
 			return session.Session{}, err
 		}

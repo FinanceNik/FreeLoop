@@ -220,6 +220,7 @@ func Open(opts Options) (*Engine, error) {
 	e.loadPresets()
 	e.loadOptimizers()
 	e.loadProfiles()
+	e.adoptExistingCommands()
 	// MCP servers run in a local environment at the user's home: they are
 	// the app's, not one project's.
 	if env, err := e.localEnv(e.home, nil); err == nil {
@@ -306,6 +307,16 @@ func (e *Engine) Config() config.Config {
 // SaveSettings replaces config.yaml (SET-004, GUI-011). Turning bypass mode
 // off also takes any session out of it on its next mode change.
 func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
+	marks, err := e.writtenMarks(c.Hooks)
+	if err != nil {
+		return config.Config{}, err
+	}
+	return e.saveSettings(c, marks)
+}
+
+// saveSettings writes config.yaml with marks added to the approvals in force. The
+// form's copy of those is ignored, since it can be older than an approval.
+func (e *Engine) saveSettings(c config.Config, marks []string) (config.Config, error) {
 	e.mu.Lock()
 	broken := config.Unreadable(e.issues[issueConfig])
 	e.mu.Unlock()
@@ -315,7 +326,13 @@ func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
 	c.Version = 1
 	e.mu.Lock()
 	sameSearch := e.cfg.Web.SearchURL == c.Web.SearchURL
+	c.CommandApprovals = slices.Clone(e.cfg.CommandApprovals)
 	e.mu.Unlock()
+	for _, m := range marks {
+		if !slices.Contains(c.CommandApprovals, m) {
+			c.CommandApprovals = append(c.CommandApprovals, m)
+		}
+	}
 	if !sameSearch {
 		if err := checkAddress("the search address", strings.ReplaceAll(c.Web.SearchURL, "{query}", "q")); err != nil {
 			return config.Config{}, err
@@ -347,12 +364,12 @@ func (e *Engine) BlockedConnections() []netguard.Blocked {
 // ConfigIssues returns the problems found while loading configuration.
 func (e *Engine) ConfigIssues() []config.Issue {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	out := []config.Issue{}
 	for _, k := range issueOrder {
 		out = append(out, e.issues[k]...)
 	}
-	return out
+	e.mu.Unlock()
+	return append(out, e.pendingIssues()...)
 }
 
 // Issue groups, one per kind of config file.
@@ -729,7 +746,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	harnessID, model := builtin.ID, ""
 	if prof.Harness != "" && prof.Harness != builtin.ID {
 		// An external agent brings its own model access (HRN-005).
-		if _, err := e.preset(prof.Harness); err != nil {
+		if _, err := e.runnablePreset(prof.Harness); err != nil {
 			return session.Session{}, err
 		}
 		harnessID, req.ProviderID = prof.Harness, ""

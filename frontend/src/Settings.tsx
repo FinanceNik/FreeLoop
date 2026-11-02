@@ -5,7 +5,7 @@ import type { ColorSet } from "./colors.ts";
 import { bindingOf, keyLabel } from "./shortcuts.ts";
 import { Browser } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
-import { HookTable } from "./Hooks.tsx";
+import { HookTable, PendingCommands } from "./Hooks.tsx";
 import { EngineService, type Blocked, type ConfigRestore, type Config, type UpdateInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
@@ -41,13 +41,14 @@ export default function Settings({ config, providers, environments, profiles, pr
       .then((path) => path && setBackup(path))
       .catch(onError);
   const restore = () => {
-    if (!confirm("Restore a config backup? Its settings, colors, providers, profiles, environments, token optimizers, rules and MCP servers replace the current ones; the replaced files are kept in the data folder's backups folder.")) return;
+    if (!confirm("Restore a config backup? Its settings, colors, providers, profiles, environments, token optimizers, rules, MCP servers, hooks and agent presets replace the current ones; the replaced files are kept in the data folder's backups folder. Hooks and agents it brings run nothing until you approve them here.")) return;
     EngineService.ImportConfig()
       .then((r) => r && setRestored(r))
       .catch(onError);
   };
   // ⌘+ and ⌘- change one field; the rest of the form may hold unsaved edits.
-  const { ui: { fontSize: savedFontSize, ...savedUi }, ...savedRest } = config;
+  // Approving a command is not an edit either.
+  const { ui: { fontSize: savedFontSize, ...savedUi }, commandApprovals: _approvals, ...savedRest } = config;
   useEffect(() => setForm(config), [JSON.stringify([savedRest, savedUi])]);
   useEffect(() => setForm((f) => ({ ...f, ui: { ...f.ui, fontSize: savedFontSize } })), [savedFontSize]);
   // The opt-in update check (OQ-015).
@@ -337,6 +338,8 @@ export default function Settings({ config, providers, environments, profiles, pr
         </div>
       </form>
 
+      <PendingCommands version={[config, restored]} onSaved={onSaved} onError={onError} />
+
       <div className="card">
         <h3>Backup</h3>
         <p className="muted">
@@ -355,6 +358,7 @@ export default function Settings({ config, providers, environments, profiles, pr
         {restored && (
           <div className="banner" role="status">
             Restored {restored.files?.length ?? 0} files. {restored.backupNote}
+            {restored.needApproval > 0 && <p>Hooks and agents waiting for your approval, listed above, run nothing until you approve them.</p>}
             {(restored.needKeys ?? []).length > 0 && (
               <p>
                 Enter the API keys for {(restored.needKeys ?? []).join(", ")} under{" "}

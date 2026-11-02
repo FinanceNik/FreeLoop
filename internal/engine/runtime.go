@@ -38,7 +38,9 @@ type runtime struct {
 	// Tool calls in progress, for post_tool_use hooks (EXT-005).
 	callsMu sync.Mutex
 	calls   map[string]hookCall
-	env     environment.Environment
+	// Hooks the session was told do not run for want of approval (SET-005).
+	unapproved map[string]bool
+	env        environment.Environment
 	// host is the session's folder on this Mac, where the app's own git
 	// commands run even when env is a container.
 	host *environment.Local
@@ -141,7 +143,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		if err := e.requireTools(ctx, ses.ProviderID, ses.Model); err != nil {
 			return nil, err
 		}
-	} else if preset, err = e.preset(ses.HarnessID); err != nil {
+	} else if preset, err = e.runnablePreset(ses.HarnessID); err != nil {
 		return nil, err
 	}
 	envID := ses.EnvironmentID

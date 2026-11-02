@@ -426,6 +426,18 @@ func (s *EngineService) ApproveOptimizer(ctx context.Context, id, fingerprint st
 	return s.eng.ApproveOptimizer(ctx, id, fingerprint)
 }
 
+// PendingCommands lists the hooks and agent presets from files that wait for
+// approval.
+func (s *EngineService) PendingCommands() []engine.PendingCommand {
+	return s.eng.PendingCommands()
+}
+
+// ApproveCommand approves a hook or preset as the Settings page showed it. It is
+// here and not on the socket: the user approves, not another process.
+func (s *EngineService) ApproveCommand(fingerprint string) (config.Config, error) {
+	return s.eng.ApproveCommand(fingerprint)
+}
+
 func (s *EngineService) SetDefaultOptimizer(ctx context.Context, id string) (config.Config, error) {
 	return s.eng.SetDefaultOptimizer(ctx, id)
 }

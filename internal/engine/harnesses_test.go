@@ -32,6 +32,7 @@ func TestExternalHarnessSession(t *testing.T) {
 		[]byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n"), 0o600)
 	e.loadPresets()
 	e.loadProfiles()
+	approvePending(t, e)
 	if !slices.ContainsFunc(e.ListHarnesses(), func(h HarnessInfo) bool { return h.ID == "ref" && h.Kind == "acp" && !h.UsesProvider }) {
 		t.Fatalf("harnesses = %+v", e.ListHarnesses())
 	}
@@ -169,6 +170,7 @@ func TestExternalAgentNotSignedIn(t *testing.T) {
 		[]byte("name: Reference agent\ncommand: "+exe+"\nnotes: Sign in once by running ref login in a terminal.\nenv:\n  "+acptest.EnvVar+": \"1\"\n  "+acptest.AuthVar+": \"1\"\n"), 0o600)
 	e.loadPresets()
 	e.loadProfiles()
+	approvePending(t, e)
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProfileID: "ref", Mode: "accept_edits"})
 	if err != nil {
 		t.Fatal(err)
@@ -223,6 +225,7 @@ func TestExternalAgentImages(t *testing.T) {
 			[]byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n  "+acptest.ImageVar+": \""+flag+"\"\n"), 0o600)
 		e.loadPresets()
 		e.loadProfiles()
+		approvePending(t, e)
 		ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProfileID: "ref", Mode: "plan"})
 		if err != nil {
 			t.Fatal(err)

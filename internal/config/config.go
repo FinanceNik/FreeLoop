@@ -66,6 +66,9 @@ type Config struct {
 	// OptimizerApprovals record the token optimizer files the user approved, by
 	// ID, with a mark only the app can compute (HRN-019).
 	OptimizerApprovals map[string]string `yaml:"optimizerApprovals,omitempty" json:"optimizerApprovals"`
+	// CommandApprovals record the hooks and agent presets from files the user
+	// approved, with marks only the app can compute (SET-005).
+	CommandApprovals []string `yaml:"commandApprovals,omitempty" json:"commandApprovals"`
 	// Network holds the local-only switch (NFR-OFF-003).
 	Network Network `yaml:"network,omitempty" json:"network"`
 	// Updates holds the opt-in update check (SEC-009, OQ-015).

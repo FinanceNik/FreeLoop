@@ -17,9 +17,12 @@ import (
 // ConfigRestore is what a restore did: the files written, and the
 // providers whose API key is not in this Mac's Keychain, to enter again.
 type ConfigRestore struct {
-	Files      []string `json:"files"`
-	NeedKeys   []string `json:"needKeys"`
-	BackupNote string   `json:"backupNote"`
+	Files    []string `json:"files"`
+	NeedKeys []string `json:"needKeys"`
+	// NeedApproval counts the hooks and agents that wait for the user's
+	// approval, which a backup does not bring.
+	NeedApproval int    `json:"needApproval"`
+	BackupNote   string `json:"backupNote"`
 }
 
 // ExportConfig writes a config backup to path, through a local
@@ -51,6 +54,7 @@ func (e *Engine) ImportConfig(ctx context.Context, path string) (ConfigRestore, 
 	if err != nil {
 		return ConfigRestore{}, err
 	}
+	approvals := e.Config().CommandApprovals
 	written, err := config.ImportBundle(e.dataDir, b)
 	if err != nil {
 		return ConfigRestore{}, err
@@ -60,6 +64,11 @@ func (e *Engine) ImportConfig(ctx context.Context, path string) (ConfigRestore, 
 		changed[i] = filepath.FromSlash(rel)
 	}
 	e.reload(changed)
+	// What this Mac approved stays approved, for the files a backup does not hold
+	// and for the same commands in those it does.
+	if err := e.addApprovals(approvals); err != nil {
+		return ConfigRestore{}, err
+	}
 	e.mu.Lock()
 	cfgs := slices.Clone(e.providers.configs)
 	e.mu.Unlock()
@@ -76,5 +85,6 @@ func (e *Engine) ImportConfig(ctx context.Context, path string) (ConfigRestore, 
 			res.NeedKeys = append(res.NeedKeys, c.Name)
 		}
 	}
+	res.NeedApproval = len(e.PendingCommands())
 	return res, nil
 }

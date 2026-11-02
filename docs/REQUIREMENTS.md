@@ -157,7 +157,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **SET-002** · MVP · **Project-level overrides.** `.freeloop/` in a repo may contain profiles, environment defaults, MCP servers, skills and rules; applied after trust (SEC-006). *Accept:* a project profile appears in the new-session dialog for that project only.
 - **SET-003** · MVP · **Import from Claude Code.** Permission rules from `settings.json`, MCP servers (MCP-002) and skills (SKL-003), previewed, one-way. *Accept:* the preview lists each item with its destination; nothing is written back to `~/.claude`.
 - **SET-004** · MVP · **Defaults.** Default provider and model, profile, permission mode, notification preferences, editor to open files in. *Accept:* a new session uses the defaults without extra clicks.
-- **SET-005** · v1 · **Backup and export of config without secrets.** *Accept:* restoring the export on a fresh install recreates all providers (prompting for keys) and profiles.
+- **SET-005** · v1 · **Backup and export of config without secrets.** *Accept:* restoring the export on a fresh install recreates all providers (prompting for keys) and profiles, and the hooks and agent presets it brings run nothing until the user approves them.
 - **SET-006** · v1 · **Keyboard shortcut customization.** *Accept:* the palette, Settings, attention, text size and approval letters can be changed in Settings; a reserved or used key is refused with the reason.
 
 ### Extensibility (EXT)
@@ -166,7 +166,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **EXT-002** · MVP · **Documented event schema.** A versioned JSON schema for session events (message deltas, thinking, tool call lifecycle, permission request and decision, plan, mode, usage, error, end). Transcripts use it; the GUI consumes it; external harness events are mapped to it. *Accept:* `schemas/events.json` validates every transcript produced by the test suite.
 - **EXT-003** · v1 · **Harness SDK templates.** Python and Go templates that speak ACP, with a test harness. *Accept:* per HRN-011.
 - **EXT-004** · v1 · **Headless control.** Local JSON-RPC API over a Unix socket and a small CLI (`freeloop sessions list`, `freeloop prompt <id> "..."`). *Accept:* a session created from the CLI appears in the GUI live.
-- **EXT-005** · v1 · **Hooks.** Shell hooks on session start, before and after tool use, and on permission request, per profile or project, with the event as JSON on stdin and a documented exit-code contract. *Accept:* a pre-tool hook can block a shell command with a message shown in the transcript.
+- **EXT-005** · v1 · **Hooks.** Shell hooks on session start, before and after tool use, and on permission request, per profile or project, with the event as JSON on stdin and a documented exit-code contract. *Accept:* a pre-tool hook can block a shell command with a message shown in the transcript; a hook that reached the app's config files without being written or approved in the app runs nothing until approved.
 - **EXT-006** · later · **UI plugins.**
 - **EXT-007** · later · **Out-of-process provider adapters.**
 

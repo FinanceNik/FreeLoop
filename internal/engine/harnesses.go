@@ -63,7 +63,11 @@ func (e *Engine) ListHarnesses() []HarnessInfo {
 	presets := slices.Clone(e.presets)
 	e.mu.Unlock()
 	for _, p := range presets {
-		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: e.missingCommand(p.Command), Custom: p.Watch != ""})
+		missing := e.presetBlocked(p)
+		if missing == "" {
+			missing = e.missingCommand(p.Command)
+		}
+		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: missing, Custom: p.Watch != ""})
 	}
 	return out
 }

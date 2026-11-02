@@ -77,6 +77,8 @@ Read the agent's real mode IDs from its `session/new` reply, not its docs, and c
 
 The built-in presets are checked by `make verify-agents`, which runs each real agent at its pinned version on a local stand-in for its model; add a case to `TestPresetScenarios` (`internal/harness/acp/presets_test.go`) with a new one, and rerun it when you change a version.
 
+A preset file starts an agent only after the user approves it in Settings, and any change ends that; one made with "New harness…" is approved already. The same holds for a hook in `config.yaml` or a profile that was not written in the app (`internal/engine/approvals.go`).
+
 The agent runs in the session's environment, its file and terminal requests go through the environment and the permission broker like everything else, and it signs in on its own: Freeloop never reads, stores or forwards a vendor's tokens (HRN-008). Presets that ship with the app are in `config.BuiltinPresets`; a file with the same ID replaces one. To test a preset, run the HRN-005 scenario from REQUIREMENTS.md against it; `internal/harness/acp/acptest` is a reference agent for the client's own tests.
 
 ## Making a release
