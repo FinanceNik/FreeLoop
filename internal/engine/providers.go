@@ -225,6 +225,9 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 	if req.Type == string(openaicompat.Type) && req.Preset == "custom" && strings.TrimSpace(req.BaseURL) == "" {
 		return ProviderInfo{}, errors.New("a custom endpoint needs a base URL")
 	}
+	if err := checkAddress("the base URL", req.BaseURL); err != nil {
+		return ProviderInfo{}, err
+	}
 	e.mu.Lock()
 	cfgs := slices.Clone(e.providers.configs)
 	e.mu.Unlock()

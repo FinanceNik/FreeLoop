@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
@@ -169,11 +171,54 @@ type MergeResult struct {
 	Message string `json:"message"`
 }
 
+// MergeRisks lists the files a session's branch would bring into the main
+// checkout that something outside a session acts on: the project's hooks and
+// settings, editors' tasks, other agents' configuration.
+func (e *Engine) MergeRisks(ctx context.Context, sid string) ([]string, error) {
+	ses, err := e.store.GetSession(ctx, sid)
+	if err != nil {
+		return nil, err
+	}
+	if ses.Worktree == "" {
+		return []string{}, nil
+	}
+	project, err := e.store.GetProject(ctx, ses.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	main, err := e.projectGit(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+	into, ok := git(ctx, main, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if !ok {
+		return []string{}, nil
+	}
+	return mergeRisks(ctx, main, strings.TrimSpace(into), ses.OwnBranch()), nil
+}
+
+func mergeRisks(ctx context.Context, main environment.Environment, into, branch string) []string {
+	out := []string{}
+	names, ok := git(ctx, main, "diff", "--name-only", "-z", "--no-renames", "--no-ext-diff", into+"..."+branch)
+	if !ok {
+		return []string{"(the changed files could not be listed)"}
+	}
+	for _, name := range strings.Split(names, "\x00") {
+		first, _, _ := strings.Cut(name, "/")
+		if name != "" && (first == ProjectDir || first == ".gitattributes" || first == ".gitmodules" || slices.Contains(permission.ActedOnLater, first)) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 // MergeWorktree merges a session's branch into the branch the project's
 // main checkout is on. The session's work must be committed and the main
 // checkout must have no uncommitted changes to tracked files; a merge that
-// conflicts is aborted and its files listed. Hooks do not run.
-func (e *Engine) MergeWorktree(ctx context.Context, sid string) (MergeResult, error) {
+// conflicts is aborted and its files listed. Hooks do not run. A merge bringing
+// in files something outside a session acts on, a sandboxed agent cannot write
+// them but can commit them, needs confirmed: see MergeRisks.
+func (e *Engine) MergeWorktree(ctx context.Context, sid string, confirmed bool) (MergeResult, error) {
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {
 		return MergeResult{}, err
@@ -206,6 +251,11 @@ func (e *Engine) MergeWorktree(ctx context.Context, sid string) (MergeResult, er
 		return MergeResult{}, errors.New("the main checkout is on the session's own branch")
 	}
 	res := MergeResult{Into: into, Branch: ses.OwnBranch()}
+	if !confirmed {
+		if risky := mergeRisks(ctx, main, into, ses.OwnBranch()); len(risky) > 0 {
+			return res, fmt.Errorf("this merge changes %s, which can run commands on your Mac; check them and confirm", strings.Join(risky, ", "))
+		}
+	}
 	if _, err := gitOK(ctx, main, "merge", "--no-ff", "--no-edit", ses.OwnBranch()); err != nil {
 		conflicts, _ := git(ctx, main, "diff", "--name-only", "--diff-filter=U", "--ignore-submodules=dirty")
 		gitOK(ctx, main, "merge", "--abort")

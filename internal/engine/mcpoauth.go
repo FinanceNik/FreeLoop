@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,6 +89,19 @@ func (e *Engine) loadOAuth(s config.MCPServer) (oauthRecord, bool) {
 		return oauthRecord{}, false
 	}
 	return r, true
+}
+
+// oauthSecrets are the secret values in a stored sign-in, for redaction.
+func oauthSecrets(stored string) []string {
+	var r oauthRecord
+	if json.Unmarshal([]byte(stored), &r) != nil {
+		return nil
+	}
+	out := []string{r.ClientSecret}
+	if r.Token != nil {
+		out = append(out, r.Token.AccessToken, r.Token.RefreshToken)
+	}
+	return out
 }
 
 func (e *Engine) saveOAuth(serverID string, r oauthRecord) {
@@ -308,12 +322,24 @@ func freeLoopbackPort() (int, error) {
 func oauthClient(serverURL string) *http.Client {
 	u, _ := url.Parse(serverURL)
 	if u != nil && hostIsPrivate(u.Hostname()) {
-		if base, ok := http.DefaultTransport.(*http.Transport); ok {
-			return &http.Client{Transport: base.Clone(), Timeout: 30 * time.Second}
-		}
-		return &http.Client{Timeout: 30 * time.Second}
+		// Only the server itself: its metadata still cannot point at anything
+		// else on this Mac or its network, whatever its name resolves to later.
+		return &http.Client{Timeout: 30 * time.Second, Transport: ownHostOnly{host: u.Host, own: http.DefaultTransport, others: publicClient().Transport}}
 	}
 	return publicClient()
+}
+
+// ownHostOnly sends requests to one host directly and the rest through others.
+type ownHostOnly struct {
+	host        string
+	own, others http.RoundTripper
+}
+
+func (t ownHostOnly) RoundTrip(r *http.Request) (*http.Response, error) {
+	if strings.EqualFold(r.URL.Host, t.host) {
+		return t.own.RoundTrip(r)
+	}
+	return t.others.RoundTrip(r)
 }
 
 // publicClient is an HTTP client that reaches public addresses only: every

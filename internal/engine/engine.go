@@ -6,10 +6,13 @@ package engine
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -85,6 +88,9 @@ type Engine struct {
 	rules   *ruleStore
 	cfg     config.Config
 	colors  config.Colors
+	// loginEnv is what shell startup files set, for commands in a sandbox.
+	loginOnce sync.Once
+	loginEnv  map[string]string
 	// editorArgv is the command that opens a file for editing.
 	editorArgv func(path string) []string
 	// keyAddresses holds, by provider, the address its key is for.
@@ -152,6 +158,7 @@ type Engine struct {
 	startLocks sync.Map
 	streams    map[string]*streamBuf
 	known      []string // secret values to redact
+	knownForms [][]byte // and other spellings of them
 }
 
 // Open loads configuration and opens the store in opts.DataDir. Config
@@ -303,6 +310,14 @@ func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
 		return config.Config{}, fmt.Errorf("%s cannot be read, so it is not overwritten; fix or remove it first", config.FileName)
 	}
 	c.Version = 1
+	e.mu.Lock()
+	sameSearch := e.cfg.Web.SearchURL == c.Web.SearchURL
+	e.mu.Unlock()
+	if !sameSearch {
+		if err := checkAddress("the search address", strings.ReplaceAll(c.Web.SearchURL, "{query}", "q")); err != nil {
+			return config.Config{}, err
+		}
+	}
 	if err := config.Save(e.dataDir, c); err != nil {
 		return config.Config{}, err
 	}
@@ -442,36 +457,45 @@ func (e *Engine) write(sid string, typ event.Type, data any) {
 // session is redacted even before its provider or environment is used.
 func (e *Engine) rememberStoredSecrets() {
 	e.mu.Lock()
-	var refs []string
+	// Only the items the app would use for these: a file naming another would
+	// otherwise raise a Keychain prompt for it, in the app's name.
+	var refs []secrets.Ref
+	add := func(raw string, want secrets.Ref) {
+		if ref, err := ownRef(raw, want); err == nil {
+			refs = append(refs, ref)
+		}
+	}
 	for _, c := range e.providers.configs {
 		if c.APIKey != "" {
-			refs = append(refs, c.APIKey)
+			add(c.APIKey, providerRef(c.ID))
 		}
 	}
 	for _, env := range e.envs {
-		for _, ref := range env.Secrets {
-			refs = append(refs, ref)
+		for name, ref := range env.Secrets {
+			add(ref, secretRef(env.ID, name))
 		}
 	}
+	var oauth []string
 	for _, s := range e.mcpServers {
-		for _, ref := range s.Secrets {
-			refs = append(refs, ref)
+		for name, ref := range s.Secrets {
+			add(ref, mcpSecretRef(s.ID, name))
 		}
+		oauth = append(oauth, s.ID)
 	}
 	e.mu.Unlock()
-	for _, s := range refs {
-		ref, err := secrets.ParseRef(s)
-		if err != nil {
-			continue
-		}
+	refs = append(refs, webSearchKey)
+	for _, ref := range refs {
 		if v, err := e.secrets.Get(ref); err == nil {
 			_, key, _ := unbindSecret(v)
 			e.remember(key)
 		}
 	}
-	if v, err := e.secrets.Get(webSearchKey); err == nil {
-		_, key, _ := unbindSecret(v)
-		e.remember(key)
+	for _, id := range oauth {
+		if v, err := e.secrets.Get(oauthRef(id)); err == nil {
+			for _, secret := range oauthSecrets(v) {
+				e.remember(secret)
+			}
+		}
 	}
 	e.learnKeyAddresses()
 }
@@ -509,13 +533,43 @@ func (e *Engine) remember(secret string) {
 		}
 	}
 	e.known = append(e.known, secret)
+	e.knownForms = append(e.knownForms, encodedForms(secret)...)
+}
+
+// encodedForms are other spellings of a secret a command could print: curl -v
+// shows a key base64-encoded in a Basic header, and URLs escape it. Base64 of a
+// value inside something longer depends on where it starts, so the part that
+// does not depend on its neighbours is taken at each of the three alignments.
+func encodedForms(secret string) [][]byte {
+	var out [][]byte
+	add := func(s string) {
+		if s != secret && len(s) >= 8 && !slices.ContainsFunc(out, func(b []byte) bool { return string(b) == s }) {
+			out = append(out, []byte(s))
+		}
+	}
+	add(url.QueryEscape(secret))
+	add(url.PathEscape(secret))
+	add(hex.EncodeToString([]byte(secret)))
+	add(strings.ToUpper(hex.EncodeToString([]byte(secret))))
+	for pad := range 3 {
+		for _, enc := range []*base64.Encoding{base64.RawStdEncoding, base64.RawURLEncoding} {
+			b := enc.EncodeToString(append(make([]byte, pad), secret...))
+			// Characters touched by what comes before or after are not the secret's.
+			start := (pad*8 + 5) / 6
+			end := len(b) - 1
+			if end-start >= 12 {
+				add(b[start:end])
+			}
+		}
+	}
+	return out
 }
 
 // redact replaces known secret values in event data, in raw and in
 // JSON-escaped form.
 func (e *Engine) redact(data json.RawMessage) json.RawMessage {
 	e.mu.Lock()
-	known := e.known
+	known, forms := e.known, e.knownForms
 	e.mu.Unlock()
 	for _, k := range known {
 		esc, _ := json.Marshal(k)
@@ -526,7 +580,17 @@ func (e *Engine) redact(data json.RawMessage) json.RawMessage {
 		}
 		data = redactCut(data, []byte(k))
 	}
+	for _, form := range forms {
+		if bytes.Contains(data, form) {
+			data = bytes.ReplaceAll(data, form, []byte("[REDACTED]"))
+		}
+	}
 	return data
+}
+
+// redactText is redact for a string, for what goes to the log.
+func (e *Engine) redactText(s string) string {
+	return string(e.redact([]byte(s)))
 }
 
 // minCutSecret is the shortest piece of a secret recognized as one: long

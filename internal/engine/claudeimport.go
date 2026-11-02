@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -60,7 +61,7 @@ type claudeServer struct {
 }
 
 // secretName matches variables and headers whose values are secrets.
-var secretName = regexp.MustCompile(`(?i)(token|secret|password|passwd|api[_-]?key|access[_-]?key|private[_-]?key|credential|auth|bearer|\bpat\b|_pat$|(^|[_-])key$|(^|[_-])dsn$)`)
+var secretName = regexp.MustCompile(`(?i)(pass$|pass[_-]|pwd|cookie|webhook|token|secret|password|passwd|api[_-]?key|access[_-]?key|private[_-]?key|credential|auth|bearer|\bpat\b|_pat$|(^|[_-])key$|(^|[_-])dsn$)`)
 
 // urlWithPassword matches a URL carrying a user and password.
 var urlWithPassword = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^/@\s]*:[^/@\s]+@`)
@@ -71,7 +72,13 @@ var notAValue = regexp.MustCompile(`(?i)[_-](file|path|env|var|dir|command|cmd|u
 // secretValue reports a variable whose value is a secret, by name or by
 // form, such as DATABASE_URL=postgres://me:pw@host/db.
 func secretValue(name, value string) bool {
-	return value != "" && (secretName.MatchString(name) || urlWithPassword.MatchString(value))
+	return value != "" && (secretName.MatchString(name) || urlWithPassword.MatchString(value) || urlWithCredential(value))
+}
+
+// urlWithCredential reports a URL with a credential in its query.
+func urlWithCredential(value string) bool {
+	u, err := url.Parse(value)
+	return err == nil && u.Host != "" && len(credentialsIn(u)) > 0
 }
 
 // secretArgument returns the first argument holding a secret, an option such
@@ -81,6 +88,9 @@ func secretArgument(args []string) string {
 	for i, a := range args {
 		if urlWithPassword.MatchString(a) {
 			return "a URL with a password"
+		}
+		if urlWithCredential(a) {
+			return "a URL with a key in it"
 		}
 		if !strings.HasPrefix(a, "-") {
 			continue
@@ -280,9 +290,13 @@ func (e *Engine) mcpItem(name string, cs claudeServer, source string) ImportItem
 		} else {
 			it.Status = "changed"
 			it.Note = strings.TrimSpace(it.Note + " Replaces the server " + id + "; it needs approval again.")
+			if (!sameDestination(cur, s) || !slices.Equal(cur.Args, s.Args)) && len(cur.Secrets) > 0 {
+				it.Note += " Its saved secrets are removed, since they were for the old address or command."
+			}
 		}
 	}
 	req.Server = s
+	req.imported = true
 	it.server = req
 	return it
 }

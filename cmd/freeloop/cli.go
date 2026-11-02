@@ -70,11 +70,18 @@ func (p plainWriter) Write(b []byte) (int, error) {
 
 func plainText(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r != '\n' && r != '\t' && unicode.IsControl(r) {
+		// Format characters too: bidi overrides reorder what is shown, and
+		// zero-width ones hide what a line says.
+		if r != '\n' && r != '\t' && (unicode.IsControl(r) || unicode.Is(unicode.Cf, r)) {
 			return -1
 		}
 		return r
 	}, s)
+}
+
+// oneLine keeps a title on its line, so one cannot fake the rows after it.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func command(c *rpc.Client, args []string, out io.Writer) error {
@@ -88,7 +95,7 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 			if s.ParentID != "" {
 				continue
 			}
-			fmt.Fprintf(out, "%s  %-18s %s  (%s)\n", s.ID, s.Status, s.Title, filepath.Base(s.ProjectRoot))
+			fmt.Fprintf(out, "%s  %-18s %s  (%s)\n", s.ID, s.Status, oneLine(s.Title), filepath.Base(s.ProjectRoot))
 		}
 		return nil
 	case "new":
@@ -147,7 +154,7 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 			for _, o := range r.Options {
 				opts = append(opts, o.ID)
 			}
-			fmt.Fprintf(out, "%s  %s  %s  [%s]\n", r.ID, r.SessionID, r.Title, strings.Join(opts, " "))
+			fmt.Fprintf(out, "%s  %s  %s  [%s]\n", r.ID, r.SessionID, oneLine(r.Title), strings.Join(opts, " "))
 		}
 		return nil
 	case "approve", "deny":
@@ -195,9 +202,9 @@ func prompt(c *rpc.Client, sid, text string, out io.Writer) error {
 				json.Unmarshal(ev.Data, &m)
 				fmt.Fprint(out, m.Content.Text)
 			case event.ToolCall:
-				fmt.Fprintf(out, "\n[%v]\n", d["title"])
+				fmt.Fprintf(out, "\n[%s]\n", oneLine(fmt.Sprint(d["title"])))
 			case event.PermissionRequested:
-				fmt.Fprintf(out, "\n[waiting for approval: %v; freeloop approve %v]\n", d["title"], d["requestId"])
+				fmt.Fprintf(out, "\n[waiting for approval: %s; freeloop approve %v]\n", oneLine(fmt.Sprint(d["title"])), d["requestId"])
 			case event.Error:
 				fmt.Fprintf(out, "\n[error: %v]\n", d["message"])
 			case event.TurnEnded:

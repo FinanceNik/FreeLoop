@@ -286,3 +286,18 @@ func TestRenameAndDelete(t *testing.T) {
 		t.Errorf("second delete: %v", err)
 	}
 }
+
+// The database holds titles, commands and search text.
+func TestDatabaseFilesArePrivate(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for _, name := range []string{"freeloop.db", "freeloop.db-wal", "freeloop.db-shm"} {
+		if fi, err := os.Stat(filepath.Join(dir, name)); err == nil && fi.Mode().Perm() != 0o600 {
+			t.Errorf("%s has mode %o", name, fi.Mode().Perm())
+		}
+	}
+}

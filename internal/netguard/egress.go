@@ -169,9 +169,39 @@ func HostAllowed(hosts []string, host string, port int) bool {
 // PrivateAddr reports an address on this Mac or its local network.
 func PrivateAddr(ip netip.Addr) bool {
 	ip = ip.Unmap()
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() ||
-		netip.MustParsePrefix("100.64.0.0/10").Contains(ip)
+	if ip.Is6() {
+		// An IPv4 address carried inside an IPv6 one reaches the same place, on a
+		// network with NAT64 or 6to4 especially.
+		b := ip.As16()
+		switch {
+		case nat64.Contains(ip), compat4.Contains(ip):
+			return PrivateAddr(netip.AddrFrom4([4]byte(b[12:16])))
+		case sixToFour.Contains(ip):
+			return PrivateAddr(netip.AddrFrom4([4]byte(b[2:6])))
+		}
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsInterfaceLocalMulticast() {
+		return true
+	}
+	for _, p := range privateRanges {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
+
+var (
+	nat64     = netip.MustParsePrefix("64:ff9b::/96")
+	compat4   = netip.MustParsePrefix("::/96")
+	sixToFour = netip.MustParsePrefix("2002::/16")
+	// Not public, though Go does not call them private: shared address space,
+	// "this network", IETF protocol assignments, benchmarking, and site-local.
+	privateRanges = []netip.Prefix{
+		netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("192.0.0.0/24"),
+		netip.MustParsePrefix("198.18.0.0/15"), netip.MustParsePrefix("fec0::/10"),
+	}
+)
 
 // dial connects to the address it checked, so a name that resolves to a public
 // address for the check cannot then lead to the local network.

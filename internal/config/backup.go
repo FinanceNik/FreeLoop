@@ -73,19 +73,17 @@ func ExportBundle(dir string) ([]byte, error) {
 }
 
 // withoutApprovals clears what an mcp.yaml says the user confirmed. A
-// fingerprint can be computed by anyone, so a backup from elsewhere could
-// otherwise start its commands with no question asked (MCP-005); the servers
-// ask again after a restore.
+// mark is only good on the machine that made it, but a restored backup asks
+// again in any case (MCP-005).
 func withoutApprovals(content []byte) ([]byte, error) {
-	var f map[string]any
+	// Through the type the app reads, so a key spelled in some other way, as a
+	// !!binary one is, decodes to the same field and cannot keep it.
+	var f mcpFile
 	if err := yaml.Unmarshal(content, &f); err != nil {
 		return nil, err
 	}
-	servers, _ := f["servers"].([]any)
-	for _, s := range servers {
-		if m, ok := s.(map[string]any); ok {
-			delete(m, "approved")
-		}
+	for i := range f.Servers {
+		f.Servers[i].Approved = ""
 	}
 	return yaml.Marshal(f)
 }

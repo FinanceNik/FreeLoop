@@ -164,7 +164,10 @@ export default function DiffPanel({ session, gitKey, agentEdits, onReview, onErr
                 disabled={busy}
                 onClick={() =>
                   act(
-                    EngineService.MergeWorktree(session.id).then((r) => {
+                    EngineService.MergeRisks(session.id).then(async (risky) => {
+                      const list = risky ?? [];
+                      if (list.length > 0 && !confirm(`This merge brings in files that can run commands on your Mac:\n\n${list.join("\n")}\n\nCheck them in the diff first. Merge anyway?`)) return;
+                      const r = await EngineService.MergeWorktree(session.id, list.length > 0);
                       setMerged(r.message);
                       setMerging(false);
                     }),

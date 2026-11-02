@@ -40,6 +40,11 @@ func DataDir() (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("config: %w", err)
 	}
+	// MkdirAll leaves an existing folder as it is, and this one is what keeps
+	// other users out of the socket.
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return "", fmt.Errorf("config: %w", err)
+	}
 	return dir, nil
 }
 

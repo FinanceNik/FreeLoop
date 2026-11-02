@@ -105,8 +105,8 @@ func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payl
 		}
 		res, err := r.env.Exec(ctx, environment.ExecSpec{
 			Command: h.Command, Stdin: stdin, SeparateStderr: true, MaxOutput: 64 << 10,
-			Timeout: time.Duration(timeout) * time.Second, Network: environment.NetworkAll,
-			Env: map[string]string{"FREELOOP_HOOK_EVENT": ev, "FREELOOP_SESSION_ID": r.sid, "FREELOOP_TOOL": tool},
+			Timeout: time.Duration(timeout) * time.Second,
+			Env:     map[string]string{"FREELOOP_HOOK_EVENT": ev, "FREELOOP_SESSION_ID": r.sid, "FREELOOP_TOOL": tool},
 		})
 		d := HookRanData{Event: ev, Command: h.Command, Source: h.Source, Tool: tool, ToolCallID: callID,
 			ExitCode: res.ExitCode, TimedOut: res.TimedOut, DurationMs: res.Duration.Milliseconds(),

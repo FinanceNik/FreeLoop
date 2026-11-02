@@ -15,6 +15,7 @@ import (
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
+	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
 type fixture struct {
@@ -149,7 +150,6 @@ func TestSeatbeltRefuses(t *testing.T) {
 		"osascript -e 'tell application \"Finder\" to activate'",
 		"pbpaste",
 		"launchctl submit -l com.freeloop.sandboxtest -- /usr/bin/touch " + filepath.Join(f.outside, "launchd"),
-		"security find-generic-password -s freeloop-test -w",
 		"sandbox-exec -p '(version 1)(allow default)' touch " + filepath.Join(f.outside, "nested"),
 	} {
 		if out, code := f.run(t, command); code == 0 {
@@ -475,5 +475,24 @@ func TestOpenInEditorNeverRuns(t *testing.T) {
 	argv := EditorArgv("/p/README.md")
 	if argv[0] != "/usr/bin/open" || argv[1] != "-t" || argv[2] != "/p/README.md" || len(argv) != 3 {
 		t.Errorf("argv = %v", argv)
+	}
+}
+
+// make test-keychain: a real item, since a missing one fails outside the sandbox
+// too and proves nothing.
+func TestSeatbeltClosesTheKeychain(t *testing.T) {
+	if os.Getenv("FREELOOP_KEYCHAIN_TEST") != "1" {
+		t.Skip("set FREELOOP_KEYCHAIN_TEST=1 to run against the login keychain")
+	}
+	ref := secrets.Ref{Service: "freeloop-test", Account: "sandbox-probe"}
+	const value = "not-a-real-secret-0123456789"
+	if err := (Keychain{}).Set(ref, value); err != nil {
+		t.Fatal(err)
+	}
+	defer (Keychain{}).Delete(ref)
+	f := sandboxed(t, nil)
+	out, code := f.run(t, "security find-generic-password -s freeloop-test -a sandbox-probe -w")
+	if code == 0 || strings.Contains(out, value) {
+		t.Errorf("a sandboxed command read the Keychain: %d: %s", code, out)
 	}
 }

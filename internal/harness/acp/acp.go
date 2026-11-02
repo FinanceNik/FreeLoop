@@ -438,6 +438,10 @@ func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) er
 	switch {
 	case t == event.UsageUpdate:
 		return nil
+	case t == event.UserMessageChunk:
+		// The agent's own words must not show as the user's. A replay while
+		// loading was already skipped above.
+		return nil
 	case t == event.CurrentModeUpdate:
 		// The agent's mode, back in the app's terms when the preset maps it.
 		id, _ := m["currentModeId"].(string)
@@ -637,6 +641,14 @@ type terminal struct {
 
 func (s *session) CreateTerminal(ctx context.Context, r sdk.CreateTerminalRequest) (sdk.CreateTerminalResponse, error) {
 	line := strings.TrimSpace(r.Command + " " + strings.Join(r.Args, " "))
+	// What decides what runs is part of what is approved: PATH=./evil, or a folder
+	// with its own Makefile, changes what the same words do.
+	for _, v := range r.Env {
+		line = v.Name + "=" + v.Value + " " + line
+	}
+	if r.Cwd != nil && *r.Cwd != "" {
+		line = "cd " + *r.Cwd + " && " + line
+	}
 	// This command runs here, so the sandbox can hold it, unlike the ones an
 	// agent runs itself after session/request_permission (ENV-009).
 	var contained permission.Containment

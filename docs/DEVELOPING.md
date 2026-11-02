@@ -30,7 +30,7 @@ Rules the lint enforces (`internal/archtest`): no `os/exec` or file I/O in the e
 - `make tools` once, then `make dev` (live reload; `FREELOOP_DEV=1` adds a scripted demo provider, `FREELOOP_HOME=/some/dir` keeps your data apart).
 - `make test` runs the Go tests with the race detector and the frontend tests (`node --test`, no framework). One test: `go test ./internal/<pkg>/ -run '^TestName$'`.
 - `make lint` runs gofmt, `go vet`, the architecture test and `tsc`. Both pass before every commit.
-- A UI change is checked in the running app: build the frontend, `go build -tags server ./cmd/freeloop`, run it with `FREELOOP_DEV=1 FREELOOP_HOME=<scratch> WAILS_SERVER_PORT=<port>` and open it in a browser.
+- A UI change is checked in the running app: build the frontend, `go build -tags server ./cmd/freeloop`, run it with `FREELOOP_DEV=1 FREELOOP_HOME=<scratch> WAILS_SERVER_PORT=<port>` and open it in a browser. **That build serves the whole engine on a local port, with no sign-in:** any process on this Mac, other users' and sandboxed commands included, can call it, and through a terminal run commands as you. Use it on scratch data, stop it when done, and never ship it. Keychain items are shared across data folders, so give a test provider a name of its own: one with a real provider's name overwrites its key.
 - Docker tests need a running daemon (Colima or Docker Desktop) and skip without one.
 - `make memcheck` packages the app, starts it on a scratch data folder, runs a demo turn in ten sessions through the command line and checks the idle footprint of the app and its WebKit processes against the 300 MB of NFR-PERF-004 (`scripts/memcheck.sh`; the window opens while it runs). `TestIdleSessionsMemory` guards the engine's share in `make test`.
 

@@ -97,7 +97,7 @@ func (l *Local) Resolve(p string) string {
 // Contains reports whether p resolves to a location inside Root. Like the
 // permission policy it ignores case.
 func (l *Local) Contains(p string) bool {
-	r, root := strings.ToLower(l.Resolve(p)), strings.ToLower(l.root)
+	r, root := FoldPath(l.Resolve(p)), FoldPath(l.root)
 	return r == root || strings.HasPrefix(r, root+string(filepath.Separator))
 }
 

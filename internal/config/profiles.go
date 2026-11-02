@@ -170,6 +170,18 @@ func (p Profile) ValidateProject() error {
 			return fieldErr(fmt.Sprintf("rules[%d]", i), "a project profile can only add deny rules")
 		}
 	}
+	// What a session runs and what it can reach are the user's to choose: a
+	// repository could otherwise turn on an MCP server the user left off, or
+	// start a different agent.
+	if len(p.MCPServers) > 0 {
+		return fieldErr("mcpServers", "a project profile cannot add MCP servers; choose them in your own profile")
+	}
+	if p.Harness != "" && p.Harness != "builtin" {
+		return fieldErr("harness", "a project profile cannot choose another agent; only the built-in harness")
+	}
+	if p.Fallback != nil {
+		return fieldErr("fallback", "a project profile cannot send prompts to a fallback model; choose one in your own profile")
+	}
 	return nil
 }
 

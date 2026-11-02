@@ -421,8 +421,13 @@ func (s *EngineService) SaveProfileYAML(id, text string) error {
 
 // MergeWorktree and SetProjectWorktreeDefault handle session worktrees
 // (SES-010).
-func (s *EngineService) MergeWorktree(ctx context.Context, sessionID string) (engine.MergeResult, error) {
-	return s.eng.MergeWorktree(ctx, sessionID)
+func (s *EngineService) MergeWorktree(ctx context.Context, sessionID string, confirmed bool) (engine.MergeResult, error) {
+	return s.eng.MergeWorktree(ctx, sessionID, confirmed)
+}
+
+// MergeRisks lists the files a merge would bring in that can run commands.
+func (s *EngineService) MergeRisks(ctx context.Context, sessionID string) ([]string, error) {
+	return s.eng.MergeRisks(ctx, sessionID)
 }
 
 func (s *EngineService) SetProjectWorktreeDefault(ctx context.Context, projectID, choice string) error {

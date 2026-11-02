@@ -4,9 +4,11 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
@@ -30,10 +32,11 @@ func sandboxedEnvironment() config.Environment {
 
 // sandboxTools are the folders under home a confined command can read: what a
 // login shell and the usual toolchains need. Everything else in home is closed,
-// the shell's interactive startup files included, since keys are often kept in
-// them, and npm's, where tokens are.
+// the shell's startup files and git's own config included, since keys and tokens
+// are often kept in them. What they set reaches commands through loginVars,
+// without what looks like a secret.
 var sandboxTools = []string{
-	".zshenv", ".zprofile", ".zlogin", ".gitconfig", ".gitignore_global", ".config/git",
+	".gitignore_global",
 	"go", ".nvm", ".cargo", ".rustup", ".pyenv", ".rbenv", ".asdf", ".volta", ".bun", ".deno", ".local/bin", ".local/share/mise",
 	"Library/Developer", "Library/Python", "Library/pnpm",
 }
@@ -41,9 +44,7 @@ var sandboxTools = []string{
 // sandboxProtected are the project's files that something outside the sandbox
 // reads and acts on: the app, git, editors and other agents. A command in the
 // sandbox writing one could otherwise run with the user's full rights later.
-var sandboxProtected = []string{
-	ProjectDir, ".devcontainer", ".devcontainer.json", ".mcp.json", ".claude", ".envrc", ".vscode",
-}
+var sandboxProtected = append([]string{ProjectDir}, permission.ActedOnLater...)
 
 // sandboxEnv returns the session's environment confined as its settings say.
 func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config.Environment, vars map[string]string) (*environment.Local, func(), error) {
@@ -107,9 +108,18 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 		c.Protected = append(c.Protected, filepath.Join(root, p))
 	}
 	c.Protected = append(c.Protected, e.gitProtected(ctx, host, &c)...)
+	// At any depth: git runs what a nested repository's config names when it
+	// starts there, and a nested project's settings become active when opened.
+	quoted := regexp.QuoteMeta(root)
+	c.ProtectedPatterns = append(c.ProtectedPatterns, "^"+quoted+"/.+/\\.git(/.*)?$", "^"+quoted+"/.+/\\."+regexp.QuoteMeta(strings.TrimPrefix(ProjectDir, "."))+"(/.*)?$")
 	sid := ses.ID
+	allVars := e.loginVars(ctx, host)
+	maps.Copy(allVars, vars)
 	env, err := environment.NewLocal(environment.LocalOptions{
-		ID: cfg.ID, Root: root, Env: vars, Guard: e.broker.Policy().Guard(root),
+		ID: cfg.ID, Root: root, Env: allVars, Guard: e.broker.Policy().Guard(root),
+		// No startup files: they may hold keys, so they are closed, and what they
+		// set came through loginVars.
+		Shell: []string{"zsh", "-fc"},
 		Sandbox: &environment.SandboxOptions{
 			Confiner: e.confiner, Base: c, Env: cacheEnv, NetworkEnv: networkEnv, Reach: reach,
 			Probe: filepath.Join(cacheBase, ".sandbox-probe"),
@@ -158,6 +168,15 @@ func (e *Engine) gitProtected(ctx context.Context, host *environment.Local, c *e
 			out = append(out, filepath.Join(d, name))
 		}
 	}
+	// Git runs the hooks it names, wherever that is.
+	if hooks, ok := git(ctx, host, "config", "--local", "--get", "core.hooksPath"); ok {
+		if hooks = strings.TrimSpace(hooks); hooks != "" {
+			if !filepath.IsAbs(hooks) {
+				hooks = filepath.Join(root, hooks)
+			}
+			out = append(out, filepath.Clean(hooks))
+		}
+	}
 	if own == common {
 		// The main checkout has no business in its linked worktrees' folders.
 		out = append(out, worktrees)
@@ -176,6 +195,61 @@ func (e *Engine) gitProtected(ctx context.Context, host *environment.Local, c *e
 
 // gitActive are the names in a git directory that decide what git runs.
 var gitActive = []string{"config", "config.worktree", "hooks", "commondir", "gitdir"}
+
+// loginVars are what the user's shell startup files set, for commands in a
+// sandbox, which cannot read those files. A login shell outside the sandbox reads
+// them once, with everything else the app runs that way, and what looks like a
+// secret stays out: such a command needs no approval, so a prompt-injected
+// printenv would otherwise hand it to the model. Git's own config is closed too,
+// so it gets only the user's name from it.
+func (e *Engine) loginVars(ctx context.Context, host *environment.Local) map[string]string {
+	e.loginOnce.Do(func() {
+		e.loginEnv = map[string]string{}
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		const marker = "__FREELOOP_ENV__"
+		res, err := host.Exec(ctx, environment.ExecSpec{
+			Argv: []string{"zsh", "-lc", "print -r -- " + marker + "; /usr/bin/env"},
+			Env:  map[string]string{"HOME": e.home},
+		})
+		if err != nil || res.ExitCode != 0 {
+			return
+		}
+		_, out, ok := strings.Cut(res.Output, marker+"\n")
+		if !ok {
+			return
+		}
+		for _, line := range strings.Split(out, "\n") {
+			name, value, ok := strings.Cut(line, "=")
+			if ok && envName.MatchString(name) && keepLoginVar(name, value) {
+				e.loginEnv[name] = value
+			}
+		}
+		for name, key := range map[string]string{"NAME": "user.name", "EMAIL": "user.email"} {
+			if v, ok := git(ctx, host, "config", "--global", "--get", key); ok && strings.TrimSpace(v) != "" {
+				e.loginEnv["GIT_AUTHOR_"+name] = strings.TrimSpace(v)
+				e.loginEnv["GIT_COMMITTER_"+name] = strings.TrimSpace(v)
+			}
+		}
+		e.loginEnv["GIT_CONFIG_GLOBAL"] = "/dev/null"
+	})
+	return maps.Clone(e.loginEnv)
+}
+
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// keepLoginVar reports a variable a sandboxed command may have. The ones the
+// app sets itself, the ones that change what programs load, and secrets stay out.
+func keepLoginVar(name, value string) bool {
+	switch name {
+	case "HOME", "PWD", "OLDPWD", "SHLVL", "_", "TMPDIR", "USER", "LOGNAME", "SHELL", "SSH_AUTH_SOCK", "ZDOTDIR", "BASH_ENV", "ENV":
+		return false
+	}
+	if strings.HasPrefix(name, "DYLD_") || strings.HasPrefix(name, "LD_") || strings.HasPrefix(name, "FREELOOP_") {
+		return false
+	}
+	return !secretValue(name, value)
+}
 
 func expandHome(home, p string) string {
 	if p == "~" {

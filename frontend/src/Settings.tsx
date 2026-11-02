@@ -206,7 +206,7 @@ export default function Settings({ config, providers, environments, profiles, pr
           engine of its own to send your queries to. A self-hosted SearXNG and the Brave Search API both work. Each search asks you first.
         </p>
         <label>
-          Search address <span className="muted">(with {"{query}"} where the query goes)</span>
+          Search address <span className="muted">(with {"{query}"} where the query goes, and {"{key}"} if the key goes in the address)</span>
           <input
             value={form.web?.searchURL ?? ""}
             placeholder="http://localhost:8888/search?format=json&q={query}"
@@ -217,7 +217,7 @@ export default function Settings({ config, providers, environments, profiles, pr
           Key header <span className="muted">(optional, such as X-Subscription-Token)</span>
           <input value={form.web?.searchHeader ?? ""} onChange={(e) => setForm({ ...form, web: { ...form.web, searchHeader: e.target.value } })} />
         </label>
-        {form.web?.searchHeader && (
+        {(form.web?.searchHeader || form.web?.searchURL?.includes("{key}")) && (
           <label>
             Key <span className="muted">(kept in the Keychain; saved at once)</span>
             <input

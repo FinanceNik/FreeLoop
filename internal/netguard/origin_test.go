@@ -1,6 +1,9 @@
 package netguard
 
-import "testing"
+import (
+	"net/netip"
+	"testing"
+)
 
 func TestRuntimeCallAllowed(t *testing.T) {
 	for _, c := range []struct {
@@ -37,5 +40,18 @@ func TestRuntimeCallAllowed(t *testing.T) {
 	}
 	if !RuntimeCallAllowed("POST", "", "", "localhost", "client-1", false) {
 		t.Error("the app's own call was refused")
+	}
+}
+
+func TestPrivateAddrCoversEmbeddedAndSpecialRanges(t *testing.T) {
+	for _, s := range []string{"127.0.0.1", "10.0.0.1", "169.254.169.254", "::1", "::ffff:127.0.0.1", "64:ff9b::a9fe:a9fe", "64:ff9b::7f00:1", "2002:7f00:1::", "::127.0.0.1", "192.0.0.1", "198.18.0.1", "fec0::1", "0.1.2.3", "100.64.0.1", "::"} {
+		if !PrivateAddr(netip.MustParseAddr(s)) {
+			t.Errorf("%s is treated as public", s)
+		}
+	}
+	for _, s := range []string{"8.8.8.8", "1.1.1.1", "2606:4700:4700::1111", "64:ff9b::808:808", "2002:808:808::"} {
+		if PrivateAddr(netip.MustParseAddr(s)) {
+			t.Errorf("%s is treated as private", s)
+		}
 	}
 }

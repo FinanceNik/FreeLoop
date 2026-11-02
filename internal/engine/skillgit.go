@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	neturl "net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -33,6 +34,13 @@ func parseGitSource(src string) (gitSource, bool) {
 	url, ref, _ := strings.Cut(strings.TrimSpace(src), "#")
 	for _, p := range []string{"https://", "http://", "ssh://", "git://", "file://", "git@"} {
 		if strings.HasPrefix(url, p) {
+			// A token in the address would be written beside the skill, where a
+			// sandboxed command can read it. Git's own credentials handle sign-in.
+			if p == "https://" || p == "http://" {
+				if u, err := neturl.Parse(url); err != nil || u.User != nil {
+					return gitSource{}, false
+				}
+			}
 			return gitSource{URL: url, Ref: ref}, true
 		}
 	}

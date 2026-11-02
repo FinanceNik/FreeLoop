@@ -24,6 +24,23 @@ func NewPolicy(home, appDataDir string) *Policy {
 		filepath.Join(home, ".ssh"),
 		filepath.Join(home, ".gnupg"),
 		filepath.Join(home, ".aws"),
+		// Other programs' sign-ins. HRN-008: the app never reads these, and an
+		// "allow always" must not cover them. A vendor's own agent reads its own
+		// itself, not through here.
+		filepath.Join(home, ".codex", "auth.json"),
+		filepath.Join(home, ".gemini", "oauth_creds.json"),
+		filepath.Join(home, ".gemini", "google_accounts.json"),
+		filepath.Join(home, ".claude", ".credentials.json"),
+		filepath.Join(home, ".claude.json"),
+		filepath.Join(home, ".netrc"),
+		filepath.Join(home, ".npmrc"),
+		filepath.Join(home, ".pypirc"),
+		filepath.Join(home, ".git-credentials"),
+		filepath.Join(home, ".config", "gh"),
+		filepath.Join(home, ".config", "gcloud"),
+		filepath.Join(home, ".docker", "config.json"),
+		filepath.Join(home, ".kube"),
+		filepath.Join(home, ".azure"),
 		filepath.Join(lib, "Keychains"),
 		filepath.Join(lib, "Cookies"),
 		filepath.Join(lib, "Safari"),
@@ -49,11 +66,10 @@ func (p *Policy) NeverRead() []string { return slices.Clone(p.neverRead) }
 // canonical returns the spellings of p that checks must cover.
 func canonical(p string) []string { return environment.Spellings(p) }
 
-// within reports whether p is dir or inside it. It ignores case: macOS
-// volumes are case-insensitive by default, so ~/.SSH is ~/.ssh and .GIT is
-// .git. On a case-sensitive volume this errs towards refusing.
+// within reports whether p is dir or inside it, spelled as macOS volumes
+// compare names, so ~/.SSH is ~/.ssh and .GIT is .git (environment.FoldPath).
 func within(p, dir string) bool {
-	p, dir = strings.ToLower(p), strings.ToLower(dir)
+	p, dir = environment.FoldPath(p), environment.FoldPath(dir)
 	return p == dir || strings.HasPrefix(p, dir+string(filepath.Separator))
 }
 
@@ -84,17 +100,61 @@ func (p *Policy) writeRefusal(root, path string) string {
 	case !withinAny(path, roots):
 		return fmt.Sprintf("%s is outside the project root %s", path, root)
 	}
-	for _, r := range roots {
-		if within(path, filepath.Join(r, ".git")) {
+	// At any depth: a nested repository's config runs when git starts in it, and
+	// the project's Freeloop settings can add hooks, which run commands; only the
+	// user edits them (EXT-005, SEC-006). A nested .freeloop is the settings of a
+	// project opened there.
+	gitDir, settings := environment.FoldPath(".git"), environment.FoldPath(ProjectSettingsDir)
+	for _, part := range pathParts(roots, path) {
+		switch environment.FoldPath(part) {
+		case gitDir:
 			return fmt.Sprintf("%s is inside .git", path)
-		}
-		// The project's Freeloop settings can add hooks, which run
-		// commands; only the user edits them (EXT-005, SEC-006).
-		if within(path, filepath.Join(r, ProjectSettingsDir)) {
+		case settings:
 			return fmt.Sprintf("%s is inside %s, the project's Freeloop settings, which only you edit", path, ProjectSettingsDir)
 		}
 	}
 	return ""
+}
+
+// pathParts returns path's names below whichever root it is in.
+func pathParts(roots []string, path string) []string {
+	fp := environment.FoldPath(path)
+	for _, r := range roots {
+		fr := environment.FoldPath(r)
+		if strings.HasPrefix(fp, fr+string(filepath.Separator)) {
+			return strings.Split(fp[len(fr)+1:], string(filepath.Separator))
+		}
+	}
+	return nil
+}
+
+// ActedOnLater are the project files something outside a session later reads and
+// runs: editors, direnv, commit hooks and other agents. Writing one is not an
+// ordinary edit, so accept-edits mode asks, and a sandbox keeps them read-only.
+var ActedOnLater = []string{
+	".devcontainer", ".devcontainer.json", ".mcp.json", ".envrc", ".vscode", ".idea", ".husky", ".githooks",
+	".pre-commit-config.yaml", ".claude", ".gemini", ".codex", ".goose", ".opencode", "opencode.json", ".cursor",
+}
+
+// actedOn reports a path that is or is inside one of ActedOnLater.
+func (p *Policy) actedOn(root string, paths []string) bool {
+	roots := canonical(root)
+	for _, path := range paths {
+		parts := pathParts(roots, path)
+		if len(parts) == 0 {
+			continue
+		}
+		for _, name := range ActedOnLater {
+			if parts[0] == environment.FoldPath(name) {
+				return true
+			}
+		}
+		// direnv looks in every folder on the way.
+		if parts[len(parts)-1] == environment.FoldPath(".envrc") {
+			return true
+		}
+	}
+	return false
 }
 
 // ProjectSettingsDir is a project's Freeloop settings folder; harnesses may

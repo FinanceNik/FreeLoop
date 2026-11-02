@@ -118,7 +118,8 @@ type registryArgument struct {
 // A package identifier and version become a command line, so only plain ones do.
 var (
 	registryPackage = regexp.MustCompile(`^(@[a-zA-Z0-9._-]+/)?[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
-	registryVersion = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.+_-]*$`)
+	// It starts with a digit: "latest" is not a pinned version.
+	registryVersion = regexp.MustCompile(`^v?[0-9][a-zA-Z0-9.+_-]*$`)
 )
 
 // maxRegistryPage bounds what one page may be.

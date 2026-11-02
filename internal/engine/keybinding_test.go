@@ -1,18 +1,25 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
@@ -284,5 +291,225 @@ func TestTheSearchKeyStaysWithItsAddress(t *testing.T) {
 	sessionWeb{e: e}.Search(context.Background(), "x")
 	if !evilGot.Load() {
 		t.Error("the key was not sent after the user entered it for this address")
+	}
+}
+
+// Go keeps X-Api-Key on a redirect to another host, and a 307 sends the prompt too.
+func TestARedirectDoesNotCarryAKey(t *testing.T) {
+	for _, typ := range []string{"anthropic", "gemini", "openai_compat", "openai_responses"} {
+		t.Run(typ, func(t *testing.T) {
+			evil, evilGot := keyTrap(t, testKey)
+			target := strings.Replace(evil.URL, "127.0.0.1", "localhost", 1)
+			gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, target+r.URL.Path, http.StatusTemporaryRedirect)
+			}))
+			defer gateway.Close()
+			e := openBinding(t, t.TempDir(), secrets.NewMemory())
+			pi, err := e.SaveProvider(SaveProviderRequest{Name: "p", Type: typ, Preset: "custom", BaseURL: gateway.URL, APIKey: testKey, DefaultModel: "m"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			e.TestProvider(context.Background(), pi.ID)
+			if evilGot.Load() {
+				t.Error("the key followed a redirect to another host")
+			}
+		})
+	}
+}
+
+func TestAddressesCannotHoldCredentials(t *testing.T) {
+	e := openBinding(t, t.TempDir(), secrets.NewMemory())
+	for _, u := range []string{"https://u:pw@llm.example.com/v1", "https://llm.example.com/v1?api-key=abc", "https://llm.example.com/v1?token=abc"} {
+		if _, err := e.SaveProvider(SaveProviderRequest{Name: "p", Type: "openai_compat", Preset: "custom", BaseURL: u}); err == nil {
+			t.Errorf("%s was accepted", u)
+		}
+	}
+	if _, err := e.SaveProvider(SaveProviderRequest{Name: "p", Type: "openai_compat", Preset: "custom", BaseURL: "https://llm.example.com/v1?api-version=2"}); err != nil {
+		t.Errorf("an ordinary query: %v", err)
+	}
+	cfg := e.Config()
+	cfg.Web.SearchURL = "https://s.example/?key=AIzaFAKE&q={query}"
+	if _, err := e.SaveSettings(cfg); err == nil {
+		t.Error("a key in the search address was saved")
+	}
+	cfg.Web.SearchURL = "https://s.example/?key={key}&q={query}"
+	if _, err := e.SaveSettings(cfg); err != nil {
+		t.Errorf("the {key} placeholder: %v", err)
+	}
+}
+
+func TestTheSearchKeyInTheAddressStaysOutOfErrors(t *testing.T) {
+	dead := httptest.NewServer(http.NotFoundHandler())
+	u := dead.URL
+	dead.Close()
+	e := openBinding(t, t.TempDir(), secrets.NewMemory())
+	cfg := e.Config()
+	cfg.Web.SearchURL = u + "/s?key={key}&q={query}"
+	if _, err := e.SaveSettings(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.SetWebSearchKey("AIzaFAKE0123456789"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := sessionWeb{e: e}.Search(context.Background(), "x")
+	if err == nil || strings.Contains(err.Error(), "AIzaFAKE") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+// A secret stored for one address did not stay behind when the server moved.
+func TestMCPSecretsDoNotFollowANewAddress(t *testing.T) {
+	evil, evilGot := keyTrap(t, "ghp_FAKE0123456789abcdefgh")
+	honest, _ := keyTrap(t, "ghp_FAKE0123456789abcdefgh")
+	mem := secrets.NewMemory()
+	e := openBinding(t, t.TempDir(), mem)
+	if _, err := e.SaveMCPServer(SaveMCPServerRequest{Server: config.MCPServer{ID: "github", Transport: "http", URL: honest.URL, Enabled: true},
+		Secrets: map[string]string{"Authorization": "Bearer ghp_FAKE0123456789abcdefgh"}}); err != nil {
+		t.Fatal(err)
+	}
+	it := e.mcpItem("github", claudeServer{Type: "http", URL: evil.URL}, "/repo/.mcp.json")
+	if !strings.Contains(it.Note, "secrets are removed") {
+		t.Errorf("the import preview does not say so: %q", it.Note)
+	}
+	got, err := e.SaveMCPServer(*it.server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.SecretNames) != 0 {
+		t.Errorf("secrets kept: %v", got.SecretNames)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	e.ApproveMCPServer(ctx, "github", got.Fingerprint)
+	if evilGot.Load() {
+		t.Error("a stored token went to the new address")
+	}
+	if _, err := mem.Get(mcpSecretRef("github", "Authorization")); err == nil {
+		t.Error("the secret was left in the Keychain")
+	}
+	// In the app, changing something else keeps it; changing the address does not.
+	if _, err := e.SaveMCPServer(SaveMCPServerRequest{Server: config.MCPServer{ID: "other", Transport: "http", URL: honest.URL}, Secrets: map[string]string{"X": "keep-me-0123456789"}}); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := e.SaveMCPServer(SaveMCPServerRequest{Server: config.MCPServer{ID: "other", Transport: "http", URL: honest.URL, Enabled: true}})
+	if err != nil || len(kept.SecretNames) != 1 {
+		t.Errorf("an unrelated change: %+v, %v", kept.SecretNames, err)
+	}
+	moved, err := e.SaveMCPServer(SaveMCPServerRequest{Server: config.MCPServer{ID: "other", Transport: "http", URL: evil.URL, Enabled: true}})
+	if err != nil || len(moved.SecretNames) != 0 {
+		t.Errorf("a new address kept its secrets: %+v, %v", moved.SecretNames, err)
+	}
+}
+
+// Keys and tokens are known from the start, in the forms a command might print.
+func TestRedaction(t *testing.T) {
+	dir, home, mem := t.TempDir(), t.TempDir(), secrets.NewMemory()
+	e, err := Open(Options{DataDir: dir, Secrets: mem, Home: home, WatchInterval: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.SetWebSearchKey("search-FAKEKEY-0123456789abc")
+	e.secrets.Set(oauthRef("srv"), `{"server":"https://x","clientSecret":"client-secret-FAKE-012345","token":{"access_token":"oauth-access-FAKE-0123456789","refresh_token":"oauth-refresh-FAKE-0123456789"}}`)
+	e.SaveMCPServer(SaveMCPServerRequest{Server: config.MCPServer{ID: "srv", Transport: "http", URL: "https://x"}})
+	e.Close()
+	e2 := openBinding(t, dir, mem)
+	out := e2.redactText("search-FAKEKEY-0123456789abc oauth-access-FAKE-0123456789 oauth-refresh-FAKE-0123456789 client-secret-FAKE-012345")
+	if strings.Contains(out, "FAKE") {
+		t.Errorf("not known after a restart: %s", out)
+	}
+	secret := "p@ss/w+rd=with&sk-audit-FAKE-0123456789"
+	e2.remember(secret)
+	basic := base64.StdEncoding.EncodeToString([]byte("user:" + secret))
+	for name, form := range map[string]string{
+		"base64": base64.StdEncoding.EncodeToString([]byte(secret)),
+		"url":    url.QueryEscape(secret),
+		"path":   url.PathEscape(secret),
+		"hex":    hex.EncodeToString([]byte(secret)),
+		"HEX":    strings.ToUpper(hex.EncodeToString([]byte(secret))),
+		"basic":  "Authorization: Basic " + basic,
+		"basic2": base64.StdEncoding.EncodeToString([]byte("ab:" + secret)),
+		"basic3": base64.StdEncoding.EncodeToString([]byte("abc:" + secret)),
+	} {
+		got := e2.redactText(form)
+		if !strings.Contains(got, "[REDACTED]") {
+			t.Errorf("%s not redacted: %s", name, got)
+		}
+	}
+	if got := e2.redactText("an ordinary sentence about keys"); got != "an ordinary sentence about keys" {
+		t.Errorf("changed ordinary text: %s", got)
+	}
+}
+
+func TestSkillSourceCannotHoldAToken(t *testing.T) {
+	if _, ok := parseGitSource("https://token@github.com/o/r"); ok {
+		t.Error("a token in a skill's address was accepted")
+	}
+	if _, ok := parseGitSource("https://github.com/o/r#main"); !ok {
+		t.Error("an ordinary address was refused")
+	}
+}
+
+// A key an endpoint repeats in its error reached the log unredacted.
+func TestAKeyInAnErrorStaysOutOfTheLog(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+	e := openBinding(t, t.TempDir(), secrets.NewMemory())
+	e.remember(testKey)
+	log.Printf("engine: prompt: %s", e.redactText("bad key "+testKey))
+	if strings.Contains(buf.String(), testKey) {
+		t.Errorf("log = %s", buf.String())
+	}
+}
+
+func TestBypassIsRefusedInAnUntrustedProject(t *testing.T) {
+	ctx := context.Background()
+	repo := gitRepo(t)
+	dir := t.TempDir()
+	e := openBinding(t, dir, secrets.NewMemory())
+	cfg := e.Config()
+	cfg.Permissions.AllowBypass = true
+	if _, err := e.SaveSettings(cfg); err != nil {
+		t.Fatal(err)
+	}
+	withScript(e, "s", scripted.Step{Text: "hi"})
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: "s", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.SetMode(ctx, ses.ID, "bypass"); err == nil {
+		t.Error("bypass was set in an untrusted project")
+	}
+	if _, err := e.SetProjectTrust(ctx, repo, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.SetMode(ctx, ses.ID, "bypass"); err != nil {
+		t.Errorf("in a trusted project: %v", err)
+	}
+}
+
+// OAuth's exception for a server on this Mac covers that server, not what its
+// metadata names.
+func TestOAuthPrivateExceptionIsTheServersOwn(t *testing.T) {
+	own, _ := keyTrap(t, "unused")
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { t.Error("reached another private service") }))
+	defer other.Close()
+	c := oauthClient(own.URL)
+	if res, err := c.Get(own.URL); err != nil {
+		t.Errorf("the server itself: %v", err)
+	} else {
+		res.Body.Close()
+	}
+	if res, err := c.Get(strings.Replace(other.URL, "127.0.0.1", "localhost", 1)); err == nil {
+		res.Body.Close()
+		t.Error("metadata could point at another service on this Mac")
+	}
+}
+
+func TestRegistryVersionsArePinned(t *testing.T) {
+	for v, want := range map[string]bool{"1.2.3": true, "v1.2.3": true, "0.1.0-beta.1": true, "latest": false, "next": false, "": false} {
+		if registryVersion.MatchString(v) != want {
+			t.Errorf("%q: %v", v, !want)
+		}
 	}
 }

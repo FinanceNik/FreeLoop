@@ -110,7 +110,7 @@ func New(opts Options) *Provider {
 	}
 	client := opts.HTTPClient
 	if client == nil {
-		client = &http.Client{}
+		client = provider.KeyClient()
 	}
 	return &Provider{id: opts.ID, preset: pr, base: base, key: opts.APIKey, headers: headers, client: client}
 }

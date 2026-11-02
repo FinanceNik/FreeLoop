@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { keyMoves, plainRemote } from "./addresses.ts";
 import { EngineService, errorText, type HarnessInfo, type ModelInfo, type PresetInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
@@ -60,6 +61,11 @@ export default function Providers({ providers, onChanged, onError, agents, defau
   const save = (e: FormEvent) => {
     e.preventDefault();
     if (!form) return;
+    // The saved key goes along to a new address unless a new one is entered.
+    const before = providers.find((p) => p.id === form.id);
+    if (before?.hasKey && !form.apiKey && keyMoves(before.baseUrl, form.baseUrl === preset?.baseUrl ? "" : form.baseUrl)) {
+      if (!confirm(`Send the saved API key of ${before.name} to ${form.baseUrl || "the default endpoint"}? Enter a new key instead if it is for another service.`)) return;
+    }
     setBusy(true);
     EngineService.SaveProvider({
       id: form.id,
@@ -204,6 +210,7 @@ export default function Providers({ providers, onChanged, onError, agents, defau
           </label>
           <label>
             API key {preset && !preset.needsKey && <span className="muted">(optional for local servers)</span>}
+            {plainRemote(form.baseUrl) && <span className="error-text"> This address is plain http, so the key would travel unencrypted.</span>}
             <input
               type="password"
               autoComplete="off"

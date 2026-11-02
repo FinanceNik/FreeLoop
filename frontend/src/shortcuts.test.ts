@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { approvalHint, approvalShortcut, bindingOf, bindingProblem, comboOf, isTextField, keyLabel, optionKind, pressed, setBindings } from "./shortcuts.ts";
+import { approvalHint, approvalShortcut, optionLabel, bindingOf, bindingProblem, comboOf, isTextField, keyLabel, optionKind, pressed, setBindings } from "./shortcuts.ts";
 
 const k = (key: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({
   key,
@@ -81,4 +81,10 @@ test("a binding edited by hand into something unusable is ignored", () => {
   setBindings({ palette: "Meta+C", nonsense: "Meta+J" });
   assert.equal(bindingOf("palette"), "Meta+K");
   setBindings({});
+});
+
+test("an approval button says what its kind does, whatever the agent named it", () => {
+  assert.equal(optionLabel("allow_always", "Deny"), "Allow always");
+  assert.equal(optionLabel("reject_once", "Allow"), "Deny");
+  assert.equal(optionLabel("other", "Something"), "Something");
 });

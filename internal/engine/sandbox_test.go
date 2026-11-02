@@ -490,3 +490,66 @@ func TestSkillLinksStayInTheSkill(t *testing.T) {
 		t.Errorf("the skill itself: %q, %v", c.Text, err)
 	}
 }
+
+// Keys in the shell's startup files reached commands that need no approval, and
+// the files were readable (security review, 2026-11-02).
+func TestSandboxKeepsStartupSecretsOut(t *testing.T) {
+	home := environment.Canonical(t.TempDir())
+	repo := filepath.Join(home, "Documents", "repo")
+	os.MkdirAll(repo, 0o755)
+	gitIn(t, repo, "init", "-q", "-b", "main")
+	os.WriteFile(filepath.Join(repo, "a.txt"), []byte("a\n"), 0o644)
+	gitIn(t, repo, "add", ".")
+	gitIn(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "one")
+	os.WriteFile(filepath.Join(home, ".zshenv"), []byte("export MY_API_KEY=fake-from-zshenv\nexport MY_TOOL_DIR=/opt/tool\n"), 0o644)
+	os.WriteFile(filepath.Join(home, ".zprofile"), []byte("export GH_TOKEN=fake-from-zprofile\nexport PATH=/stand/in/bin:$PATH\n"), 0o644)
+	os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[url \"https://x-access-token:fake-gh-token@github.com/\"]\n\tinsteadOf = https://github.com/\n"), 0o644)
+	e, err := Open(Options{DataDir: filepath.Join(home, "data"), Secrets: secrets.NewMemory(), Home: home, Confiner: darwin.Seatbelt{}, WatchInterval: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	p, err := e.SetProjectTrust(context.Background(), repo, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Environment{ID: "sandboxed", Kind: "local", Sandbox: &config.Sandbox{Enabled: true}}
+	env, done, err := e.sandboxEnv(context.Background(), session.Session{ID: "ses_x", ProjectID: p.ID, ProjectRoot: repo}, cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+	res, err := env.Exec(context.Background(), environment.ExecSpec{Command: "env; cat ~/.zshenv; cat ~/.zprofile; cat ~/.gitconfig; true", Timeout: 20 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"fake-from-zshenv", "fake-from-zprofile", "fake-gh-token"} {
+		if strings.Contains(res.Output, secret) {
+			t.Errorf("a sandboxed command got %s:\n%s", secret, res.Output)
+		}
+	}
+	for _, want := range []string{"MY_TOOL_DIR=/opt/tool", "/stand/in/bin"} {
+		if !strings.Contains(res.Output, want) {
+			t.Errorf("what the startup files set is missing %s:\n%s", want, res.Output)
+		}
+	}
+	// Git still works without its config.
+	res, err = env.Exec(context.Background(), environment.ExecSpec{Command: "echo b > b.txt && git add b.txt && git -c user.name=t -c user.email=t@t commit -qm two && git log --oneline | wc -l", Timeout: 20 * time.Second})
+	if err != nil || res.ExitCode != 0 || !strings.Contains(res.Output, "2") {
+		t.Errorf("git in the sandbox: %v: %s", err, res.Output)
+	}
+}
+
+func TestSandboxClosesNestedRepositoriesAndAgentConfig(t *testing.T) {
+	_, env, repo, _ := sandboxedProject(t)
+	os.MkdirAll(filepath.Join(repo, "sub", ".git", "hooks"), 0o755)
+	for _, rel := range []string{"sub/.git/config", "sub/.git/hooks/pre-commit", "sub/.freeloop/hooks.yaml", ".gemini/settings.json", ".codex/config.toml", ".husky/pre-commit", ".pre-commit-config.yaml", "opencode.json"} {
+		inSandbox(t, env, "mkdir -p \"$(dirname "+rel+")\"; echo x > "+rel)
+		if _, err := os.Stat(filepath.Join(repo, rel)); err == nil {
+			t.Errorf("a sandboxed command wrote %s", rel)
+		}
+	}
+	if out, code := inSandbox(t, env, "mkdir -p src && echo x > src/a.go && echo y > .gitignore"); code != 0 {
+		t.Errorf("ordinary writes: %s", out)
+	}
+}

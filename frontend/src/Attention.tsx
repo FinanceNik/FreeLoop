@@ -1,3 +1,4 @@
+import { optionLabel } from "./shortcuts.ts";
 import { useState } from "react";
 import { EngineService, type AttentionItem, type PermissionRequest } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
@@ -103,7 +104,7 @@ function RequestView({ req, onError }: { req: PermissionRequest; onError: (err: 
             title={o.kind === "allow_always" ? "Saves a rule for this session" : undefined}
             onClick={() => mcpForm.choose(o.optionId, o.kind, decide)}
           >
-            {o.kind === "allow_always" ? `${o.name} (this session)` : o.name}
+            {o.kind === "allow_always" ? `${optionLabel(o.kind, o.name)} (this session)` : optionLabel(o.kind, o.name)}
           </button>
         ))}
       </div>

@@ -137,6 +137,23 @@ export function optionKind(kind: string): ApprovalKind | null {
   return kind.startsWith("reject") ? "reject" : null;
 }
 
+// optionLabel names an approval button after what it does. An external agent
+// chooses its options' names as well as their kinds, and only the kind counts: a
+// button it named "Deny" with the kind allow_always allowed the call.
+export function optionLabel(kind: string, name: string): string {
+  switch (kind) {
+    case "allow_once":
+      return "Allow once";
+    case "allow_always":
+      return "Allow always";
+    case "reject_once":
+      return "Deny";
+    case "reject_always":
+      return "Always deny";
+  }
+  return name;
+}
+
 export function isTextField(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   return el.isContentEditable || el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT";

@@ -107,9 +107,23 @@ func (w sessionWeb) Search(ctx context.Context, query string) ([]web.Result, err
 		return nil, errors.New("no search endpoint is configured")
 	}
 	raw := strings.ReplaceAll(cfg.SearchURL, "{query}", url.QueryEscape(query))
+	inURL := strings.Contains(raw, "{key}")
+	key := ""
+	if cfg.SearchHeader != "" || inURL {
+		var err error
+		if key, err = w.e.searchKey(cfg.SearchURL); err != nil {
+			return nil, err
+		}
+		raw = strings.ReplaceAll(raw, "{key}", url.QueryEscape(key))
+	}
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, fmt.Errorf("the search endpoint %q is not an http or https address", cfg.SearchURL)
+		return nil, fmt.Errorf("the search endpoint is not an http or https address")
+	}
+	// A key typed into the address by hand, in a file: not kept there on purpose,
+	// and not to reach a transcript either.
+	for _, v := range credentialsIn(u) {
+		w.e.remember(v)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
@@ -117,23 +131,25 @@ func (w sessionWeb) Search(ctx context.Context, query string) ([]web.Result, err
 	}
 	req.Header.Set("Accept", "application/json")
 	if cfg.SearchHeader != "" {
-		key, err := w.e.searchKey(cfg.SearchURL)
-		if err != nil {
-			return nil, err
-		}
 		req.Header.Set(cfg.SearchHeader, key)
 	}
 	// Through http.DefaultTransport, so the local-only switch covers it. The
 	// key is for the endpoint the user set: a redirect to another host would
 	// carry it there.
 	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(next *http.Request, via []*http.Request) error {
-		if next.URL.Host != req.URL.Host || len(via) >= 5 {
+		if next.URL.Host != req.URL.Host || (req.URL.Scheme == "https" && next.URL.Scheme != "https") || len(via) >= 5 {
 			return errors.New("the search endpoint redirects elsewhere")
 		}
 		return nil
 	}}
 	res, err := client.Do(req)
 	if err != nil {
+		// Go's error quotes the whole address, a key in it included, and it goes
+		// to the model and the transcript.
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			return nil, fmt.Errorf("the search endpoint at %s: %w", u.Host, uerr.Err)
+		}
 		return nil, err
 	}
 	defer res.Body.Close()

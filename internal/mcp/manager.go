@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -140,7 +141,7 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 	case "http":
 		transport = &sdk.StreamableClientTransport{
 			Endpoint:             l.Config.URL,
-			HTTPClient:           &http.Client{Transport: headers{set: merge(l.Config.Headers, l.Headers), host: hostOf(l.Config.URL), next: http.DefaultTransport}},
+			HTTPClient:           &http.Client{Transport: headers{set: merge(l.Config.Headers, l.Headers), host: hostOf(l.Config.URL), scheme: schemeOf(l.Config.URL), next: http.DefaultTransport}},
 			DisableStandaloneSSE: true,
 			MaxRetries:           2,
 			OAuthHandler:         l.OAuth,
@@ -374,13 +375,14 @@ func lastLines(s string, n int) string {
 type headers struct {
 	set map[string]string
 	// host is the server's; a redirect elsewhere gets none of the headers,
-	// which can hold secrets.
-	host string
-	next http.RoundTripper
+	// which can hold secrets, and neither does a redirect from https to http.
+	host   string
+	scheme string
+	next   http.RoundTripper
 }
 
 func (h headers) RoundTrip(r *http.Request) (*http.Response, error) {
-	if !strings.EqualFold(r.URL.Host, h.host) {
+	if !strings.EqualFold(r.URL.Host, h.host) || (h.scheme == "https" && r.URL.Scheme != "https") {
 		return h.next.RoundTrip(r)
 	}
 	r = r.Clone(r.Context())
@@ -390,11 +392,29 @@ func (h headers) RoundTrip(r *http.Request) (*http.Response, error) {
 	return h.next.RoundTrip(r)
 }
 
+func schemeOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Scheme
+}
+
+func loopback(host string) bool {
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return host == "localhost" || strings.HasSuffix(host, ".localhost")
+}
+
 // Warning says why a stdio command deserves a second look before it first
 // runs (MCP-005): it fetches and runs code from a package registry or an
 // image that is not pinned.
 func Warning(s config.MCPServer) string {
 	if s.Transport != "stdio" {
+		if u, err := url.Parse(s.URL); err == nil && u.Scheme == "http" && !loopback(u.Hostname()) {
+			return "this address is plain http, so what is sent to it, secrets included, is not encrypted."
+		}
 		return ""
 	}
 	cmd := s.Command

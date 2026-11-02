@@ -119,6 +119,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   // user trusts it (EXT-005).
   const [trustHooks, setTrustHooks] = useState<Hook[]>([]);
   const untrusted = !!project && !project.trusted && !project.missing;
+  const canBypass = allowBypass && !!project?.trusted;
   useEffect(() => {
     if (!untrusted || !project) return setTrustHooks([]);
     EngineService.ProjectSettings(project.root)
@@ -257,7 +258,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   }, [slash === null]);
   const commands = useMemo<SlashCommand[]>(
     () => [
-      ...MODE_COMMANDS.filter((c) => c.mode !== "bypass" || allowBypass),
+      ...MODE_COMMANDS.filter((c) => c.mode !== "bypass" || canBypass),
       ...view.commands.map((c) => ({ name: c.name, description: c.description })),
       ...(mcp?.prompts ?? []).map((p) => ({
         name: p.command,
@@ -380,7 +381,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     const text = draft.trim();
     if ((!text && pictures.length === 0) || accepting) return;
     const m = modeCommand(text);
-    if (m && (m !== "bypass" || allowBypass)) {
+    if (m && (m !== "bypass" || canBypass)) {
       setDraft("");
       setMode(m);
       return;
@@ -534,7 +535,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           keywords: `mcp ${r.description ?? ""}`,
         }),
       ),
-    ...MODES.filter((m) => m.id !== mode && (m.id !== "bypass" || allowBypass)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
+    ...MODES.filter((m) => m.id !== mode && (m.id !== "bypass" || canBypass)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
     ...(session.providerId ? [act("model", "Switch model…", () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
     act("panel", panelOpen ? "Hide the panel" : "Show the panel", togglePanel, { keywords: "right sidebar" }),
     ...(onClosePane ? [act("close-pane", "Close this pane", onClosePane, { keywords: "workspace split" })] : []),
@@ -701,7 +702,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             <label>
               Mode{" "}
               <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                {MODES.filter((m) => m.id !== "bypass" || allowBypass || mode === "bypass").map((m) => (
+                {MODES.filter((m) => m.id !== "bypass" || canBypass || mode === "bypass").map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>

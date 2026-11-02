@@ -74,7 +74,16 @@ func Open(opts Options) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(opts.Dir, "sessions"), 0o700); err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
-	dsn := "file:" + filepath.Join(opts.Dir, "freeloop.db") +
+	// SQLite gives the WAL and shared-memory files the database's mode, and the
+	// database holds session titles, commands and search text.
+	dbPath := filepath.Join(opts.Dir, "freeloop.db")
+	if f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600); err == nil {
+		f.Close()
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		os.Chmod(dbPath+suffix, 0o600)
+	}
+	dsn := "file:" + dbPath +
 		"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

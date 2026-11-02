@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,14 +64,14 @@ func TestWorktreeSessions(t *testing.T) {
 	if len(c.Files) != 1 || c.Files[0].Path != "a.txt" || c.Branch != a.Branch {
 		t.Errorf("changes in a = %+v", c)
 	}
-	if _, err := e.MergeWorktree(ctx, a.ID); err == nil || !strings.Contains(err.Error(), "uncommitted") {
+	if _, err := e.MergeWorktree(ctx, a.ID, false); err == nil || !strings.Contains(err.Error(), "uncommitted") {
 		t.Errorf("merging uncommitted work = %v", err)
 	}
 	e.StageFiles(ctx, a.ID, []string{"a.txt"}, true)
 	if _, err := e.Commit(ctx, a.ID, "A's change"); err != nil {
 		t.Fatal(err)
 	}
-	res, err := e.MergeWorktree(ctx, a.ID)
+	res, err := e.MergeWorktree(ctx, a.ID, false)
 	if err != nil || res.Into != "main" {
 		t.Fatalf("merge = %+v, %v", res, err)
 	}
@@ -111,5 +112,41 @@ func TestWorktreeSessions(t *testing.T) {
 	}
 	if p, _ := e.store.GetProject(ctx, a.ProjectID); p.WorktreeDefault != "always" {
 		t.Errorf("project = %+v", p)
+	}
+}
+
+// A sandboxed agent cannot write .freeloop, but it can commit it, in ways the
+// status check does not see (security review, 2026-11-02).
+func TestAMergeBringingInHooksAsksFirst(t *testing.T) {
+	ctx := context.Background()
+	repo := gitRepo(t)
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	p, err := e.SetProjectTrust(ctx, repo, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withScript(e, "s", scripted.Step{Text: "hi"})
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: p.Root, ProviderID: "s", Model: "m", Worktree: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", "h=$(printf 'hooks:\\n  - event: session_start\\n    command: touch /tmp/never\\n' | git hash-object -w --stdin) && git update-index --add --cacheinfo 100644,$h,.freeloop/hooks.yaml && git -c user.name=a -c user.email=a@a commit -qm 'update docs' && git update-index --skip-worktree .freeloop/hooks.yaml")
+	cmd.Dir = ses.Worktree
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	risky, err := e.MergeRisks(ctx, ses.ID)
+	if err != nil || len(risky) != 1 || risky[0] != ".freeloop/hooks.yaml" {
+		t.Fatalf("risks = %v, %v", risky, err)
+	}
+	if _, err := e.MergeWorktree(ctx, ses.ID, false); err == nil || !strings.Contains(err.Error(), ".freeloop/hooks.yaml") {
+		t.Fatalf("merged without asking: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".freeloop", "hooks.yaml")); err == nil {
+		t.Fatal("the hook reached the main checkout")
+	}
+	if _, err := e.MergeWorktree(ctx, ses.ID, true); err != nil {
+		t.Errorf("after confirming: %v", err)
 	}
 }

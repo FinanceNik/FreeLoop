@@ -19,6 +19,8 @@ interface Props {
 export default function FilesPanel({ session, gitKey, agentEdits, onError }: Props) {
   const root = session.worktree || session.projectRoot;
   const [folders, setFolders] = useState<Record<string, FileEntry[]>>({});
+  // A folder can be named "constructor" or "__proto__", which any plain object has.
+  const opened = (rel: string) => (Object.hasOwn(folders, rel) ? folders[rel] : undefined);
   const [open, setOpen] = useState<Set<string>>(new Set([""]));
   const [view, setView] = useState<FileView | null>(null);
   const [gitChanged, setGitChanged] = useState<string[]>([]);
@@ -53,7 +55,7 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
     if (next.has(rel)) next.delete(rel);
     else {
       next.add(rel);
-      if (!folders[rel]) load(rel);
+      if (!opened(rel)) load(rel);
     }
     setOpen(next);
   };
@@ -63,7 +65,7 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
       .catch(onError);
 
   const tree = (rel: string, depth: number): ReactElement[] =>
-    (folders[rel] ?? []).flatMap((f) => {
+    (opened(rel) ?? []).flatMap((f) => {
       const mark = marked(f.path, f.isDir);
       const row = (
         <li key={f.path}>

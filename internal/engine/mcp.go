@@ -118,10 +118,18 @@ type SaveMCPServerRequest struct {
 	Server        config.MCPServer  `json:"server"`
 	Secrets       map[string]string `json:"secrets"`
 	RemoveSecrets []string          `json:"removeSecrets"`
+	// imported marks a server from another program's settings.
+	imported bool
 }
 
 func mcpSecretRef(id, name string) secrets.Ref {
 	return secrets.Ref{Service: "freeloop", Account: "mcp/" + id + "/" + name}
+}
+
+// sameDestination reports whether two configurations of a server send what they
+// are given to the same place.
+func sameDestination(a, b config.MCPServer) bool {
+	return a.Transport == b.Transport && a.URL == b.URL && a.Command == b.Command
 }
 
 // SaveMCPServer writes the server into mcp.yaml. Any change to what it runs
@@ -137,8 +145,22 @@ func (e *Engine) SaveMCPServer(req SaveMCPServerRequest) (MCPServerInfo, error) 
 	i := slices.IndexFunc(list, func(x config.MCPServer) bool { return x.ID == s.ID })
 	s.Secrets = map[string]string{}
 	if i >= 0 {
-		maps.Copy(s.Secrets, list[i].Secrets)
 		s.Approved, s.Source = list[i].Approved, list[i].Source
+		// A secret is for the address or command it was given for. Sent on to a
+		// new one, a repository's .mcp.json could collect a stored token, so an
+		// import inherits none unless nothing changed. The user changing a
+		// command's arguments here is still talking to the same program.
+		same := sameDestination(list[i], s)
+		if req.imported {
+			same = same && slices.Equal(list[i].Args, s.Args)
+		}
+		if same {
+			maps.Copy(s.Secrets, list[i].Secrets)
+		} else {
+			for name := range list[i].Secrets {
+				e.secrets.Delete(mcpSecretRef(s.ID, name))
+			}
+		}
 	}
 	for _, name := range req.RemoveSecrets {
 		delete(s.Secrets, name)
@@ -308,7 +330,7 @@ func (e *Engine) startSessionServers(prof config.Profile) {
 		e.bg.Go(func() {
 			defer wg.Done()
 			if err := e.StartMCPServer(context.Background(), s.ID); err != nil {
-				log.Printf("engine: MCP server %s: %v", s.ID, err)
+				log.Printf("engine: MCP server %s: %s", s.ID, e.redactText(err.Error()))
 			}
 		})
 	}

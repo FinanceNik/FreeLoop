@@ -146,10 +146,25 @@ var blanks = regexp.MustCompile(`[ \t]+`)
 // shell treats as command separators.
 func exactForm(cmd string) string { return strings.TrimSpace(blanks.ReplaceAllString(cmd, " ")) }
 
-// wrappers run the command that follows them.
-var wrappers = []string{"env", "command", "exec", "nohup", "time", "builtin", "nice", "sudo", "doas"}
+// wrappers run the command that follows them, with the options that take a
+// separate value, which must not be read as the command.
+var wrappers = map[string]string{
+	"env": "uCS", "command": "", "exec": "a", "nohup": "", "time": "fo", "builtin": "", "nice": "n", "sudo": "ughpCrtUD", "doas": "uC",
+	"ionice": "cnp", "stdbuf": "ioe", "caffeinate": "tw", "xargs": "EILPdnsJR", "watch": "n", "timeout": "ks",
+}
 
-var shellC = regexp.MustCompile(`^(?:\S*/)?(?:sh|bash|zsh|dash|ksh)\s+-[a-z]*c[a-z]*\s+(.*)$`)
+// keywords come before a command without being one.
+var keywords = []string{"!", "if", "then", "elif", "else", "do", "while", "until", "time"}
+
+var shellC = regexp.MustCompile(`^(?:\S*/)?(?:sh|bash|zsh|dash|ksh)\s+(?:--?[a-zA-Z-]+\s+)*?-[a-z]*c[a-z]*\s+(.*)$`)
+
+// substitution finds what $(...) and backticks run.
+var substitution = regexp.MustCompile("\\$\\(([^()]*)\\)|`([^`]*)`")
+
+// unquoted is how the shell reads a word's plain spelling: 'rm', "rm" and r\m are rm.
+func unquoted(word string) string {
+	return strings.NewReplacer("'", "", `"`, "", `\`, "").Replace(word)
+}
 
 // simpleCommands returns the commands a line runs, unwrapped for matching
 // deny rules: each segment between operators, without enclosing
@@ -158,18 +173,36 @@ var shellC = regexp.MustCompile(`^(?:\S*/)?(?:sh|bash|zsh|dash|ksh)\s+-[a-z]*c[a
 // recursively.
 func simpleCommands(cmd string, depth int) []string {
 	var out []string
+	if depth < 3 {
+		for _, m := range substitution.FindAllStringSubmatch(cmd, -1) {
+			out = append(out, simpleCommands(m[1]+m[2], depth+1)...)
+		}
+	}
 	for _, seg := range segments(cmd) {
 		seg = strings.Trim(seg, "(){} \t'\"")
 		fields := strings.Fields(seg)
 		for len(fields) > 0 {
-			f := fields[0]
+			f := unquoted(fields[0])
+			valued, wrapper := wrappers[filepath.Base(f)]
 			switch {
+			case slices.Contains(keywords, f):
+				fields = fields[1:]
 			case strings.Contains(f, "=") && !strings.HasPrefix(f, "="):
 				fields = fields[1:] // VAR=value
-			case slices.Contains(wrappers, strings.TrimPrefix(f, "\\")):
+			case wrapper:
 				fields = fields[1:]
+				// Wrapper options such as env -i, and those with a value, such as
+				// env -u NAME and sudo -u root.
 				for len(fields) > 0 && strings.HasPrefix(fields[0], "-") {
-					fields = fields[1:] // wrapper options such as env -i
+					takes := len(fields[0]) == 2 && strings.ContainsRune(valued, rune(fields[0][1]))
+					fields = fields[1:]
+					if takes && len(fields) > 0 {
+						fields = fields[1:]
+					}
+				}
+				// timeout's first word is the time.
+				if filepath.Base(f) == "timeout" && len(fields) > 0 {
+					fields = fields[1:]
 				}
 			default:
 				goto done
@@ -179,7 +212,7 @@ func simpleCommands(cmd string, depth int) []string {
 		if len(fields) == 0 {
 			continue
 		}
-		fields[0] = filepath.Base(strings.TrimPrefix(fields[0], "\\"))
+		fields[0] = filepath.Base(unquoted(fields[0]))
 		simple := strings.Join(fields, " ")
 		out = append(out, simple)
 		if g := withoutGitOptions(fields); g != "" {
@@ -270,10 +303,10 @@ func (r Rule) matchPath(root, p string) bool {
 	pattern := r.Path
 	if r.Literal {
 		if filepath.IsAbs(pattern) {
-			return strings.EqualFold(filepath.Clean(pattern), p)
+			return environment.FoldPath(filepath.Clean(pattern)) == environment.FoldPath(p)
 		}
 		for _, rt := range canonical(root) {
-			if strings.EqualFold(filepath.Join(rt, filepath.FromSlash(pattern)), p) {
+			if environment.FoldPath(filepath.Join(rt, filepath.FromSlash(pattern))) == environment.FoldPath(p) {
 				return true
 			}
 		}
@@ -281,9 +314,9 @@ func (r Rule) matchPath(root, p string) bool {
 	}
 	// Globs ignore case, as macOS volumes do, so SECRETS/key is secrets/key.
 	if filepath.IsAbs(pattern) {
-		name := strings.ToLower(strings.TrimPrefix(filepath.ToSlash(p), "/"))
+		name := environment.FoldPath(strings.TrimPrefix(filepath.ToSlash(p), "/"))
 		for _, pat := range absSpellings(pattern) {
-			if environment.MatchGlob(strings.ToLower(strings.TrimPrefix(filepath.ToSlash(pat), "/")), name) {
+			if environment.MatchGlob(environment.FoldPath(strings.TrimPrefix(filepath.ToSlash(pat), "/")), name) {
 				return true
 			}
 		}
@@ -291,8 +324,8 @@ func (r Rule) matchPath(root, p string) bool {
 	}
 	for _, rt := range canonical(root) {
 		if within(p, rt) {
-			rel := strings.TrimPrefix(p[len(rt):], string(filepath.Separator))
-			return environment.MatchGlob(strings.ToLower(pattern), strings.ToLower(filepath.ToSlash(rel)))
+			rel := strings.TrimPrefix(environment.FoldPath(p)[len(environment.FoldPath(rt)):], string(filepath.Separator))
+			return environment.MatchGlob(environment.FoldPath(pattern), filepath.ToSlash(rel))
 		}
 	}
 	return false
@@ -448,6 +481,10 @@ func RuleFor(req Request, root string, scope Scope) (Rule, bool) {
 			}
 		}
 	case len(req.Paths) > 1, req.Kind == KindExecute:
+		return r, false
+	case strings.HasPrefix(req.Tool, "acp:"), slices.Contains([]string{"edit_file", "read_file", "grep"}, req.Tool):
+		// An external agent's tool is known only by its kind: "always" for reading
+		// one calendar event would also have allowed deleting every calendar.
 		return r, false
 	}
 	return r, true

@@ -69,8 +69,7 @@ func New(opts Options) *Provider {
 		HTTPOptions: genai.HTTPOptions{BaseURL: opts.BaseURL, Headers: hdr},
 	}
 	if cc.HTTPClient == nil {
-		// http.DefaultTransport, so local-only mode covers it (NFR-OFF-003).
-		cc.HTTPClient = &http.Client{}
+		cc.HTTPClient = provider.KeyClient()
 	}
 	p.client, p.err = genai.NewClient(context.Background(), cc)
 	return p

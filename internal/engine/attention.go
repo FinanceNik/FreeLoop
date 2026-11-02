@@ -39,6 +39,8 @@ func (e *Engine) Attention(ctx context.Context) ([]AttentionItem, error) {
 	}
 	pending := map[string][]permission.Request{}
 	for _, r := range e.broker.Pending() {
+		// The transcript shows these redacted; so does this.
+		r.Title, r.Command = e.redactText(r.Title), e.redactText(r.Command)
 		pending[r.SessionID] = append(pending[r.SessionID], r)
 	}
 	out := []AttentionItem{}

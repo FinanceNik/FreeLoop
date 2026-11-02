@@ -48,9 +48,11 @@ func New(opts Options) *Provider {
 	for k, v := range opts.Headers {
 		ro = append(ro, option.WithHeader(k, v))
 	}
-	if opts.HTTPClient != nil {
-		ro = append(ro, option.WithHTTPClient(opts.HTTPClient))
+	client := opts.HTTPClient
+	if client == nil {
+		client = provider.KeyClient()
 	}
+	ro = append(ro, option.WithHTTPClient(client))
 	return &Provider{id: opts.ID, client: sdk.NewClient(ro...)}
 }
 

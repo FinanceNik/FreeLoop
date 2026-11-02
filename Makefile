@@ -70,7 +70,7 @@ verify-agents: ## Run the HRN-005 scenario with each preset's real agent on a lo
 	scripts/verify-agents.sh
 
 test-keychain: ## Run the Keychain backend test against the real login keychain
-	FREELOOP_KEYCHAIN_TEST=1 go test -count=1 -run '^TestKeychain$$' ./internal/platform/darwin/
+	FREELOOP_KEYCHAIN_TEST=1 go test -count=1 -run '^(TestKeychain|TestSeatbeltClosesTheKeychain)$$' ./internal/platform/darwin/
 
 frontend-test: frontend/node_modules
 	cd frontend && npm test

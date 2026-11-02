@@ -77,3 +77,30 @@ func TestRestoreDropsApprovals(t *testing.T) {
 		t.Errorf("mcp.yaml = %s", got)
 	}
 }
+
+// A key spelled another way kept its approval past the check (security review,
+// 2026-11-02).
+func TestARestoredBackupKeepsNoMCPApproval(t *testing.T) {
+	s := MCPServer{ID: "evil", Transport: "stdio", Command: "/bin/sh", Args: []string{"-c", "id"}, Enabled: true}
+	crafted := "version: 1\nservers:\n  - !!binary aWQ=: evil\n    transport: stdio\n    command: /bin/sh\n    args: [\"-c\", \"id\"]\n    enabled: true\n    approved: " + s.Fingerprint() + "\n"
+	bundle, _ := json.Marshal(Bundle{Format: BundleFormat, Version: 1, Files: map[string]string{MCPFileName: crafted}})
+	dir := t.TempDir()
+	if _, err := ImportBundle(dir, bundle); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := LoadMCP(dir)
+	if err != nil || len(got) != 1 || got[0].Approved != "" {
+		t.Errorf("restored = %+v, %v", got, err)
+	}
+}
+
+func TestAProjectProfileCannotWiden(t *testing.T) {
+	for _, body := range []string{"name: p\nmcpServers: [off]\n", "name: p\nharness: claude-code\n", "name: p\nfallback: {provider: x, model: y}\n"} {
+		if _, issue := ParseProjectProfile("p", []byte(body), nil, "repo"); issue == nil {
+			t.Errorf("accepted:\n%s", body)
+		}
+	}
+	if _, issue := ParseProjectProfile("p", []byte("name: p\nmode: plan\n"), nil, "repo"); issue != nil {
+		t.Errorf("an ordinary profile: %+v", issue)
+	}
+}

@@ -286,7 +286,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 			if fp, err := e.provider(f.Provider); err == nil {
 				params.Fallback = &harness.Fallback{Provider: e.limit(fp, sid), Model: f.Model}
 			} else {
-				log.Printf("engine: the fallback of profile %s: %v", prof.ID, err)
+				log.Printf("engine: the fallback of profile %s: %s", prof.ID, e.redactText(err.Error()))
 			}
 		}
 		if caps, err := e.ModelCapabilities(ctx, ses.ProviderID, ses.Model, false); err == nil {
@@ -467,7 +467,7 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 		p.Resources = append(p.Resources, e.readResources(ctx, r, q.refs)...)
 		_, err := r.hs.Prompt(ctx, p)
 		if err != nil {
-			log.Printf("engine: prompt: %v", err)
+			log.Printf("engine: prompt: %s", e.redactText(err.Error()))
 		}
 		r.mu.Lock()
 		r.cancel()
@@ -547,6 +547,15 @@ func (e *Engine) SetMode(ctx context.Context, sid, mode string) error {
 	}
 	if m == permission.ModeBypass && !e.Config().Permissions.AllowBypass {
 		return errors.New("bypass mode is off; set permissions.allowBypass: true in config.yaml to allow it")
+	}
+	if m == permission.ModeBypass {
+		ses, err := e.store.GetSession(ctx, sid)
+		if err != nil {
+			return err
+		}
+		if !e.trusted(ses.ProjectID) {
+			return errors.New("bypass mode is not available in a project you have not trusted")
+		}
 	}
 	e.mu.Lock()
 	r, ok := e.runtimes[sid]

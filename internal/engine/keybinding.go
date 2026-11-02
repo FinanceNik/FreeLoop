@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -23,14 +24,15 @@ import (
 // Keychain together with the address the user gave it for, which a file cannot
 // change, and is sent nowhere else until the user says so in the app.
 
-// boundSecret is what a Keychain item holds for a key tied to an address.
+// boundSecret is what a Keychain item holds for a key tied to an address. The
+// address can be empty: a search key entered before its address is.
 type boundSecret struct {
-	Address string `json:"freeloopAddress"`
-	Key     string `json:"key"`
+	Address *string `json:"freeloopAddress"`
+	Key     string  `json:"key"`
 }
 
 func bindSecret(address, key string) string {
-	b, _ := json.Marshal(boundSecret{Address: address, Key: key})
+	b, _ := json.Marshal(boundSecret{Address: &address, Key: key})
 	return string(b)
 }
 
@@ -38,8 +40,8 @@ func bindSecret(address, key string) string {
 // had addresses, or by hand: the whole value is the key.
 func unbindSecret(stored string) (address, key string, bound bool) {
 	var s boundSecret
-	if json.Unmarshal([]byte(stored), &s) == nil && s.Address != "" && s.Key != "" {
-		return s.Address, s.Key, true
+	if json.Unmarshal([]byte(stored), &s) == nil && s.Address != nil && s.Key != "" {
+		return *s.Address, s.Key, true
 	}
 	return "", stored, false
 }
@@ -267,4 +269,50 @@ func (e *Engine) approvalKey() ([]byte, error) {
 	}
 	e.approvalSecret = []byte(stored)
 	return e.approvalSecret, nil
+}
+
+// credentialParam matches a query parameter that holds a credential.
+var credentialParam = regexp.MustCompile(`(?i)^(.*[_-])?(key|apikey|token|secret|password|passwd|pwd|auth|sig|signature)$`)
+
+// credentialsIn returns the credential-like values in an address's query and
+// userinfo. A {key} or {query} placeholder is not one.
+func credentialsIn(u *url.URL) []string {
+	var out []string
+	if u.User != nil {
+		if p, ok := u.User.Password(); ok && p != "" {
+			out = append(out, p)
+		}
+		if n := u.User.Username(); n != "" {
+			out = append(out, n)
+		}
+	}
+	for name, values := range u.Query() {
+		if credentialParam.MatchString(name) {
+			for _, v := range values {
+				if v != "" && v != "{key}" && v != "{query}" {
+					out = append(out, v)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// checkAddress refuses an address holding a credential: config files are not a
+// place for one, a backup carries them, and it would show in errors.
+func checkAddress(what, raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("%s is not an address: %w", what, err)
+	}
+	if u.User != nil {
+		return fmt.Errorf("%s holds a user name or password; those go in the Keychain, not in the address", what)
+	}
+	if len(credentialsIn(u)) > 0 {
+		return fmt.Errorf("%s holds a key in its query; enter the key separately so it stays in the Keychain", what)
+	}
+	return nil
 }

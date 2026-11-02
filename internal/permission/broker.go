@@ -341,6 +341,11 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 
 	switch pc.Mode {
 	case ModeBypass:
+		// Leaving the sandbox asks every time, whatever the mode: a user who chose
+		// a sandbox has not chosen to let the model walk out of it.
+		if req.LeavesSandbox {
+			return Decision{}, false
+		}
 		return allow(ActorMode, "bypass mode")
 	case ModePlan:
 		switch {
@@ -359,9 +364,14 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		}
 	}
 	if req.Kind == KindExecute && req.Contained != "" {
+		// Nothing else stands between the model and a deny rule here, and the rule
+		// reads a line that may hide its command in an expansion.
+		if !plain(req.Command) && slices.ContainsFunc(rules, func(r Rule) bool { return r.Effect == Deny && r.Tool == "shell" && r.Command != "" }) {
+			return Decision{}, false
+		}
 		return allow(ActorSandbox, "it runs in the sandbox")
 	}
-	if pc.Mode == ModeAcceptEdits && req.Kind.writes() && len(req.Paths) > 0 && !outside {
+	if pc.Mode == ModeAcceptEdits && req.Kind.writes() && len(req.Paths) > 0 && !outside && !b.policy.actedOn(pc.Root, req.Paths) {
 		return allow(ActorMode, "accept-edits mode allows edits inside the project")
 	}
 
