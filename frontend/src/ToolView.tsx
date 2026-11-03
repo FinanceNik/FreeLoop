@@ -47,7 +47,7 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
   }, [waiting, item.permission, reason, scope]);
 
   // A token optimizer ran this command in a shorter form (HRN-019).
-  const via = item.content.find((c) => c.via)?.via;
+  const via = item.via ?? item.content.find((c) => c.via)?.via;
   const plan = item.tool === "present_plan" ? String((item.input as { plan?: string } | null)?.plan ?? "") : null;
 
   return (

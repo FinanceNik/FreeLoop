@@ -146,8 +146,6 @@ func (p Profile) Validate() error {
 		return fieldErr("instructions", "%q must be project or none", p.Instructions)
 	case p.Optimizer != "" && !idPattern.MatchString(p.Optimizer):
 		return fieldErr("optimizer", "%q must be off or the ID of a token optimizer", p.Optimizer)
-	case p.Optimizer != "" && p.Optimizer != OptimizerOff && p.Harness != "" && p.Harness != "builtin":
-		return fieldErr("optimizer", "only the built-in harness can use one; an external agent runs its commands itself")
 	}
 	for i, r := range p.Rules {
 		if err := r.Validate(); err != nil {

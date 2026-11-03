@@ -9,6 +9,7 @@ import (
 	"maps"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -75,6 +76,11 @@ type OptimizerStatus struct {
 	Install string `json:"install"`
 	// Path is where the program is on the user's PATH; empty when it is not.
 	Path string `json:"path"`
+	// CanDownload says the app can install it, and Download describes what from.
+	CanDownload bool   `json:"canDownload"`
+	Download    string `json:"download"`
+	// Downloaded says Path is the app's own copy.
+	Downloaded bool `json:"downloaded"`
 	// NeedsApproval is set for a file the user has not approved as it is now;
 	// Runs says what it would run, and Fingerprint is what to approve.
 	NeedsApproval bool   `json:"needsApproval"`
@@ -89,11 +95,24 @@ func (e *Engine) ListOptimizers(ctx context.Context) []OptimizerStatus {
 	for _, o := range e.optimizerList() {
 		st := OptimizerStatus{ID: o.ID, Name: o.Name, Source: o.Source, Install: o.Install, NeedsApproval: !e.optimizerApproved(o), Runs: describeOptimizer(o), Fingerprint: o.Fingerprint()}
 		if err == nil {
-			st.Path = locateProgram(ctx, env, o.Program)
+			st.Path = e.findProgram(ctx, env, o)
 		}
+		st.Downloaded = st.Path != "" && st.Path == e.downloadedProgram(o)
+		st.CanDownload, st.Download = downloadNote(o)
 		out = append(out, st)
 	}
 	return out
+}
+
+// downloadNote says what installing an optimizer from the app would fetch.
+func downloadNote(o config.Optimizer) (bool, string) {
+	if o.Download == nil {
+		return false, ""
+	}
+	if _, ok := o.Download.Assets[goruntime.GOARCH]; !ok {
+		return false, ""
+	}
+	return true, fmt.Sprintf("Downloads %s %s (%s) from its GitHub releases and checks it. It stays in Freeloop's own folder, and only sessions that choose it use it.", o.Name, o.Download.Version, o.Download.License)
 }
 
 // describeOptimizer says what an optimizer runs, for the user to approve.
@@ -210,9 +229,9 @@ func (e *Engine) chooseOptimizer(ctx context.Context, req CreateSessionRequest, 
 		return "", nil
 	}
 	asked := req.optimizer == "" && req.Optimizer != ""
-	if harnessID != builtin.ID {
+	if harnessID != builtin.ID && !e.agentTakesOptimizer(harnessID, envCfg) {
 		if asked {
-			return "", errors.New("only built-in sessions can use a token optimizer; an external agent runs its commands itself")
+			return "", errors.New("this agent cannot use a token optimizer: it runs its commands itself, with no hook to rewrite them")
 		}
 		return "", nil
 	}
@@ -244,10 +263,14 @@ type OptimizerInfo struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Available bool   `json:"available"`
-	// Reason says why it is not available, and Install what to type about it,
-	// when typing can help.
-	Reason  string `json:"reason"`
-	Install string `json:"install"`
+	// Reason says why it is not available, Install what to type about it, when
+	// typing can help, and Download what the app can fetch instead.
+	Reason      string `json:"reason"`
+	Install     string `json:"install"`
+	CanDownload bool   `json:"canDownload"`
+	Download    string `json:"download"`
+	// Warning says what about this optimizer the session's switch does not decide.
+	Warning string `json:"warning"`
 }
 
 // Optimizers lists the token optimizers a session can use. It only looks for
@@ -264,16 +287,17 @@ func (e *Engine) Optimizers(ctx context.Context, sid string) ([]OptimizerInfo, e
 	}
 	var out []OptimizerInfo
 	for _, o := range e.optimizerList() {
-		info := OptimizerInfo{ID: o.ID, Name: o.Name}
+		info := OptimizerInfo{ID: o.ID, Name: o.Name, Warning: e.ownHookWarning(ses, o)}
 		switch {
-		case ses.HarnessID != builtin.ID:
+		case !e.sessionTakesOptimizer(ses):
 			info.Reason = externalAgentReason(o)
 		case !e.optimizerApproved(o):
 			info.Reason = notApprovedReason(o)
 		case e.inContainer(ses):
 			info.Available = true // only a command in it can tell
-		case locateProgram(ctx, env, o.Program) == "":
+		case e.findProgram(ctx, env, o) == "":
 			info.Reason, info.Install = notInstalledReason(o), o.Install
+			info.CanDownload, info.Download = downloadNote(o)
 		default:
 			info.Available = true
 		}
@@ -335,7 +359,58 @@ func (e *Engine) TypeOptimizerInstall(ctx context.Context, sid, id string) (Term
 }
 
 func externalAgentReason(o config.Optimizer) string {
-	return fmt.Sprintf("%s is not available here: this agent runs its commands itself, so Freeloop cannot rewrite them.", o.Name)
+	return fmt.Sprintf("%s is not available here: this agent runs its commands itself and has no hook for Freeloop to rewrite them with. Claude Code sessions and the built-in agent can use it.", o.Name)
+}
+
+// sessionTakesOptimizer reports a session whose commands an optimizer can reach:
+// the built-in agent's always, an external agent's through a hook.
+func (e *Engine) sessionTakesOptimizer(ses session.Session) bool {
+	if ses.HarnessID == builtin.ID {
+		return true
+	}
+	cfg, err := e.environment(cmp.Or(ses.EnvironmentID, DefaultEnvironmentID))
+	return err == nil && e.agentTakesOptimizer(ses.HarnessID, cfg)
+}
+
+// agentTakesOptimizer reports an external agent with a hook Freeloop can use. In a
+// container the agent cannot reach the app's socket or program.
+func (e *Engine) agentTakesOptimizer(harnessID string, env config.Environment) bool {
+	if e.hookProgram == "" || env.Kind == string(environment.KindDocker) {
+		return false
+	}
+	p, err := e.preset(harnessID)
+	return err == nil && p.TakesCommandHook()
+}
+
+// ownHookWarning names an optimizer's own hook in the agent's settings: Freeloop
+// only reads that file, so the hook runs whatever is chosen here, and such a hook
+// may approve commands by itself (OQ-029).
+func (e *Engine) ownHookWarning(ses session.Session, o config.Optimizer) string {
+	if p, err := e.preset(ses.HarnessID); err != nil || !p.TakesCommandHook() {
+		return ""
+	}
+	var settings struct {
+		Hooks struct {
+			PreToolUse []struct {
+				Hooks []struct {
+					Command string `json:"command"`
+				} `json:"hooks"`
+			} `json:"PreToolUse"`
+		} `json:"hooks"`
+	}
+	path, ok, err := e.readHomeJSON(filepath.Join(".claude", "settings.json"), &settings)
+	if !ok || err != nil {
+		return ""
+	}
+	own := regexp.MustCompile(`(^|[^A-Za-z0-9_-])` + regexp.QuoteMeta(o.Program) + `([^A-Za-z0-9_]|$)`)
+	for _, group := range settings.Hooks.PreToolUse {
+		for _, h := range group.Hooks {
+			if own.MatchString(h.Command) {
+				return fmt.Sprintf("%s has its own hook in %s, and Freeloop does not change that file. It rewrites this agent's commands whatever you choose here, and it can approve commands without asking you. Remove it there if this switch should decide.", o.Name, path)
+			}
+		}
+	}
+	return ""
 }
 
 func notInstalledReason(o config.Optimizer) string {
@@ -357,7 +432,7 @@ func (e *Engine) inContainer(ses session.Session) bool {
 // be used. A container that is not running cannot be asked; its first command
 // finds out.
 func (e *Engine) checkForSession(ctx context.Context, ses session.Session, o config.Optimizer) string {
-	if ses.HarnessID != builtin.ID {
+	if !e.sessionTakesOptimizer(ses) {
 		return externalAgentReason(o)
 	}
 	if !e.optimizerApproved(o) {
@@ -425,7 +500,7 @@ func (e *Engine) probeOptimizer(ctx context.Context, env environment.Environment
 		p.reason = notApprovedReason(o)
 		return p
 	}
-	path := locateProgram(ctx, env, o.Program)
+	path := e.findProgram(ctx, env, o)
 	if path == "" {
 		p.reason = notInstalledReason(o)
 		return p
@@ -434,7 +509,7 @@ func (e *Engine) probeOptimizer(ctx context.Context, env environment.Environment
 		p.reason = fmt.Sprintf("%s was found inside the project, at %s, which the repository could change, so it is not used.", o.Program, path)
 		return p
 	}
-	got, err := runRewrite(ctx, env, o, path, o.ProbeCommand, probeTimeout)
+	got, err := runRewrite(ctx, env, o, path, o.ProbeCommand, probeTimeout, false)
 	if err != nil || got != o.ProbeWant {
 		p.reason = fmt.Sprintf("%s at %s does not rewrite commands as %s does, so it may be another program with the same name, or the session's environment may keep it from running.", o.Program, path, o.Name)
 		return p
@@ -451,14 +526,22 @@ func (e *Engine) probeOptimizer(ctx context.Context, env environment.Environment
 // runRewrite asks the program for a command's rewrite: "" when it has none, an
 // error when it did not answer. Only standard output counts, since standard
 // error carries its warnings.
-func runRewrite(ctx context.Context, env environment.Environment, o config.Optimizer, path, command string, limit time.Duration) (string, error) {
+func runRewrite(ctx context.Context, env environment.Environment, o config.Optimizer, path, command string, limit time.Duration, forAgent bool) (string, error) {
 	// Without a home it reads no agent's settings: what may run is the broker's
 	// business.
 	vars := map[string]string{}
 	maps.Copy(vars, o.Env)
-	vars["HOME"] = "/nonexistent"
+	cwd := neutralDir
+	if forAgent {
+		// An agent's own deny rules are the program's to read and honour: a rewrite
+		// goes before the agent decides, and would otherwise slip past them. The
+		// program cannot approve anything here, since only the command comes back.
+		cwd = env.Root()
+	} else {
+		vars["HOME"] = "/nonexistent"
+	}
 	argv := append(append([]string{path}, o.Rewrite...), command)
-	res, err := env.Exec(ctx, environment.ExecSpec{Argv: argv, Env: vars, Cwd: neutralDir, Timeout: limit, MaxOutput: 1 << 16, SeparateStderr: true, ReadOnly: true})
+	res, err := env.Exec(ctx, environment.ExecSpec{Argv: argv, Env: vars, Cwd: cwd, Timeout: limit, MaxOutput: 1 << 16, SeparateStderr: true, ReadOnly: true})
 	if err != nil {
 		return "", err
 	}
@@ -477,9 +560,78 @@ type sessionOptimizer struct {
 	sid string
 	env environment.Environment
 
+	// agent is an external agent's session, reached through its hook.
+	agent bool
+
 	mu     sync.Mutex
 	probes map[string]optimizerProbe
 	warned map[string]bool
+	// made maps a command given to an agent's hook back to what the model wrote.
+	made map[string]madeCommand
+}
+
+// madeCommand is a rewrite given to an agent.
+type madeCommand struct {
+	original, via string
+}
+
+// maxMade bounds what a long session remembers; the agent asks right after.
+const maxMade = 512
+
+// Original implements harness.CommandOptimizer.
+func (s *sessionOptimizer) Original(command string) (string, string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.made[command]
+	return m.original, m.via, ok
+}
+
+// forAgent is the hook's answer for a shell command: what to run instead, or "".
+// It carries what the command needs with it, since the agent's process started
+// before the user chose this, and its environment is its own.
+func (s *sessionOptimizer) forAgent(ctx context.Context, command string) string {
+	rw := s.Rewrite(ctx, command, false)
+	if rw.Via == "" {
+		return ""
+	}
+	o, ok := s.e.findOptimizer(mustSession(ctx, s))
+	if !ok {
+		return ""
+	}
+	p := s.probe(ctx, o, false)
+	exports := []string{"PATH=" + shellQuote(filepath.Dir(p.path)) + `:"$PATH"`}
+	for _, name := range slices.Sorted(maps.Keys(rw.Env)) {
+		exports = append(exports, name+"="+shellQuote(rw.Env[name]))
+	}
+	made := "export " + strings.Join(exports, " ") + "; " + rw.Shown
+	s.mu.Lock()
+	if s.made == nil || len(s.made) >= maxMade {
+		s.made = map[string]madeCommand{}
+	}
+	s.made[made] = madeCommand{original: command, via: rw.Via}
+	s.mu.Unlock()
+	return made
+}
+
+// mustSession is the optimizer the session has now.
+func mustSession(ctx context.Context, s *sessionOptimizer) string {
+	ses, err := s.e.store.GetSession(ctx, s.sid)
+	if err != nil {
+		return ""
+	}
+	return ses.Optimizer
+}
+
+// RewriteForAgent is what an external agent's hook asks (HRN-019). "" leaves the
+// command as it is, and so does anything that goes wrong.
+func (e *Engine) RewriteForAgent(ctx context.Context, sid, command string) (string, error) {
+	e.mu.Lock()
+	r := e.runtimes[sid]
+	e.mu.Unlock()
+	if r == nil || r.optimizer == nil || !r.optimizer.agent {
+		return "", nil
+	}
+	return r.optimizer.forAgent(ctx, command), nil
 }
 
 func (s *sessionOptimizer) probe(ctx context.Context, o config.Optimizer, fresh bool) optimizerProbe {
@@ -577,7 +729,7 @@ func (s *sessionOptimizer) Rewrite(ctx context.Context, command string, raw bool
 	if raw || !rewritable(command, o) {
 		return out
 	}
-	rewritten, err := runRewrite(ctx, s.env, o, p.path, command, rewriteTimeout)
+	rewritten, err := runRewrite(ctx, s.env, o, p.path, command, rewriteTimeout, s.agent)
 	if err != nil {
 		// A stopped turn is not the program's failing.
 		if ctx.Err() == nil {
@@ -586,7 +738,11 @@ func (s *sessionOptimizer) Rewrite(ctx context.Context, command string, raw bool
 		return harness.Rewrite{Command: command}
 	}
 	if rewritten != command && validRewrite(command, rewritten, o) {
-		out.Command, out.Via = rewritten, o.Name
+		out.Command, out.Via, out.Shown = rewritten, o.Name, rewritten
+		// The app's own copy is on no PATH, so the command brings it.
+		if p.path == s.e.downloadedProgram(o) {
+			out.Command = "export PATH=" + shellQuote(filepath.Dir(p.path)) + `:"$PATH"; ` + rewritten
+		}
 	}
 	return out
 }

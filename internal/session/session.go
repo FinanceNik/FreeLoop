@@ -64,6 +64,9 @@ type Session struct {
 	// Optimizer is the token optimizer the session's shell commands go
 	// through (HRN-019), set by optimizer_changed events; empty for none.
 	Optimizer string `json:"optimizer"`
+	// Effort is what the user chose for this session (PRV-014), set by
+	// effort_changed events; empty takes the profile's.
+	Effort string `json:"effort"`
 	// PortBase is the first of ten ports a worktree session's commands
 	// get as FREELOOP_PORT (SES-016); 0 for none.
 	PortBase  int       `json:"portBase"`

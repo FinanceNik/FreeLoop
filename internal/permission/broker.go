@@ -83,6 +83,10 @@ type Request struct {
 	// it needs no approval (ENV-009). Only a caller that runs the command
 	// itself can promise that; an ACP agent's own request never can.
 	Contained Containment `json:"contained,omitempty"`
+	// RewrittenReadOnly says the command is one the agent would not have asked
+	// about before a token optimizer rewrote it, and that only reads (HRN-019). Only
+	// a caller holding the original can say so, and Command is that original.
+	RewrittenReadOnly bool `json:"rewrittenReadOnly,omitempty"`
 	// LeavesSandbox asks to run a command outside the sandbox: no rule covers
 	// it, so it always reaches the user.
 	LeavesSandbox bool      `json:"leavesSandbox,omitempty"`
@@ -354,6 +358,8 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		case req.Kind.reads() || req.Kind == KindThink:
 		case req.Kind == KindExecute && req.Contained == ContainedReadOnly:
 			return allow(ActorSandbox, "it runs in the sandbox, read-only")
+		case req.Kind == KindExecute && req.RewrittenReadOnly:
+			return allow(ActorPolicy, "it only reads inside the project")
 		default:
 			return deny(ActorMode, "plan mode is read-only until the plan is approved")
 		}
@@ -362,6 +368,9 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		if r := match(Allow); r != nil {
 			return byRule(r)
 		}
+	}
+	if req.Kind == KindExecute && req.RewrittenReadOnly {
+		return allow(ActorPolicy, "it only reads inside the project")
 	}
 	if req.Kind == KindExecute && req.Contained != "" {
 		// Nothing else stands between the model and a deny rule here, and the rule

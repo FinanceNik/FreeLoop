@@ -65,8 +65,24 @@ type Optimizer struct {
 	// Install tells the user how to get the program. It is typed into a
 	// terminal for them to read and run.
 	Install string `yaml:"install,omitempty"`
+	// Download is what the app can fetch for the user; a file cannot name one.
+	Download *OptimizerDownload `yaml:"-"`
 	// Source is the file it came from; empty for a built-in one.
 	Source string `yaml:"-"`
+}
+
+// OptimizerDownload is a program the app can install itself, pinned by checksum.
+type OptimizerDownload struct {
+	Version string
+	License string
+	// Assets are .tar.gz builds by Go's name for the architecture.
+	Assets map[string]OptimizerAsset
+}
+
+// OptimizerAsset is one build.
+type OptimizerAsset struct {
+	URL    string
+	SHA256 string
 }
 
 // BuiltinOptimizers are the optimizers every install offers.
@@ -96,6 +112,12 @@ func BuiltinOptimizers() []Optimizer {
 		// session goes.
 		DataEnv: map[string]string{"RTK_DB_PATH": "tracking.db", "RTK_RECALL_DB": "recall.db"},
 		Install: "brew install rtk",
+		// The edition without RTK's BUSL-licensed engine. Hashes from the release's
+		// checksums.txt.
+		Download: &OptimizerDownload{Version: "1.1.0", License: "Apache-2.0", Assets: map[string]OptimizerAsset{
+			"arm64": {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-aarch64-apple-darwin.tar.gz", SHA256: "1623590dd8d65374f61589c599c764c08ba9ce993ebe6b601312a89a3c874558"},
+			"amd64": {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-x86_64-apple-darwin.tar.gz", SHA256: "559156238dd3e148c84c88c3a62a7594b874f68793208994e1b02e77a9d9abf9"},
+		}},
 	}}
 }
 
@@ -158,7 +180,7 @@ func (o Optimizer) varPrefix() string {
 // Fingerprint identifies what the optimizer runs. A file's optimizer runs only
 // after the user approved exactly this (HRN-019).
 func (o Optimizer) Fingerprint() string {
-	o.Source = ""
+	o.Source, o.Download = "", nil
 	b, err := json.Marshal(o)
 	if err != nil {
 		return ""

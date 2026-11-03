@@ -66,6 +66,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "optimizer-hook" {
+		runOptimizerHook(os.Args[2:], os.Stdin, os.Stdout)
+		return
+	}
 	// With a command, the binary is the command line for a running app
 	// (EXT-004).
 	if len(os.Args) > 1 && isCommand(os.Args[1]) {
@@ -83,8 +87,13 @@ func main() {
 	// Reloads can happen before the app exists; they wait here.
 	configChanges := make(chan engine.ConfigChange, 16)
 	notices := make(chan engine.Notice, 64)
+	hookProgram, err := os.Executable()
+	if err != nil {
+		log.Printf("freeloop: external agents get no token optimizer: %v", err)
+	}
 	eng, err := engine.Open(engine.Options{
-		DataDir: dataDir, Secrets: secretStore(), Confiner: darwin.Seatbelt{}, EditorArgv: darwin.EditorArgv, Dev: os.Getenv("FREELOOP_DEV") == "1",
+		HookProgram: hookProgram,
+		DataDir:     dataDir, Secrets: secretStore(), Confiner: darwin.Seatbelt{}, EditorArgv: darwin.EditorArgv, FolderArgv: darwin.FolderArgv, Dev: os.Getenv("FREELOOP_DEV") == "1",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: os.Getenv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).

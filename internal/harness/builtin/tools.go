@@ -390,10 +390,10 @@ func shellTool() *tool {
 			c.run = func(ctx context.Context, _ permission.Decision) (result, error) {
 				// The broker approved in.Command; a rewrite never reaches it, and
 				// a command the user let out of the sandbox runs as they read it.
-				via := ""
+				via, shown := "", ""
 				if s.p.Optimizer != nil && !c.leaves {
 					rw := s.p.Optimizer.Rewrite(ctx, in.Command, in.Raw)
-					spec.Command, spec.Env, via = rw.Command, rw.Env, rw.Via
+					spec.Command, spec.Env, via, shown = rw.Command, rw.Env, rw.Via, rw.Shown
 				}
 				res, err := s.env.Exec(ctx, spec)
 				if err != nil {
@@ -417,7 +417,7 @@ func shellTool() *tool {
 				}
 				output := map[string]any{"type": "terminal_output", "exitCode": res.ExitCode, "output": res.Output}
 				if via != "" {
-					output["via"], output["command"] = via, spec.Command
+					output["via"], output["command"] = via, shown
 				}
 				return result{text: sb.String(), content: []any{output}}, nil
 			}

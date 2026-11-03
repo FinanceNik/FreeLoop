@@ -4,6 +4,7 @@ import type { ActivityRow as FoldedRow, EffRow } from "./activity.ts";
 import { EngineService, type ActivityReport, type HarnessInfo, type ProjectInfo, type ProviderInfo, type UsageReport, type UsageRow } from "./api.ts";
 import { byType, change, compact, daily, dailyByType, days, groupBy, OTHER, perCall, TOKEN_TYPES, topKeys, totals, value, weekStart, weeks, withoutCacheReads, type Metric } from "./analytics.ts";
 import { formatCost } from "./cost.ts";
+import LiveUsage from "./LiveUsage.tsx";
 import UsageChart, { type Series } from "./UsageChart.tsx";
 import { ActivityView, ApprovalsView, EfficiencyView, Tile } from "./UsageInsights.tsx";
 import { basename } from "./paths.ts";
@@ -16,6 +17,8 @@ import { basename } from "./paths.ts";
 // did, who decided what, and what a turn takes, under the same filters.
 
 interface Props {
+  // Shows live usage in a pane beside sessions (GUI-023).
+  onShowInPane?: () => void;
   projects: ProjectInfo[];
   providers: ProviderInfo[];
   harnesses: HarnessInfo[];
@@ -59,7 +62,7 @@ const SERIES = 5; // colours; a sixth group and beyond fold into Other
 
 const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
 
-export default function Usage({ projects, providers, harnesses, onOpenSession, onOpenPrices, onError }: Props) {
+export default function Usage({ onShowInPane, projects, providers, harnesses, onOpenSession, onOpenPrices, onError }: Props) {
   const [range, setRange] = useState(30);
   const [group, setGroup] = useState<GroupID>("type");
   const [metric, setMetric] = useState<Metric>("tokens");
@@ -184,6 +187,14 @@ export default function Usage({ projects, providers, harnesses, onOpenSession, o
   return (
     <section className="page usage-page">
       <h2>Usage</h2>
+      <div className="usage-recent">
+        <div className="pane-usage-head">
+          <h3>Recent hours</h3>
+          <span className="spacer" />
+          {onShowInPane && <button onClick={onShowInPane}>Show in a pane</button>}
+        </div>
+        <LiveUsage onError={onError} />
+      </div>
       <div
         className="panel-tabs usage-tabs"
         role="tablist"

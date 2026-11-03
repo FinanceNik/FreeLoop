@@ -11,6 +11,15 @@ export interface WorkspaceState {
   active: number;
 }
 
+// USAGE_PANE in a pane's place shows live usage there (GUI-023). Session IDs start
+// with ses_, so it can't be mistaken for one.
+export const USAGE_PANE = "usage";
+
+// isSession reports a pane showing a session, not nothing or usage.
+export function isSession(pane: string | null): pane is string {
+  return pane !== null && pane !== USAGE_PANE;
+}
+
 export const SINGLE: WorkspaceState = { layout: 1, panes: [null], active: 0 };
 
 // The narrowest a pane may get before the panes become tabs.
@@ -100,8 +109,9 @@ export function cycle(w: WorkspaceState, step: number): WorkspaceState {
 // forget empties the panes of sessions that no longer exist or are
 // archived, after a delete or at launch.
 export function forget(w: WorkspaceState, exists: (sid: string) => boolean): WorkspaceState {
-  if (w.panes.every((s) => s === null || exists(s))) return w;
-  return { ...w, panes: w.panes.map((s) => (s !== null && exists(s) ? s : null)) };
+  const keep = (s: string) => s === USAGE_PANE || exists(s);
+  if (w.panes.every((s) => s === null || keep(s))) return w;
+  return { ...w, panes: w.panes.map((s) => (s !== null && keep(s) ? s : null)) };
 }
 
 // restore checks a saved workspace before it is used.

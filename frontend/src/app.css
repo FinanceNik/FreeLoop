@@ -500,6 +500,8 @@ fieldset {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+  /* Clipping is to the line box, and an emoji is taller than the text around it. */
+  line-height: 1.5;
 }
 
 .session-meta {
@@ -1147,6 +1149,47 @@ button.ghost[aria-pressed="true"] {
 
 .composer-spacer {
   flex: 1;
+}
+
+/* Model, effort and permissions, beside the message they apply to (PRV-014). */
+.composer-actions {
+  flex-wrap: wrap;
+}
+
+.session-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.session-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.session-control select {
+  max-width: 11rem;
+}
+
+.session-control-note {
+  max-width: 24rem;
+}
+
+.session-rule-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.session-rule-form input {
+  flex: 1;
+  min-width: 6rem;
 }
 
 .composer-stop {
@@ -3960,4 +4003,65 @@ table.hooks .hook-command {
 .pending-all {
   justify-content: flex-end;
   margin-top: 10px;
+}
+
+/* Recent usage, on the usage page and in a pane (GUI-023). */
+.live-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.live-usage-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.live-usage-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+.usage-recent {
+  margin-bottom: 24px;
+}
+
+.pane-usage {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 14px 16px 24px;
+}
+
+.pane-usage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pane-usage-head h2 {
+  margin: 0;
+  font-size: calc(15rem / 14);
+}
+
+.pane-usage-head .spacer {
+  flex: 1;
+}
+
+/* Its text gets the whole width: several buttons beside it left it one letter wide. */
+.optimizer-help {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.optimizer-help p {
+  flex: 1 0 100%;
+  margin: 0;
 }

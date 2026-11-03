@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { visibleCommand } from "./a11y.ts";
 import { tabAfterKey } from "./a11y.ts";
+import { describeRule, RULE_TOOLS } from "./Rules.tsx";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
 import { panelData, type SessionView, type ToolItem } from "./transcript.ts";
 import DiffPanel from "./DiffPanel.tsx";
@@ -88,7 +89,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
         </button>
       </div>
       <div className="panel-body" role="tabpanel" id="panel-body" aria-labelledby={`panel-tab-${tab}`}>
-        {tab === "approvals" && <Approvals pending={data.pending} decided={data.decided} onError={onError} />}
+        {tab === "approvals" && <Approvals session={session} configVersion={configVersion} settings={view.settings} pending={data.pending} decided={data.decided} onError={onError} />}
         {tab === "diff" && <DiffPanel session={session} gitKey={JSON.stringify(view.git)} agentEdits={data.changes} onReview={onReview} onError={onError} />}
         {tab === "files" && <FilesPanel session={session} gitKey={JSON.stringify(view.git) + data.changes.length} agentEdits={data.changes} onError={onError} />}
         {tab === "terminal" && (
@@ -129,7 +130,93 @@ function TabButton({ id, tab, setTab, children }: { id: Tab; tab: Tab; setTab: (
   );
 }
 
-function Approvals({ pending, decided, onError }: { pending: ToolItem[]; decided: ToolItem[]; onError: (err: unknown) => void }) {
+// What a session allows and denies without asking, and changing it (SEC-002).
+function SessionRules({ session, version, onError }: { session: Session; version: string; onError: (err: unknown) => void }) {
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [form, setForm] = useState({ effect: "allow", tool: "shell", pattern: "", scope: "session" });
+  const load = () =>
+    EngineService.ListRules(session.id)
+      .then((list) => setRules(list ?? []))
+      .catch(onError);
+  useEffect(() => {
+    load();
+  }, [session.id, version]);
+  const add = (e: FormEvent) => {
+    e.preventDefault();
+    const pattern = form.pattern.trim();
+    const rule = { effect: form.effect, tool: form.tool, command: form.tool === "shell" ? pattern : "", path: form.tool !== "shell" ? pattern : "", scope: form.scope, source: "" } as unknown as Rule;
+    (form.scope === "session" ? EngineService.AddSessionRule(session.id, rule) : EngineService.AddRule(rule))
+      .then(() => {
+        setForm({ ...form, pattern: "" });
+        return load();
+      })
+      .catch(onError);
+  };
+  const remove = (r: Rule) => (r.scope === "session" ? EngineService.DeleteSessionRule(session.id, r) : EngineService.DeleteRule(r)).then(load).catch(onError);
+  return (
+    <div data-rules={session.id}>
+      <h3>Rules</h3>
+      <p className="muted">These decide before you are asked. Deny rules win, and an allow rule never lifts plan mode or protected paths.</p>
+      {rules.length === 0 && <p className="muted">No rules yet.</p>}
+      <ul className="panel-list">
+        {rules.map((r, i) => (
+          <li key={i} className="row">
+            <span className={`decision decision-${r.effect === "deny" ? "denied" : "allowed"}`}>{r.effect}</span>
+            <code>{describeRule(r)}</code>
+            <span className="muted">{r.scope === "session" ? "this session" : r.scope === "global" ? "all sessions" : String(r.scope)}</span>
+            {r.pending && <span className="muted">waits for approval in Settings</span>}
+            {(r.scope === "session" || r.scope === "global") && (
+              <button className="link" onClick={() => remove(r)} aria-label={`Remove the rule ${describeRule(r)}`}>
+                Remove
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form className="session-rule-form" onSubmit={add}>
+        <select value={form.effect} onChange={(e) => setForm({ ...form, effect: e.target.value })} aria-label="Effect">
+          <option value="allow">Allow</option>
+          <option value="deny">Deny</option>
+        </select>
+        <select value={form.tool} onChange={(e) => setForm({ ...form, tool: e.target.value })} aria-label="Tool">
+          {RULE_TOOLS.map((t) => (
+            <option key={t} value={t}>
+              {t === "*" ? "any tool" : t}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label={form.tool === "shell" ? "Command" : "Path pattern"}
+          placeholder={form.tool === "shell" ? "git *" : "src/**"}
+          value={form.pattern}
+          onChange={(e) => setForm({ ...form, pattern: e.target.value })}
+        />
+        <select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} aria-label="Applies to">
+          <option value="session">This session</option>
+          <option value="global">All sessions</option>
+        </select>
+        <button type="submit">Add</button>
+      </form>
+    </div>
+  );
+}
+
+function Approvals({
+  session,
+  configVersion,
+  settings,
+  pending,
+  decided,
+  onError,
+}: {
+  session: Session;
+  configVersion: number;
+  settings: number;
+  pending: ToolItem[];
+  decided: ToolItem[];
+  onError: (err: unknown) => void;
+}) {
+  const saved = decided.filter((t) => t.permission?.decided?.persisted).length;
   // Quick answers only; the card in the conversation has the note, the
   // scope for "Allow always" and the keyboard shortcuts.
   const decide = (t: ToolItem, kind: string) => {
@@ -170,6 +257,7 @@ function Approvals({ pending, decided, onError }: { pending: ToolItem[]; decided
           </li>
         ))}
       </ul>
+      <SessionRules session={session} version={`${configVersion} ${settings} ${saved}`} onError={onError} />
       <h3>Decided</h3>
       {decided.length === 0 && <p className="muted">No decisions yet. Calls allowed by the session's mode are not listed.</p>}
       <ul className="panel-list">
@@ -225,7 +313,7 @@ function Info({ session, view, turns, provider, environment, configVersion, onEr
     ["Profile", session.profileId || "default"],
     ["Provider", provider?.name ?? session.providerId],
     ["Model", <code>{session.model}</code>],
-    ["Mode", MODES.find((m) => m.id === mode)?.name ?? mode],
+    ["Permissions", MODES.find((m) => m.id === mode)?.name ?? mode],
     ["Environment", environment?.name ?? (session.environmentId || "Local")],
     ["Project", <code>{session.projectRoot}</code>],
     ...(session.worktree ? ([["Worktree", <code>{session.worktree}</code>]] as [string, ReactNode][]) : []),

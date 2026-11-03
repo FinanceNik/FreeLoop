@@ -41,6 +41,15 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
         refresh();
       })
       .catch(onError);
+  const [installing, setInstalling] = useState("");
+  const install = (o: OptimizerStatus) => {
+    setInstalling(o.id);
+    EngineService.InstallOptimizer(o.id)
+      .then(refresh)
+      .catch(onError)
+      .finally(() => setInstalling(""));
+  };
+  const remove = (o: OptimizerStatus) => EngineService.RemoveOptimizer(o.id).then(refresh).catch(onError);
   const setDefault = (id: string) => EngineService.SetDefaultOptimizer(id).then(onSaved).catch(onError);
   const copy = (id: string, text: string) =>
     Clipboard.SetText(text)
@@ -61,7 +70,7 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
     <section className="page">
       <h2>Token optimizers</h2>
       <p className="muted">
-        An optimizer runs an agent's shell commands through a program that shortens their output, so they cost fewer tokens. You still approve each command as the model wrote it. Shortened output can leave out something the agent needs, such as a commit message or the end of a large diff, so it is off unless you choose one. It works with the built-in agent; other agents run their commands themselves.
+        An optimizer runs an agent's shell commands through a program that shortens their output, so they cost fewer tokens. You still approve each command as the model wrote it. Shortened output can leave out something the agent needs, such as a commit message or the end of a large diff, so it is off unless you choose one. It works with the built-in agent and Claude Code; other agents run their commands themselves, with no hook to rewrite them.
       </p>
       <div className="card form">
         <label>
@@ -98,6 +107,21 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
                   <button onClick={() => approve(o)}>Approve</button>
                 </p>
               </>
+            )}
+            {!o.path && o.canDownload && !o.needsApproval && (
+              <>
+                <p className="muted">{o.download}</p>
+                <p className="row">
+                  <button className="primary" disabled={installing === o.id} onClick={() => install(o)}>
+                    {installing === o.id ? "Installing…" : `Install ${o.name}`}
+                  </button>
+                </p>
+              </>
+            )}
+            {o.downloaded && (
+              <p className="row">
+                <button onClick={() => remove(o)}>Remove Freeloop's copy</button>
+              </p>
             )}
             {!o.path && o.install && !o.needsApproval && (
               <p className="row">

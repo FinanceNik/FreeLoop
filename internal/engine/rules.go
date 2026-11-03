@@ -171,6 +171,19 @@ func (s *ruleStore) forget(sid string) {
 func (s *ruleStore) restore(sid string, events []event.Event) {
 	var rules []permission.Rule
 	for _, ev := range events {
+		if ev.Type == event.SessionRuleChanged {
+			var d sessionRuleChange
+			if json.Unmarshal(ev.Data, &d) != nil {
+				continue
+			}
+			if d.Removed {
+				rules = slices.DeleteFunc(rules, func(r permission.Rule) bool { return sameRule(r, d.Rule) })
+			} else {
+				d.Rule.Scope, d.Rule.Source = permission.ScopeSession, "session "+sid
+				rules = append(rules, d.Rule)
+			}
+			continue
+		}
 		if ev.Type != event.PermissionDecided {
 			continue
 		}
@@ -185,6 +198,21 @@ func (s *ruleStore) restore(sid string, events []event.Event) {
 	s.mu.Lock()
 	s.session[sid] = rules
 	s.mu.Unlock()
+}
+
+// sessionRuleChange is the payload of session_rule_changed.
+type sessionRuleChange struct {
+	Rule    permission.Rule `json:"rule"`
+	Removed bool            `json:"removed,omitempty"`
+}
+
+// deleteSession removes a rule from a session and reports whether it had it.
+func (s *ruleStore) deleteSession(sid string, r permission.Rule) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	before := len(s.session[sid])
+	s.session[sid] = slices.DeleteFunc(slices.Clone(s.session[sid]), func(g permission.Rule) bool { return sameRule(g, r) })
+	return len(s.session[sid]) != before
 }
 
 // ListRules returns the rules of a session, global first; with an empty session

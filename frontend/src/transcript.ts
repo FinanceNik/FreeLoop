@@ -133,6 +133,8 @@ type ItemKinds =
       input: unknown;
       content: ToolContent[];
       permission?: PermissionState;
+      // The token optimizer that ran this command in a shorter form (HRN-019).
+      via?: string;
     }
   | { kind: "turn_end"; key: string; rev: number; stopReason: string; ts: string; calls: ModelCall[] }
   | { kind: "error"; key: string; rev: number; message: string }
@@ -167,6 +169,8 @@ export interface SessionView {
   calls: ModelCall[];
   git: GitState | null;
   mode: string | null;
+  // Counts changes to the session's model, effort and rules, for what shows them.
+  settings: number;
   status: string | null;
   running: boolean;
   // The slash commands the session's harness offers (GUI-004).
@@ -197,6 +201,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   const tools = new Map<string, Extract<Item, { kind: "tool" }>>();
   const usage: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
   let mode: string | null = null;
+  let settings = 0;
   let status: string | null = null;
   let running = false;
   let git: GitState | null = null;
@@ -317,6 +322,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           content: d.content ?? item.content,
           title: d.title || item.title,
           input: d.rawInput && Object.keys(d.rawInput).length > 0 ? d.rawInput : item.input,
+          via: d.via ?? item.via,
         };
         replaceTool(items, tools, next);
         break;
@@ -421,6 +427,16 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         if (d.model) current = { providerId: d.providerId ?? current.providerId, model: d.model };
         items.push({ kind: "model", key, rev, model: d.model ?? "", providerId: d.providerId ?? "" });
         break;
+      case "effort_changed":
+        settings++;
+        items.push({ kind: "notice", key, rev, message: `Effort set to ${d.effort}. It applies from the next model call.`, warn: false });
+        break;
+      case "config_option_update":
+        settings++;
+        break;
+      case "session_rule_changed":
+        settings++;
+        break;
       case "optimizer_changed":
         items.push({ kind: "notice", key, rev, message: d.name ? `Token optimizer set to ${d.name}. It applies from the next command.` : "Token optimizer turned off.", warn: false });
         break;
@@ -446,7 +462,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       if (seq > r.from && seq < r.to && !items[i].rewound) items[i] = { ...items[i], rewound: true, rev: r.to };
     }
   }
-  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan };
+  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan, settings };
 }
 
 function replaceTool(

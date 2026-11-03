@@ -88,6 +88,9 @@ type Params struct {
 	// MCPServers are passed to an external agent on session creation, so
 	// it uses the same servers (MCP-004). Secrets are resolved.
 	MCPServers []MCPServerSpec
+	// Options are the choices the session's agent last reported, put back when it
+	// starts again, since a new process begins with its defaults (PRV-014).
+	Options []OptionValue
 	// ExternalID, when set, is the harness-side session to load instead of
 	// starting a new one (SES-003).
 	ExternalID string
@@ -100,6 +103,9 @@ type CommandOptimizer interface {
 	// Rewrite is asked with raw set when the model wants the command as written:
 	// nothing rewrites it, but the variables stay, so rtk recall finds its data.
 	Rewrite(ctx context.Context, command string, raw bool) Rewrite
+	// Original returns what the model wrote, for a command it made for an external
+	// agent's hook: the agent asks about what it is going to run.
+	Original(command string) (original, via string, ok bool)
 }
 
 // Rewrite is what to run for an approved command. Via names the optimizer when
@@ -108,7 +114,9 @@ type CommandOptimizer interface {
 type Rewrite struct {
 	Command string
 	Via     string
-	Env     map[string]string
+	// Shown is the rewrite without what only finds the program, for the record.
+	Shown string
+	Env   map[string]string
 }
 
 // WebSource reads the web for the built-in harness (HRN-017). The broker
@@ -190,6 +198,97 @@ type Resumable interface {
 // turns (PRV-006): the built-in harness's.
 type ModelSetter interface {
 	SetModel(p provider.Provider, model string, contextWindow int)
+}
+
+// EffortSetter is implemented by sessions that take an effort from the app
+// (PRV-014): the built-in harness's.
+type EffortSetter interface {
+	SetEffort(effort string)
+}
+
+// Option is a setting of a session the user can change while it runs: ACP's
+// session config options, and the same two for the built-in harness (PRV-014).
+type Option struct {
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Category string         `json:"category"`
+	Current  string         `json:"current"`
+	Choices  []OptionChoice `json:"choices"`
+	// Custom means a value that is not listed can be typed.
+	Custom bool `json:"custom"`
+}
+
+// OptionChoice is one value of an Option.
+type OptionChoice struct {
+	Value       string `json:"value"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Group       string `json:"group"`
+}
+
+// OptionValue is a choice to put back.
+type OptionValue struct {
+	ID, Value string
+}
+
+// The categories the app offers. An agent's mode stays out: permissions are the
+// app's to set, and an agent must not offer a way around them (SEC-003).
+const (
+	OptionModel  = "model"
+	OptionEffort = "thought_level"
+)
+
+// Configurable is implemented by sessions whose agent reports options.
+type Configurable interface {
+	Options() []Option
+	SetOption(ctx context.Context, id, value string) error
+}
+
+// ParseOptions reads ACP's configOptions, keeping the selects the app offers,
+// model first. What it cannot read is left out.
+func ParseOptions(raw []byte) []Option {
+	type choice struct {
+		Value       string   `json:"value"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Group       string   `json:"group"`
+		Options     []choice `json:"options"`
+	}
+	var in []struct {
+		ID           string   `json:"id"`
+		Name         string   `json:"name"`
+		Category     string   `json:"category"`
+		Type         string   `json:"type"`
+		CurrentValue any      `json:"currentValue"`
+		Options      []choice `json:"options"`
+	}
+	if json.Unmarshal(raw, &in) != nil {
+		return nil
+	}
+	var out []Option
+	for _, want := range []string{OptionModel, OptionEffort} {
+		for _, o := range in {
+			current, isText := o.CurrentValue.(string)
+			if o.Category != want || o.Type != "select" || !isText || o.ID == "" {
+				continue
+			}
+			opt := Option{ID: o.ID, Name: o.Name, Category: o.Category, Current: current}
+			for _, c := range o.Options {
+				if c.Value != "" {
+					opt.Choices = append(opt.Choices, OptionChoice{Value: c.Value, Name: c.Name, Description: c.Description})
+				}
+				for _, g := range c.Options {
+					if g.Value != "" {
+						opt.Choices = append(opt.Choices, OptionChoice{Value: g.Value, Name: g.Name, Description: g.Description, Group: c.Name})
+					}
+				}
+			}
+			if len(opt.Choices) > 0 {
+				out = append(out, opt)
+			}
+		}
+	}
+	return out
 }
 
 // Command is a slash command that sends a prepared prompt; text after the

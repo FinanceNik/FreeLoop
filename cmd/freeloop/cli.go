@@ -194,15 +194,40 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 		if len(args) < 2 {
 			return fmt.Errorf("usage: freeloop %s <request>", args[0])
 		}
-		option := "allow_once"
-		if args[0] == "deny" {
-			option = "reject_once"
-		} else if len(args) > 2 {
+		option := ""
+		if args[0] == "approve" && len(args) > 2 {
 			option = args[2]
+		}
+		if option == "" {
+			var pending []permission.Request
+			if err := c.Call("approvals.list", nil, &pending); err != nil {
+				return err
+			}
+			option = defaultOption(pending, args[1], args[0] == "deny")
 		}
 		return c.Call("approvals.decide", map[string]any{"requestId": args[1], "optionId": option}, nil)
 	}
 	return fmt.Errorf("unknown command %q; see freeloop help", args[0])
+}
+
+// defaultOption is the once-only answer of a request: an external agent names
+// its own options, so the kind says which is which.
+func defaultOption(pending []permission.Request, id string, deny bool) string {
+	kind := "allow_once"
+	if deny {
+		kind = "reject_once"
+	}
+	for _, r := range pending {
+		if r.ID != id {
+			continue
+		}
+		for _, o := range r.Options {
+			if o.Kind == kind {
+				return o.ID
+			}
+		}
+	}
+	return kind
 }
 
 // prompt sends a message and prints the agent's reply as it streams, and
@@ -250,4 +275,57 @@ func prompt(c *rpc.Client, sid, text string, out io.Writer) error {
 		}
 	}
 	return fmt.Errorf("gave up waiting for the turn to end")
+}
+
+// optimizerHookLimit keeps a slow answer from holding up the agent's command.
+const optimizerHookLimit = 4 * time.Second
+
+// runOptimizerHook is what an external agent runs before a shell command, through
+// the plugin Freeloop gives it (HRN-019): it hands the command to the app, and
+// prints the rewrite as the agent's hook format has it. It never says whether the
+// command may run, and on any failure says nothing, so the command runs as written.
+func runOptimizerHook(args []string, in io.Reader, out io.Writer) {
+	if len(args) != 2 {
+		return
+	}
+	sock, sid := args[0], args[1]
+	var hook struct {
+		ToolInput map[string]any `json:"tool_input"`
+	}
+	if json.NewDecoder(in).Decode(&hook) != nil {
+		return
+	}
+	command, _ := hook.ToolInput["command"].(string)
+	if command == "" {
+		return
+	}
+	done := make(chan string, 1)
+	go func() {
+		c, err := rpc.Dial(sock)
+		if err != nil {
+			done <- ""
+			return
+		}
+		defer c.Close()
+		var res struct {
+			Command string `json:"command"`
+		}
+		if c.Call("sessions.rewriteForAgent", map[string]any{"id": sid, "command": command}, &res) != nil {
+			done <- ""
+			return
+		}
+		done <- res.Command
+	}()
+	var made string
+	select {
+	case made = <-done:
+	case <-time.After(optimizerHookLimit):
+	}
+	if made == "" {
+		return
+	}
+	hook.ToolInput["command"] = made
+	json.NewEncoder(out).Encode(map[string]any{"hookSpecificOutput": map[string]any{
+		"hookEventName": "PreToolUse", "updatedInput": hook.ToolInput,
+	}})
 }

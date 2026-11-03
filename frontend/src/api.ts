@@ -1,10 +1,11 @@
 // One import point for the generated bindings.
 export { EngineService } from "../bindings/github.com/FinanceNik/Freeloop/cmd/freeloop";
 export type { Colors, Command, Config, Defaults, Hook, Issue, MCPServer, Price, Profile, Schedule } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
-export type { ActivityReport, ActivityRow, RegistryOption, RegistryPage, RegistryServer, AttentionItem, ChangedFile, Changes, ChecksInfo, CompareRun, ClaudeImport, ConfigPreview, ConfigRestore, DayCost, FileEntry, FileView, ImportItem, EnvironmentInfo, FileDiff, HarnessInfo, Issue as GitHubIssue, IssueBrief, MCPServerInfo, OptimizerCheck, OptimizerInfo, OptimizerStatus, PendingCommand, PresetInfo, ProjectInfo, ProjectSettings, ProviderInfo, PullRequestInfo, PullRequestText, ProjectScriptsInfo, ResourceRef, ReviewInfo, ScheduleInfo, UsageReport, UsageRow, TerminalInfo, TerminalOutput, UpdateInfo, SkillTest, SessionHits, SessionMCPContext, SkillCandidate, SkillInfo, SkillList, StartWaits } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
+export type { SessionOptionsReport, ActivityReport, ActivityRow, RegistryOption, RegistryPage, RegistryServer, AttentionItem, ChangedFile, Changes, ChecksInfo, CompareRun, ClaudeImport, ConfigPreview, ConfigRestore, DayCost, FileEntry, FileView, ImportItem, EnvironmentInfo, FileDiff, HarnessInfo, Issue as GitHubIssue, IssueBrief, MCPServerInfo, OptimizerCheck, OptimizerInfo, OptimizerStatus, PendingCommand, PresetInfo, ProjectInfo, ProjectSettings, ProviderInfo, PullRequestInfo, PullRequestText, ProjectScriptsInfo, ResourceRef, ReviewInfo, ScheduleInfo, UsageReport, UsageRow, TerminalInfo, TerminalOutput, UpdateInfo, SkillTest, SessionHits, SessionMCPContext, SkillCandidate, SkillInfo, SkillList, StartWaits } from "../bindings/github.com/FinanceNik/Freeloop/internal/engine/models";
 export type { Request as PermissionRequest, Rule } from "../bindings/github.com/FinanceNik/Freeloop/internal/permission/models";
 export type { ModelCaps, ModelInfo } from "../bindings/github.com/FinanceNik/Freeloop/internal/provider/models";
 export type { Project, Session } from "../bindings/github.com/FinanceNik/Freeloop/internal/session/models";
+export type { Option as SessionOption } from "../bindings/github.com/FinanceNik/Freeloop/internal/harness/models";
 export type { Blocked } from "../bindings/github.com/FinanceNik/Freeloop/internal/netguard/models";
 
 // Must match EventName, ConfigEventName, OpenSessionEventName,
@@ -17,10 +18,10 @@ export const FILES_DROPPED_EVENT_NAME = "freeloop:files-dropped";
 export const TERMINAL_EVENT_NAME = "freeloop:terminal";
 
 export const MODES = [
-  { id: "ask", name: "Ask" },
-  { id: "accept_edits", name: "Accept edits" },
-  { id: "plan", name: "Plan" },
-  { id: "bypass", name: "Bypass" },
+  { id: "ask", name: "Ask", hint: "Asks before anything that changes files or runs a command, unless a rule decides." },
+  { id: "accept_edits", name: "Accept edits", hint: "File edits in the project go ahead; commands still ask." },
+  { id: "plan", name: "Plan", hint: "Only reads, and proposes a plan for you to approve." },
+  { id: "bypass", name: "Bypass", hint: "Nothing asks, except protected paths and deny rules." },
 ];
 
 export function errorText(err: unknown): string {

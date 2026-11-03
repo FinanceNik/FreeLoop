@@ -203,6 +203,8 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 			}
 		case event.ModelChanged:
 			note("Model changed to " + str("model") + ".")
+		case event.EffortChanged:
+			note("Effort set to " + str("effort") + ".")
 		case event.OptimizerChanged:
 			if name := str("name"); name != "" {
 				note("Token optimizer set to " + name + ".")

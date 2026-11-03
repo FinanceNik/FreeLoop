@@ -68,7 +68,7 @@ func (Harness) NewSession(_ context.Context, p harness.Params) (harness.Session,
 			offered = append(offered, t)
 		}
 	}
-	s := &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered, prov: p.Provider, model: p.Model, window: p.ContextWindow}
+	s := &session{p: p, env: p.Env, mode: mode, history: slices.Clone(p.History), tools: offered, prov: p.Provider, model: p.Model, window: p.ContextWindow, effort: p.Effort}
 	s.repair()
 	return s, nil
 }
@@ -110,6 +110,8 @@ type session struct {
 	tools []*tool
 
 	mu sync.Mutex
+	// effort is what model calls ask for; the user can change it (PRV-014).
+	effort string
 	// images holds the data of pictures this run has seen, by name.
 	images  map[string][]byte
 	mode    permission.Mode
@@ -190,6 +192,13 @@ func (s *session) current() (provider.Provider, string) {
 func (s *session) SetModel(prov provider.Provider, model string, window int) {
 	s.mu.Lock()
 	s.prov, s.model, s.window = prov, model, window
+	s.mu.Unlock()
+}
+
+// SetEffort implements harness.EffortSetter; the next model call uses it.
+func (s *session) SetEffort(effort string) {
+	s.mu.Lock()
+	s.effort = effort
 	s.mu.Unlock()
 }
 
@@ -341,12 +350,15 @@ func (s *session) loop(ctx context.Context) (harness.StopReason, error) {
 		}
 		mode := s.Mode()
 		prov, model := s.current()
+		s.mu.Lock()
+		effort := s.effort
+		s.mu.Unlock()
 		req := provider.ChatRequest{
 			Model:    model,
 			System:   s.systemPrompt(mode),
 			Messages: s.withImages(s.history),
 			Tools:    s.toolSpecs(mode),
-			Effort:   s.p.Effort,
+			Effort:   effort,
 		}
 		msg, stop, err := s.call(ctx, prov, req)
 		if ctx.Err() != nil {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chooseLayout, closePane, cycle, focusPane, forget, openIn, placeIn, restore, setLayout, SINGLE, tabbed, type WorkspaceState } from "./workspace.ts";
+import { chooseLayout, closePane, cycle, focusPane, forget, openIn, placeIn, restore, setLayout, SINGLE, tabbed, type WorkspaceState, USAGE_PANE, isSession } from "./workspace.ts";
 
 const w = (layout: 1 | 2 | 3 | 4, panes: (string | null)[], active = 0): WorkspaceState => ({ layout, panes, active });
 
@@ -64,4 +64,17 @@ test("a pane added with the layout control is the one the next session goes into
   assert.deepEqual(chooseLayout(w(2, ["a", null], 0), 3), w(3, ["a", null, null], 1));
   assert.deepEqual(chooseLayout(w(3, ["a", "b", "c"], 2), 2), w(2, ["c", "a"], 0));
   assert.deepEqual(openIn(chooseLayout(w(1, ["a"]), 2), "b", "active"), w(2, ["a", "b"], 1));
+});
+
+test("a pane can hold live usage, which no session list clears (GUI-023)", () => {
+  const one = openIn({ layout: 1, panes: ["a"], active: 0 }, USAGE_PANE, "new");
+  assert.deepEqual(one.panes, ["a", USAGE_PANE]);
+  assert.equal(one.active, 1);
+  assert.deepEqual(forget(one, () => false).panes, [null, USAGE_PANE]);
+  assert.deepEqual(restore({ layout: 2, panes: ["a", USAGE_PANE], active: 1 }).panes, ["a", USAGE_PANE]);
+  // Opened again, it goes where it already is.
+  assert.equal(openIn({ ...one, active: 0 }, USAGE_PANE, "new").active, 1);
+  assert.equal(isSession(USAGE_PANE), false);
+  assert.equal(isSession(null), false);
+  assert.equal(isSession("ses_1"), true);
 });

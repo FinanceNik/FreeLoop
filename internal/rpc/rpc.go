@@ -154,6 +154,7 @@ type (
 	idParams   struct{ ID string }
 	promptP    struct{ ID, Text string }
 	optimizerP struct{ ID, Optimizer string }
+	rewriteP   struct{ ID, Command string }
 	eventsP    struct {
 		ID    string
 		After int64
@@ -239,6 +240,29 @@ func (s *Server) call(ctx context.Context, method string, raw json.RawMessage) (
 			return nil, err
 		}
 		return struct{}{}, e.SetOptimizer(ctx, p.ID, p.Optimizer)
+	case "sessions.options":
+		var p idParams
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		return e.SessionOptions(ctx, p.ID)
+	case "sessions.setOption":
+		var p struct {
+			ID     string `json:"id"`
+			Option string `json:"option"`
+			Value  string `json:"value"`
+		}
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		return struct{}{}, e.SetSessionOption(ctx, p.ID, p.Option, p.Value)
+	case "sessions.rewriteForAgent":
+		var p rewriteP
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		made, err := e.RewriteForAgent(ctx, p.ID, p.Command)
+		return map[string]string{"command": made}, err
 	case "approvals.list":
 		return e.PendingPermissions(), nil
 	case "approvals.decide":

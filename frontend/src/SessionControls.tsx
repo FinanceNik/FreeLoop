@@ -1,0 +1,111 @@
+import { useEffect, useState } from "react";
+import { EngineService, MODES, type SessionOption, type SessionOptionsReport } from "./api.ts";
+
+// What can be changed in a session, beside where the next message is written
+// (PRV-014): the same controls for every harness (HRN-001). The engine says what
+// each one offers.
+
+interface Props {
+  sessionId: string;
+  mode: string;
+  canBypass: boolean;
+  // Changes when a model or effort was chosen, here or anywhere else.
+  version: number;
+  onMode: (mode: string) => void;
+  onOtherModel: () => void;
+  onRules: () => void;
+  onError: (err: unknown) => void;
+}
+
+// A value the engine reports that is not among its choices still shows.
+function grouped(o: SessionOption) {
+  const listed = o.choices ?? [];
+  const choices = listed.some((c) => c.value === o.current) ? listed : [{ value: o.current, name: o.current.split("\n").pop() || "Default", description: "", group: "" }, ...listed];
+  const groups: { group: string; choices: typeof choices }[] = [];
+  for (const c of choices) {
+    const g = groups.find((x) => x.group === c.group);
+    if (g) g.choices.push(c);
+    else groups.push({ group: c.group, choices: [c] });
+  }
+  return groups;
+}
+
+const OTHER = "\u0000other";
+
+export default function SessionControls({ sessionId, mode, canBypass, version, onMode, onOtherModel, onRules, onError }: Props) {
+  const [report, setReport] = useState<SessionOptionsReport | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = () =>
+    EngineService.SessionOptions(sessionId)
+      .then(setReport)
+      .catch(onError);
+  useEffect(() => {
+    refresh();
+  }, [sessionId, version]);
+
+  const choose = (o: SessionOption, value: string) => {
+    if (value === OTHER) return onOtherModel();
+    setReport((r) => r && { ...r, options: (r.options ?? []).map((x) => (x.id === o.id ? { ...x, current: value } : x)) });
+    EngineService.SetSessionOption(sessionId, o.id, value)
+      .catch(onError)
+      .finally(refresh);
+  };
+  const load = () => {
+    setLoading(true);
+    EngineService.LoadSessionOptions(sessionId)
+      .then(setReport)
+      .catch(onError)
+      .finally(() => setLoading(false));
+  };
+  const hint = MODES.find((m) => m.id === mode)?.hint;
+
+  return (
+    <div className="session-controls">
+      {(report?.options ?? []).map((o) => (
+        <label key={o.id} className="session-control" title={o.choices?.find((c) => c.value === o.current)?.description || undefined}>
+          {o.name || o.id}{" "}
+          <select value={o.current} onChange={(e) => choose(o, e.target.value)}>
+            {grouped(o).map((g) =>
+              g.group ? (
+                <optgroup key={g.group} label={g.group}>
+                  {g.choices.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.name || c.value}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : (
+                g.choices.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.name || c.value}
+                  </option>
+                ))
+              ),
+            )}
+            {o.custom && <option value={OTHER}>Other…</option>}
+          </select>
+        </label>
+      ))}
+      {report?.unknown && (
+        <button onClick={load} disabled={loading} title="Starts the agent, which says what it offers. Your first message would start it too.">
+          {loading ? "Starting the agent…" : "Model and effort…"}
+        </button>
+      )}
+      {report?.note && <span className="muted session-control-note">{report.note}</span>}
+      <label className="session-control" title={hint}>
+        Permissions{" "}
+        <select value={mode} onChange={(e) => onMode(e.target.value)}>
+          {MODES.map((m) => (
+            <option key={m.id} value={m.id} disabled={m.id === "bypass" && !canBypass && mode !== "bypass"} title={m.hint}>
+              {m.id === "bypass" && !canBypass && mode !== "bypass" ? `${m.name} (needs a trusted project and Settings)` : m.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="link" onClick={onRules} title="See and change what this session allows and denies without asking">
+        Rules…
+      </button>
+    </div>
+  );
+}

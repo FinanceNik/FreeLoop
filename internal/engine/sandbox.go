@@ -106,6 +106,8 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 	for _, p := range sandboxTools {
 		c.Read = append(c.Read, filepath.Join(home, filepath.FromSlash(p)))
 	}
+	// What the app downloaded for token optimizers, to run and not to change.
+	c.Read = append(c.Read, e.toolsDir())
 	for _, p := range cfg.Sandbox.Read {
 		c.Read = append(c.Read, expandHome(home, p))
 	}

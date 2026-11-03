@@ -27,6 +27,8 @@ import AttachedImages from "./AttachedImages.tsx";
 import ToolView, { openSessionEvent } from "./ToolView.tsx";
 import Tags from "./Tags.tsx";
 import { prepareImage, type PreparedImage } from "./imageprep.ts";
+import { addText, isPicture, type TextFile } from "./attach.ts";
+import SessionControls from "./SessionControls.tsx";
 import { MAX_IMAGES, room } from "./images.ts";
 import { CheckIcon, CopyIcon, ForkIcon, RewindIcon, StopIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
@@ -289,6 +291,23 @@ export default function SessionView({ session, events, focus, prices, initialDra
       list.filter((p) => p.id === id).forEach((p) => URL.revokeObjectURL(p.url));
       return list.filter((p) => p.id !== id);
     });
+  // Text files for the next message (SES-019).
+  const [textFiles, setTextFiles] = useState<TextFile[]>([]);
+  const addFiles = (files: File[]) => {
+    addPictures(files.filter((f) => isPicture(f.type)));
+    for (const f of files.filter((f) => !isPicture(f.type))) {
+      f.arrayBuffer()
+        .then((b) => {
+          const bytes = new Uint8Array(b);
+          setTextFiles((list) => {
+            const r = addText(list, f.name, bytes);
+            if (r.error) onError(new Error(r.error));
+            return r.list;
+          });
+        })
+        .catch(onError);
+    }
+  };
   const [attaching, setAttaching] = useState<string | null>(null);
   const [promptForm, setPromptForm] = useState<{ command: SlashCommand; values: Record<string, string> } | null>(null);
   const runPrompt = (c: SlashCommand, values: Record<string, string>) => {
@@ -380,7 +399,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const [accepting, setAccepting] = useState(false);
   const send = () => {
     const text = draft.trim();
-    if ((!text && pictures.length === 0) || accepting) return;
+    if ((!text && pictures.length === 0 && textFiles.length === 0) || accepting) return;
     const m = modeCommand(text);
     if (m && (m !== "bypass" || canBypass)) {
       setDraft("");
@@ -400,10 +419,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
     // start (the first start may download it), the composer says so and
     // takes no second one.
     setAccepting(true);
-    (sending.length > 0 || images.length > 0 ? EngineService.PromptWith(session.id, { text, resources: sending, images }) : EngineService.Prompt(session.id, text))
+    (sending.length > 0 || images.length > 0 || textFiles.length > 0 ? EngineService.PromptWith(session.id, { text, resources: sending, images, files: textFiles }) : EngineService.Prompt(session.id, text))
       .then((r) => {
         setDraft("");
         setAttached([]);
+        setTextFiles([]);
         pictures.forEach((p) => URL.revokeObjectURL(p.url));
         setPictures([]);
         if (r.queued) setQueued((n) => n + 1);
@@ -473,11 +493,26 @@ export default function SessionView({ session, events, focus, prices, initialDra
   }, [session.id]);
   // One that cannot be used yet says why here, with a way to install it.
   const [optimizerHelp, setOptimizerHelp] = useState<OptimizerInfo | null>(null);
+  const optimizerWarning = optimizers.find((o) => o.warning)?.warning;
+  const [warningDismissed, setWarningDismissed] = useState(false);
   const setOptimizer = (id: string) => {
     const chosen = optimizers.find((o) => o.id === id);
     if (chosen && !chosen.available) return setOptimizerHelp(chosen);
     setOptimizerHelp(null);
     EngineService.SetOptimizer(session.id, id).catch(onError);
+  };
+  // One click: fetch it, then turn it on for this session.
+  const [installing, setInstalling] = useState(false);
+  const install = (o: OptimizerInfo) => {
+    setInstalling(true);
+    EngineService.InstallOptimizer(o.id)
+      .then(() => EngineService.SetOptimizer(session.id, o.id))
+      .then(() => {
+        setOptimizerHelp(null);
+        return loadOptimizers();
+      })
+      .catch(onError)
+      .finally(() => setInstalling(false));
   };
   const typeInstall = (o: OptimizerInfo) =>
     EngineService.TypeOptimizerInstall(session.id, o.id)
@@ -506,6 +541,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
     setPanelTab(t);
     if (!panelOpen) togglePanel();
   };
+  const showRules = () => {
+    showPanel("approvals");
+    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`[data-rules="${session.id}"]`)?.scrollIntoView({ block: "start" })));
+  };
+  const openFolder = () => EngineService.OpenProjectFolder(session.id).catch(onError);
   // The project's run command for a worktree session (SES-016).
   const [runCommand, setRunCommand] = useState("");
   const [terminalNonce, setTerminalNonce] = useState(0);
@@ -706,6 +746,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   </button>
                 </div>
               </details>
+              <button className="ghost" onClick={openFolder} title={`Show ${session.worktree || session.projectRoot} in the Finder`}>
+                Finder
+              </button>
               <button className="ghost" onClick={togglePanel} aria-pressed={panelOpen && (active || !split)} title="Show or hide the right panel">
                 Panel
               </button>
@@ -722,23 +765,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </div>
             <span className="muted" title="Provider and model">
               {session.providerId ? `${provider?.name ?? session.providerId} · ${session.model}` : (harness?.name ?? session.harnessId)}
-              {session.providerId && (
-                <button className="link" onClick={() => setSwitching(switching ? null : { providerId: session.providerId, model: session.model })}>
-                  {" "}
-                  Switch…
-                </button>
-              )}
             </span>
-            <label>
-              Mode{" "}
-              <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                {MODES.filter((m) => m.id !== "bypass" || canBypass || mode === "bypass").map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label title="Runs this session's shell commands through a program that shortens their output, to spend fewer tokens. You still approve the command as the model wrote it.">
               Optimizer{" "}
               <select value={session.optimizer} onChange={(e) => setOptimizer(e.target.value)} onFocus={loadOptimizers}>
@@ -776,9 +803,25 @@ export default function SessionView({ session, events, focus, prices, initialDra
             )}
           </div>
         </header>
+        {optimizerWarning && !warningDismissed && (
+          <div className="banner optimizer-help" role="status">
+            <p>{optimizerWarning}</p>
+            <button className="link" onClick={() => setWarningDismissed(true)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         {optimizerHelp && (
-          <div className="banner row" role="status">
-            <span>{optimizerHelp.reason}</span>
+          <div className="banner optimizer-help" role="status">
+            <p>
+              {optimizerHelp.reason}
+              {optimizerHelp.canDownload && <span className="muted"> {optimizerHelp.download}</span>}
+            </p>
+            {optimizerHelp.canDownload && (
+              <button className="primary" disabled={installing} onClick={() => install(optimizerHelp)}>
+                {installing ? "Installing…" : `Install ${optimizerHelp.name} and turn it on`}
+              </button>
+            )}
             {optimizerHelp.install && <button onClick={() => typeInstall(optimizerHelp)}>Type it in the terminal</button>}
             <button className="link" onClick={() => setOptimizerHelp(null)}>
               Dismiss
@@ -909,7 +952,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             if (!e.dataTransfer.files.length) return;
             e.preventDefault();
             setDragging(false);
-            addPictures([...e.dataTransfer.files]);
+            addFiles([...e.dataTransfer.files]);
           }}
         >
           {view.plan.length > 0 && <TodoList entries={view.plan} running={view.running} />}
@@ -954,6 +997,18 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 <li key={p.id}>
                   <img src={p.url} alt={`Picture ${i + 1}`} />
                   <button className="picture-remove" aria-label={`Remove picture ${i + 1}`} title="Remove" onClick={() => dropPicture(p.id)}>
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {textFiles.length > 0 && (
+            <ul className="attachments" aria-label="Files for the next message">
+              {textFiles.map((f) => (
+                <li key={f.name} className="chip" title={`${f.text.length.toLocaleString()} characters`}>
+                  {f.name}
+                  <button className="link" aria-label={`Remove ${f.name}`} onClick={() => setTextFiles((list) => list.filter((x) => x !== f))}>
                     ×
                   </button>
                 </li>
@@ -1021,10 +1076,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
             aria-controls={pickerOptions > 0 ? `composer-options-${session.id}` : undefined}
             aria-activedescendant={pickerOptions > 0 ? `composer-option-${pick}` : undefined}
             onPaste={(e) => {
-              const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+              const files = [...e.clipboardData.files];
               if (files.length === 0) return;
               e.preventDefault();
-              addPictures(files);
+              addFiles(files);
             }}
             placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file, / for commands."}
             value={draft}
@@ -1053,6 +1108,16 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 <StopIcon /> Stop
               </button>
             )}
+            <SessionControls
+              sessionId={session.id}
+              mode={mode}
+              canBypass={canBypass}
+              version={view.items.filter((i) => i.kind === "model").length + view.settings}
+              onMode={setMode}
+              onOtherModel={() => setSwitching({ providerId: session.providerId, model: session.model })}
+              onRules={showRules}
+              onError={onError}
+            />
             <span className="composer-spacer" />
             {queued > 0 && <span className="muted">{queued} queued</span>}
             {(mcp?.resources ?? []).length > 0 && (
@@ -1063,24 +1128,23 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   setAttaching(attaching === null ? "" : null);
                 }}
               >
-                Attach…
+                MCP resource…
               </button>
             )}
             <input
               ref={picker}
               type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp"
               multiple
               hidden
               onChange={(e) => {
-                addPictures([...(e.target.files ?? [])]);
+                addFiles([...(e.target.files ?? [])]);
                 e.target.value = "";
               }}
             />
-            <button title="Attach pictures; you can also paste or drop them" disabled={pictures.length >= MAX_IMAGES} onClick={() => picker.current?.click()}>
-              Picture…
+            <button title="Attach files from anywhere on your Mac: text goes in the message, pictures go to the model as pictures. You can also paste or drop them." onClick={() => picker.current?.click()}>
+              Attach…
             </button>
-            <button className="primary" onClick={send} disabled={(!draft.trim() && pictures.length === 0) || accepting}>
+            <button className="primary" onClick={send} disabled={(!draft.trim() && pictures.length === 0 && textFiles.length === 0) || accepting}>
               {view.running ? "Queue" : "Send"}
             </button>
           </div>

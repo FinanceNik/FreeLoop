@@ -193,6 +193,28 @@ func WriteCacheFile(path string, data []byte) error {
 	return nil
 }
 
+// InstallTool writes a program the app downloaded, whole or not at all.
+func InstallTool(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("environment: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o700); err != nil {
+		return fmt.Errorf("environment: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("environment: %w", err)
+	}
+	return nil
+}
+
+// IsFile reports a regular file at path.
+func IsFile(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.Mode().IsRegular()
+}
+
 // RemoveCache deletes a folder made under the app's caches.
 func RemoveCache(dir string) error {
 	return os.RemoveAll(dir)

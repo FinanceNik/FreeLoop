@@ -44,7 +44,9 @@
         "pull_request",
         "tags_changed",
         "worktree_setup",
-        "optimizer_changed"
+        "optimizer_changed",
+        "effort_changed",
+        "session_rule_changed"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -109,9 +111,29 @@
     {
       "if": { "properties": { "type": { "const": "optimizer_changed" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/optimizerChanged" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "effort_changed" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/effortChanged" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "session_rule_changed" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/sessionRuleChanged" } } }
     }
   ],
   "$defs": {
+    "sessionRuleChanged": {
+      "type": "object",
+      "description": "A rule the user added to a session, or removed from it.",
+      "required": ["rule"],
+      "properties": { "rule": { "type": "object" }, "removed": { "type": "boolean" } }
+    },
+    "effortChanged": {
+      "type": "object",
+      "description": "The effort the session's model calls ask for (PRV-014).",
+      "required": ["effort"],
+      "properties": { "effort": { "type": "string" } }
+    },
     "optimizerChanged": {
       "type": "object",
       "description": "The session's token optimizer (HRN-019); an empty optimizer means off.",

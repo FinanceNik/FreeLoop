@@ -357,7 +357,8 @@ export default function App() {
   // showWork shows the workspace as next, its active pane's session first.
   const showWork = (next: ws.WorkspaceState) => {
     setWork(next);
-    const sid = next.panes[next.active];
+    const pane = next.panes[next.active];
+    const sid = ws.isSession(pane) ? pane : null;
     setScreen({ kind: "session", id: sid ?? "" });
     if (sid) {
       setLastSessionId(sid);
@@ -384,9 +385,10 @@ export default function App() {
         const exists = (sid: string) => sessions.some((x) => x.id === sid);
         const w = ws.forget(ws.restore({ ...saved, panes: (saved.panes ?? []).map((x) => x || null) }), exists);
         setWork(w);
-        for (const sid of w.panes) if (sid && !transcriptsRef.current[sid]) catchUp(sid);
-        const sid = w.panes[w.active];
-        if (sid || (w.layout > 1 && sessions.length > 0)) setScreen((sc) => (sc.kind === "none" ? { kind: "session", id: sid ?? "" } : sc));
+        for (const sid of w.panes) if (ws.isSession(sid) && !transcriptsRef.current[sid]) catchUp(sid);
+        const active = w.panes[w.active];
+        const sid = ws.isSession(active) ? active : null;
+        if (active || (w.layout > 1 && sessions.length > 0)) setScreen((sc) => (sc.kind === "none" ? { kind: "session", id: sid ?? "" } : sc));
       })
       .catch(() => {});
   }, [sessionsLoaded]);
@@ -656,6 +658,7 @@ export default function App() {
       page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
       page("rules", "Permission rules", () => setScreen({ kind: "rules" }), { keywords: "allow deny" }),
       page("settings", "Settings", () => setScreen({ kind: "settings" }), { keywords: "preferences theme notifications prices" }),
+      page("usage-pane", "Show usage in a pane", () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new")), { keywords: "live tokens cost graph 12 24 hours side by side" }),
       page("usage", "Usage", () => setScreen({ kind: "usage" }), { keywords: "cost tokens analytics dashboard spend", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
       page("import", "Import from Claude Code", () => setScreen({ kind: "import" })),
       page("backup", "Back up or restore the configuration", () => setScreen({ kind: "settings" }), { keywords: "export import settings providers profiles" }),
@@ -808,7 +811,16 @@ export default function App() {
           <button className="attention-link" aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
             Board
           </button>
-          <button className="attention-link" aria-current={screen.kind === "usage" ? "page" : undefined} onClick={() => setScreen({ kind: "usage" })}>
+          <button
+            className="attention-link"
+            aria-current={screen.kind === "usage" ? "page" : undefined}
+            title="Drag to a pane to watch it beside your sessions"
+            draggable={!STANDALONE}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(SESSION_DRAG_TYPE, ws.USAGE_PANE);
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            onClick={() => setScreen({ kind: "usage" })}>
             Usage
           </button>
           <div className="layout-switch" role="group" aria-label="Sessions side by side">
@@ -1083,6 +1095,8 @@ export default function App() {
             onPlace={(sid, i) => showWork(ws.placeIn(workRef.current, sid, i))}
             onClose={(i) => showWork(ws.closePane(workRef.current, i))}
             onNew={() => setScreen({ kind: "new" })}
+            onUsagePage={() => setScreen({ kind: "usage" })}
+            onError={report}
           />
         )}
         {screen.kind === "new" && (
@@ -1193,7 +1207,7 @@ export default function App() {
         )}
         {screen.kind === "compare" && <Compare key={screen.tag} tag={screen.tag} onOpen={(id) => openSession(id)} onError={report} />}
         {screen.kind === "usage" && (
-          <Usage projects={projects} providers={providers} harnesses={harnesses} onOpenSession={(id) => openSession(id)} onOpenPrices={() => setScreen({ kind: "settings" })} onError={report} />
+          <Usage onShowInPane={STANDALONE ? undefined : () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new"))} projects={projects} providers={providers} harnesses={harnesses} onOpenSession={(id) => openSession(id)} onOpenPrices={() => setScreen({ kind: "settings" })} onError={report} />
         )}
         {screen.kind === "board" && (
           <Board

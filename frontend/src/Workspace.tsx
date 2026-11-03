@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
-import { tabbed, type WorkspaceState } from "./workspace.ts";
+import LiveUsage from "./LiveUsage.tsx";
+import { tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
 
 // The panes of the main window (GUI-017). The rules are in workspace.ts; this
 // draws them. Every pane stays mounted, tabbed or not, so a hidden pane keeps
@@ -18,11 +19,14 @@ interface Props {
   onPlace: (sid: string, i: number) => void;
   onClose: (i: number) => void;
   onNew: () => void;
+  // Opens the full usage page.
+  onUsagePage: () => void;
+  onError: (err: unknown) => void;
 }
 
 const MAX_OFFERED = 6;
 
-export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onClose, onNew }: Props) {
+export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onClose, onNew, onUsagePage, onError }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -36,7 +40,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
   const split = work.layout > 1;
   const asTabs = tabbed(work, width);
   const session = (sid: string | null) => (sid ? sessions.find((s) => s.id === sid) : undefined);
-  const titleOf = (sid: string | null) => session(sid)?.title ?? "Empty";
+  const titleOf = (sid: string | null) => (sid === USAGE_PANE ? "Usage" : (session(sid)?.title ?? "Empty"));
   // Sessions an empty pane offers: not shown yet, most recent first.
   const offered = sessions.filter((s) => !work.panes.includes(s.id) && s.status !== "archived" && !s.parentId).slice(0, MAX_OFFERED);
 
@@ -99,7 +103,21 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               }}
               onDrop={(e) => drop(e, i)}
             >
-              {s ? (
+              {sid === USAGE_PANE ? (
+                <div className="pane-usage">
+                  <div className="pane-usage-head">
+                    <h2>Usage</h2>
+                    <span className="spacer" />
+                    <button className="link" onClick={onUsagePage}>
+                      Full usage page
+                    </button>
+                    <button onClick={() => onClose(i)} aria-label="Close this pane" title="Close this pane">
+                      ×
+                    </button>
+                  </div>
+                  <LiveUsage onError={onError} />
+                </div>
+              ) : s ? (
                 renderSession(s, active, split ? () => onClose(i) : undefined)
               ) : (
                 <div className="empty pane-empty">
@@ -117,6 +135,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
                   )}
                   <div className="row">
                     <button onClick={onNew}>New session</button>
+                    {!work.panes.includes(USAGE_PANE) && <button onClick={() => onPlace(USAGE_PANE, i)}>Show usage</button>}
                     {split && <button onClick={() => onClose(i)}>Close this pane</button>}
                   </div>
                 </div>

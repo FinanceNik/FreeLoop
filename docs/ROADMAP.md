@@ -307,17 +307,17 @@ What the open "later" list held that follows from the sandbox or needs no accoun
 
 ### Token optimizers (planned 2026-11-02)
 
-Rewriting shell commands so their output costs fewer tokens (HRN-019, OQ-029). No new dependency; the program is the user's to install.
+Rewriting shell commands so their output costs fewer tokens (HRN-019, OQ-029). No new dependency; the program is the user's to install, by hand or with one click.
 
 1. **The built-in harness and the session dropdown.** *Built 2026-11-02; tested with a stand-in program, with real RTK 1.1.0 unconfined and under the real Seatbelt sandbox, and in the browser with the demo provider. Real models' behaviour with shortened output, Docker and a Homebrew-installed binary are not checked.* `internal/engine/optimizers.go` asks the program for a rewrite after approval and checks it (`validRewrite`); the shell tool has a permanent `raw` option, so the tool list and the prompt cache do not change with the switch; `optimizer_changed` records the choice; the Optimizer dropdown is in the session header and the ⌘K palette.
 2. **Defaults, setup and files.** *Built 2026-11-02; tested with a stand-in program and checked in the browser with real RTK and with none on the PATH.* A Token optimizers page in Settings shows where each program is, a Check button that runs it, the install command and the default for new sessions (`defaults.optimizer`); profiles have `optimizer:`, the new-session form and `freeloop new -optimizer` choose one, `freeloop optimizer <session> [id|off]` and the socket's `sessions.optimizers` and `sessions.setOptimizer` switch one; `optimizers/<id>.yaml` adds or replaces one, hot-reloaded and included in backups. Choosing one that is not installed offers to type its install command in the session's terminal.
 3. Measured savings per session from `rtk gain`, the Usage tab by optimizer, on and off in Compare (HRN-016).
-4. Claude Code through a hook of Freeloop's own, a narrow allow list for rewritten read-only commands, and a warning when a global `rtk init -g` hook is present, which Freeloop cannot switch off.
+4. **Claude Code and installing from the session.** *Built 2026-11-03; run through the real Claude Code adapter (0.99.1) with real RTK 1.1.0 on a stand-in model: read-only commands ran shorter with no prompt, `touch` and `git push` asked with the original shown, off gave raw output and on again the short form. The install button was tried against GitHub. A real model and a signed-in Claude Code were not tried.* `sessionOptimizer.forAgent` answers the plugin's `PreToolUse` hook (`freeloop optimizer-hook`, `sessions.rewriteForAgent`), the ACP client maps a rewrite back with `Original`, and a tool call's `via` names the optimizer. `internal/engine/optimizerinstall.go` downloads `rtk-oss`. A global `rtk init -g` hook gets a warning in the session.
 5. Custom harnesses through `terminal/create`.
 
 A hardening pass on 2026-11-02 tried 130 commands raw and through real RTK in identical repositories, and tried to get hidden commands past the check in zsh. See `docs/SECURITY.md`. An independent review added more. RTK turned a `git diff --output` file into its own summary and showed 10 of 31 commits for `git log` with no note, so those stay as written; pipes, redirections and substitutions no longer are rewritten; RTK runs a repository's copy of `tsc`, `jest`, `gradle` and others, so a rewrite now takes a list of tools and must be the approved text after the program's name; files need approval; a repository's settings no longer reach the program; a sandboxed session could read an unconfined session's stored output, and no longer can; `rtk bypass`, `run`, `err`, `summary` and `test` no longer get past deny rules. Known limits: `rtk recall` hints go stale after a fork or after switching the optimizer off.
 
-Not in: output filters (`rtk pipe` shortened a 22 KB `git log` to 259 bytes in the test, which looks wrong), and gateways that sit in front of the model (they raise HRN-008 questions).
+Not in: output filters (`rtk pipe` shortened a 22 KB `git log` to 259 bytes in the test, which looks wrong), gateways that sit in front of the model (they raise HRN-008 questions), and squeez and PTK, tested on 2026-11-03 and not added (OQ-029).
 
 ### Production readiness (2026-11-03)
 
@@ -332,6 +332,17 @@ A check of the whole app against v1, then the fixes it asked for. What it found 
 - **A panic** ends that turn or tool call, not the app. **A lost context line** no longer cuts what follows it, and the user is told. **A crashed agent** starts again at the next message. **A stream that stalls** ends after five minutes and is retried; **one that ends early** is an error, not a finished reply.
 
 Not done: reaping after a crash, storage views and pruning, sharing checkpoints between sessions, a universal build.
+
+### Live usage (built 2026-11-03)
+
+1. **Live usage in a pane (GUI-023).** *Checked in the browser with the demo provider: a turn moved the pane's totals without a reload, and the pane stayed after one.* `internal/store/recentusage.go` folds usage per five minutes from the transcripts when asked, keeping three days; `Engine.RecentUsage` steps it every 15 minutes for 12 hours and every 30 for 24; `LiveUsage.tsx` draws it, and a pane holds it as `USAGE_PANE` in `workspace.ts`. A pane gets it from "Show in a pane" on the usage page, by dragging Usage from the sidebar, from an empty pane or from the palette.
+
+### Session controls (built 2026-11-03)
+
+1. **Model and effort (PRV-014).** *Run through the real Claude Code adapter (0.99.1) on a stand-in model: choosing Sonnet and low sent `claude-sonnet-5-5` and `effort: low` to the API, and the same after restarting the app. The built-in agent is covered by a test, since the demo provider has no effort. A real model and a signed-in Claude Code were not tried, and the other presets' agents were not asked what they offer.* `internal/engine/options.go` lists a session's options for both harnesses; `harness.Configurable` is ACP's `configOptions`; `SessionControls.tsx` is the row beside the composer.
+2. **Attaching any file (SES-019).** *Checked in the browser with a Markdown file, a file with no type, a PDF and a picture.* `frontend/src/attach.ts` sorts files; the engine checks them again in `attachedFiles`. PDFs and other binary files need the model's own document support, which no provider adapter has yet.
+3. **Finder (GUI-024).** *The click was tried in the app on a scratch project and reported no error; a window opening was not observed from here, and `open` behaviour was tested with a harmless fake app.* `darwin.FolderArgv`.
+4. **Permissions in the session (SEC-002, GUI-007).** *Checked in the browser, across a reload.* Permissions beside the composer, Rules… opening the panel, where rules are added and removed for the session or for all sessions (`session_rule_changed`).
 
 ## Later (unscheduled)
 

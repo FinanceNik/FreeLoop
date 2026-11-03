@@ -99,9 +99,6 @@ func TestProfileOptimizer(t *testing.T) {
 	if err := (Profile{ID: "p", Name: "P", Optimizer: OptimizerOff}).ValidateProject(); err == nil {
 		t.Error("a project profile turned the optimizer off")
 	}
-	if err := (Profile{ID: "p", Name: "P", Harness: "claude-code", Optimizer: "rtk"}).Validate(); err == nil {
-		t.Error("an external agent's profile chose an optimizer")
-	}
 	if err := (Profile{ID: "p", Name: "P", Harness: "claude-code", Optimizer: OptimizerOff}).Validate(); err != nil {
 		t.Error(err)
 	}

@@ -227,7 +227,7 @@ export default function NewSession({ providers, projects, environments, profiles
     if (extra.length > 0) return compare();
     setBusy(true);
     const own = worktree && !!settings?.trusted;
-    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode, worktree: own, optimizer: usesProvider ? optimizer : "" })
+    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode, worktree: own, optimizer: usesProvider || harness?.takesOptimizer ? optimizer : "" })
       .then(async (s) => {
         if (rememberWorktree && s.projectId) await EngineService.SetProjectWorktreeDefault(s.projectId, own ? "always" : "never").catch(onError);
         if (makeDefault && s.projectId) await EngineService.SetProjectProfile(s.projectId, profileId).catch(onError);
@@ -566,7 +566,7 @@ export default function NewSession({ providers, projects, environments, profiles
             env?.kind === "local" && <span className="muted">Commands ask each time, and run with your full access. Choose a sandboxed environment to confine them to the project.</span>
           )}
         </label>
-        {usesProvider && extra.length === 0 && (
+        {(usesProvider || harness?.takesOptimizer) && extra.length === 0 && (
           <label>
             Token optimizer
             <select value={optimizer} onChange={(e) => setOptimizer(e.target.value)}>

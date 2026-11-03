@@ -29,6 +29,9 @@ type HarnessInfo struct {
 	// UsesProvider is set for harnesses that run on one of the app's
 	// providers; an external agent brings its own model access.
 	UsesProvider bool `json:"usesProvider"`
+	// TakesOptimizer is set for an agent a token optimizer can reach, through a
+	// hook (HRN-019); the built-in harness always can.
+	TakesOptimizer bool `json:"takesOptimizer"`
 	// Missing says why the agent cannot start here, such as its command
 	// not being on the login PATH (Node.js for npx); empty when it can.
 	Missing string `json:"missing,omitempty"`
@@ -67,7 +70,7 @@ func (e *Engine) ListHarnesses() []HarnessInfo {
 		if missing == "" {
 			missing = e.missingCommand(p.Command)
 		}
-		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: missing, Custom: p.Watch != ""})
+		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: missing, Custom: p.Watch != "", TakesOptimizer: e.hookProgram != "" && p.TakesCommandHook()})
 	}
 	return out
 }

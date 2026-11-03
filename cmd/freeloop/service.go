@@ -409,9 +409,44 @@ func (s *EngineService) ListHarnesses() []engine.HarnessInfo {
 	return s.eng.ListHarnesses()
 }
 
+// SessionOptions lists what can be changed in a session (PRV-014).
+func (s *EngineService) SessionOptions(ctx context.Context, sessionID string) (engine.SessionOptionsReport, error) {
+	return s.eng.SessionOptions(ctx, sessionID)
+}
+
+// SetSessionOption changes one of them.
+func (s *EngineService) SetSessionOption(ctx context.Context, sessionID, id, value string) error {
+	return s.eng.SetSessionOption(ctx, sessionID, id, value)
+}
+
+// LoadSessionOptions starts a session's agent, so it can say what it offers.
+func (s *EngineService) LoadSessionOptions(ctx context.Context, sessionID string) (engine.SessionOptionsReport, error) {
+	return s.eng.LoadSessionOptions(ctx, sessionID)
+}
+
+// OpenProjectFolder shows the session's folder in the Finder (GUI-024).
+func (s *EngineService) OpenProjectFolder(ctx context.Context, sessionID string) error {
+	return s.eng.OpenProjectFolder(ctx, sessionID)
+}
+
+// AddSessionRule adds a rule that lasts as long as the session (SEC-002).
+func (s *EngineService) AddSessionRule(sessionID string, r permission.Rule) error {
+	return s.eng.AddSessionRule(sessionID, r)
+}
+
+// DeleteSessionRule removes one of them.
+func (s *EngineService) DeleteSessionRule(sessionID string, r permission.Rule) error {
+	return s.eng.DeleteSessionRule(sessionID, r)
+}
+
 // SetModel switches a built-in session's model (PRV-006).
 func (s *EngineService) SetModel(ctx context.Context, sessionID, providerID, model string) error {
 	return s.eng.SetModel(ctx, sessionID, providerID, model)
+}
+
+// RecentUsage returns the last hours of usage, for the live graphs (GUI-023).
+func (s *EngineService) RecentUsage(ctx context.Context, hours int) (engine.RecentUsageReport, error) {
+	return s.eng.RecentUsage(ctx, hours)
 }
 
 // ShowLogs shows the app's log file in Finder, for a bug report (NFR-PRIV-001).
@@ -460,6 +495,17 @@ func (s *EngineService) ApproveCommands(fingerprints []string) (config.Config, e
 
 func (s *EngineService) SetDefaultOptimizer(ctx context.Context, id string) (config.Config, error) {
 	return s.eng.SetDefaultOptimizer(ctx, id)
+}
+
+// InstallOptimizer downloads a token optimizer's program into the app's own folder,
+// on the user's asking (HRN-019).
+func (s *EngineService) InstallOptimizer(ctx context.Context, id string) (engine.OptimizerStatus, error) {
+	return s.eng.InstallOptimizer(ctx, id)
+}
+
+// RemoveOptimizer deletes what InstallOptimizer downloaded.
+func (s *EngineService) RemoveOptimizer(ctx context.Context, id string) error {
+	return s.eng.RemoveOptimizer(ctx, id)
 }
 
 // TypeOptimizerInstall types a token optimizer's install command into a new

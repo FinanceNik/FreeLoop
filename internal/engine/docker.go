@@ -37,11 +37,11 @@ func containerName(sid string) string {
 
 // sessionPlugin writes the skill plugin of a session whose agent takes one
 // (SKL-008) and returns it and its folder, both empty otherwise.
-func (e *Engine) sessionPlugin(sid string, preset config.HarnessPreset, project session.Project, prof config.Profile) (plugin, dir string) {
+func (e *Engine) sessionPlugin(sid string, preset config.HarnessPreset, containerized bool, project session.Project, prof config.Profile) (plugin, dir string) {
 	if preset.Skills != config.SkillsClaudePlugin {
 		return "", ""
 	}
-	plugin, err := e.skillPlugin(sid, project, prof)
+	plugin, err := e.skillPlugin(sid, preset.ID, containerized, project, prof)
 	if err != nil {
 		log.Printf("engine: the skills of session %s: %v", sid, err)
 		plugin = ""
@@ -76,7 +76,7 @@ func (e *Engine) sessionContainer(ctx context.Context, ses session.Session, cfg 
 	if err != nil {
 		return nil, err
 	}
-	_, pluginDir := e.sessionPlugin(ses.ID, preset, project, prof)
+	_, pluginDir := e.sessionPlugin(ses.ID, preset, true, project, prof)
 	return e.dockerEnv(ctx, ses, project, cfg, vars, host, pluginDir)
 }
 

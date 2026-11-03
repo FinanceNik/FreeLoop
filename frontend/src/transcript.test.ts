@@ -258,6 +258,17 @@ test("a tool call's later title and input replace the first ones", () => {
   assert.equal(t.status, "completed");
 });
 
+test("the optimizer's name stays on a tool call when its output arrives (HRN-019)", () => {
+  const v = buildView([
+    { ...ev(1, { toolCallId: "t1", title: "Terminal", tool: "shell", kind: "execute", status: "pending", rawInput: {} }), type: "tool_call" },
+    { ...ev(2, { toolCallId: "t1", via: "RTK" }), type: "tool_call_update" },
+    { ...ev(3, { toolCallId: "t1", status: "completed", content: [{ type: "content", content: { type: "text", text: "* main" } }] }), type: "tool_call_update" },
+  ]);
+  const t = v.items.find((i) => i.kind === "tool");
+  assert.ok(t && t.kind === "tool");
+  assert.equal(t.via, "RTK");
+});
+
 test("pictures the user attached join their message (SES-015)", () => {
   const view = buildView([
     { v: 1, seq: 1, ts: "2026-10-31T10:00:00Z", sid: "s", type: "user_message_chunk", data: { content: { type: "text", text: "what is this?" } } },

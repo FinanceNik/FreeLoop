@@ -56,6 +56,11 @@ type HarnessPreset struct {
 // ClaudeCodePresetID is the preset for Claude Code (HRN-006).
 const ClaudeCodePresetID = "claude-code"
 
+// TakesCommandHook reports an agent that runs a plugin's hook before each shell
+// command, which is how a token optimizer reaches an agent that runs its commands
+// itself (HRN-019).
+func (p HarnessPreset) TakesCommandHook() bool { return p.Skills == SkillsClaudePlugin }
+
 // SkillsClaudePlugin is the HarnessPreset.Skills way of agents built on the
 // Claude Agent SDK, whose ACP adapter passes _meta.claudeCode.options on to
 // the SDK.

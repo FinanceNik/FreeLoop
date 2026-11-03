@@ -66,6 +66,8 @@ type session struct {
 	approved approval
 	terms    map[string]*terminal
 	next     int
+	// options are what the agent reports it can change (PRV-014).
+	options []harness.Option
 }
 
 type approval struct {
@@ -121,6 +123,7 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 	if p.ExternalID != "" {
 		if s.load(ctx, p.ExternalID) {
 			s.applyMode(ctx)
+			s.restoreOptions(ctx)
 			return s, nil
 		}
 	}
@@ -137,7 +140,72 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 	}
 	s.id = ns.SessionId
 	s.applyMode(ctx)
+	s.reportOptions(ns.ConfigOptions)
+	s.restoreOptions(ctx)
 	return s, nil
+}
+
+// reportOptions takes what the agent said it can change, and records it, so the
+// app knows the choices while the agent is not running.
+func (s *session) reportOptions(options []sdk.SessionConfigOption) {
+	if len(options) == 0 {
+		return
+	}
+	raw, err := json.Marshal(options)
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	s.options = harness.ParseOptions(raw)
+	s.mu.Unlock()
+	var m []any
+	if json.Unmarshal(raw, &m) == nil {
+		s.p.Emit(event.ConfigOptionUpdate, map[string]any{"configOptions": m})
+	}
+}
+
+// Options implements harness.Configurable.
+func (s *session) Options() []harness.Option {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.options)
+}
+
+// SetOption implements harness.Configurable. Only what the agent listed can be
+// asked for, so an agent's mode or anything else it offers stays out of reach.
+func (s *session) SetOption(ctx context.Context, id, value string) error {
+	s.mu.Lock()
+	i := slices.IndexFunc(s.options, func(o harness.Option) bool { return o.ID == id })
+	listed := i >= 0 && slices.ContainsFunc(s.options[i].Choices, func(c harness.OptionChoice) bool { return c.Value == value })
+	s.mu.Unlock()
+	if !listed {
+		return fmt.Errorf("%s does not offer %q for %q", s.preset.Name, value, id)
+	}
+	res, err := s.conn.SetSessionConfigOption(ctx, sdk.SetSessionConfigOptionRequest{ValueId: &sdk.SetSessionConfigOptionValueId{
+		SessionId: s.id, ConfigId: sdk.SessionConfigId(id), Value: sdk.SessionConfigValueId(value),
+	}})
+	if err != nil {
+		return fmt.Errorf("%s refused it: %w", s.preset.Name, err)
+	}
+	s.reportOptions(res.ConfigOptions)
+	return nil
+}
+
+// restoreOptions puts back the choices from before the agent last stopped. One
+// the agent no longer offers stays at what it chose by itself.
+func (s *session) restoreOptions(ctx context.Context) {
+	for _, want := range s.p.Options {
+		s.mu.Lock()
+		i := slices.IndexFunc(s.options, func(o harness.Option) bool { return o.ID == want.ID })
+		same := i >= 0 && s.options[i].Current == want.Value
+		s.mu.Unlock()
+		if same || i < 0 {
+			continue
+		}
+		if err := s.SetOption(ctx, want.ID, want.Value); err != nil {
+			log.Printf("acp: put back option %s: %v", want.ID, err)
+		}
+	}
 }
 
 // load continues the agent's session id (SES-003) and reports whether it
@@ -149,12 +217,13 @@ func (s *session) load(ctx context.Context, id string) bool {
 		s.mu.Lock()
 		s.loading = true
 		s.mu.Unlock()
-		_, err := s.conn.LoadSession(ctx, sdk.LoadSessionRequest{SessionId: sdk.SessionId(id), Cwd: s.env.Root(), McpServers: s.mcpServers(), Meta: s.sessionMeta()})
+		loaded, err := s.conn.LoadSession(ctx, sdk.LoadSessionRequest{SessionId: sdk.SessionId(id), Cwd: s.env.Root(), McpServers: s.mcpServers(), Meta: s.sessionMeta()})
 		s.mu.Lock()
 		s.loading = false
 		s.mu.Unlock()
 		if err == nil {
 			s.id = sdk.SessionId(id)
+			s.reportOptions(loaded.ConfigOptions)
 			return true
 		}
 		why = err.Error()
@@ -435,7 +504,14 @@ func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) er
 			}
 		}
 	}
+	s.showOriginal(m)
 	switch {
+	case t == event.ConfigOptionUpdate:
+		if raw, err := json.Marshal(m["configOptions"]); err == nil {
+			s.mu.Lock()
+			s.options = harness.ParseOptions(raw)
+			s.mu.Unlock()
+		}
 	case t == event.UsageUpdate:
 		return nil
 	case t == event.UserMessageChunk:
@@ -455,6 +531,26 @@ func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) er
 	}
 	s.p.Emit(t, m)
 	return nil
+}
+
+// showOriginal puts back what the model wrote in an update about a command a token
+// optimizer rewrote, and says it did.
+func (s *session) showOriginal(m map[string]any) {
+	if s.p.Optimizer == nil {
+		return
+	}
+	in, ok := m["rawInput"].(map[string]any)
+	if !ok {
+		return
+	}
+	command, _ := in["command"].(string)
+	original, via, ok := s.p.Optimizer.Original(command)
+	if !ok {
+		return
+	}
+	in["command"] = original
+	m["title"] = original
+	m["via"] = via
 }
 
 // toolName maps an ACP tool kind onto the built-in harness's tool names, so
@@ -504,9 +600,23 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 		options = append(options, permission.Option{ID: string(o.OptionId), Name: o.Name, Kind: string(o.Kind)})
 	}
 	input, _ := json.Marshal(r.ToolCall.RawInput)
+	// A command a token optimizer rewrote is judged and shown as the model wrote it:
+	// that is what the user decides about and what rules name. Without this the
+	// agent would ask about every rewrite, read-only ones included.
+	judged, readOnly, via := command, false, ""
+	if s.p.Optimizer != nil && command != "" {
+		if original, by, ok := s.p.Optimizer.Original(command); ok {
+			judged, title, readOnly, via = original, original, permission.ReadOnlyCommand(original), by
+			if in, ok := r.ToolCall.RawInput.(map[string]any); ok {
+				shown := maps.Clone(in)
+				shown["command"] = original
+				input, _ = json.Marshal(shown)
+			}
+		}
+	}
 	d := s.p.Broker.Request(ctx, permission.Context{Mode: s.Mode(), Root: s.env.Root()}, permission.Request{
 		SessionID: s.p.SessionID, ToolCallID: string(r.ToolCall.ToolCallId), Tool: toolName(string(kind)), Kind: kind,
-		Title: title, Input: input, Paths: paths, Command: command, Options: options,
+		Title: title, Input: input, Paths: paths, Command: judged, Options: options, RewrittenReadOnly: readOnly,
 	})
 	pick := func(kinds ...sdk.PermissionOptionKind) (sdk.RequestPermissionResponse, error) {
 		if d.OptionID != "" {
@@ -526,6 +636,10 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 		s.mu.Lock()
 		s.approved = approval{kind: kind, paths: paths, command: command, until: time.Now().Add(2 * time.Minute)}
 		s.mu.Unlock()
+		if via != "" {
+			// The agent's own updates only ever name the command the model wrote.
+			s.p.Emit(event.ToolCallUpdate, map[string]any{"toolCallId": string(r.ToolCall.ToolCallId), "via": via})
+		}
 		return pick(sdk.PermissionOptionKindAllowOnce, sdk.PermissionOptionKindAllowAlways)
 	case permission.Denied:
 		return pick(sdk.PermissionOptionKindRejectOnce, sdk.PermissionOptionKindRejectAlways)

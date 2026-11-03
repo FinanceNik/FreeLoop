@@ -161,10 +161,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	e.startSessionServers(prof)
-	effort := prof.Effort
-	if effort == "" {
-		effort = "high"
-	}
+	effort := sessionEffort(ses, prof)
 	vars, err := e.resolveEnv(envCfg)
 	if err != nil {
 		return nil, err
@@ -180,7 +177,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	// An external agent that takes skills gets the session's (SKL-008).
-	plugin, pluginDir := e.sessionPlugin(sid, preset, project, prof)
+	plugin, pluginDir := e.sessionPlugin(sid, preset, envCfg.Kind == string(environment.KindDocker), project, prof)
 	var env environment.Environment = host
 	closeEgress := func() {}
 	if envCfg.Kind == string(environment.KindDocker) {
@@ -262,6 +259,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		Broker:         e.broker,
 		Model:          ses.Model,
 		Effort:         effort,
+		Options:        lastOptions(events),
 		Mode:           permission.Mode(ses.Mode),
 		History:        history,
 		Attachment:     func(name string) ([]byte, error) { return e.store.Attachment(sid, name) },
@@ -305,6 +303,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		params.Optimizer = r.optimizer
 		hs, err = builtin.Harness{}.NewSession(ctx, params)
 	} else {
+		if e.agentTakesOptimizer(ses.HarnessID, envCfg) {
+			r.optimizer = &sessionOptimizer{e: e, sid: sid, env: env, agent: true}
+			params.Optimizer = r.optimizer
+		}
 		params.MCPServers = e.agentServers(prof)
 		params.ExternalID = ses.ExternalID
 		hs, err = acp.Harness{Preset: preset}.NewSession(ctx, params)
@@ -397,6 +399,8 @@ type PromptRequest struct {
 	Resources []ResourceRef `json:"resources"`
 	// Images are pictures the user attached (SES-015).
 	Images []ImageInput `json:"images"`
+	// Files are text files the user attached from anywhere on the Mac (SES-019).
+	Files []FileInput `json:"files"`
 }
 
 // queued is a prompt waiting for its turn. Resources are read when it
@@ -418,12 +422,16 @@ func (e *Engine) PromptWith(ctx context.Context, sid string, req PromptRequest) 
 	if err != nil {
 		return PromptResult{}, err
 	}
-	return e.enqueue(ctx, sid, queued{text: req.Text, refs: req.Resources, images: images})
+	files, err := attachedFiles(req.Files, len(req.Text))
+	if err != nil {
+		return PromptResult{}, err
+	}
+	return e.enqueue(ctx, sid, queued{text: req.Text, refs: req.Resources, images: images, inline: files})
 }
 
 func (e *Engine) enqueue(ctx context.Context, sid string, q queued) (PromptResult, error) {
 	text := q.text
-	if text == "" && len(q.images) == 0 {
+	if text == "" && len(q.images) == 0 && len(q.inline) == 0 {
 		return PromptResult{}, errors.New("empty message")
 	}
 	r, err := e.runtimeFor(ctx, sid)

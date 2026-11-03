@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -157,4 +158,66 @@ func cell(s string) string {
 		return "'" + s
 	}
 	return s
+}
+
+// RecentBucket is one step of a graph of recent usage (GUI-023).
+type RecentBucket struct {
+	// Start is when it begins, in milliseconds since 1970.
+	Start      int64   `json:"start"`
+	Input      int64   `json:"input"`
+	Output     int64   `json:"output"`
+	CacheRead  int64   `json:"cacheRead"`
+	CacheWrite int64   `json:"cacheWrite"`
+	Calls      int64   `json:"calls"`
+	Cost       float64 `json:"cost"`
+	// Unpriced counts model calls with no price, which the cost leaves out.
+	Unpriced int64 `json:"unpriced"`
+}
+
+// RecentUsageReport is the last hours of usage, with every step present.
+type RecentUsageReport struct {
+	Hours       int            `json:"hours"`
+	StepMinutes int            `json:"stepMinutes"`
+	Buckets     []RecentBucket `json:"buckets"`
+}
+
+// RecentUsage returns the last hours of usage, up to two days: every 15 minutes
+// for up to 12 hours, else every 30, which keeps the bars readable in a pane.
+func (e *Engine) RecentUsage(ctx context.Context, hours int) (RecentUsageReport, error) {
+	if hours < 1 || hours > 48 {
+		return RecentUsageReport{}, fmt.Errorf("recent usage covers 1 to 48 hours, not %d", hours)
+	}
+	step := 15 * time.Minute
+	if hours > 12 {
+		step = 30 * time.Minute
+	}
+	n := int(time.Duration(hours) * time.Hour / step)
+	since := time.Now().Truncate(step).Add(-time.Duration(n-1) * step)
+	rows, err := e.store.RecentUsage(ctx, since)
+	if err != nil {
+		return RecentUsageReport{}, err
+	}
+	out := RecentUsageReport{Hours: hours, StepMinutes: int(step / time.Minute), Buckets: make([]RecentBucket, n)}
+	for i := range out.Buckets {
+		out.Buckets[i].Start = since.Add(time.Duration(i) * step).UnixMilli()
+	}
+	prices := e.Config().Prices
+	for _, u := range rows {
+		i := int(u.Start.Sub(since) / step)
+		if i < 0 || i >= n {
+			continue
+		}
+		b := &out.Buckets[i]
+		b.Input += u.Input
+		b.Output += u.Output
+		b.CacheRead += u.CacheRead
+		b.CacheWrite += u.CacheWrite
+		b.Calls += u.Calls
+		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
+			b.Cost += p.Cost(u.Input, u.Output, u.CacheRead, u.CacheWrite)
+		} else {
+			b.Unpriced += u.Calls
+		}
+	}
+	return out, nil
 }

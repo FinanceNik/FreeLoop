@@ -39,11 +39,16 @@ var ErrNotFound = store.ErrNotFound
 type Options struct {
 	DataDir string
 	Secrets secrets.Store
+	// HookProgram is this program, for an external agent's hook to call back with
+	// (HRN-019); without it agents cannot use a token optimizer.
+	HookProgram string
 	// Confiner enforces the native sandbox (ENV-009). Without one, a sandboxed
 	// environment runs nothing.
 	Confiner environment.Confiner
 	// EditorArgv is the command that opens a file for editing, never running it.
 	EditorArgv func(path string) []string
+	// FolderArgv is the command that shows a folder, never running what is in it.
+	FolderArgv func(path string) []string
 	// Home is the user's home directory, for the protected-path policy.
 	// Default os.UserHomeDir().
 	Home string
@@ -75,6 +80,8 @@ type ConfigChange struct {
 
 // Engine is safe for concurrent use.
 type Engine struct {
+	// hookProgram is what an agent's hook runs to reach the app (HRN-019).
+	hookProgram string
 	// storageFailing is set while events cannot be saved, for the sessions in
 	// storageStopped.
 	storageFailing atomic.Bool
@@ -102,6 +109,9 @@ type Engine struct {
 	loginGitConfig string
 	// editorArgv is the command that opens a file for editing.
 	editorArgv func(path string) []string
+	folderArgv func(path string) []string
+	// modelLists remembers each provider's models for the session's model menu.
+	modelLists map[string]modelList
 	// keyAddresses holds, by provider, the address its key is for.
 	keyAddresses map[string]string
 	// approvalSecret signs MCP approvals; read from the Keychain when first needed.
@@ -191,6 +201,7 @@ func Open(opts Options) (*Engine, error) {
 	}
 	e := &Engine{
 		gh:            "gh",
+		hookProgram:   opts.HookProgram,
 		dataDir:       opts.DataDir,
 		home:          opts.Home,
 		dev:           opts.Dev,
@@ -198,6 +209,8 @@ func Open(opts Options) (*Engine, error) {
 		secrets:       opts.Secrets,
 		confiner:      opts.Confiner,
 		editorArgv:    opts.EditorArgv,
+		folderArgv:    opts.FolderArgv,
+		modelLists:    map[string]modelList{},
 		cfg:           cfg,
 		issues:        map[string][]config.Issue{issueConfig: issues},
 		onChange:      opts.OnConfigChange,

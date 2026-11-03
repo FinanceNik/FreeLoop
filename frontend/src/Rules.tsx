@@ -9,9 +9,9 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-const TOOLS = ["shell", "write_file", "edit_file", "read_file", "list_dir", "glob", "grep", "*"];
+export const RULE_TOOLS = ["shell", "write_file", "edit_file", "read_file", "list_dir", "glob", "grep", "*"];
 
-function describe(r: Rule): string {
+export function describeRule(r: Rule): string {
   if (r.command) return `${r.tool}: ${r.command}`;
   if (r.path) return `${r.tool}: ${r.path}`;
   return `${r.tool}: any call`;
@@ -74,7 +74,7 @@ export default function Rules({ session, version, onError }: Props) {
             <option value="deny">Deny</option>
           </select>
           <select value={form.tool} onChange={(e) => setForm({ ...form, tool: e.target.value })} aria-label="Tool">
-            {TOOLS.map((t) => (
+            {RULE_TOOLS.map((t) => (
               <option key={t} value={t}>
                 {t === "*" ? "any tool" : t}
               </option>
@@ -110,7 +110,7 @@ function RuleList({ rules, onDelete }: { rules: Rule[]; onDelete?: (r: Rule) => 
       {rules.map((r, i) => (
         <li key={i} className="card">
           <div>
-            <span className={r.effect === "deny" ? "error-text" : "ok"}>{r.effect}</span> <code>{describe(r)}</code>
+            <span className={r.effect === "deny" ? "error-text" : "ok"}>{r.effect}</span> <code>{describeRule(r)}</code>
             {r.pending && <span className="muted"> does not apply until you approve it in Settings</span>}
             <div className="muted">{r.source}</div>
           </div>

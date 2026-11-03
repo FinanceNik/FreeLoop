@@ -48,6 +48,8 @@ type Options struct {
 
 // Store is safe for concurrent use.
 type Store struct {
+	// recentMu keeps two folds of recent usage from counting an event twice.
+	recentMu sync.Mutex
 	// rebuilt says why the database was rebuilt when it opened.
 	rebuilt  string
 	db       *sql.DB
@@ -153,10 +155,10 @@ func (s *Store) CreateSession(ctx context.Context, tmpl session.Session) (sessio
 		return session.Session{}, fmt.Errorf("store: %w", err)
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, worktree, worktree_branch, parent_id, optimizer, port_base, last_seq, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, worktree, worktree_branch, parent_id, optimizer, effort, port_base, last_seq, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 		ses.ID, ses.Title, ses.Status, ses.HarnessID, ses.ProjectID, ses.ProjectRoot, ses.EnvironmentID, ses.BaseCommit, ses.Branch,
-		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.Worktree, ses.WorktreeBranch, ses.ParentID, ses.Optimizer, ses.PortBase, now.UnixMilli(), now.UnixMilli())
+		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.Worktree, ses.WorktreeBranch, ses.ParentID, ses.Optimizer, ses.Effort, ses.PortBase, now.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return session.Session{}, fmt.Errorf("store: insert session: %w", err)
 	}
@@ -271,6 +273,7 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 			Title         string   `json:"title"`
 			Tags          []string `json:"tags"`
 			Optimizer     string   `json:"optimizer"`
+			Effort        string   `json:"effort"`
 		}
 		json.Unmarshal(data, &d)
 		switch {
@@ -299,6 +302,9 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 		case typ == event.OptimizerChanged:
 			sets += `, optimizer = ?`
 			args = append(args, d.Optimizer)
+		case typ == event.EffortChanged:
+			sets += `, effort = ?`
+			args = append(args, d.Effort)
 		}
 		// The transcript is the source of truth; a failed index update is
 		// repaired from it on the next open, so it does not fail the append.
@@ -395,7 +401,7 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
-const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, optimizer, port_base, last_seq, created_at, updated_at`
+const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, optimizer, effort, port_base, last_seq, created_at, updated_at`
 
 type scanner interface{ Scan(...any) error }
 
@@ -404,7 +410,7 @@ func scanSession(r scanner) (session.Session, error) {
 	var created, updated int64
 	var tags string
 	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectID, &ses.ProjectRoot, &ses.EnvironmentID,
-		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.Optimizer, &ses.PortBase, &ses.LastSeq, &created, &updated); err != nil {
+		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.Optimizer, &ses.Effort, &ses.PortBase, &ses.LastSeq, &created, &updated); err != nil {
 		return session.Session{}, err
 	}
 	ses.Tags = strings.Fields(tags)
@@ -500,6 +506,22 @@ var migrations = []string{
 	ALTER TABLE sessions ADD COLUMN activity_seq INTEGER NOT NULL DEFAULT 0;`,
 	// A session's token optimizer (HRN-019).
 	`ALTER TABLE sessions ADD COLUMN optimizer TEXT NOT NULL DEFAULT '';`,
+	// Usage per five minutes, for the graphs of recent hours (GUI-023).
+	`CREATE TABLE usage_recent (
+		bucket      INTEGER NOT NULL,
+		session_id  TEXT NOT NULL,
+		provider_id TEXT NOT NULL,
+		model       TEXT NOT NULL,
+		input       INTEGER NOT NULL,
+		output      INTEGER NOT NULL,
+		cache_read  INTEGER NOT NULL,
+		cache_write INTEGER NOT NULL,
+		calls       INTEGER NOT NULL,
+		PRIMARY KEY (bucket, session_id, provider_id, model)
+	);
+	ALTER TABLE sessions ADD COLUMN recent_seq INTEGER NOT NULL DEFAULT 0;`,
+	// The effort chosen for a session (PRV-014).
+	`ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

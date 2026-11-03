@@ -68,6 +68,10 @@ const (
 	WorktreeSetup Type = "worktree_setup"
 	// OptimizerChanged records the session's token optimizer (HRN-019).
 	OptimizerChanged Type = "optimizer_changed"
+	// EffortChanged records the effort a session's model calls ask for (PRV-014).
+	EffortChanged Type = "effort_changed"
+	// SessionRuleChanged records a rule the user added to or removed from a session.
+	SessionRuleChanged Type = "session_rule_changed"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -81,7 +85,7 @@ var ACPTypes = []Type{
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
-	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged,
+	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged,
 }
 
 // AllTypes returns every known variant.
@@ -211,6 +215,11 @@ type NoticeData struct {
 type ModelChangedData struct {
 	ProviderID string `json:"providerId"`
 	Model      string `json:"model"`
+}
+
+// EffortChangedData is the payload of effort_changed (PRV-014).
+type EffortChangedData struct {
+	Effort string `json:"effort"`
 }
 
 // OptimizerChangedData is the payload of optimizer_changed (HRN-019); an

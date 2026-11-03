@@ -35,7 +35,7 @@ const skillPluginName = "freeloop"
 
 // skillPlugin builds session sid's plugin folder and returns it, or "" when
 // no skill goes into it.
-func (e *Engine) skillPlugin(sid string, project session.Project, prof config.Profile) (string, error) {
+func (e *Engine) skillPlugin(sid, harnessID string, containerized bool, project session.Project, prof config.Profile) (string, error) {
 	fromClaude := filepath.Join(e.home, ".claude", "skills") + string(filepath.Separator)
 	files := map[string][]byte{}
 	var names []string
@@ -70,7 +70,19 @@ func (e *Engine) skillPlugin(sid string, project session.Project, prof config.Pr
 		}
 		names = append(names, s.Name)
 	}
-	if len(names) == 0 {
+	// The hook that lets a token optimizer reach the agent's commands (HRN-019). It
+	// asks the app on every command, so switching applies from the next one. It
+	// only ever rewrites: approval stays with the broker, whatever a repository's
+	// settings say, which is why this is not the optimizer's own hook (OQ-029).
+	hook := false
+	if preset, err := e.preset(harnessID); err == nil && e.hookProgram != "" && preset.TakesCommandHook() && !containerized {
+		command := strings.Join([]string{shellQuote(e.hookProgram), "optimizer-hook", shellQuote(config.SocketPath(e.dataDir)), shellQuote(sid)}, " ")
+		files["hooks/hooks.json"], _ = json.MarshalIndent(map[string]any{"hooks": map[string]any{"PreToolUse": []map[string]any{{
+			"matcher": "Bash", "hooks": []map[string]any{{"type": "command", "command": command}},
+		}}}}, "", "  ")
+		hook = true
+	}
+	if len(names) == 0 && !hook {
 		// The folder stays, empty, for a container that mounts it.
 		_, err := config.WriteSessionPlugin(e.dataDir, sid, nil)
 		return "", err
@@ -78,7 +90,7 @@ func (e *Engine) skillPlugin(sid string, project session.Project, prof config.Pr
 	manifest, _ := json.MarshalIndent(map[string]any{
 		"name":        skillPluginName,
 		"version":     "1.0.0",
-		"description": "Skills enabled for this session in Freeloop: " + strings.Join(names, ", "),
+		"description": "Freeloop's plugin for this session. Skills: " + strings.Join(names, ", "),
 	}, "", "  ")
 	files[".claude-plugin/plugin.json"] = manifest
 	return config.WriteSessionPlugin(e.dataDir, sid, files)

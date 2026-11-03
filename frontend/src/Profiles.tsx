@@ -248,7 +248,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                 ))}
               </select>
             </label>
-            <label hidden={!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider ?? true)}>
+            <label hidden={!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider || harnesses.find((h) => h.id === (form.harness || "builtin"))?.takesOptimizer || !harnesses.length)}>
               Token optimizer
               <select value={form.optimizer} onChange={(e) => set("optimizer", e.target.value)}>
                 <option value="">From Settings</option>
