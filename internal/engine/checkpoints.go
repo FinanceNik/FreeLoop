@@ -38,12 +38,15 @@ func (e *Engine) checkpointStore(sid string) string {
 	return filepath.Join(e.dataDir, "sessions", sid, "checkpoints.git")
 }
 
+// shadowBase is the start of a git command on the session's checkpoint store.
+func (e *Engine) shadowBase(sid string, host *environment.Local) []string {
+	return []string{"--git-dir=" + e.checkpointStore(sid), "--work-tree=" + host.Root(), "-c", "user.name=Freeloop", "-c", "user.email=freeloop@localhost", "-c", "commit.gpgsign=false"}
+}
+
 // shadowGit runs git on the session's checkpoint store with its folder as
 // the work tree. Hooks, fsmonitor and the user's identity stay out.
 func (e *Engine) shadowGit(ctx context.Context, host *environment.Local, sid string, timeout time.Duration, args ...string) (string, error) {
-	store := e.checkpointStore(sid)
-	base := []string{"--git-dir=" + store, "--work-tree=" + host.Root(), "-c", "user.name=Freeloop", "-c", "user.email=freeloop@localhost", "-c", "commit.gpgsign=false"}
-	res, err := gitRun(ctx, host, timeout, append(base, args...)...)
+	res, err := gitRun(ctx, host, timeout, append(e.shadowBase(sid, host), args...)...)
 	if err != nil {
 		return "", err
 	}
@@ -51,6 +54,33 @@ func (e *Engine) shadowGit(ctx context.Context, host *environment.Local, sid str
 		return "", fmt.Errorf("git %s: %s", args[0], strings.TrimSpace(res.Output))
 	}
 	return strings.TrimSpace(res.Output), nil
+}
+
+// snapshotExclusions keeps .claude and .freeloop out of a snapshot. git add refuses a
+// pathspec naming a folder that is ignored as a whole, even as an exclusion, though it
+// adds everything else: that turned checkpoints off for a project ignoring .claude. So
+// one ignored as a whole is left to the ignore rule, which nothing below it can undo.
+// One ignored in part keeps its exclusion, since .claude/* with !.claude/commands/
+// would bring files in. When git cannot say, the exclusions stay: at worst that is a
+// snapshot failing, and never one holding these folders.
+func (e *Engine) snapshotExclusions(ctx context.Context, host *environment.Local, sid string) []string {
+	// Asked without a final slash: with one, .claude/* counts as ignoring the folder
+	// itself, and its ! lines would then bring files in. Git sees for itself that it is
+	// a folder, which is what .claude/ as a rule needs.
+	folders := []string{".claude", ProjectDir}
+	ignored := ""
+	res, err := gitRun(ctx, host, 30*time.Second, append(e.shadowBase(sid, host), append([]string{"check-ignore", "--"}, folders...)...)...)
+	// It exits 0 with some ignored and 1 with none.
+	if err == nil && res.ExitCode == 0 {
+		ignored = res.Output
+	}
+	out := []string{}
+	for _, f := range folders {
+		if !slices.Contains(strings.Fields(ignored), f) {
+			out = append(out, ":(exclude)"+f)
+		}
+	}
+	return out
 }
 
 // snapshot commits the folder's current state and returns the commit.
@@ -73,7 +103,7 @@ func (e *Engine) snapshot(ctx context.Context, host *environment.Local, sid, mes
 	if _, err := e.shadowGit(ctx, host, sid, checkpointTimeout, "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", ".claude", ProjectDir); err != nil {
 		return "", err
 	}
-	if _, err := e.shadowGit(ctx, host, sid, checkpointTimeout, "add", "-A", "--", ".", ":(exclude).claude", ":(exclude)"+ProjectDir); err != nil {
+	if _, err := e.shadowGit(ctx, host, sid, checkpointTimeout, append([]string{"add", "-A", "--", "."}, e.snapshotExclusions(ctx, host, sid)...)...); err != nil {
 		return "", err
 	}
 	if err := e.dropNested(ctx, host, sid); err != nil {
