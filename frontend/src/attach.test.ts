@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { addText, isPicture, MAX_FILE_BYTES, MAX_FILES, textOf } from "./attach.ts";
 
@@ -31,4 +32,15 @@ test("a file is added, replaces one of its name, and is refused with a reason", 
   assert.match(addText(many, "one-more", bytes("x")).error ?? "", /at most/);
   const full = Array.from({ length: 5 }, (_, i) => ({ name: `f${i}`, text: "x".repeat(MAX_FILE_BYTES) }));
   assert.match(addText(full, "last", bytes("x")).error ?? "", /1 MB/);
+});
+
+// A pasted picture once landed at the far edge of a wide window: its own margin
+// rule replaced the auto side margins that keep the composer's children in line.
+test("what shows above the message box stays in the composer's column", () => {
+  const css = readFileSync(new URL("./app.css", import.meta.url), "utf8");
+  for (const name of ["picture-strip", "attachments", "todo-list"]) {
+    const rule = new RegExp(`^\\.${name} \\{([^}]*)\\}`, "m").exec(css);
+    assert.ok(rule, name);
+    assert.doesNotMatch(rule[1], /^\s*margin(-left|-right|-inline)?:/m, name);
+  }
 });
