@@ -224,3 +224,49 @@ func TestOnlyListedOptionsCanBeChosen(t *testing.T) {
 		t.Errorf("options = %+v", got)
 	}
 }
+
+// Stopping a turn ends what it was waiting on. The request's own context is the
+// connection's and outlives the turn, so the card stayed and a later Allow still
+// answered the agent.
+func TestStoppingATurnEndsItsApprovals(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+	env, _ := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root)})
+	rec := &recorder{}
+	broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
+	s := &session{p: harness.Params{SessionID: "x", Broker: broker, Emit: rec.emit}, env: env, mode: permission.ModeAsk, terms: map[string]*terminal{}}
+	turn, stop := context.WithCancel(context.Background())
+	defer stop()
+	s.mu.Lock()
+	s.turn = turn
+	s.mu.Unlock()
+
+	got := make(chan sdk.RequestPermissionResponse, 1)
+	go func() {
+		res, err := s.RequestPermission(context.Background(), sdk.RequestPermissionRequest{
+			ToolCall: sdk.ToolCallUpdate{ToolCallId: "t", Title: sdk.Ptr("Edit"), Kind: sdk.Ptr(sdk.ToolKindEdit)},
+			Options:  []sdk.PermissionOption{{OptionId: "yes", Name: "Allow", Kind: sdk.PermissionOptionKindAllowOnce}},
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		got <- res
+	}()
+	for len(broker.Pending()) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	stop()
+	select {
+	case res := <-got:
+		if res.Outcome.Cancelled == nil {
+			t.Errorf("outcome = %+v", res.Outcome)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the request outlived its turn")
+	}
+	if p := broker.Pending(); len(p) != 0 {
+		t.Errorf("still waiting: %+v", p)
+	}
+}

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"log"
 	"path/filepath"
 	"slices"
@@ -64,6 +65,7 @@ func (e *Engine) reload(changed []string) {
 			e.issues[issueConfig] = issues
 			e.mu.Unlock()
 			netguard.SetLocalOnly(localOnly)
+			e.dropBypass(context.Background())
 		case f == config.ProvidersFileName:
 			if err := e.loadProviders(); err != nil {
 				e.setIssues(issueProviders, []config.Issue{{File: config.ProvidersFileName, Message: err.Error()}})

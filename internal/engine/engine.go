@@ -283,6 +283,7 @@ func Open(opts Options) (*Engine, error) {
 		e.scheduling.Add(1)
 		go e.scheduleLoop(interval)
 	}
+	e.dropBypass(context.Background())
 	return e, nil
 }
 
@@ -377,6 +378,7 @@ func (e *Engine) saveSettings(c config.Config, marks []string) (config.Config, e
 	moved := originOf(e.cfg.Web.SearchURL) != originOf(c.Web.SearchURL)
 	e.cfg = c
 	e.mu.Unlock()
+	e.dropBypass(context.Background())
 	// Changed here, so the user means it; changed in the file, the key stays put.
 	if moved && c.Web.SearchURL != "" {
 		if err := e.rebindSearchKey(c.Web.SearchURL); err != nil {

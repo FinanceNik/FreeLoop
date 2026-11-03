@@ -215,6 +215,31 @@ func (m *memRules) AddRule(sid string, r Rule) error {
 	return nil
 }
 
+// A rewritten command names its files only in its text, and a search can reach
+// them with no name at all, so a path deny rule cannot be checked against it.
+func TestRewrittenReadOnlyAsksWhenAPathIsDenied(t *testing.T) {
+	b, _, _, root := setup(t)
+	rules := &memRules{}
+	b.SetRules(rules, rules)
+	read := Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "cat .env", RewrittenReadOnly: true}
+	for _, mode := range []Mode{ModeAsk, ModePlan} {
+		if d := decide(t, b, Context{Mode: mode, Root: root}, read, ""); d.Outcome != Allowed {
+			t.Errorf("%s, no rules: %+v", mode, d)
+		}
+	}
+	rules.global = []Rule{{Tool: "read_file", Path: ".env", Effect: Deny, Scope: ScopeGlobal}}
+	for _, mode := range []Mode{ModeAsk, ModePlan} {
+		if d := decide(t, b, Context{Mode: mode, Root: root}, read, "reject_once"); d.Actor != ActorUser {
+			t.Errorf("%s, a path denied: %+v", mode, d)
+		}
+	}
+	// A deny rule on a command does not stop the shortcut: it is checked itself.
+	rules.global = []Rule{{Tool: "shell", Command: "git push*", Effect: Deny, Scope: ScopeGlobal}}
+	if d := decide(t, b, Context{Mode: ModeAsk, Root: root}, read, ""); d.Outcome != Allowed {
+		t.Errorf("a command denied: %+v", d)
+	}
+}
+
 func TestRulesInEvaluation(t *testing.T) {
 	b, _, _, root := setup(t)
 	rules := &memRules{}

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -264,52 +265,9 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 	// transcript on open, and the UI follows chunks live.
 	if !chunk(typ) {
 		sets, args := `last_seq = ?, updated_at = ?`, []any{ev.Seq, ev.TS.UnixMilli()}
-		var d struct {
-			Status        string   `json:"status"`
-			CurrentModeID string   `json:"currentModeId"`
-			Model         string   `json:"model"`
-			ProviderID    string   `json:"providerId"`
-			Branch        string   `json:"branch"`
-			Title         string   `json:"title"`
-			Tags          []string `json:"tags"`
-			Optimizer     string   `json:"optimizer"`
-			Effort        string   `json:"effort"`
-			Harness       string   `json:"harness"`
-			Source        string   `json:"source"`
-		}
-		json.Unmarshal(data, &d)
-		switch {
-		case typ == event.SessionStatus && d.Status != "":
-			sets += `, status = ?`
-			args = append(args, d.Status)
-		case typ == event.CurrentModeUpdate && d.CurrentModeID != "":
-			sets += `, mode = ?`
-			args = append(args, d.CurrentModeID)
-		case typ == event.ModelChanged && d.Model != "":
-			sets += `, model = ?`
-			args = append(args, d.Model)
-			if d.ProviderID != "" {
-				sets += `, provider_id = ?`
-				args = append(args, d.ProviderID)
-			}
-		case typ == event.GitState:
-			sets += `, branch = ?`
-			args = append(args, d.Branch)
-		case typ == event.SessionInfoUpdate && d.Title != "":
-			sets += `, title = ?`
-			args = append(args, d.Title)
-		case typ == event.TagsChanged:
-			sets += `, tags = ?`
-			args = append(args, strings.Join(d.Tags, " "))
-		case typ == event.OptimizerChanged:
-			sets += `, optimizer = ?`
-			args = append(args, d.Optimizer)
-		case typ == event.EffortChanged:
-			sets += `, effort = ?`
-			args = append(args, d.Effort)
-		case typ == event.SessionImported:
-			sets += `, imported_from = ?`
-			args = append(args, d.Harness+":"+d.Source)
+		for _, f := range sessionFields(typ, data) {
+			sets += ", " + f.column + " = ?"
+			args = append(args, f.value)
 		}
 		// The transcript is the source of truth; a failed index update is
 		// repaired from it on the next open, so it does not fail the append.
@@ -321,6 +279,79 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 		s.onAppend(ev)
 	}
 	return ev, nil
+}
+
+// sessionField is a column of a session's row that an event sets.
+type sessionField struct {
+	column string
+	value  any
+}
+
+// sessionFields returns what an event says about its session's row.
+func sessionFields(typ event.Type, data []byte) []sessionField {
+	var d struct {
+		Status        string   `json:"status"`
+		CurrentModeID string   `json:"currentModeId"`
+		Model         string   `json:"model"`
+		ProviderID    string   `json:"providerId"`
+		Branch        string   `json:"branch"`
+		Title         string   `json:"title"`
+		Tags          []string `json:"tags"`
+		Optimizer     string   `json:"optimizer"`
+		Effort        string   `json:"effort"`
+		Harness       string   `json:"harness"`
+		Source        string   `json:"source"`
+	}
+	json.Unmarshal(data, &d)
+	switch {
+	case typ == event.SessionStatus && d.Status != "":
+		return []sessionField{{"status", d.Status}}
+	case typ == event.CurrentModeUpdate && d.CurrentModeID != "":
+		return []sessionField{{"mode", d.CurrentModeID}}
+	case typ == event.ModelChanged && d.Model != "":
+		if d.ProviderID != "" {
+			return []sessionField{{"model", d.Model}, {"provider_id", d.ProviderID}}
+		}
+		return []sessionField{{"model", d.Model}}
+	case typ == event.GitState:
+		return []sessionField{{"branch", d.Branch}}
+	case typ == event.SessionInfoUpdate && d.Title != "":
+		return []sessionField{{"title", d.Title}}
+	case typ == event.TagsChanged:
+		return []sessionField{{"tags", strings.Join(d.Tags, " ")}}
+	case typ == event.OptimizerChanged:
+		return []sessionField{{"optimizer", d.Optimizer}}
+	case typ == event.EffortChanged:
+		return []sessionField{{"effort", d.Effort}}
+	case typ == event.SessionImported:
+		return []sessionField{{"imported_from", d.Harness + ":" + d.Source}}
+	}
+	return nil
+}
+
+// replaySets is the row update for what events say about their session, the last
+// word on each column winning, for events the index may have missed. A status is
+// left out: what was running when the app stopped is not running now.
+func replaySets(events []event.Event) (sets string, args []any) {
+	at := map[string]int{}
+	for _, ev := range events {
+		for _, f := range sessionFields(ev.Type, ev.Data) {
+			if f.column == "status" {
+				continue
+			}
+			if i, seen := at[f.column]; seen {
+				args[i] = f.value
+				continue
+			}
+			at[f.column] = len(args)
+			args = append(args, f.value)
+			if sets != "" {
+				sets += ", "
+			}
+			sets += f.column + " = ?"
+		}
+	}
+	return sets, args
 }
 
 func chunk(t event.Type) bool {
@@ -374,10 +405,38 @@ func (s *Store) transcript(ctx context.Context, sid string) (*transcript, error)
 		return nil, err
 	}
 	if t.lastSeq != ses.LastSeq {
-		s.db.ExecContext(ctx, `UPDATE sessions SET last_seq = ? WHERE id = ?`, t.lastSeq, sid)
+		s.repairRow(ctx, t, sid, ses.LastSeq)
 	}
 	s.files[sid] = t
 	return t, nil
+}
+
+// repairRow brings a session's row up to its transcript, which is ahead of the
+// row's last_seq: only streamed chunks as a rule, but also whatever an index
+// update that failed, or that the app did not live to make, was to record.
+func (s *Store) repairRow(ctx context.Context, t *transcript, sid string, from int64) {
+	sets, args := "last_seq = ?", []any{t.lastSeq}
+	if t.lastSeq > from {
+		events, err := readEvents(t.path, from)
+		if err != nil {
+			log.Printf("store: repair session %s: %v", sid, err)
+		} else if more, moreArgs := replaySets(events); more != "" {
+			sets, args = sets+", "+more, append(args, moreArgs...)
+		}
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE sessions SET `+sets+` WHERE id = ?`, append(args, sid)...); err != nil {
+		log.Printf("store: repair session %s: %v", sid, err)
+	}
+}
+
+// Reconcile makes a session's row agree with its transcript, for a caller about
+// to act on the row. A session that is not there is not an error here.
+func (s *Store) Reconcile(ctx context.Context, sid string) error {
+	_, err := s.transcript(ctx, sid)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
 }
 
 func (s *Store) sessionDir(sid string) string {

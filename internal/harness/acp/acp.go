@@ -72,8 +72,11 @@ type session struct {
 	// request, so the agent's own fs/terminal request for the same thing
 	// does not ask twice.
 	approved approval
-	terms    map[string]*terminal
-	next     int
+	// turn is the context of the prompt running, or of one the agent never
+	// answered after it was stopped; what the agent asks during it ends with it.
+	turn  context.Context
+	terms map[string]*terminal
+	next  int
 	// options are what the agent reports it can change (PRV-014).
 	options []harness.Option
 }
@@ -415,6 +418,9 @@ func (s *session) Close() error {
 // Prompt sends one user turn. Cancelling ctx sends session/cancel and waits
 // briefly for the agent to end the turn, as the protocol asks.
 func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopReason, error) {
+	s.mu.Lock()
+	s.turn = ctx
+	s.mu.Unlock()
 	s.p.Emit(event.TurnStarted, struct{}{})
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "running"})
 	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}})
@@ -449,6 +455,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		done <- answer{res, err}
 	}()
 	var a answer
+	answered := true
 	select {
 	case a = <-done:
 	case <-ctx.Done():
@@ -457,12 +464,19 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		case a = <-done:
 		case <-time.After(10 * time.Second):
 			a.res.StopReason = sdk.StopReasonCancelled
+			answered = false
 		}
 	case <-s.conn.Done():
 		a.err = harness.ErrAgentExited
 		if tail := strings.TrimSpace(s.proc.Stderr()); tail != "" {
 			a.err = fmt.Errorf("%w: %s", harness.ErrAgentExited, lastLine(tail))
 		}
+	}
+	if answered {
+		// Between turns an agent may still ask, for work of its own.
+		s.mu.Lock()
+		s.turn = nil
+		s.mu.Unlock()
 	}
 	stop := harness.StopReason(a.res.StopReason)
 	if a.err != nil {
@@ -606,6 +620,8 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 	if s.browsing {
 		return sdk.RequestPermissionResponse{Outcome: sdk.NewRequestPermissionOutcomeCancelled()}, nil
 	}
+	ctx, done := s.duringTurn(ctx)
+	defer done()
 	kind := permission.KindOther
 	if r.ToolCall.Kind != nil {
 		kind = permission.Kind(*r.ToolCall.Kind)
@@ -706,9 +722,29 @@ func (s *session) covered(kinds []permission.Kind, path, command string, spend b
 	return true
 }
 
+// duringTurn ties a request from the agent to the turn it came in. The context the
+// connection gives it outlives the turn, so without this stopping a turn leaves its
+// approval waiting, and a later Allow still answers the agent.
+func (s *session) duringTurn(ctx context.Context) (context.Context, context.CancelFunc) {
+	s.mu.Lock()
+	turn := s.turn
+	s.mu.Unlock()
+	if turn == nil {
+		return ctx, func() {}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(turn, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
+}
+
 // ask sends a file or terminal request the agent did not ask permission
 // for to the broker, so no side effect bypasses it.
 func (s *session) ask(ctx context.Context, kind permission.Kind, title, path, command string, contained permission.Containment) error {
+	ctx, done := s.duringTurn(ctx)
+	defer done()
 	var paths []string
 	if path != "" {
 		paths = []string{path}

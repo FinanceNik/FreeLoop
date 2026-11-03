@@ -343,6 +343,13 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		return Decision{}, false
 	}
 
+	// A rewritten command names its files only in its text, and a search can reach
+	// them with no name at all, so a deny rule on a path cannot be checked against
+	// it: whatever the rule's tool, the user decides instead (HRN-019, SEC-002).
+	rewrittenReadOnly := req.Kind == KindExecute && req.RewrittenReadOnly &&
+		!slices.ContainsFunc(rules, func(r Rule) bool { return r.Effect == Deny && r.Path != "" })
+	rewrittenHidesPath := req.Kind == KindExecute && req.RewrittenReadOnly && !rewrittenReadOnly
+
 	switch pc.Mode {
 	case ModeBypass:
 		// Leaving the sandbox asks every time, whatever the mode: a user who chose
@@ -358,8 +365,10 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		case req.Kind.reads() || req.Kind == KindThink:
 		case req.Kind == KindExecute && req.Contained == ContainedReadOnly:
 			return allow(ActorSandbox, "it runs in the sandbox, read-only")
-		case req.Kind == KindExecute && req.RewrittenReadOnly:
+		case rewrittenReadOnly:
 			return allow(ActorPolicy, "it only reads inside the project")
+		case rewrittenHidesPath:
+			return Decision{}, false
 		default:
 			return deny(ActorMode, "plan mode is read-only until the plan is approved")
 		}
@@ -369,7 +378,7 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 			return byRule(r)
 		}
 	}
-	if req.Kind == KindExecute && req.RewrittenReadOnly {
+	if rewrittenReadOnly {
 		return allow(ActorPolicy, "it only reads inside the project")
 	}
 	if req.Kind == KindExecute && req.Contained != "" {

@@ -38,6 +38,7 @@ import { usePaletteActions } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
 import { estimate, formatCost, type PriceEntry } from "./cost.ts";
+import { trustStep } from "./trust.ts";
 
 interface Props {
   session: Session;
@@ -121,19 +122,35 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const [panelTab, setPanelTab] = useState<PanelTab>("approvals");
   // The commands an untrusted project's hooks would run, shown before the
   // user trusts it (EXT-005).
-  const [trustHooks, setTrustHooks] = useState<Hook[]>([]);
+  const [trustLookup, setTrustLookup] = useState<Hook[] | null>(null);
+  const trustHooks = trustLookup ?? [];
   const untrusted = !!project && !project.trusted && !project.missing;
   const canBypass = allowBypass && !!project?.trusted;
   useEffect(() => {
-    if (!untrusted || !project) return setTrustHooks([]);
+    setTrustLookup(null);
+    if (!untrusted || !project) return;
     EngineService.ProjectSettings(project.root)
-      .then((s) => setTrustHooks(s.hooks ?? []))
-      .catch(() => setTrustHooks([]));
+      .then((s) => setTrustLookup(s.hooks ?? []))
+      .catch(() => setTrustLookup(null));
   }, [untrusted, project?.root]);
   const trustProject = (ask: boolean) => {
     if (!project) return;
+    const step = trustStep(trustLookup, ask);
+    if (step === "lookup") {
+      // Trusting would run hooks nobody has seen; look again, and let the user
+      // read the answer before choosing.
+      EngineService.ProjectSettings(project.root)
+        .then((s) => {
+          const hooks = s.hooks ?? [];
+          setTrustLookup(hooks);
+          if (hooks.length > 0) return onError(`Check what ${project.name} would run, then trust it again.`);
+          return EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged);
+        })
+        .catch((err) => onError(`${project.name} was not trusted: its hooks could not be read. ${err}`));
+      return;
+    }
     const list = trustHooks.map((h) => `${h.event}: ${h.command}`).join("\n");
-    if (ask && trustHooks.length > 0 && !confirm(`Trusting ${project.name} lets it run these commands (hooks):\n\n${list}`)) return;
+    if (step === "confirm" && !confirm(`Trusting ${project.name} lets it run these commands (hooks):\n\n${list}`)) return;
     EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError);
   };
   const [renaming, setRenaming] = useState<string | null>(null);

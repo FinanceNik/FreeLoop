@@ -321,7 +321,9 @@ func (s *Store) catchUp(ctx context.Context, t *transcript, sid string) error {
 			b.add(r)
 			done = d
 		}
-		if err := s.writeIndex(ctx, sid, b, done, "", nil); err != nil {
+		// An update that failed left indexed_seq behind what it was to record.
+		sets, args := replaySets(events)
+		if err := s.writeIndex(ctx, sid, b, done, sets, args); err != nil {
 			return err
 		}
 	}
@@ -403,7 +405,8 @@ func (s *Store) catchUpFile(ctx context.Context, sid string) error {
 		b.rows = append(b.rows, row{seq: x.start, kind: x.kind, body: x.buf.String()})
 		done = x.seen
 	}
-	return s.writeIndex(ctx, sid, b, done, "", nil)
+	sets, args := replaySets(events)
+	return s.writeIndex(ctx, sid, b, done, sets, args)
 }
 
 // Search finds sessions' text matching query, best first, at most

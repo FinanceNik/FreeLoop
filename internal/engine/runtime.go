@@ -128,12 +128,23 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if err := e.waitSetup(ctx, sid); err != nil {
 		return nil, err
 	}
+	// The row decides the mode this session starts in; the transcript is the truth.
+	if err := e.store.Reconcile(ctx, sid); err != nil {
+		return nil, err
+	}
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			e.startLocks.Delete(sid) // no lock kept for an ID that is no session
 		}
 		return nil, err
+	}
+	// Whatever dropBypass missed, nothing starts in a bypass that does not hold.
+	if permission.Mode(ses.Mode) == permission.ModeBypass {
+		if why := e.bypassRefusal(ses.ProjectID); why != nil {
+			e.endBypass(sid, why)
+			ses.Mode = string(permission.ModeAsk)
+		}
 	}
 	var preset config.HarnessPreset
 	var p *configuredProvider
@@ -597,19 +608,13 @@ func (e *Engine) SetMode(ctx context.Context, sid, mode string) error {
 	if !m.Valid() {
 		return fmt.Errorf("unknown mode %q", mode)
 	}
-	if m == permission.ModeBypass && !e.Config().Permissions.AllowBypass {
-		return errors.New("bypass mode is off; turn it on in Settings to allow it")
-	}
-	if m == permission.ModeBypass && !e.commandApproved(config.BypassFingerprint()) {
-		return errors.New("bypass mode was turned on in config.yaml and has not been approved; approve it in Settings")
-	}
 	if m == permission.ModeBypass {
 		ses, err := e.store.GetSession(ctx, sid)
 		if err != nil {
 			return err
 		}
-		if !e.trusted(ses.ProjectID) {
-			return errors.New("bypass mode is not available in a project you have not trusted")
+		if err := e.bypassRefusal(ses.ProjectID); err != nil {
+			return err
 		}
 	}
 	e.mu.Lock()
@@ -627,6 +632,53 @@ func (e *Engine) SetMode(ctx context.Context, sid, mode string) error {
 		e.emit(sid, event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: mode})
 	}
 	return nil
+}
+
+// bypassRefusal says why bypass mode does not hold in a project now (SEC-001).
+func (e *Engine) bypassRefusal(projectID string) error {
+	if !e.Config().Permissions.AllowBypass {
+		return errors.New("bypass mode is off; turn it on in Settings to allow it")
+	}
+	if !e.commandApproved(config.BypassFingerprint()) {
+		return errors.New("bypass mode was turned on in config.yaml and has not been approved; approve it in Settings")
+	}
+	if !e.trusted(projectID) {
+		return errors.New("bypass mode is not available in a project you have not trusted")
+	}
+	return nil
+}
+
+// dropBypass ends bypass in every session where it no longer holds: what allowed
+// it can go after the mode was chosen, in Settings, in the file, with a project's
+// trust or while the app was closed (SEC-001). Call it with no lock held.
+func (e *Engine) dropBypass(ctx context.Context) {
+	list, err := e.store.ListSessions(ctx)
+	if err != nil {
+		// runtimeFor checks again before a session can act.
+		log.Printf("engine: bypass check: %v", err)
+		return
+	}
+	for _, ses := range list {
+		if permission.Mode(ses.Mode) != permission.ModeBypass {
+			continue
+		}
+		if why := e.bypassRefusal(ses.ProjectID); why != nil {
+			e.endBypass(ses.ID, why)
+		}
+	}
+}
+
+// endBypass puts a session back to asking and says why in its transcript.
+func (e *Engine) endBypass(sid string, why error) {
+	e.emit(sid, event.Notice, event.NoticeData{Message: "Bypass ended, and this session now asks: " + why.Error()})
+	e.mu.Lock()
+	r, ok := e.runtimes[sid]
+	e.mu.Unlock()
+	if ok {
+		r.hs.SetMode(permission.ModeAsk)
+		return
+	}
+	e.emit(sid, event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: string(permission.ModeAsk)})
 }
 
 // DecideRequest answers a pending permission request.

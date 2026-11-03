@@ -55,7 +55,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 | 8 | A cloned repo ships `.freeloop/rules.yaml` with `allow shell(*)` and a hook | Silent auto-approval, code execution on open | Project configuration is inert until trusted (SEC-006); project-scope allow rules can never override global deny rules (SEC-002) |
 | 9 | A secret is pasted into the prompt or printed by a command | Secret in transcript on disk and sent to the provider | Redaction of known secret values before persistence (SEC-004); nothing stops an unknown secret, see limitations |
 | 10 | A process with the user's privileges edits `rules.yaml` | Policy bypass | Config directory is write-protected from tools (SEC-005) and `0600`; no stronger defence against A4 |
-| 11 | Bypass mode on a hostile repo | Everything in rows 1 to 3 at once | Opt-in in settings, persistent banner, resets per session, unavailable in untrusted projects (SEC-001) |
+| 11 | Bypass mode on a hostile repo | Everything in rows 1 to 3 at once | Opt-in in settings, persistent banner, resets per session, unavailable in untrusted projects, and ended when the setting, its approval or the trust goes, with the reason in the transcript (SEC-001) |
 | 12 | Runaway loop burns API credit | Financial | Max turns and tokens per session (HRN-002); per-provider concurrency cap; cost display (PRV-008) |
 | 13 | A compromised dependency of Freeloop itself | Everything | Modules and npm packages pinned by checksum, CI's actions by commit, a budget for shipped npm packages (a test holds these); an SBOM with each release and builds anyone can reproduce (`make verify-repro`); minimal npm surface. Builds are not signed or notarized (OQ-009), so a download is only as good as where it came from |
 | 14 | The app leaks vendor sign-in tokens | Legal exposure and account compromise | The app never reads, stores or forwards them; vendor binaries own their login (HRN-008) |
@@ -241,6 +241,17 @@ An independent re-check of the 2026-11-02 review at 3348cce reproduced these, ea
 - **Smaller ones.** A planted `.git` file could open another repository to the sandbox or a container; saving a provider moved its key to an address a file had planted; `http.proxy` or `pushurl` in a repository's config received the app's push; relinking a project kept its trust; a variable holding a key under an innocent name, and `NODE_OPTIONS`, reached sandboxed commands; `~/.cargo/credentials.toml` was readable in the sandbox; the approvals list and the socket showed a secret the transcript redacts. The sandbox's `GIT_AUTHOR_*` overrode a repository's own name, and is now a config file of its own.
 
 Still open, all needing more than a click or a planted file: `FREELOOP_HOME` and `FREELOOP_DEV` work in a release build; a hook arriving after a project is trusted runs unprompted, with the merge check as what stands in its way; the file tools have a small race on creating folders (one win in 8,543 tries).
+
+## Review, 2026-11-03: holes in what asks
+
+Found by reading the code and confirmed by tests that failed before the fixes. None was seen exploited.
+
+- `permission.ReadOnlyCommand` judged a command as written, not as the shell reads it. `rg --pr"e=./x.sh" foo` passed and ran a script from the repository, `cat .""./.""./.ssh/id_rsa` passed and read outside the project, and `git blame --contents=/etc/passwd a` passed with the path in an option's value. For a session with a token optimizer on an external agent, the broker then allowed these without asking, in plan mode too. The check now resolves quotes first, treats an option's value as a path, and takes a long option's unique start as the option, as git does.
+- A deny rule on a path could not stop a rewritten read: the request names no paths, so the rule never matched. While any path deny rule exists, such a command now goes to the user. It is not matched word by word, since a recursive search reaches a file without naming it.
+- Bypass was checked only when chosen. A session kept it after the setting was turned off, after its approval ended or the project's trust was taken back, and across a restart. `Engine.dropBypass` now ends it in each of those cases, and `runtimeFor` checks again before a session starts.
+- A mode change the index failed to record was never repaired, so a session could return to a looser mode. `replaySets` now restores a session's settings from the transcript on catch-up and when a transcript is opened, and `runtimeFor` reconciles before it reads the mode. A status is not replayed.
+- A failed lookup of a project's hooks counted as no hooks, and so did a click before the lookup answered, so trusting skipped the question. Not knowing now looks again, and a failure refuses (`frontend/src/trust.ts`).
+- Stopping an external agent's turn left its approval waiting, because the request's context belongs to the connection. A later Allow still answered the agent. A request now ends with its turn.
 
 ## Review cadence
 
