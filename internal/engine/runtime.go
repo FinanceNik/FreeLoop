@@ -49,6 +49,9 @@ type runtime struct {
 	noCheckpoints bool
 	// optimizer rewrites a built-in session's commands (HRN-019).
 	optimizer *sessionOptimizer
+	// toldOptimizer is the optimizer the model last heard about (HRN-019). Only the
+	// turn running reads or writes it, and turns run one at a time.
+	toldOptimizer string
 
 	// Git state, refreshed after tool calls and turns (SES-006).
 	gitMu   sync.Mutex
@@ -558,6 +561,7 @@ func (e *Engine) promptSafely(r *runtime, ctx context.Context, p harness.Prompt)
 			e.emit(r.sid, event.SessionStatus, map[string]string{"status": string(session.StatusError)})
 		}
 	}()
+	p.Note = e.optimizerNote(ctx, r)
 	_, err = r.hs.Prompt(ctx, p)
 	return err
 }

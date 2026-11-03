@@ -440,6 +440,9 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "running"})
 	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}})
 	blocks := []sdk.ContentBlock{sdk.TextBlock(p.Text)}
+	if p.Note != "" {
+		blocks = append([]sdk.ContentBlock{sdk.TextBlock(p.Note)}, blocks...)
+	}
 	if recap := s.takeRecap(); recap != "" {
 		blocks = append([]sdk.ContentBlock{sdk.TextBlock(recap)}, blocks...)
 	}

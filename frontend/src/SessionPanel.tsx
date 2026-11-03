@@ -3,7 +3,7 @@ import { visibleCommand } from "./a11y.ts";
 import { tabAfterKey } from "./a11y.ts";
 import { describeRule, RULE_TOOLS } from "./Rules.tsx";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
-import { panelData, type SessionView, type ToolItem } from "./transcript.ts";
+import { optimizerCounts, panelData, type SessionView, type ToolItem } from "./transcript.ts";
 import DiffPanel from "./DiffPanel.tsx";
 import FilesPanel from "./FilesPanel.tsx";
 // xterm.js is large; it loads when a terminal is first shown.
@@ -303,6 +303,16 @@ interface InfoProps {
 
 function Info({ session, view, turns, provider, environment, configVersion, costLabel, onError }: InfoProps) {
   const [rules, setRules] = useState<Rule[]>([]);
+  // What the token optimizer did (HRN-019). Its savings are its own report, which
+  // not every optimizer has, so no answer shows only the count.
+  const optimized = optimizerCounts(view, !!session.optimizer);
+  const [savings, setSavings] = useState<{ input: number; saved: number } | null>(null);
+  useEffect(() => {
+    if (!session.optimizer) return setSavings(null);
+    EngineService.OptimizerSavings(session.id)
+      .then((s) => setSavings(s && s.input > 0 ? s : null))
+      .catch(() => setSavings(null));
+  }, [session.id, session.optimizer, turns]);
   // Refetched when a decision may have saved a rule or the files changed.
   const saved = view.items.filter((i) => i.kind === "tool" && i.permission?.decided?.persisted).length;
   useEffect(() => {
@@ -338,6 +348,15 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
         ] as [string, ReactNode][])
       : []),
     ["Estimated cost", costLabel],
+    ...(session.optimizer
+      ? ([
+          [
+            "Token optimizer",
+            `${optimized.rewritten} of ${optimized.commands} shell commands shortened` +
+              (savings ? `; ${savings.saved.toLocaleString()} of ${savings.input.toLocaleString()} tokens saved` : ""),
+          ],
+        ] as [string, ReactNode][])
+      : []),
     ...(session.portBase > 0 ? ([["Ports", `${session.portBase}–${session.portBase + 9}`]] as [string, ReactNode][]) : []),
     ["Session ID", <code>{session.id}</code>],
   ];

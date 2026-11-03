@@ -140,7 +140,7 @@ type ItemKinds =
   | { kind: "error"; key: string; rev: number; message: string }
   | { kind: "mode"; key: string; rev: number; mode: string }
   | { kind: "model"; key: string; rev: number; model: string; providerId: string }
-  | { kind: "notice"; key: string; rev: number; message: string; warn: boolean }
+  | { kind: "notice"; key: string; rev: number; message: string; warn: boolean; optimizer?: string }
   | { kind: "compaction"; key: string; rev: number; reason: string; before: number; after: number; summary: string }
   | { kind: "handoff"; key: string; rev: number; fromTitle: string; summary: string; generated: boolean }
   | { kind: "pull_request"; key: string; rev: number; url: string; title: string; base: string; head: string; draft: boolean }
@@ -442,7 +442,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         settings++;
         break;
       case "optimizer_changed":
-        items.push({ kind: "notice", key, rev, message: d.name ? `Token optimizer set to ${d.name}. It applies from the next command.` : "Token optimizer turned off.", warn: false });
+        items.push({ kind: "notice", key, rev, optimizer: d.optimizer ?? "", message: d.name ? `Token optimizer set to ${d.name}. It applies from the next command.` : "Token optimizer turned off.", warn: false });
         break;
       case "session_status":
         status = d.status ?? status;
@@ -566,6 +566,23 @@ export function panelData(view: SessionView): PanelData {
     }
   }
   return { pending, decided: decided.reverse(), changes: [...changes.values()].sort((a, b) => a.path.localeCompare(b.path)), turns };
+}
+
+// optimizerCounts says how many shell commands ran while an optimizer was on and how
+// many it shortened (HRN-019). A session started with one has no event for that, so
+// it counts as on from the start unless its first change turned one on.
+export function optimizerCounts(view: { items: Item[] }, on: boolean): { commands: number; rewritten: number } {
+  const changes = view.items.filter((i) => i.kind === "notice" && i.optimizer !== undefined);
+  let active = changes.length > 0 ? (changes[0] as { optimizer?: string }).optimizer === "" : on;
+  let commands = 0;
+  let rewritten = 0;
+  for (const item of view.items) {
+    if (item.kind === "notice" && item.optimizer !== undefined) active = item.optimizer !== "";
+    if (item.kind !== "tool" || item.toolKind !== "execute" || !active) continue;
+    commands++;
+    if (item.via || item.content.some((c) => c.via)) rewritten++;
+  }
+  return { commands, rewritten };
 }
 
 // hookMessage describes a hook that blocked or failed, or returns "" for

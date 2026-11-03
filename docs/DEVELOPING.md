@@ -154,6 +154,8 @@ dataEnv:                    # optional: variables pointing at files in the sessi
 install: brew install rtk   # optional, one line: typed into a terminal for the user to run
 ```
 
+The model is told once when an optimizer comes on (`optimizerNote`, through `harness.Prompt.Note`, which the transcript does not show). A built-in optimizer can name `Gain`, the arguments that print its savings as JSON (`parseGain`); a file cannot, so a file's optimizer shows only the count of commands it shortened.
+
 Only a built-in can offer a one-click install, through `Download` in `config.BuiltinOptimizers`: a version and, per architecture, a `.tar.gz` URL and its SHA-256. A file cannot, so no file makes the app fetch anything.
 
 A file runs only after the user approves it on the Settings page, and any change ends that. For the built-in agent Freeloop asks from `/` with `HOME` set to nothing, so the program reads no project's or agent's settings; for an agent's hook it asks from the project with the real `HOME`, so the agent's deny rules count. Only plain lines are asked about, and a rewrite must be `program` and the same command. Before listing a tool in `rewrites`, try it raw and rewritten in identical repositories, and with a copy of the tool planted in the repository, since a program may prefer that copy; that is how the `--output` and `tsc` problems were found. Run the program with what you add through `internal/engine/optimizers.go` before trusting it, under the sandbox too: check that exit codes survive, that refusals stay visible, and where it writes. A variable that stops it reporting home belongs in `Env`. Never use a program's own agent hook: RTK's answers "allow" when a repository's settings say so (OQ-029).
