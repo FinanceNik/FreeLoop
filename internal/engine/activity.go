@@ -37,6 +37,11 @@ const (
 	eventCompaction = "compaction"
 	eventHandoff    = "handoff"
 	eventError      = "error"
+	// eventModeRefused is an agent's own switch to a looser mode, which stayed as it
+	// was, and eventFormDeclined a form the user declined: a denied decision of the
+	// user's that held nothing back (SEC-014).
+	eventModeRefused  = "mode_refused"
+	eventFormDeclined = "form_declined"
 )
 
 // A question about a longer command is not one a rule would be made from.
@@ -76,6 +81,7 @@ func foldActivity(events []event.Event, copiedSeq int64) []store.ActivityCount {
 	type ask struct {
 		at                  time.Time
 		tool, command, path string
+		form                bool
 	}
 	tools := map[string]*toolRun{}
 	asks := map[string]ask{}
@@ -155,9 +161,10 @@ func foldActivity(events []event.Event, copiedSeq int64) []store.ActivityCount {
 				Tool      string   `json:"tool"`
 				Command   string   `json:"command"`
 				Paths     []string `json:"paths"`
+				Form      any      `json:"form"`
 			}
 			json.Unmarshal(ev.Data, &d)
-			a := ask{at: ev.TS, tool: d.Tool, command: d.Command}
+			a := ask{at: ev.TS, tool: d.Tool, command: d.Command, form: d.Form != nil}
 			if len(d.Paths) == 1 {
 				a.path = d.Paths[0]
 			}
@@ -171,6 +178,9 @@ func foldActivity(events []event.Event, copiedSeq int64) []store.ActivityCount {
 			var millis int64
 			if a, ok := asks[d.RequestID]; ok {
 				millis = ev.TS.Sub(a.at).Milliseconds()
+				if a.form && d.Outcome == permission.Denied {
+					bump(ev.TS, activityEvent, eventFormDeclined, 1, 0, 0)
+				}
 				if d.Actor == permission.ActorUser && d.Outcome != permission.Cancelled && (a.command != "" || a.path != "") && len(a.command) <= maxAskedCommand {
 					name := askedName(a.tool, a.command, a.path)
 					if d.Outcome == permission.Allowed {
@@ -181,6 +191,8 @@ func foldActivity(events []event.Event, copiedSeq int64) []store.ActivityCount {
 				}
 			}
 			bump(ev.TS, activityDecision, string(d.Actor)+":"+string(d.Outcome), 1, 0, millis)
+		case event.ModeRefused:
+			bump(ev.TS, activityEvent, eventModeRefused, 1, 0, 0)
 		case event.PullRequest:
 			bump(ev.TS, activityEvent, eventPR, 1, 0, 0)
 		case event.Rewind:

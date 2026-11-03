@@ -1638,6 +1638,16 @@ button.ghost[aria-pressed="true"] {
   background: var(--surface);
 }
 
+.held-list li {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.held-list code {
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
 .panel-info {
   margin: 8px 0 0;
 }

@@ -394,12 +394,18 @@ export default function SessionView({ session, events, focus, prices, initialDra
   // Scroll to a search hit once its item is there and mark it for a moment.
   const [focused, setFocused] = useState<string | null>(null);
   const shown = useRef(0);
+  // A search hit from outside, or a link in the panel.
+  const aims = useRef(0);
+  const [aim, setAim] = useState<{ seq: number; n: number } | null>(null);
   useEffect(() => {
-    if (!focus || shown.current === focus.n) return;
-    const key = itemForSeq(view.items, focus.seq);
+    if (focus) setAim({ seq: focus.seq, n: ++aims.current });
+  }, [focus]);
+  useEffect(() => {
+    if (!aim || shown.current === aim.n) return;
+    const key = itemForSeq(view.items, aim.seq);
     const el = key && layoutBox.current?.querySelector<HTMLElement>(`[data-item="${key}"]`);
     if (!el) return;
-    shown.current = focus.n;
+    shown.current = aim.n;
     holdBottom.current = true;
     // Items above have estimated heights until rendered; scroll again once
     // they settle.
@@ -408,7 +414,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     setFocused(key);
     const t = setTimeout(() => setFocused(null), 2500);
     return () => clearTimeout(t);
-  }, [focus, view.items]);
+  }, [aim, view.items]);
 
   useEffect(() => {
     if (!view.running) setQueued(0);
@@ -1189,6 +1195,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           configVersion={configVersion}
           costLabel={costLabel}
           terminalNonce={terminalNonce}
+          onJump={(seq) => setAim({ seq, n: ++aims.current })}
           onReview={(text) => {
             // Added to what is already typed, for the user to edit and send.
             setDraft((d) => (d.trim() ? `${d.trimEnd()}\n\n${text}` : text));

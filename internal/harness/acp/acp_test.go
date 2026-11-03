@@ -228,7 +228,7 @@ func TestAgentCannotLoosenTheMode(t *testing.T) {
 	if strings.Contains(rec.text(event.CurrentModeUpdate), "bypass") {
 		t.Error("the refused change reached the transcript")
 	}
-	if !strings.Contains(rec.text(event.Notice), "on its own") {
+	if !strings.Contains(rec.text(event.ModeRefused), `"to":"bypass"`) {
 		t.Error("the user was not told")
 	}
 

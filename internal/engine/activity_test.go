@@ -50,6 +50,11 @@ func TestFoldActivity(t *testing.T) {
 		evAt(8, at(40), event.PermissionRequested, map[string]any{"requestId": "r2", "toolCallId": "b", "tool": "shell", "command": "rm x"}),
 		evAt(9, at(50), event.PermissionDecided, permission.Decision{RequestID: "r2", ToolCallID: "b", Outcome: permission.Denied, Actor: permission.ActorUser}),
 		evAt(10, at(50), event.ToolCallUpdate, map[string]any{"toolCallId": "b", "status": "failed"}),
+		// An MCP server's form, declined: the user's answer, and it held nothing back.
+		evAt(201, at(41), event.PermissionRequested, map[string]any{"requestId": "f1", "tool": "form", "form": map[string]any{"server": "s"}}),
+		evAt(202, at(42), event.PermissionDecided, permission.Decision{RequestID: "f1", Outcome: permission.Denied, Actor: permission.ActorUser}),
+		// An agent's own switch to a looser mode.
+		evAt(203, at(43), event.ModeRefused, event.ModeRefusedData{From: "plan", To: "bypass"}),
 		// Left waiting when the turn was stopped: nothing ran.
 		evAt(101, at(52), event.ToolCall, map[string]any{"toolCallId": "e", "tool": "write_file", "kind": "edit"}),
 		evAt(102, at(52), event.PermissionRequested, map[string]any{"requestId": "r3", "toolCallId": "e", "tool": "write_file", "paths": []string{"/a"}}),
@@ -95,8 +100,14 @@ func TestFoldActivity(t *testing.T) {
 	if c := find(got, activityDecision, "user:allowed"); c.Count != 1 || c.Millis != 30000 {
 		t.Errorf("user allowed = %+v", c)
 	}
-	if c := find(got, activityDecision, "user:denied"); c.Count != 1 || c.Millis != 10000 {
+	if c := find(got, activityDecision, "user:denied"); c.Count != 2 || c.Millis != 11000 {
 		t.Errorf("user denied = %+v", c)
+	}
+	if c := find(got, activityEvent, eventFormDeclined); c.Count != 1 {
+		t.Errorf("forms declined = %+v", c)
+	}
+	if c := find(got, activityEvent, eventModeRefused); c.Count != 1 {
+		t.Errorf("modes refused = %+v", c)
 	}
 	if c := find(got, activityDecision, "mode:allowed"); c.Count != 1 {
 		t.Errorf("mode = %+v", c)

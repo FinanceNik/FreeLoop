@@ -366,3 +366,38 @@ test("a rewrite the content records counts too", () => {
   assert.deepEqual(optimizerCounts({ items: [item] }, true), { commands: 1, rewritten: 1 });
 });
 
+
+// SEC-014.
+test("buildView lists what the policy held, named from the tool call's final title", () => {
+  const v = buildView([
+    at(1, "tool_call", { toolCallId: "a", tool: "shell", kind: "execute", title: "Terminal" }),
+    at(2, "permission_requested", { requestId: "r1", toolCallId: "a", command: "git push", options: [] }),
+    at(3, "permission_decided", { requestId: "r1", toolCallId: "a", outcome: "denied", actor: "user" }),
+    at(4, "tool_call", { toolCallId: "b", tool: "read_file", kind: "read", title: "Read" }),
+    at(5, "tool_call_update", { toolCallId: "b", title: "Read secrets.env" }),
+    at(6, "permission_decided", { requestId: "r2", toolCallId: "b", outcome: "denied", actor: "rule", reason: "deny read (global rule)" }),
+    at(7, "permission_decided", { requestId: "r3", toolCallId: "gone", outcome: "denied", actor: "protected_path", reason: "~/.ssh is protected" }),
+    at(8, "mode_refused", { from: "plan", to: "bypass" }),
+    // None of these held anything.
+    at(9, "permission_requested", { requestId: "f1", form: { server: "s" }, options: [] }),
+    at(10, "permission_decided", { requestId: "f1", outcome: "denied", actor: "user" }),
+    at(11, "permission_decided", { requestId: "r4", toolCallId: "a", outcome: "allowed", actor: "user" }),
+    at(12, "permission_decided", { requestId: "r5", toolCallId: "a", outcome: "cancelled", actor: "user" }),
+  ]);
+  assert.deepEqual(
+    v.held.map((h) => [h.seq, h.kind, h.what]),
+    [
+      [1, "user", "git push"],
+      [4, "rule", "Read secrets.env"],
+      [7, "protected_path", "~/.ssh is protected"],
+      [8, "mode_change", "plan to bypass"],
+    ],
+  );
+  assert.equal(v.held[1].reason, "deny read (global rule)");
+  const notice = v.items.find((i) => i.key === "8");
+  assert.ok(notice?.kind === "notice" && notice.message.includes("from plan to bypass on its own"));
+});
+
+test("buildView holds nothing in a session that was never stopped", () => {
+  assert.deepEqual(buildView([at(1, "turn_started", {})]).held, []);
+});

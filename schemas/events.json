@@ -48,7 +48,8 @@
         "effort_changed",
         "session_rule_changed",
         "session_imported",
-        "limit_update"
+        "limit_update",
+        "mode_refused"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -127,6 +128,10 @@
       "then": { "properties": { "data": { "$ref": "#/$defs/limitUpdate" } } }
     },
     {
+      "if": { "properties": { "type": { "const": "mode_refused" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/modeRefused" } } }
+    },
+    {
       "if": { "properties": { "type": { "const": "session_rule_changed" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/sessionRuleChanged" } } }
     }
@@ -153,6 +158,15 @@
       "description": "The effort the session's model calls ask for (PRV-014).",
       "required": ["effort"],
       "properties": { "effort": { "type": "string" } }
+    },
+    "modeRefused": {
+      "type": "object",
+      "description": "An agent tried to loosen the mode on its own, and it stayed as it was.",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" }
+      }
     },
     "limitUpdate": {
       "type": "object",

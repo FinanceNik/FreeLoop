@@ -288,7 +288,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
       <div id="usage-panel" role="tabpanel" aria-labelledby={`usage-tab-${tab}`}>
         {activity && activity.pending > 0 && tab !== "tokens" && <p className="muted usage-note">Still counting older sessions ({activity.pending} left)…</p>}
         {tab === "activity" && <ActivityView rows={activityRows} since={since} until={until} rangeLabel={RANGES.find((r) => r.days === range)?.label ?? ""} onOpenSession={onOpenSession} />}
-        {tab === "approvals" && <ApprovalsView rows={activityRows} since={since} until={until} rangeLabel={RANGES.find((r) => r.days === range)?.label ?? ""} onChanged={() => setReloads((n) => n + 1)} onError={onError} />}
+        {tab === "approvals" && <ApprovalsView rows={activityRows} since={since} until={until} rangeLabel={RANGES.find((r) => r.days === range)?.label ?? ""} onOpenSession={onOpenSession} onChanged={() => setReloads((n) => n + 1)} onError={onError} />}
         {tab === "efficiency" && <EfficiencyView usage={fetched.filter((r) => r.day >= since)} allUsage={fetched} rows={activityRows} today={until} modelOf={keyOf.model} projectOf={project} onOpenPrices={onOpenPrices} />}
         {tab === "tokens" && (
           <div className={loading && report ? "usage-body usage-loading" : "usage-body"}>

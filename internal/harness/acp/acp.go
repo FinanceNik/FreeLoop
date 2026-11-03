@@ -392,7 +392,7 @@ func (s *session) agentMode(m permission.Mode) {
 	if m == cur || refused {
 		s.mu.Unlock()
 		if refused {
-			s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("The agent tried to change the mode from %s to %s on its own; the mode stays %s.", cur, m, cur)})
+			s.p.Emit(event.ModeRefused, event.ModeRefusedData{From: string(cur), To: string(m)})
 			s.restoreMode()
 		}
 		return

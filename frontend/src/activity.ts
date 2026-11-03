@@ -125,6 +125,34 @@ export function decisionStats(rows: ActivityRow[]): DecisionStats {
   return out;
 }
 
+export interface HeldStats {
+  total: number;
+  kinds: { kind: string; count: number }[];
+  sessions: { sessionId: string; title: string; deleted: boolean; count: number }[];
+}
+
+// heldStats counts what the user's policy stopped (SEC-014): every denied decision
+// but a declined form, and an agent's own switch to a looser mode. The kinds are
+// those of HELD_BY in transcript.ts.
+export function heldStats(rows: ActivityRow[]): HeldStats {
+  const kinds = new Map<string, number>();
+  const sessions = new Map<string, HeldStats["sessions"][number]>();
+  const add = (r: ActivityRow, kind: string, n: number) => {
+    kinds.set(kind, (kinds.get(kind) ?? 0) + n);
+    const s = sessions.get(r.sessionId) ?? { sessionId: r.sessionId, title: r.title ?? "", deleted: !!r.deleted, count: 0 };
+    s.count += n;
+    sessions.set(r.sessionId, s);
+  };
+  for (const r of rows) {
+    if (r.kind === "decision" && r.name.endsWith(":denied")) add(r, r.name.slice(0, -":denied".length), r.count);
+    else if (r.kind === "event" && r.name === "mode_refused") add(r, "mode_change", r.count);
+    else if (r.kind === "event" && r.name === "form_declined") add(r, "user", -r.count);
+  }
+  const positive = <T extends { count: number }>(l: T[]) => l.filter((x) => x.count > 0).sort((a, b) => b.count - a.count);
+  const list = positive([...kinds].map(([kind, count]) => ({ kind, count })));
+  return { total: list.reduce((n, k) => n + k.count, 0), kinds: list, sessions: positive([...sessions.values()]) };
+}
+
 export interface Repeat {
   tool: string;
   command: string;

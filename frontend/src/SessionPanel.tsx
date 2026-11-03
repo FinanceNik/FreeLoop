@@ -3,7 +3,7 @@ import { visibleCommand } from "./a11y.ts";
 import { tabAfterKey } from "./a11y.ts";
 import { describeRule, RULE_TOOLS } from "./Rules.tsx";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
-import { optimizerCounts, panelData, type SessionView, type ToolItem } from "./transcript.ts";
+import { HELD_BY, optimizerCounts, panelData, type SessionView, type ToolItem } from "./transcript.ts";
 import DiffPanel from "./DiffPanel.tsx";
 import FilesPanel from "./FilesPanel.tsx";
 // xterm.js is large; it loads when a terminal is first shown.
@@ -18,6 +18,8 @@ import PreviewPanel from "./PreviewPanel.tsx";
 export type Tab = "approvals" | "diff" | "files" | "terminal" | "preview" | "info";
 
 interface Props {
+  // Shows a moment of the session in the conversation.
+  onJump: (seq: number) => void;
   session: Session;
   tab: Tab;
   onTab: (t: Tab) => void;
@@ -49,7 +51,7 @@ export function showTool(toolCallId: string) {
   el.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
 }
 
-export default function SessionPanel({ session, tab, onTab: setTab, view, provider, environment, configVersion, costLabel, onReview, terminalNonce, onClose, onError }: Props) {
+export default function SessionPanel({ session, tab, onTab: setTab, view, provider, environment, configVersion, costLabel, onReview, terminalNonce, onClose, onError, onJump }: Props) {
   const data = panelData(view);
   // Uncommitted files, from the latest git state.
   const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
@@ -111,6 +113,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
             environment={environment}
             configVersion={configVersion}
             costLabel={costLabel}
+            onJump={onJump}
             onError={onError}
           />
         )}
@@ -298,10 +301,14 @@ interface InfoProps {
   environment?: EnvironmentInfo;
   configVersion: number;
   costLabel: string;
+  onJump: (seq: number) => void;
   onError: (err: unknown) => void;
 }
 
-function Info({ session, view, turns, provider, environment, configVersion, costLabel, onError }: InfoProps) {
+// How many of what the policy held are listed; the count covers them all.
+const HELD_SHOWN = 50;
+
+function Info({ session, view, turns, provider, environment, configVersion, costLabel, onJump, onError }: InfoProps) {
   const [rules, setRules] = useState<Rule[]>([]);
   // What the token optimizer did (HRN-019). Its savings are its own report, which
   // not every optimizer has, so no answer shows only the count.
@@ -348,6 +355,7 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
         ] as [string, ReactNode][])
       : []),
     ["Estimated cost", costLabel],
+    ["Held by your policy", view.held.length === 0 ? "Nothing so far" : `${view.held.length} ${view.held.length === 1 ? "thing" : "things"}`],
     ...(session.optimizer
       ? ([
           [
@@ -370,6 +378,28 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
           </div>
         ))}
       </dl>
+      {view.held.length > 0 && (
+        <>
+          <h3>Held by your policy</h3>
+          <ul className="panel-list held-list">
+            {view.held
+              .slice(-HELD_SHOWN)
+              .reverse()
+              .map((h, i) => (
+                <li key={`${h.seq}-${i}`}>
+                  <button className="link" title="Show this in the conversation" onClick={() => onJump(h.seq)}>
+                    <code>{h.what}</code>
+                  </button>
+                  <div className="muted">
+                    {HELD_BY[h.kind] ?? h.kind.replace(/_/g, " ")}
+                    {h.reason ? `: ${h.reason}` : ""}
+                  </div>
+                </li>
+              ))}
+          </ul>
+          {view.held.length > HELD_SHOWN && <p className="muted">The latest {HELD_SHOWN} of {view.held.length}.</p>}
+        </>
+      )}
       <h3>Rules for this session</h3>
       {rules.length === 0 && <p className="muted">None. "Allow always" with "this session" adds one.</p>}
       <ul className="panel-list">

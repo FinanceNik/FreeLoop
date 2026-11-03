@@ -374,7 +374,7 @@ After a look at everything built, the one claim worth selling: **every coding ag
 
 What follows, in order, before anything else in v1:
 
-1. **What the policy held (SEC-014).** Make the policy visible: what it stopped, in the session and across sessions.
+1. **What the policy held (SEC-014).** *Built 2026-11-03. The `git push` case ran through the real Claude Code adapter (0.99.1) with a real model and a scratch repository whose `.claude/settings.json` allows `Bash(*)`: Freeloop was asked, the denial held and the remote stayed empty. The views are covered by tests and were not checked in the running app.* Make the policy visible: what it stopped, in the session and across sessions. `heldStats` in `frontend/src/activity.ts` and `held` in `frontend/src/transcript.ts` read what the transcript already had, so past sessions count too; a `mode_refused` event replaces the notice for an agent's own switch, so refusals before this build do not count.
 2. **A cost summary to share (GUI-029).** Make the cost view the one people show each other.
 3. The release: the definition of done above, with signing as OQ-009 has it.
 

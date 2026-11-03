@@ -1,5 +1,6 @@
+import { HELD_BY } from "./transcript.ts";
 import { useState } from "react";
-import { decisionStats, duration, efficiency, eventCount, forecast, heatLevel, heatmap, perDay, repeatApprovals, sessionStats, timeUnit, toolStats, turnStats, WEEKDAYS, type ActivityRow, type EffRow, type Efficiency } from "./activity.ts";
+import { decisionStats, duration, heldStats, efficiency, eventCount, forecast, heatLevel, heatmap, perDay, repeatApprovals, sessionStats, timeUnit, toolStats, turnStats, WEEKDAYS, type ActivityRow, type EffRow, type Efficiency } from "./activity.ts";
 import { compact, days, weekStart, weeks } from "./analytics.ts";
 import { EngineService } from "./api.ts";
 import { formatCost } from "./cost.ts";
@@ -280,12 +281,14 @@ interface ApprovalsProps {
   until: string;
   rangeLabel: string;
   onChanged: () => void;
+  onOpenSession: (id: string) => void;
   onError: (err: unknown) => void;
 }
 
-export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, onError }: ApprovalsProps) {
+export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, onOpenSession, onError }: ApprovalsProps) {
   const rows = all.filter((r) => r.day >= since);
   const stats = decisionStats(rows);
+  const held = heldStats(rows);
   const repeats = repeatApprovals(rows);
   const { weekly, buckets, bucketed, bucketLabel } = bucketsOf(rows, since, until);
   const waitedMillis = perDay(bucketed, buckets, "decision", (r) => (r.name.startsWith("user:") ? r.millis : 0));
@@ -315,6 +318,53 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
         <Tile label="Decisions" value={compact(stats.total)} />
         <Tile label="Asked you" value={compact(stats.byUser)} note={`${percent(stats.byUser / stats.total)} of decisions`} />
         <Tile label="Denied" value={compact(stats.denied)} note={`${percent(stats.denied / stats.total)} of decisions`} />
+      </div>
+
+      <div className="usage-card">
+        <h3>Held by your policy</h3>
+        {held.total === 0 ? (
+          <p className="muted">Nothing in this range: no agent or repository was stopped from doing something.</p>
+        ) : (
+          <>
+            <p className="muted">
+              {compact(held.total)} {held.total === 1 ? "thing" : "things"} an agent or a repository would have gone ahead with. A session's Info tab lists them, each with a link to the moment.
+            </p>
+            <table className="usage-table">
+              <tbody>
+                {held.kinds.map((k) => (
+                  <tr key={k.kind}>
+                    <td>{HELD_BY[k.kind] ?? k.kind.replace(/_/g, " ")}</td>
+                    <td className="num">{compact(k.count)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <table className="usage-table">
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th className="num">Held</th>
+                </tr>
+              </thead>
+              <tbody>
+                {held.sessions.slice(0, 10).map((s) => (
+                  <tr key={s.sessionId}>
+                    <td>
+                      {s.deleted ? (
+                        <span className="muted">{s.title || "Deleted session"}</span>
+                      ) : (
+                        <button className="link" onClick={() => onOpenSession(s.sessionId)}>
+                          {s.title || s.sessionId}
+                        </button>
+                      )}
+                    </td>
+                    <td className="num">{compact(s.count)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </div>
 
       {repeats.length > 0 && (

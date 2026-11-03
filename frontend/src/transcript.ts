@@ -181,7 +181,31 @@ export interface SessionView {
   setup: string | null;
   // The agent's latest to-do list, from any harness (HRN-017).
   plan: PlanEntry[];
+  // What the user's policy stopped (SEC-014).
+  held: Held[];
 }
+
+// Held is one thing the user's policy stopped (SEC-014): a request denied by the
+// user, a rule, the mode, a protected path, a hook or the sandbox, or an agent's own
+// switch to a looser mode. seq is the moment in the transcript.
+export interface Held {
+  seq: number;
+  kind: string;
+  what: string;
+  reason: string;
+}
+
+// HELD_BY says who held it, by a decision's actor or "mode_change".
+export const HELD_BY: Record<string, string> = {
+  user: "You denied it",
+  rule: "A rule denied it",
+  mode: "The permission mode denied it",
+  protected_path: "A protected path",
+  hook: "A hook blocked it",
+  sandbox: "The sandbox denied it",
+  policy: "Policy denied it",
+  mode_change: "The agent changed the mode on its own",
+};
 
 export interface PlanEntry {
   content: string;
@@ -199,6 +223,10 @@ type Data = Record<string, any>;
 export function buildView(events: readonly TranscriptEvent[]): SessionView {
   const items: Item[] = [];
   const tools = new Map<string, Extract<Item, { kind: "tool" }>>();
+  // What was held, named from its tool call once that has its final title. A form is
+  // the user answering an MCP server, which holds nothing back.
+  const denied: (Held & { toolCallId?: string })[] = [];
+  const forms = new Set<string>();
   const usage: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
   let mode: string | null = null;
   let settings = 0;
@@ -332,6 +360,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       }
       case "permission_requested": {
+        if (d.form) forms.add(d.requestId);
         const item = tools.get(d.toolCallId);
         const permission: PermissionState = {
           requestId: d.requestId,
@@ -345,6 +374,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       }
       case "permission_decided": {
         const item = tools.get(d.toolCallId);
+        if (d.outcome === "denied" && !forms.has(d.requestId)) {
+          denied.push({ seq: item ? Number(item.key) : ev.seq, kind: d.actor ?? "", what: "", reason: d.reason ?? "", toolCallId: d.toolCallId });
+        }
         if (!item) break;
         const decided = { outcome: d.outcome, actor: d.actor, optionId: d.optionId, reason: d.reason, persisted: d.persisted };
         const permission: PermissionState = item.permission
@@ -353,6 +385,10 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         replaceTool(items, tools, { ...item, rev, permission });
         break;
       }
+      case "mode_refused":
+        items.push({ kind: "notice", key, rev, message: `The agent tried to change the mode from ${d.from} to ${d.to} on its own; the mode stays ${d.from}.`, warn: false });
+        denied.push({ seq: ev.seq, kind: "mode_change", what: `${d.from} to ${d.to}`, reason: "" });
+        break;
       case "turn_started":
         running = true;
         break;
@@ -468,7 +504,11 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       if (seq > r.from && seq < r.to && !items[i].rewound) items[i] = { ...items[i], rewound: true, rev: r.to };
     }
   }
-  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan, settings };
+  const held = denied.map(({ toolCallId, ...h }) => {
+    const tool = toolCallId ? tools.get(toolCallId) : undefined;
+    return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || "A request" };
+  });
+  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan, settings, held };
 }
 
 function replaceTool(

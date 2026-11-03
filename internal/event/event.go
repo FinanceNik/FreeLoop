@@ -32,6 +32,7 @@ const (
 	SessionInfoUpdate       Type = "session_info_update"
 	UsageUpdate             Type = "usage_update"
 	LimitUpdate             Type = "limit_update"
+	ModeRefused             Type = "mode_refused"
 	Notice                  Type = "notice"
 	CompactionUpdate        Type = "compaction_update"
 	CompactionSummaryChunk  Type = "compaction_summary_chunk"
@@ -90,7 +91,7 @@ var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
 	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged, SessionImported,
-	LimitUpdate,
+	LimitUpdate, ModeRefused,
 }
 
 // AllTypes returns every known variant.
@@ -213,6 +214,13 @@ type RewindData struct {
 	// Context is false when the harness cannot rewind its context, as for
 	// an external agent.
 	Context bool `json:"context"`
+}
+
+// ModeRefusedData is the payload of mode_refused: an agent tried to loosen the mode
+// on its own and it stayed as it was (SEC-003, SEC-014).
+type ModeRefusedData struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // LimitData is the payload of limit_update: how much of an account's limits is used,

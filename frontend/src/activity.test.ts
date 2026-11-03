@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decisionStats, duration, efficiency, eventCount, forecast, heatLevel, heatmap, perDay, repeatApprovals, sessionStats, timeUnit, toolStats, turnStats, weekdayIndex, type ActivityRow, type EffRow } from "./activity.ts";
+import { decisionStats, duration, heldStats, efficiency, eventCount, forecast, heatLevel, heatmap, perDay, repeatApprovals, sessionStats, timeUnit, toolStats, turnStats, weekdayIndex, type ActivityRow, type EffRow } from "./activity.ts";
 
 const row = (p: Partial<ActivityRow>): ActivityRow => ({ day: "2026-10-12", hour: 9, sessionId: "s1", kind: "tool", name: "shell", count: 1, failures: 0, millis: 0, ...p });
 const use = (p: Partial<EffRow>): EffRow => ({ day: "2026-10-12", sessionId: "s1", providerId: "p", model: "big", inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, calls: 1, cost: 0, priced: false, ...p });
@@ -135,4 +135,31 @@ test("forecast adds the last two weeks' pace to the month so far", () => {
   assert.equal(f.projected, 15 + 10); // 10 days left at 1 a day
   assert.equal(f.tokens, 200);
   assert.ok(forecast([use({ day: "2026-01-01", inputTokens: 5 })], "2026-11-10") === null);
+});
+
+test("heldStats counts what was stopped, without a declined form", () => {
+  const s = heldStats([
+    row({ kind: "decision", name: "user:denied", count: 3, sessionId: "a", title: "A" }),
+    row({ kind: "event", name: "form_declined", count: 1, sessionId: "a", title: "A" }),
+    row({ kind: "decision", name: "rule:denied", count: 2, sessionId: "b", title: "B" }),
+    row({ kind: "decision", name: "protected_path:denied", sessionId: "b", title: "B" }),
+    row({ kind: "decision", name: "user:allowed", count: 9, sessionId: "a" }),
+    row({ kind: "decision", name: "user:cancelled", count: 4, sessionId: "a" }),
+    row({ kind: "event", name: "mode_refused", sessionId: "c", title: "C", deleted: true }),
+  ]);
+  assert.equal(s.total, 6);
+  assert.deepEqual(s.kinds.find((k) => k.kind === "user"), { kind: "user", count: 2 });
+  assert.deepEqual(s.kinds.find((k) => k.kind === "mode_change"), { kind: "mode_change", count: 1 });
+  assert.deepEqual(s.sessions.map((x) => [x.sessionId, x.count]), [["b", 3], ["a", 2], ["c", 1]]);
+  assert.equal(s.sessions[2].deleted, true);
+});
+
+test("heldStats is zero with nothing held, and a declined form alone is nothing", () => {
+  assert.deepEqual(heldStats([row({ kind: "decision", name: "user:allowed" })]), { total: 0, kinds: [], sessions: [] });
+  const form = heldStats([
+    row({ kind: "decision", name: "user:denied", sessionId: "a" }),
+    row({ kind: "event", name: "form_declined", sessionId: "a" }),
+  ]);
+  assert.equal(form.total, 0);
+  assert.deepEqual(form.sessions, []);
 });
