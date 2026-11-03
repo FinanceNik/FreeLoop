@@ -9,8 +9,7 @@ import (
 // Price is what a model's tokens cost, in US dollars per million tokens
 // (PRV-008). Model matches a model ID exactly or as a glob ("claude-*");
 // ProviderID, when set, limits the entry to one provider. The first
-// matching entry applies. The app ships no prices: they change, and an
-// estimate from a stale table would mislead (OQ-023).
+// matching entry applies: the user's in config.yaml, then BuiltinPrices.
 type Price struct {
 	ProviderID string  `yaml:"providerId,omitempty" json:"providerId"`
 	Model      string  `yaml:"model" json:"model"`
@@ -18,6 +17,24 @@ type Price struct {
 	Output     float64 `yaml:"output" json:"output"`
 	CacheRead  float64 `yaml:"cacheRead,omitempty" json:"cacheRead"`
 	CacheWrite float64 `yaml:"cacheWrite,omitempty" json:"cacheWrite"`
+	// CacheWrite1h is a write that lasts an hour; 0 charges it as CacheWrite.
+	CacheWrite1h float64 `yaml:"cacheWrite1h,omitempty" json:"cacheWrite1h"`
+	// LongPromptOver is the prompt size above which a call pays the prices of the
+	// row named Model+LongPromptSuffix; only the built-in table has one.
+	LongPromptOver int64 `yaml:"-" json:"longPromptOver"`
+}
+
+// LongPromptSuffix ends the name a call above LongPromptOver counts under.
+const LongPromptSuffix = " (long prompt)"
+
+// PricedModel is the model a call's tokens count under. Usage is kept in sums per
+// model and a price applies to each call by its prompt's size, so the calls that
+// pay more are kept apart.
+func PricedModel(model string, prompt int64) string {
+	if p, ok := FindPrice(builtinPrices, "", model); ok && p.LongPromptOver > 0 && prompt > p.LongPromptOver {
+		return model + LongPromptSuffix
+	}
+	return model
 }
 
 // FindPrice returns the first entry for a provider's model.
@@ -33,9 +50,15 @@ func FindPrice(prices []Price, providerID, model string) (Price, bool) {
 	return Price{}, false
 }
 
-// Cost is the price of tokens in US dollars.
-func (p Price) Cost(input, output, cacheRead, cacheWrite int64) float64 {
-	return (float64(input)*p.Input + float64(output)*p.Output + float64(cacheRead)*p.CacheRead + float64(cacheWrite)*p.CacheWrite) / 1e6
+// Cost is the price of tokens in US dollars. cacheWrite1h is the part of
+// cacheWrite that lasts an hour.
+func (p Price) Cost(input, output, cacheRead, cacheWrite, cacheWrite1h int64) float64 {
+	rate1h := p.CacheWrite1h
+	if rate1h == 0 {
+		rate1h = p.CacheWrite
+	}
+	return (float64(input)*p.Input + float64(output)*p.Output + float64(cacheRead)*p.CacheRead +
+		float64(cacheWrite-cacheWrite1h)*p.CacheWrite + float64(cacheWrite1h)*rate1h) / 1e6
 }
 
 // validatePrices drops entries that cannot apply and reports them.
@@ -50,7 +73,7 @@ func validatePrices(prices []Price) ([]Price, []Issue) {
 		} else if _, err := path.Match(p.Model, ""); err != nil {
 			bad = fmt.Sprintf("%q is not a valid pattern", p.Model)
 		}
-		for _, v := range []float64{p.Input, p.Output, p.CacheRead, p.CacheWrite} {
+		for _, v := range []float64{p.Input, p.Output, p.CacheRead, p.CacheWrite, p.CacheWrite1h} {
 			if v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {
 				bad = "prices must be zero or more"
 			}

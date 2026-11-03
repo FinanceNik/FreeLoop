@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 )
 
@@ -64,8 +65,8 @@ type row struct {
 
 // usage is one model call's tokens, on the day of the call.
 type usage struct {
-	day, providerID, model                      string
-	input, output, cacheRead, cacheWrite, calls int64
+	day, providerID, model                                    string
+	input, output, cacheRead, cacheWrite, cacheWrite1h, calls int64
 }
 
 // batch is what events add to the index.
@@ -130,8 +131,8 @@ func (x *indexer) feed(ev event.Event) (batch, int64) {
 		json.Unmarshal(ev.Data, &d)
 		if ev.Seq > x.copied && d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens > 0 {
 			b.usage = append(b.usage, usage{day: ev.TS.In(time.Local).Format(time.DateOnly),
-				providerID: cmp.Or(d.ProviderID, x.providerID), model: cmp.Or(d.Model, x.model),
-				input: d.InputTokens, output: d.OutputTokens, cacheRead: d.CacheReadTokens, cacheWrite: d.CacheWriteTokens, calls: 1})
+				providerID: cmp.Or(d.ProviderID, x.providerID), model: pricedModel(cmp.Or(d.Model, x.model), d),
+				input: d.InputTokens, output: d.OutputTokens, cacheRead: d.CacheReadTokens, cacheWrite: d.CacheWriteTokens, cacheWrite1h: d.CacheWrite1hTokens, calls: callCount(d)})
 		}
 	}
 	rows := b.rows
@@ -265,12 +266,12 @@ func (s *Store) writeIndex(ctx context.Context, sid string, b batch, done int64,
 	}
 	defer tx.Rollback()
 	for _, u := range b.usage {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO usage (day, session_id, provider_id, model, input, output, cache_read, cache_write, calls)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO usage (day, session_id, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (day, session_id, provider_id, model) DO UPDATE SET
 			input = input + excluded.input, output = output + excluded.output, cache_read = cache_read + excluded.cache_read,
-			cache_write = cache_write + excluded.cache_write, calls = calls + excluded.calls`,
-			u.day, sid, u.providerID, u.model, u.input, u.output, u.cacheRead, u.cacheWrite, u.calls); err != nil {
+			cache_write = cache_write + excluded.cache_write, cache_write_1h = cache_write_1h + excluded.cache_write_1h, calls = calls + excluded.calls`,
+			u.day, sid, u.providerID, u.model, u.input, u.output, u.cacheRead, u.cacheWrite, u.cacheWrite1h, u.calls); err != nil {
 			return err
 		}
 	}
@@ -515,7 +516,26 @@ type Usage struct {
 	OutputTokens     int64  `json:"outputTokens"`
 	CacheReadTokens  int64  `json:"cacheReadTokens"`
 	CacheWriteTokens int64  `json:"cacheWriteTokens"`
-	Calls            int64  `json:"calls"`
+	// CacheWrite1hTokens is the part of CacheWriteTokens that lasts an hour.
+	CacheWrite1hTokens int64 `json:"cacheWrite1hTokens"`
+	Calls              int64 `json:"calls"`
+}
+
+// pricedModel is the model a usage event counts under. An adjustment is a sum of
+// several calls, so its size says nothing about one prompt.
+func pricedModel(model string, d event.UsageData) string {
+	if d.Adjustment {
+		return model
+	}
+	return config.PricedModel(model, d.InputTokens+d.CacheReadTokens+d.CacheWriteTokens)
+}
+
+// callCount is how many model calls a usage event stands for.
+func callCount(d event.UsageData) int64 {
+	if d.Adjustment {
+		return 0
+	}
+	return 1
 }
 
 // UsageSince returns the tokens per day and model from day since
@@ -523,7 +543,7 @@ type Usage struct {
 // stays: the tokens were spent.
 func (s *Store) UsageSince(ctx context.Context, since string) ([]Usage, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT day, provider_id, model, sum(input), sum(output), sum(cache_read), sum(cache_write), sum(calls)
+		`SELECT day, provider_id, model, sum(input), sum(output), sum(cache_read), sum(cache_write), sum(cache_write_1h), sum(calls)
 		 FROM usage WHERE day >= ? GROUP BY day, provider_id, model ORDER BY day DESC, provider_id, model`, since)
 	if err != nil {
 		return nil, fmt.Errorf("store: usage: %w", err)
@@ -532,7 +552,7 @@ func (s *Store) UsageSince(ctx context.Context, since string) ([]Usage, error) {
 	out := []Usage{}
 	for rows.Next() {
 		var u Usage
-		if err := rows.Scan(&u.Day, &u.ProviderID, &u.Model, &u.InputTokens, &u.OutputTokens, &u.CacheReadTokens, &u.CacheWriteTokens, &u.Calls); err != nil {
+		if err := rows.Scan(&u.Day, &u.ProviderID, &u.Model, &u.InputTokens, &u.OutputTokens, &u.CacheReadTokens, &u.CacheWriteTokens, &u.CacheWrite1hTokens, &u.Calls); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -559,7 +579,7 @@ type UsageRow struct {
 // since (YYYY-MM-DD, local time) on, newest day first.
 func (s *Store) UsageRowsSince(ctx context.Context, since string) ([]UsageRow, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT u.day, u.provider_id, u.model, sum(u.input), sum(u.output), sum(u.cache_read), sum(u.cache_write), sum(u.calls),
+		`SELECT u.day, u.provider_id, u.model, sum(u.input), sum(u.output), sum(u.cache_read), sum(u.cache_write), sum(u.cache_write_1h), sum(u.calls),
 		        u.session_id, coalesce(s.title, ''), coalesce(s.project_id, ''), coalesce(s.project_root, ''),
 		        coalesce(s.harness_id, ''), coalesce(s.parent_id, ''), coalesce(s.tags, ''), s.id IS NULL
 		 FROM usage u LEFT JOIN sessions s ON s.id = u.session_id
@@ -574,7 +594,7 @@ func (s *Store) UsageRowsSince(ctx context.Context, since string) ([]UsageRow, e
 	for rows.Next() {
 		var r UsageRow
 		var tags string
-		if err := rows.Scan(&r.Day, &r.ProviderID, &r.Model, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens, &r.CacheWriteTokens, &r.Calls,
+		if err := rows.Scan(&r.Day, &r.ProviderID, &r.Model, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens, &r.CacheWriteTokens, &r.CacheWrite1hTokens, &r.Calls,
 			&r.SessionID, &r.Title, &r.ProjectID, &r.ProjectRoot, &r.HarnessID, &r.ParentID, &tags, &r.Deleted); err != nil {
 			return nil, err
 		}

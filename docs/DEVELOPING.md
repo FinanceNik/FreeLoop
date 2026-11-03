@@ -68,7 +68,7 @@ modes:                            # the app's modes to the agent's session modes
   accept_edits: acceptEdits
   plan: plan
 notes: Sign in once with `my-agent login` in a terminal.
-skills: claude-plugin             # optional: the agent takes the session's skills as a Claude Code plugin (SKL-008)
+skills: claude-plugin             # optional: an agent on the Claude Agent SDK: it takes the session's skills as a Claude Code plugin (SKL-008) and reports tokens per model call (PRV-008)
 hideText: ["[DEBUG]"]             # optional: starts of agent messages meant for machines, left out of the conversation
 missingFileIsEmpty: true          # optional: for an agent that cannot recognize ACP's "not found" when reading a file it will create
 ```
@@ -129,6 +129,12 @@ The templates live in `internal/harness/templates` as `.tmpl` files; their tests
 ## The native sandbox
 
 `config.Environment.Sandbox` turns it on (ENV-009). `internal/engine/sandbox.go` decides what a session's commands reach, `environment.Local` wraps `Exec` with a `Confiner`, and `internal/platform/darwin/seatbelt.go` is the only macOS-specific part. Only `Exec` is confined; `Spawn` is not, so agents and MCP servers stay outside. A caller that runs a command itself sets `permission.Request.Contained`, which is what lets the broker skip the approval. Never set it for a request an agent will carry out on its own. If a tool fails in the sandbox, first look for what it writes under home: most fixes are a variable in `SandboxCaches` or a folder in `sandboxTools`. Add anything that closes a way out to `TestSeatbeltRefuses`, with a control if the refusal could have another cause. A host list (ENV-010) adds `netguard.Egress`: its variables are in `environment.ProxyEnv`, and `FREELOOP_SANDBOX_NET=1 go test ./internal/platform/darwin` tries real tools against the real internet.
+
+## Updating prices
+
+`listPrices` in `internal/config/builtinprices.go` holds the vendors' list prices, with the pages they come from; set `PricesAsOf` when you change them. Add a model's name only: dated names get a row of their own. A model that charges more above a prompt size has `longOver` and a row named with `LongPromptSuffix`, ahead of it. Its calls are counted under that name, so that the sums per model can be priced.
+
+Claude Code sessions report tokens per model call through the adapter's raw SDK messages (`internal/harness/acp/calls.go`). Other external agents report at the end of each turn, as ACP has it, and name no model, so they show no cost unless their session names one.
 
 ## Adding a token optimizer
 

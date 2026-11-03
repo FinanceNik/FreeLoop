@@ -61,6 +61,10 @@ const ClaudeCodePresetID = "claude-code"
 // itself (HRN-019).
 func (p HarnessPreset) TakesCommandHook() bool { return p.Skills == SkillsClaudePlugin }
 
+// ReportsCalls reports an agent that can say what each model call used, as it
+// finishes, and not only what a turn did when the turn ends (PRV-008).
+func (p HarnessPreset) ReportsCalls() bool { return p.Skills == SkillsClaudePlugin }
+
 // SkillsClaudePlugin is the HarnessPreset.Skills way of agents built on the
 // Claude Agent SDK, whose ACP adapter passes _meta.claudeCode.options on to
 // the SDK.

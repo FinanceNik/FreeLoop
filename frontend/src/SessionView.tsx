@@ -201,7 +201,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       const e = estimate(prices, it.calls, own);
       if (e.unpriced < it.calls.length) turns.set(it.key, `≈ ${formatCost(e.cost)}${e.unpriced ? " + unpriced calls" : ""}`);
     }
-    return { session: estimate(prices, view.calls, own), calls: view.calls.length, turns };
+    return { session: estimate(prices, view.calls, own), calls: view.calls.filter((c) => !c.adjustment).length, turns };
   }, [view, prices, session.providerId, session.model]);
 
   // Screen readers hear approvals and turn ends, not every streamed word

@@ -686,6 +686,17 @@ func (s *EngineService) DeleteSession(ctx context.Context, sessionID string) err
 	return err
 }
 
+// BuiltinPrices are the vendors' list prices, after the user's own (PRV-008).
+func (s *EngineService) BuiltinPrices() BuiltinPriceList {
+	return BuiltinPriceList{AsOf: config.PricesAsOf, Prices: config.BuiltinPrices()}
+}
+
+// BuiltinPriceList is the built-in prices and the day they were copied.
+type BuiltinPriceList struct {
+	AsOf   string         `json:"asOf"`
+	Prices []config.Price `json:"prices"`
+}
+
 func (s *EngineService) Config() config.Config {
 	return s.eng.Config()
 }

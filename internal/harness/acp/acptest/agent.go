@@ -59,6 +59,45 @@ type agent struct {
 	// plugin is the local plugin folder session/new or session/load passed
 	// in _meta.claudeCode.options.plugins (SKL-008).
 	plugin string
+	// callTokens is set when session/new asked for the SDK's own messages.
+	callTokens bool
+}
+
+// asksForCalls reports a request's _meta.claudeCode.emitRawSDKMessages.
+func asksForCalls(meta map[string]any) bool {
+	cc, _ := meta["claudeCode"].(map[string]any)
+	return cc["emitRawSDKMessages"] != nil
+}
+
+// sendCalls sends the SDK's messages for two model calls, as the real agent shapes
+// them: a call of the agent's own, whose assistant message comes before its output
+// is final, and a subagent's, which is only an assistant message, twice.
+func (a *agent) sendCalls(ctx context.Context, sid sdk.SessionId) {
+	usage := func(in, out, read, write int) map[string]any {
+		return map[string]any{"input_tokens": in, "output_tokens": out, "cache_read_input_tokens": read, "cache_creation_input_tokens": write,
+			"cache_creation": map[string]any{"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": write}}
+	}
+	message := func(id string, u map[string]any) map[string]any {
+		return map[string]any{"id": id, "model": "test-model", "usage": u}
+	}
+	stream := func(ev map[string]any) map[string]any {
+		return map[string]any{"type": "stream_event", "parent_tool_use_id": nil, "event": ev}
+	}
+	sub := "toolu_1"
+	for _, m := range []map[string]any{
+		stream(map[string]any{"type": "message_start", "message": message("m1", usage(2, 7, 100, 50))}),
+		{"type": "assistant", "parent_tool_use_id": nil, "message": message("m1", usage(2, 7, 100, 50))},
+		stream(map[string]any{"type": "content_block_delta", "delta": map[string]any{"type": "text_delta", "text": "hi"}}),
+		{"type": "assistant", "parent_tool_use_id": sub, "message": message("s1", usage(3, 4, 0, 20))},
+		{"type": "assistant", "parent_tool_use_id": sub, "message": message("s1", usage(3, 4, 0, 20))},
+		stream(map[string]any{"type": "message_delta", "usage": map[string]any{"output_tokens": 192}}),
+		stream(map[string]any{"type": "message_stop"}),
+		{"type": "result", "modelUsage": map[string]any{"test-model[1m]": map[string]any{"inputTokens": 1005, "outputTokens": 276, "cacheReadInputTokens": 100, "cacheCreationInputTokens": 100, "cacheCreationEphemeral1hInputTokens": 70}}},
+		{"type": "assistant", "parent_tool_use_id": nil, "message": map[string]any{"id": "banner", "model": "<synthetic>", "usage": usage(0, 0, 0, 0)}},
+		stream(map[string]any{"type": "message_start", "message": message("m2", usage(5, 1, 200, 0))}),
+	} {
+		a.conn.NotifyExtension(ctx, "_claude/sdkMessage", map[string]any{"sessionId": sid, "message": m})
+	}
 }
 
 // pluginOf returns the path of the first local plugin in a request's _meta.
@@ -87,6 +126,7 @@ func (a *agent) Initialize(context.Context, sdk.InitializeRequest) (sdk.Initiali
 
 func (a *agent) NewSession(_ context.Context, r sdk.NewSessionRequest) (sdk.NewSessionResponse, error) {
 	a.plugin = pluginOf(r.Meta)
+	a.callTokens = asksForCalls(r.Meta)
 	for _, m := range r.McpServers {
 		switch {
 		case m.Stdio != nil:
@@ -157,6 +197,9 @@ func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResp
 			out, _ := a.conn.TerminalOutput(ctx, sdk.TerminalOutputRequest{SessionId: r.SessionId, TerminalId: t.TerminalId})
 			say("terminal: " + strings.TrimSpace(out.Output))
 		}
+	}
+	if a.callTokens {
+		a.sendCalls(ctx, r.SessionId)
 	}
 	in, out := 10, 5
 	return sdk.PromptResponse{StopReason: sdk.StopReasonEndTurn, Usage: &sdk.Usage{InputTokens: in, OutputTokens: out, TotalTokens: in + out}}, nil

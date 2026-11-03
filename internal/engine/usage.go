@@ -49,7 +49,7 @@ func (e *Engine) Usage(ctx context.Context, days int) ([]DayCost, error) {
 	if err != nil {
 		return nil, err
 	}
-	prices := e.Config().Prices
+	prices := config.EffectivePrices(e.Config())
 	out := []DayCost{}
 	for _, u := range rows {
 		if len(out) == 0 || out[len(out)-1].Day != u.Day {
@@ -59,7 +59,7 @@ func (e *Engine) Usage(ctx context.Context, days int) ([]DayCost, error) {
 		m := ModelCost{ProviderID: u.ProviderID, Model: u.Model, InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
 			CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, Calls: u.Calls}
 		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
-			m.Cost, m.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens), true
+			m.Cost, m.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheWrite1hTokens), true
 			d.Cost += m.Cost
 		}
 		d.Models = append(d.Models, m)
@@ -105,17 +105,17 @@ func (e *Engine) UsageReport(ctx context.Context, days int) (UsageReport, error)
 	if err != nil {
 		return UsageReport{}, err
 	}
-	prices := e.Config().Prices
+	prices := config.EffectivePrices(e.Config())
 	rep.Rows = make([]UsageRow, 0, len(rows))
 	for _, u := range rows {
 		r := UsageRow{UsageRow: u}
 		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
-			r.Cost, r.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens), true
-			r.CostInput = p.Cost(u.InputTokens, 0, 0, 0)
-			r.CostOutput = p.Cost(0, u.OutputTokens, 0, 0)
-			r.CostCacheRead = p.Cost(0, 0, u.CacheReadTokens, 0)
-			r.CostCacheWrite = p.Cost(0, 0, 0, u.CacheWriteTokens)
-			r.SavedByCache = max(0, p.Cost(u.CacheReadTokens, 0, 0, 0)-r.CostCacheRead)
+			r.Cost, r.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheWrite1hTokens), true
+			r.CostInput = p.Cost(u.InputTokens, 0, 0, 0, 0)
+			r.CostOutput = p.Cost(0, u.OutputTokens, 0, 0, 0)
+			r.CostCacheRead = p.Cost(0, 0, u.CacheReadTokens, 0, 0)
+			r.CostCacheWrite = p.Cost(0, 0, 0, u.CacheWriteTokens, u.CacheWrite1hTokens)
+			r.SavedByCache = max(0, p.Cost(u.CacheReadTokens, 0, 0, 0, 0)-r.CostCacheRead)
 		}
 		rep.Rows = append(rep.Rows, r)
 	}
@@ -201,7 +201,7 @@ func (e *Engine) RecentUsage(ctx context.Context, hours int) (RecentUsageReport,
 	for i := range out.Buckets {
 		out.Buckets[i].Start = since.Add(time.Duration(i) * step).UnixMilli()
 	}
-	prices := e.Config().Prices
+	prices := config.EffectivePrices(e.Config())
 	for _, u := range rows {
 		i := int(u.Start.Sub(since) / step)
 		if i < 0 || i >= n {
@@ -214,7 +214,7 @@ func (e *Engine) RecentUsage(ctx context.Context, hours int) (RecentUsageReport,
 		b.CacheWrite += u.CacheWrite
 		b.Calls += u.Calls
 		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
-			b.Cost += p.Cost(u.Input, u.Output, u.CacheRead, u.CacheWrite)
+			b.Cost += p.Cost(u.Input, u.Output, u.CacheRead, u.CacheWrite, u.CacheWrite1h)
 		} else {
 			b.Unpriced += u.Calls
 		}

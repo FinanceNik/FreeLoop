@@ -121,7 +121,7 @@ func (e *Engine) Compare(ctx context.Context, tag string) ([]CompareRun, error) 
 	}
 	slices.SortFunc(runs, func(a, b CompareRun) int { return strings.Compare(a.Session.Title, b.Session.Title) })
 	usage, _ := e.store.UsageRowsSince(ctx, since)
-	prices := e.Config().Prices
+	prices := config.EffectivePrices(e.Config())
 	for i := range runs {
 		r := &runs[i]
 		for _, u := range usage {
@@ -130,7 +130,7 @@ func (e *Engine) Compare(ctx context.Context, tag string) ([]CompareRun, error) 
 			}
 			r.Tokens += u.InputTokens + u.OutputTokens + u.CacheReadTokens + u.CacheWriteTokens
 			if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
-				r.Cost += p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens)
+				r.Cost += p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheWrite1hTokens)
 				r.Priced = true
 			}
 		}

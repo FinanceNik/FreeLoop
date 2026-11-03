@@ -369,6 +369,8 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           outputTokens: d.outputTokens ?? 0,
           cacheReadTokens: d.cacheReadTokens ?? 0,
           cacheWriteTokens: d.cacheWriteTokens ?? 0,
+          cacheWrite1hTokens: d.cacheWrite1hTokens ?? 0,
+          adjustment: d.adjustment === true,
         };
         calls.push(c);
         turnCalls.push(c);

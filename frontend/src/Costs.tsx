@@ -5,13 +5,19 @@ import { formatCost } from "./cost.ts";
 // The price table and the usage per day on the Settings page (PRV-008).
 
 export function PriceTable({ prices, providers, onChange }: { prices: Price[]; providers: ProviderInfo[]; onChange: (p: Price[]) => void }) {
+  const [list, setList] = useState<{ asOf: string; prices: Price[] } | null>(null);
+  useEffect(() => {
+    EngineService.BuiltinPrices()
+      .then((l) => setList({ asOf: l.asOf, prices: l.prices ?? [] }))
+      .catch(() => {});
+  }, []);
   const set = (i: number, patch: Partial<Price>) => onChange(prices.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   const num = (v: string) => (v === "" ? 0 : Math.max(0, Number(v)));
   return (
     <>
       <p className="muted">
-        US dollars per million tokens. The model can be a pattern such as <code>claude-*</code>; the first matching row applies. Freeloop
-        ships no prices: copy them from your provider's price list.
+        US dollars per million tokens. Models from Anthropic, OpenAI and Google use their official API list prices{list ? `, as of ${list.asOf}` : ""}. A row here comes
+        first, for another price or a model not on the list. The model can be a pattern such as <code>claude-*</code>; the first matching row applies.
       </p>
       {prices.length > 0 && (
         <table className="prices">
@@ -22,7 +28,8 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
               <th>Input</th>
               <th>Output</th>
               <th>Cache read</th>
-              <th>Cache write</th>
+              <th>Cache write 5 min</th>
+              <th>Cache write 1 hour</th>
               <th />
             </tr>
           </thead>
@@ -43,7 +50,7 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
                 <td>
                   <input aria-label="Model" required value={p.model} onChange={(e) => set(i, { model: e.target.value })} />
                 </td>
-                {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
+                {(["input", "output", "cacheRead", "cacheWrite", "cacheWrite1h"] as const).map((k) => (
                   <td key={k}>
                     <input
                       aria-label={k}
@@ -67,10 +74,42 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
         </table>
       )}
       <div className="row">
-        <button type="button" onClick={() => onChange([...prices, { providerId: "", model: "", input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }])}>
+        <button type="button" onClick={() => onChange([...prices, { providerId: "", model: "", input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0 }])}>
           Add a price
         </button>
       </div>
+      {list && (
+        <details>
+          <summary>List prices</summary>
+          <table className="prices">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Input</th>
+                <th>Output</th>
+                <th>Cache read</th>
+                <th>Cache write 5 min</th>
+                <th>Cache write 1 hour</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* A model's dated names have the same price as its name. */}
+              {list.prices
+                .filter((p) => !p.model.includes("-20*"))
+                .map((p) => (
+                  <tr key={p.model}>
+                    <td>{p.model}</td>
+                    <td>{p.input}</td>
+                    <td>{p.output}</td>
+                    <td>{p.cacheRead || "–"}</td>
+                    <td>{p.cacheWrite || "–"}</td>
+                    <td>{p.cacheWrite1h || "–"}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </details>
+      )}
     </>
   );
 }

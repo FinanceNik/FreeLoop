@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -126,6 +127,53 @@ func TestReferenceAgent(t *testing.T) {
 	}
 	if !strings.Contains(rec.text(event.UsageUpdate), `"inputTokens":10`) || !strings.Contains(rec.text(event.TurnEnded), "end_turn") {
 		t.Error("usage or turn end missing")
+	}
+}
+
+// PRV-008, GUI-023: an agent that reports each model call has each recorded once,
+// with the stream's final output, its model and its hour-long cache writes. A result
+// adds what the messages did not show, and a call cut off by the end of the turn
+// still counts. The turn's own usage would count it twice, so it is left
+// out.
+func TestUsagePerModelCall(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+	env, err := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root), Shell: []string{"sh", "-c"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &recorder{}
+	broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
+	exe, _ := os.Executable()
+	h := Harness{Preset: config.HarnessPreset{ID: "ref", Name: "Reference", Command: exe, Env: map[string]string{acptest.EnvVar: "1"}, Skills: config.SkillsClaudePlugin}}
+	s, err := h.NewSession(context.Background(), harness.Params{SessionID: "ses", Env: env, Broker: broker, Mode: permission.ModeBypass, Emit: rec.emit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.Prompt(context.Background(), harness.Prompt{Text: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	var got []event.UsageData
+	rec.mu.Lock()
+	for _, e := range rec.events {
+		if e.Type == event.UsageUpdate {
+			var d event.UsageData
+			json.Unmarshal(e.Data, &d)
+			got = append(got, d)
+		}
+	}
+	rec.mu.Unlock()
+	want := []event.UsageData{
+		{InputTokens: 3, OutputTokens: 4, CacheWriteTokens: 20, CacheWrite1hTokens: 20, Model: "test-model"},
+		{InputTokens: 2, OutputTokens: 192, CacheReadTokens: 100, CacheWriteTokens: 50, CacheWrite1hTokens: 50, Model: "test-model"},
+		{InputTokens: 1000, OutputTokens: 80, CacheWriteTokens: 30, Model: "test-model", Adjustment: true},
+		{InputTokens: 5, OutputTokens: 1, CacheReadTokens: 200, Model: "test-model"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("usage events = %+v, want %+v", got, want)
 	}
 }
 

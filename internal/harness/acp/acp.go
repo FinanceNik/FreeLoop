@@ -68,6 +68,8 @@ type session struct {
 	// browsing marks a process started only to list, copy or read the agent's
 	// sessions: it may not ask for anything or touch anything.
 	browsing bool
+	// calls follows the agent's model calls (calls.go).
+	calls callLedger
 	// approved holds what the user or a rule just allowed for a permission
 	// request, so the agent's own fs/terminal request for the same thing
 	// does not ask twice.
@@ -504,7 +506,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	} else if ctx.Err() != nil {
 		stop = harness.StopCancelled
 	}
-	if u := a.res.Usage; u != nil {
+	if u := a.res.Usage; !s.endCalls() && u != nil {
 		d := event.UsageData{InputTokens: int64(u.InputTokens), OutputTokens: int64(u.OutputTokens)}
 		if u.CachedReadTokens != nil {
 			d.CacheReadTokens = int64(*u.CachedReadTokens)
@@ -525,8 +527,8 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 
 // SessionUpdate records an update as the event of the same name: Freeloop's
 // schema is a superset of ACP's (OQ-012). Context usage, which has another
-// shape than the per-turn usage_update the app records, and variants newer
-// than the schema are left out.
+// shape than the usage_update the app records, and variants newer than the
+// schema are left out.
 func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) error {
 	s.mu.Lock()
 	loading, replay := s.loading, s.replay
@@ -970,16 +972,21 @@ func lastLine(s string) string {
 }
 
 // sessionMeta is what session/new and session/load carry beyond the
-// protocol: the session's skills as a local plugin, for an agent whose
-// preset takes them that way (SKL-008). The plugin brings no MCP servers;
-// the session's own reach the agent through the protocol.
+// protocol, for an agent on the Claude Agent SDK: the request for its token
+// counts per model call (calls.go), and the session's skills as a local plugin
+// (SKL-008). The plugin brings no MCP servers; the session's own reach the agent
+// through the protocol.
 func (s *session) sessionMeta() map[string]any {
-	if s.preset.Skills != config.SkillsClaudePlugin || s.p.SkillPlugin == "" {
+	if !s.preset.ReportsCalls() {
 		return nil
 	}
-	return map[string]any{"claudeCode": map[string]any{"options": map[string]any{
-		"plugins": []map[string]any{{"type": "local", "path": s.p.SkillPlugin, "skipMcpDiscovery": true}},
-	}}}
+	claude := map[string]any{"emitRawSDKMessages": sdkMessageFilter()}
+	if s.preset.Skills == config.SkillsClaudePlugin && s.p.SkillPlugin != "" {
+		claude["options"] = map[string]any{
+			"plugins": []map[string]any{{"type": "local", "path": s.p.SkillPlugin, "skipMcpDiscovery": true}},
+		}
+	}
+	return map[string]any{"claudeCode": claude}
 }
 
 // explain turns the protocol's "authentication required" (-32000) into

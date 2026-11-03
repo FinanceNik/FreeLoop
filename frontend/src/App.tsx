@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { screenName } from "./a11y.ts";
 import { ariaKeys, bindingOf, keyLabel, pressed, setBindings } from "./shortcuts.ts";
 import { Browser, Events, Window } from "@wailsio/runtime";
@@ -23,7 +23,7 @@ import {
 } from "./api.ts";
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
 import { HIT_LABEL, snippetParts } from "./search.ts";
-import { formatCost } from "./cost.ts";
+import { formatCost, type PriceEntry } from "./cost.ts";
 import { windowSession } from "./windows.ts";
 import * as ws from "./workspace.ts";
 import { allTags, dateGroups, isEmpty, matches, parseQuery, sameFilter, saveFilter, statusSummary, type SavedFilter, type SessionFilter } from "./filters.ts";
@@ -652,6 +652,15 @@ export default function App() {
       })
       .catch(report);
 
+  // The list prices come after the user's own (PRV-008).
+  const [listPrices, setListPrices] = useState<PriceEntry[]>([]);
+  useEffect(() => {
+    EngineService.BuiltinPrices()
+      .then((l) => setListPrices(l.prices ?? []))
+      .catch(report);
+  }, []);
+  const prices = useMemo(() => [...(config?.prices ?? []), ...listPrices], [config?.prices, listPrices]);
+
   // Saved prices change today's estimate.
   useEffect(() => {
     if (config) refreshToday();
@@ -893,7 +902,7 @@ export default function App() {
         refreshSessions();
         openSession(sid);
       }}
-      prices={config?.prices ?? []}
+      prices={prices}
       knownTags={tagsInUse}
       onOpenCompare={(tag) => setScreen({ kind: "compare", tag })}
       events={transcripts[s.id]?.events ?? []}

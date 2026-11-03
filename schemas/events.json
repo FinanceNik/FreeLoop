@@ -255,6 +255,8 @@
         "outputTokens": { "type": "integer" },
         "cacheReadTokens": { "type": "integer" },
         "cacheWriteTokens": { "type": "integer" },
+        "cacheWrite1hTokens": { "type": "integer" },
+        "adjustment": { "type": "boolean" },
         "contextTokens": { "type": "integer" },
         "contextWindow": { "type": "integer" },
         "providerId": { "type": "string" },

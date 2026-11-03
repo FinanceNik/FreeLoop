@@ -604,6 +604,9 @@ var migrations = []string{
 	`ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT '';`,
 	// The agent's session an imported one came from (SES-020).
 	`ALTER TABLE sessions ADD COLUMN imported_from TEXT NOT NULL DEFAULT '';`,
+	// Cache writes that last an hour cost more (PRV-008). Earlier calls did not say.
+	`ALTER TABLE usage ADD COLUMN cache_write_1h INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE usage_recent ADD COLUMN cache_write_1h INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

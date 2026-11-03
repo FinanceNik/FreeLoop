@@ -1,7 +1,7 @@
-// Cost estimates (PRV-008): the price table from config.yaml applied to
-// model calls' tokens. Prices are US dollars per million tokens; the first
-// entry whose provider (when set) and model pattern match applies, as in
-// config.FindPrice.
+// Cost estimates (PRV-008): the price table from config.yaml, then the built-in
+// list prices, applied to model calls' tokens. Prices are US dollars per million
+// tokens; the first entry whose provider (when set) and model pattern match
+// applies, as in config.FindPrice.
 
 export interface PriceEntry {
   providerId: string;
@@ -10,7 +10,14 @@ export interface PriceEntry {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  // A write that lasts an hour; without it one costs as cacheWrite.
+  cacheWrite1h?: number;
+  // The prompt size above which a call pays the row named with LONG_PROMPT.
+  longPromptOver?: number;
 }
+
+// config.LongPromptSuffix.
+export const LONG_PROMPT = " (long prompt)";
 
 export interface ModelCall {
   providerId: string;
@@ -19,6 +26,10 @@ export interface ModelCall {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  // The part of cacheWriteTokens that lasts an hour.
+  cacheWrite1hTokens?: number;
+  // Adds what earlier calls' counts missed; it is no call itself.
+  adjustment?: boolean;
 }
 
 // globMatch matches like Go's path.Match: * is any run of characters but
@@ -72,12 +83,23 @@ export function estimate(prices: readonly PriceEntry[], calls: readonly ModelCal
   for (const c of calls) {
     const providerId = c.model ? c.providerId : session.providerId;
     const model = c.model || session.model;
-    const p = findPrice(prices, providerId, model);
-    if (!p) {
+    const base = findPrice(prices, providerId, model);
+    if (!base) {
       unpriced++;
       continue;
     }
-    cost += (c.inputTokens * p.input + c.outputTokens * p.output + c.cacheReadTokens * (p.cacheRead ?? 0) + c.cacheWriteTokens * (p.cacheWrite ?? 0)) / 1e6;
+    const prompt = c.inputTokens + c.cacheReadTokens + c.cacheWriteTokens;
+    const long = !c.adjustment && base.longPromptOver && prompt > base.longPromptOver;
+    const p = (long && findPrice(prices, providerId, model + LONG_PROMPT)) || base;
+    const hour = c.cacheWrite1hTokens ?? 0;
+    const write = p.cacheWrite ?? 0;
+    cost +=
+      (c.inputTokens * p.input +
+        c.outputTokens * p.output +
+        c.cacheReadTokens * (p.cacheRead ?? 0) +
+        (c.cacheWriteTokens - hour) * write +
+        hour * (p.cacheWrite1h || write)) /
+      1e6;
   }
   return { cost, unpriced };
 }

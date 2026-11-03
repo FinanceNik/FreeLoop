@@ -61,3 +61,57 @@ func TestRecentUsageFollowsTheTranscript(t *testing.T) {
 		t.Fatalf("buckets after a long time: %+v", got)
 	}
 }
+
+// PRV-008: an hour's cache writes are kept apart, calls over a model's long-prompt
+// size count under their own name, and an adjustment adds tokens and no call.
+func TestUsageKeepsWhatPricesDependOn(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	s, err := Open(Options{Dir: dir, Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ses, err := s.CreateSession(ctx, session.Session{Title: "a", HarnessID: "claude-code"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []event.UsageData{
+		{InputTokens: 2, CacheWriteTokens: 50, CacheWrite1hTokens: 30, Model: "claude-haiku-5-5"},
+		{InputTokens: 2, CacheReadTokens: 100_000, Model: "claude-haiku-5-5"},
+		{OutputTokens: 7, CacheReadTokens: 200_000, Model: "claude-haiku-5-5", Adjustment: true},
+	} {
+		b, _ := json.Marshal(d)
+		if _, err := s.Append(ctx, ses.ID, event.UsageUpdate, b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	recent, err := s.RecentUsage(ctx, now.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 2 {
+		t.Fatalf("recent: %+v", recent)
+	}
+	base, long := recent[0], recent[1]
+	if base.Model != "claude-haiku-5-5" || base.CacheWrite != 50 || base.CacheWrite1h != 30 || base.Output != 7 || base.Calls != 1 {
+		t.Errorf("base: %+v", base)
+	}
+	if long.Model != "claude-haiku-5-5 (long prompt)" || long.CacheRead != 100_000 || long.Calls != 1 {
+		t.Errorf("long: %+v", long)
+	}
+	s.Close()
+	s, err = Open(Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	s.indexed.Wait()
+	day, err := s.UsageSince(ctx, "2026-11-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(day) != 2 || day[0].CacheWrite1hTokens != 30 || day[0].Calls != 1 || day[1].Model != "claude-haiku-5-5 (long prompt)" || day[1].Calls != 1 {
+		t.Errorf("per day: %+v", day)
+	}
+}

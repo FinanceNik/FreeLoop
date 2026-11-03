@@ -30,7 +30,9 @@ type RecentUsage struct {
 	Output     int64
 	CacheRead  int64
 	CacheWrite int64
-	Calls      int64
+	// CacheWrite1h is the part of CacheWrite that lasts an hour.
+	CacheWrite1h int64
+	Calls        int64
 }
 
 // RecentUsage returns the buckets from since on, after folding what happened.
@@ -38,7 +40,7 @@ func (s *Store) RecentUsage(ctx context.Context, since time.Time) ([]RecentUsage
 	if err := s.foldRecent(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT bucket, provider_id, model, SUM(input), SUM(output), SUM(cache_read), SUM(cache_write), SUM(calls)
+	rows, err := s.db.QueryContext(ctx, `SELECT bucket, provider_id, model, SUM(input), SUM(output), SUM(cache_read), SUM(cache_write), SUM(cache_write_1h), SUM(calls)
 		FROM usage_recent WHERE bucket >= ? GROUP BY bucket, provider_id, model ORDER BY bucket`, since.Unix())
 	if err != nil {
 		return nil, fmt.Errorf("store: recent usage: %w", err)
@@ -48,7 +50,7 @@ func (s *Store) RecentUsage(ctx context.Context, since time.Time) ([]RecentUsage
 	for rows.Next() {
 		var u RecentUsage
 		var bucket int64
-		if err := rows.Scan(&bucket, &u.ProviderID, &u.Model, &u.Input, &u.Output, &u.CacheRead, &u.CacheWrite, &u.Calls); err != nil {
+		if err := rows.Scan(&bucket, &u.ProviderID, &u.Model, &u.Input, &u.Output, &u.CacheRead, &u.CacheWrite, &u.CacheWrite1h, &u.Calls); err != nil {
 			return nil, fmt.Errorf("store: recent usage: %w", err)
 		}
 		u.Start = time.Unix(bucket, 0)
@@ -114,11 +116,12 @@ func (s *Store) foldRecent(ctx context.Context) error {
 			if model == "" {
 				model = st.model
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO usage_recent (bucket, session_id, provider_id, model, input, output, cache_read, cache_write, calls)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+			model = pricedModel(model, d)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO usage_recent (bucket, session_id, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (bucket, session_id, provider_id, model) DO UPDATE SET input = input + excluded.input, output = output + excluded.output,
-				cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write, calls = calls + 1`,
-				bucket, st.id, provider, model, d.InputTokens, d.OutputTokens, d.CacheReadTokens, d.CacheWriteTokens); err != nil {
+				cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write, cache_write_1h = cache_write_1h + excluded.cache_write_1h, calls = calls + excluded.calls`,
+				bucket, st.id, provider, model, d.InputTokens, d.OutputTokens, d.CacheReadTokens, d.CacheWriteTokens, d.CacheWrite1hTokens, callCount(d)); err != nil {
 				tx.Rollback()
 				return fmt.Errorf("store: recent usage: %w", err)
 			}
