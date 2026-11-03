@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 // SpawnSpec starts a long-running process that talks over its stdin and
@@ -40,6 +41,25 @@ type Process interface {
 // pipes; the local environment is one.
 type Spawner interface {
 	Spawn(ctx context.Context, spec SpawnSpec) (Process, error)
+}
+
+// stderrWait bounds waiting for a process that outlives what it was doing.
+const stderrWait = time.Second
+
+// StderrAfterExit returns what a process wrote to stderr, for saying why it stopped.
+// Seeing its stdout close is not enough to read that yet, since stderr is copied
+// separately and is complete only once the process has been waited for.
+func StderrAfterExit(p Process) string {
+	done := make(chan struct{})
+	go func() {
+		p.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(stderrWait):
+	}
+	return p.Stderr()
 }
 
 type proc struct {

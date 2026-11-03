@@ -123,7 +123,7 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 		cancel()
 		msg := err.Error()
 		if s.proc != nil {
-			if tail := strings.TrimSpace(s.proc.Stderr()); tail != "" {
+			if tail := strings.TrimSpace(environment.StderrAfterExit(s.proc)); tail != "" {
 				msg += ": " + lastLines(tail, 6)
 			}
 		}
@@ -195,14 +195,16 @@ func (m *Manager) Start(ctx context.Context, l Launch) error {
 
 	go func() {
 		cs.Wait()
+		tail := ""
+		if s.proc != nil {
+			tail = strings.TrimSpace(environment.StderrAfterExit(s.proc))
+		}
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		if s.status.State == Running {
 			s.status.State, s.status.Error = Failed, "the server stopped"
-			if s.proc != nil {
-				if tail := strings.TrimSpace(s.proc.Stderr()); tail != "" {
-					s.status.Error += ": " + lastLines(tail, 6)
-				}
+			if tail != "" {
+				s.status.Error += ": " + lastLines(tail, 6)
 			}
 		}
 	}()

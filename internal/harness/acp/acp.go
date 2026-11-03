@@ -170,7 +170,7 @@ func (s *session) start(ctx context.Context, sp environment.Spawner) (sdk.Initia
 func (s *session) startFailed(step string, err error) error {
 	s.proc.Kill()
 	msg := fmt.Sprintf("%s: %s: %v", s.preset.Name, step, err)
-	if tail := strings.TrimSpace(s.proc.Stderr()); tail != "" {
+	if tail := strings.TrimSpace(environment.StderrAfterExit(s.proc)); tail != "" {
 		msg += " (" + lastLine(tail) + ")"
 	}
 	return errors.New(msg)
@@ -493,7 +493,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		}
 	case <-s.conn.Done():
 		a.err = harness.ErrAgentExited
-		if tail := strings.TrimSpace(s.proc.Stderr()); tail != "" {
+		if tail := strings.TrimSpace(environment.StderrAfterExit(s.proc)); tail != "" {
 			a.err = fmt.Errorf("%w: %s", harness.ErrAgentExited, lastLine(tail))
 		}
 	}
