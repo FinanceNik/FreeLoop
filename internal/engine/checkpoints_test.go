@@ -8,8 +8,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/provider"
@@ -184,5 +186,60 @@ func TestRewindAfterHistoryResetKeepsContext(t *testing.T) {
 	evs, _ = e.Events(ctx, ses.ID, 0)
 	if ev := evs[len(evs)-1]; ev.Type != event.Rewind || strings.Contains(string(ev.Data), `"context":true`) {
 		t.Errorf("last event = %s %s", ev.Type, ev.Data)
+	}
+}
+
+// SES-014: a project that ignores .claude or .freeloop still gets checkpoints. Naming
+// an ignored folder in git add's exclusions is an error, even with everything else
+// added, and that turned checkpoints off. Neither folder goes in, whatever the project
+// ignores or takes back with a !, since a rewind must never change them.
+func TestSnapshotLeavesOutClaudeWhateverIsIgnored(t *testing.T) {
+	ctx := context.Background()
+	for _, ignore := range []string{
+		"",
+		".claude\n",
+		".claude/\n",
+		".claude\n.freeloop\n",
+		".claude/*\n",
+		".claude/local.md\n",
+		".claude/*\n!.claude/commands/\n",
+		"/.claude/\n/.freeloop/\n",
+	} {
+		t.Run(strings.ReplaceAll(ignore, "\n", " "), func(t *testing.T) {
+			e := openTest(t, t.TempDir())
+			defer e.Close()
+			root := t.TempDir()
+			for path, text := range map[string]string{
+				".claude/local.md":     "secret",
+				".claude/commands/c":   "c",
+				".freeloop/rules.yaml": "r",
+				"a.txt":                "a",
+				"build.log":            "l",
+				".gitignore":           ignore + "*.log\n",
+			} {
+				full := filepath.Join(root, path)
+				if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, []byte(text), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			host, err := environment.NewLocal(environment.LocalOptions{Root: root, Guard: e.broker.Policy().Guard(root)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			commit, err := e.snapshot(ctx, host, "ses_test", "checkpoint")
+			if err != nil {
+				t.Fatalf("snapshot: %v", err)
+			}
+			files, err := e.shadowGit(ctx, host, "ses_test", time.Minute, "ls-tree", "-r", "--name-only", commit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if files != ".gitignore\na.txt" {
+				t.Errorf("the snapshot holds:\n%s", files)
+			}
+		})
 	}
 }
