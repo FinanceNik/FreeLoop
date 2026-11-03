@@ -10,7 +10,7 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 export CGO_CFLAGS := -O2 -g -mmacosx-version-min=14.0
 export CGO_LDFLAGS := -mmacosx-version-min=14.0
 
-.PHONY: help tools dev build package dmg release verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
+.PHONY: help tools dev build package dmg notices release verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -29,27 +29,34 @@ package: ## Build bin/Freeloop.app (ad-hoc signed)
 
 # The DMG holds the app and a link to /Applications, compressed (UDZO). It is
 # as signed as the app inside: ad-hoc (OQ-009).
-dmg: package ## Build bin/Freeloop.dmg from bin/Freeloop.app
+dmg: package notices ## Build bin/Freeloop.dmg from bin/Freeloop.app
 	rm -rf bin/dmg bin/Freeloop.dmg
 	mkdir -p bin/dmg
 	cp -R bin/Freeloop.app bin/dmg/
+	cp bin/THIRD_PARTY_NOTICES.txt bin/dmg/
 	ln -s /Applications bin/dmg/Applications
 	hdiutil create -volname Freeloop -srcfolder bin/dmg -ov -format UDZO -quiet bin/Freeloop.dmg
 	rm -rf bin/dmg
 	@echo "bin/Freeloop.dmg"
+
+# The licenses of everything in the app, which its licenses say must go with it.
+notices: ## Write bin/THIRD_PARTY_NOTICES.txt from what bin/Freeloop.app was built with
+	go run ./cmd/freeloop-sbom -notices -modcache "$$(go env GOMODCACHE)" -node-modules frontend/node_modules \
+		-binary bin/Freeloop.app/Contents/MacOS/Freeloop \
+		-version $$(sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml) < frontend/package-lock.json > bin/THIRD_PARTY_NOTICES.txt
 
 # What a release ships besides the app: its bill of materials (SEC-012), the
 # tools it was built with, and checksums, of every file in the bundle too.
 release: dmg ## Build bin/release: the DMG, its SBOM, build information and checksums
 	rm -rf bin/release
 	mkdir -p bin/release
-	cp bin/Freeloop.dmg bin/release/
+	cp bin/Freeloop.dmg bin/THIRD_PARTY_NOTICES.txt bin/release/
 	go run ./cmd/freeloop-sbom -binary bin/Freeloop.app/Contents/MacOS/Freeloop \
 		-version $$(sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml) < frontend/package-lock.json > bin/release/Freeloop.sbom.cdx.json
 	{ echo "commit $$(git rev-parse HEAD)"; go version; echo "node $$(node --version)"; clang --version | head -1; \
 		echo "macOS SDK $$(xcrun --show-sdk-version)"; echo "wails3 $(WAILS_VERSION)"; } > bin/release/BUILDINFO.txt
 	cd bin && find Freeloop.app -type f | LC_ALL=C sort | xargs shasum -a 256 > release/APP-FILES.sha256
-	cd bin/release && shasum -a 256 Freeloop.dmg Freeloop.sbom.cdx.json BUILDINFO.txt APP-FILES.sha256 > SHA256SUMS
+	cd bin/release && shasum -a 256 Freeloop.dmg Freeloop.sbom.cdx.json THIRD_PARTY_NOTICES.txt BUILDINFO.txt APP-FILES.sha256 > SHA256SUMS
 	@echo "bin/release"
 
 verify-repro: ## Build twice from clean clones and compare every file (NFR-SEC-004; REF=<tag> for a release)

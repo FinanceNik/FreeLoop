@@ -19,8 +19,8 @@ import (
 // The update check (SEC-009, OQ-015): off unless the user turns it on in
 // Settings. When on, the app asks GitHub for the project's latest release
 // at most once a day and says when it is newer than the running version;
-// it downloads and installs nothing (signed builds and in-app updates wait
-// on OQ-009). The request carries no version, ID or other detail of this
+// it downloads and installs nothing (in-app updates are not planned, since
+// builds are not signed: OQ-009). The request carries no version, ID or other detail of this
 // copy of the app, and a failure is silent (NFR-OFF-002).
 
 // AppVersion is this build's version; build/config.yml says the same.
@@ -145,7 +145,8 @@ func fetchLatestRelease(ctx context.Context, url string) (version, page string, 
 	return v, rel.HTMLURL, nil
 }
 
-// parseVersion reads major.minor.patch.
+// parseVersion reads major.minor.patch. A pre-release such as 0.1.0-rc1 reads as
+// no version: nobody on a release should be told about one.
 func parseVersion(v string) ([3]int, bool) {
 	var out [3]int
 	parts := strings.Split(strings.TrimPrefix(v, "v"), ".")
