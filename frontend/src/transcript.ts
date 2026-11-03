@@ -484,6 +484,21 @@ export function awaitingDecision(item: Item): boolean {
   return item.kind === "tool" && !!item.permission && !item.permission.decided && item.permission.options.length > 0;
 }
 
+// toolRuns groups finished tool calls that follow each other, so a long stretch
+// of them reads as one line. A call still running, failed, refused or waiting
+// stands alone, as does a plan: they are what the user has to see.
+export function toolRuns(items: Item[]): { items: Item[] }[] {
+  const quiet = (i: Item) =>
+    i.kind === "tool" && i.status === "completed" && i.tool !== "present_plan" && !awaitingDecision(i) && (!i.permission?.decided || i.permission.decided.outcome === "allowed");
+  const runs: { items: Item[] }[] = [];
+  for (const item of items) {
+    const last = runs[runs.length - 1];
+    if (quiet(item) && last && quiet(last.items[0])) last.items.push(item);
+    else runs.push({ items: [item] });
+  }
+  return runs;
+}
+
 export interface DiffLine {
   sign: " " | "-" | "+";
   text: string;

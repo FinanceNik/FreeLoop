@@ -1,5 +1,5 @@
 import { Browser, Clipboard } from "@wailsio/runtime";
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
 import {
@@ -19,6 +19,7 @@ import {
 import {
   awaitingDecision,
   buildView,
+  toolRuns,
   type Item,
   type TranscriptEvent,
 } from "./transcript.ts";
@@ -30,7 +31,7 @@ import { prepareImage, type PreparedImage } from "./imageprep.ts";
 import { addText, isPicture, type TextFile } from "./attach.ts";
 import SessionControls from "./SessionControls.tsx";
 import { MAX_IMAGES, room } from "./images.ts";
-import { CheckIcon, CopyIcon, ForkIcon, RewindIcon, StopIcon } from "./icons.tsx";
+import { CheckIcon, CopyIcon, ForkIcon, PaperclipIcon, RewindIcon, StopIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
 import { usePaletteActions } from "./Palette.tsx";
@@ -534,7 +535,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
         input.current?.focus();
       })
       .catch(onError);
-  const total = view.usage.inputTokens + view.usage.cacheReadTokens + view.usage.cacheWriteTokens;
+  // The box is one line until there is more to show; a hidden pane has no height to read.
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight}px`;
+  }, [draft, active, panelOpen]);
+
+  // The folders a command's leading `cd` adds nothing for (quietCommand).
+  const roots = useMemo(() => [session.projectRoot, session.worktree].filter(Boolean) as string[], [session.projectRoot, session.worktree]);
+  const costLabel = costs.calls === 0 ? "none yet" : costs.session.unpriced === costs.calls ? "no price set" : `≈ ${formatCost(costs.session.cost)}${costs.session.unpriced ? "+" : ""}`;
 
   // Everything this view shows a control for, for the palette (GUI-014).
   const showPanel = (t: PanelTab) => {
@@ -650,6 +661,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
 
   // The header's More menu closes once an action is picked.
   const moreMenu = useRef<HTMLDetailsElement>(null);
+  // What the header leaves to its tooltip and the Info tab.
+  const headerDetails = [
+    session.worktree ? `Worktree of ${session.projectRoot}: ${session.worktree}` : session.projectRoot,
+    `Environment: ${environment?.name ?? session.environmentId ?? "Local"}`,
+    session.providerId ? `${provider?.name ?? session.providerId} · ${session.model}` : (harness?.name ?? session.harnessId),
+  ].join("\n");
   const fromMenu = (act: () => void) => () => {
     if (moreMenu.current) moreMenu.current.open = false;
     act();
@@ -659,21 +676,36 @@ export default function SessionView({ session, events, focus, prices, initialDra
     <div ref={layoutBox} className="session-layout">
       <section className="session">
         <header className="session-header">
-          <div>
-            {renaming === null ? (
-              <h2 onDoubleClick={() => setRenaming(session.title)} title="Double-click to rename">
-                {session.title}
-              </h2>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  rename();
-                }}
+          <div className="session-heading">
+            <div className="session-titleline">
+              {renaming === null ? (
+                <h2 onDoubleClick={() => setRenaming(session.title)} title={`${headerDetails}\nDouble-click to rename`}>
+                  {session.title}
+                </h2>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    rename();
+                  }}
+                >
+                  <input autoFocus aria-label="Session title" value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
+                </form>
+              )}
+              <span
+                className="muted session-sub"
+                title={view.git?.repo ? `HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}` : undefined}
               >
-                <input autoFocus aria-label="Session title" value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
-              </form>
-            )}
+                {view.git?.repo && (
+                  <>
+                    {view.git.branch || "detached"}
+                    {session.worktree ? " (own worktree)" : ""}
+                    {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : ""}
+                  </>
+                )}
+                {switchingTo && ` · Handing over to ${switchingTo}…`}
+              </span>
+            </div>
             {session.parentId && (
               <p className="muted">
                 A subagent.{" "}
@@ -682,26 +714,6 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 </button>
               </p>
             )}
-            <p className="muted">
-              <code className="session-path" title={session.worktree ? `Worktree of ${session.projectRoot}: ${session.worktree}` : session.projectRoot}>
-                {session.worktree || session.projectRoot}
-              </code>
-              {view.git?.repo && (
-                <span title={`HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}`}>
-                  {" "}
-                  · {view.git.branch || "detached"}
-                  {session.worktree ? " (own worktree)" : ""}
-                  {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : view.git.dirty < 0 ? " · changes not checked" : " · clean"}
-                </span>
-              )}
-              {" "}· env {environment?.name ?? session.environmentId ?? "Local"}
-              {session.portBase > 0 && (
-                <span title="This session's commands get FREELOOP_PORT, the first of its ten ports">
-                  {" "}
-                  · ports {session.portBase}–{session.portBase + 9}
-                </span>
-              )}
-            </p>
             <Tags tags={session.tags ?? []} known={knownTags} adding={tagging} onAdding={setTagging} onChange={setTags} />
             {onOpenCompare &&
               (session.tags ?? [])
@@ -712,94 +724,63 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   </button>
                 ))}
           </div>
-          <div className="session-controls">
-            <div className="row">
-              {otherProfiles.length > 0 && (
-                <details className="export-menu">
-                  <summary title="A new session with another profile or harness, told what happened here">{switchingTo ? `Handing over to ${switchingTo}…` : "Continue with…"}</summary>
-                  <div className="export-options">
+          <div className="session-actions">
+            {view.context && view.context.window > 0 && view.context.tokens >= 0.8 * view.context.window && (
+              <span className="context-meter context-high" title="Context of the latest model call; the session compacts at 80 % of the model's window, or on /compact">
+                context {Math.round((100 * view.context.tokens) / view.context.window)} %
+              </span>
+            )}
+            {exported && (
+              <span className="ok" role="status" title={exported}>
+                Exported
+              </span>
+            )}
+            <button className="ghost" onClick={togglePanel} aria-pressed={panelOpen && (active || !split)} title="Show or hide the right panel">
+              Panel
+            </button>
+            <details className="export-menu" ref={moreMenu}>
+              <summary aria-label="More actions for this session" title="More actions">
+                ⋯
+              </summary>
+              <div className="export-options">
+                {otherProfiles.length > 0 && (
+                  <>
+                    <span className="muted export-group" title="A new session with another profile or harness, told what happened here">
+                      Continue with
+                    </span>
                     {otherProfiles.map((p) => (
-                      <button key={p.id} disabled={!!switchingTo || view.running} onClick={() => continueWith(p)}>
+                      <button key={p.id} disabled={!!switchingTo || view.running} onClick={fromMenu(() => continueWith(p))}>
                         {p.name}
                       </button>
                     ))}
-                  </div>
-                </details>
-              )}
-              {runCommand && (
-                <button title={`Runs ${runCommand} in a terminal tab`} disabled={archived} onClick={runApp}>
-                  Run
-                </button>
-              )}
-              <details className="export-menu" ref={moreMenu}>
-                <summary aria-label="More actions for this session">More</summary>
-                <div className="export-options">
-                  <button onClick={fromMenu(() => setRenaming(session.title))}>Rename</button>
-                  <button onClick={fromMenu(() => setTagging(true))}>Add a tag</button>
-                  {onOpenWindow && <button onClick={fromMenu(onOpenWindow)}>Open in a new window</button>}
-                  <button onClick={fromMenu(() => exportAs("markdown"))}>Export as Markdown…</button>
-                  <button onClick={fromMenu(() => exportAs("json"))}>Export as JSON…</button>
-                  <button onClick={fromMenu(archive)}>{archived ? "Unarchive" : "Archive"}</button>
-                  <hr />
-                  <button className="danger" onClick={fromMenu(remove)}>
-                    Delete…
+                    <hr />
+                  </>
+                )}
+                {runCommand && (
+                  <button title={`Runs ${runCommand} in a terminal tab`} disabled={archived} onClick={fromMenu(runApp)}>
+                    Run
                   </button>
-                </div>
-              </details>
-              <button className="ghost" onClick={openFolder} title={`Show ${session.worktree || session.projectRoot} in the Finder`}>
-                Finder
-              </button>
-              <button className="ghost" onClick={togglePanel} aria-pressed={panelOpen && (active || !split)} title="Show or hide the right panel">
-                Panel
-              </button>
-              {onClosePane && (
-                <button className="ghost pane-close" onClick={onClosePane} aria-label="Close this pane" title="Close this pane">
-                  ×
+                )}
+                <button onClick={fromMenu(openFolder)} title={`Show ${session.worktree || session.projectRoot} in the Finder`}>
+                  Show in Finder
                 </button>
-              )}
-              {exported && (
-                <span className="ok" role="status" title={exported}>
-                  Exported
-                </span>
-              )}
-            </div>
-            <span className="muted" title="Provider and model">
-              {session.providerId ? `${provider?.name ?? session.providerId} · ${session.model}` : (harness?.name ?? session.harnessId)}
-            </span>
-            <label title="Runs this session's shell commands through a program that shortens their output, to spend fewer tokens. You still approve the command as the model wrote it.">
-              Optimizer{" "}
-              <select value={session.optimizer} onChange={(e) => setOptimizer(e.target.value)} onFocus={loadOptimizers}>
-                <option value="">Off</option>
-                {optimizers.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.available ? o.name : `${o.name} (not available)`}
-                  </option>
-                ))}
-                {session.optimizer && !optimizers.some((o) => o.id === session.optimizer) && <option value={session.optimizer}>{session.optimizer} (no such optimizer)</option>}
-              </select>
-            </label>
-            {view.context && (
-              <span
-                className={view.context.window > 0 && view.context.tokens >= 0.8 * view.context.window ? "context-meter context-high" : "context-meter muted"}
-                title="Context of the latest model call; the session compacts at 80 % of the model's window, or on /compact"
-              >
-                context {view.context.window > 0 ? `${Math.round((100 * view.context.tokens) / view.context.window)} % of ${Math.round(view.context.window / 1000)}k` : `${Math.round(view.context.tokens / 1000)}k tokens`}
-              </span>
-            )}
-            <span className="muted" title="Input (including cache reads and writes) / output tokens">
-              {total.toLocaleString()} in · {view.usage.outputTokens.toLocaleString()} out
-            </span>
-            {costs.calls > 0 && (
-              <span
-                className="muted"
-                title={
-                  costs.session.unpriced === costs.calls
-                    ? "No price for this model; add one in Settings to estimate the cost"
-                    : `Estimated from the price table in Settings${costs.session.unpriced ? `; ${costs.session.unpriced} calls to models without a price are left out` : ""}`
-                }
-              >
-                {costs.session.unpriced === costs.calls ? "cost: no price" : `≈ ${formatCost(costs.session.cost)}${costs.session.unpriced ? "+" : ""}`}
-              </span>
+                {onOpenWindow && <button onClick={fromMenu(onOpenWindow)}>Open in a new window</button>}
+                <hr />
+                <button onClick={fromMenu(() => setRenaming(session.title))}>Rename</button>
+                <button onClick={fromMenu(() => setTagging(true))}>Add a tag</button>
+                <button onClick={fromMenu(() => exportAs("markdown"))}>Export as Markdown…</button>
+                <button onClick={fromMenu(() => exportAs("json"))}>Export as JSON…</button>
+                <button onClick={fromMenu(archive)}>{archived ? "Unarchive" : "Archive"}</button>
+                <hr />
+                <button className="danger" onClick={fromMenu(remove)}>
+                  Delete…
+                </button>
+              </div>
+            </details>
+            {onClosePane && (
+              <button className="ghost pane-close" onClick={onClosePane} aria-label="Close this pane" title="Close this pane">
+                ×
+              </button>
             )}
           </div>
         </header>
@@ -857,9 +838,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
         )}
         {untrusted && (
           <div className="banner warn row" role="status">
-            <span>
-              Untrusted project: this session uses your global settings only, without the project's <code>AGENTS.md</code>,{" "}
-              <code>.freeloop/</code> settings or git status.
+            <span title="Without the project's AGENTS.md, .freeloop/ settings or git status.">
+              Untrusted project: global settings only.
               {trustHooks.length > 0 && (
                 <>
                   {" "}
@@ -888,9 +868,19 @@ export default function SessionView({ session, events, focus, prices, initialDra
         </div>
         <div className="conversation" role="region" aria-label="Conversation">
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
-          {view.items.map((item) => (
-            <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} onError={onError} onRewind={rewind} onFork={fork} />
-          ))}
+          {toolRuns(view.items).map((run) => {
+            const one = (item: Item) => (
+              <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} roots={roots} onError={onError} onRewind={rewind} onFork={fork} />
+            );
+            if (run.items.length === 1) return one(run.items[0]);
+            return (
+              // Opens for a search hit inside it; otherwise it is the user's.
+              <details key={`run-${run.items[0].key}`} className="tool-run" open={run.items.some((i) => i.key === focused) || undefined}>
+                <summary className="muted">{run.items.length} tool calls</summary>
+                {run.items.map(one)}
+              </details>
+            );
+          })}
           {accepting && !view.running && (
             <p className="muted working" role="status">
               {view.setup === "running"
@@ -1069,84 +1059,105 @@ export default function SessionView({ session, events, focus, prices, initialDra
               ))}
             </ul>
           )}
-          <textarea
-            ref={input}
-            aria-label="Message"
-            aria-autocomplete="list"
-            aria-controls={pickerOptions > 0 ? `composer-options-${session.id}` : undefined}
-            aria-activedescendant={pickerOptions > 0 ? `composer-option-${pick}` : undefined}
-            onPaste={(e) => {
-              const files = [...e.clipboardData.files];
-              if (files.length === 0) return;
-              e.preventDefault();
-              addFiles(files);
-            }}
-            placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file, / for commands."}
-            value={draft}
-            rows={3}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              if (dismissed !== null && !e.target.value.slice(dismissed).startsWith("@")) setDismissed(null);
-              syncMention(e.target);
-              syncSlash(e.target);
-            }}
-            onSelect={(e) => {
-              syncMention(e.currentTarget);
-              syncSlash(e.currentTarget);
-            }}
-            onBlur={() => {
-              setMention(null);
-              setSlash(null);
-            }}
-            onKeyDown={onKeyDown}
-          />
-          <div className="composer-actions">
-            {/* Stop sits at the far end from Send, so a second click on Send
-                never stops the turn it started. */}
-            {view.running && (
-              <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger composer-stop" title="Stop the turn">
-                <StopIcon /> Stop
-              </button>
-            )}
-            <SessionControls
-              sessionId={session.id}
-              mode={mode}
-              canBypass={canBypass}
-              version={view.items.filter((i) => i.kind === "model").length + view.settings}
-              onMode={setMode}
-              onOtherModel={() => setSwitching({ providerId: session.providerId, model: session.model })}
-              onRules={showRules}
-              onError={onError}
-            />
-            <span className="composer-spacer" />
-            {queued > 0 && <span className="muted">{queued} queued</span>}
-            {(mcp?.resources ?? []).length > 0 && (
-              <button
-                title="Attach a resource of one of the session's MCP servers"
-                onClick={() => {
-                  refreshMcp();
-                  setAttaching(attaching === null ? "" : null);
-                }}
-              >
-                MCP resource…
-              </button>
-            )}
-            <input
-              ref={picker}
-              type="file"
-              multiple
-              hidden
-              onChange={(e) => {
-                addFiles([...(e.target.files ?? [])]);
-                e.target.value = "";
+          <div className="composer-box">
+            <textarea
+              ref={input}
+              aria-label="Message"
+              aria-autocomplete="list"
+              aria-controls={pickerOptions > 0 ? `composer-options-${session.id}` : undefined}
+              aria-activedescendant={pickerOptions > 0 ? `composer-option-${pick}` : undefined}
+              onPaste={(e) => {
+                const files = [...e.clipboardData.files];
+                if (files.length === 0) return;
+                e.preventDefault();
+                addFiles(files);
               }}
+              placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file, / for commands."}
+              value={draft}
+              rows={1}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                if (dismissed !== null && !e.target.value.slice(dismissed).startsWith("@")) setDismissed(null);
+                syncMention(e.target);
+                syncSlash(e.target);
+              }}
+              onSelect={(e) => {
+                syncMention(e.currentTarget);
+                syncSlash(e.currentTarget);
+              }}
+              onBlur={() => {
+                setMention(null);
+                setSlash(null);
+              }}
+              onKeyDown={onKeyDown}
             />
-            <button title="Attach files from anywhere on your Mac: text goes in the message, pictures go to the model as pictures. You can also paste or drop them." onClick={() => picker.current?.click()}>
-              Attach…
-            </button>
-            <button className="primary" onClick={send} disabled={(!draft.trim() && pictures.length === 0 && textFiles.length === 0) || accepting}>
-              {view.running ? "Queue" : "Send"}
-            </button>
+            <div className="composer-actions">
+              {/* Stop sits at the far end from Send, so a second click on Send
+                  never stops the turn it started. */}
+              {view.running && (
+                <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger composer-stop" title="Stop the turn">
+                  <StopIcon /> Stop
+                </button>
+              )}
+              <SessionControls
+                optimizer={
+                  <label className="session-control" title="Runs this session's shell commands through a program that shortens their output, to spend fewer tokens. You still approve the command as the model wrote it.">
+                    <span className="sr-only">Optimizer</span>
+                    <select value={session.optimizer} onChange={(e) => setOptimizer(e.target.value)} onFocus={loadOptimizers}>
+                      <option value="">Optimizer off</option>
+                      {optimizers.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.available ? o.name : `${o.name} (not available)`}
+                        </option>
+                      ))}
+                      {session.optimizer && !optimizers.some((o) => o.id === session.optimizer) && <option value={session.optimizer}>{session.optimizer} (no such optimizer)</option>}
+                    </select>
+                  </label>
+                }
+                sessionId={session.id}
+                mode={mode}
+                canBypass={canBypass}
+                version={view.items.filter((i) => i.kind === "model").length + view.settings}
+                onMode={setMode}
+                onOtherModel={() => setSwitching({ providerId: session.providerId, model: session.model })}
+                onRules={showRules}
+                onError={onError}
+              />
+              <span className="composer-spacer" />
+              {queued > 0 && <span className="muted">{queued} queued</span>}
+              {(mcp?.resources ?? []).length > 0 && (
+                <button
+                  title="Attach a resource of one of the session's MCP servers"
+                  onClick={() => {
+                    refreshMcp();
+                    setAttaching(attaching === null ? "" : null);
+                  }}
+                >
+                  MCP resource…
+                </button>
+              )}
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                hidden
+                onChange={(e) => {
+                  addFiles([...(e.target.files ?? [])]);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                className="ghost composer-attach"
+                aria-label="Attach files"
+                title="Attach files from anywhere on your Mac: text goes in the message, pictures go to the model as pictures. You can also paste or drop them."
+                onClick={() => picker.current?.click()}
+              >
+                <PaperclipIcon />
+              </button>
+              <button className="primary" onClick={send} disabled={(!draft.trim() && pictures.length === 0 && textFiles.length === 0) || accepting}>
+                {view.running ? "Queue" : "Send"}
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -1159,6 +1170,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           provider={provider}
           environment={environment}
           configVersion={configVersion}
+          costLabel={costLabel}
           terminalNonce={terminalNonce}
           onReview={(text) => {
             // Added to what is already typed, for the user to edit and send.
@@ -1180,6 +1192,7 @@ const ItemView = memo(
     item,
     focused,
     cost,
+    roots,
     onError,
     onRewind,
     onFork,
@@ -1188,6 +1201,7 @@ const ItemView = memo(
     item: Item;
     focused: boolean;
     cost?: string;
+    roots: string[];
     onError: (err: unknown) => void;
     onRewind: (seq: number, text: string) => void;
     onFork: (seq: number) => void;
@@ -1196,7 +1210,7 @@ const ItemView = memo(
     return (
       <div data-item={item.key} className={cls || undefined}>
         {item.rewound && <span className="sr-only">Rewound, no longer part of the conversation:</span>}
-        <ItemBody sid={sid} item={item} cost={cost} onError={onError} onRewind={onRewind} onFork={onFork} />
+        <ItemBody sid={sid} item={item} cost={cost} roots={roots} onError={onError} onRewind={onRewind} onFork={onFork} />
       </div>
     );
   },
@@ -1207,6 +1221,7 @@ function ItemBody({
   sid,
   item,
   cost,
+  roots,
   onError,
   onRewind,
   onFork,
@@ -1214,6 +1229,7 @@ function ItemBody({
   sid: string;
   item: Item;
   cost?: string;
+  roots: string[];
   onError: (err: unknown) => void;
   onRewind: (seq: number, text: string) => void;
   onFork: (seq: number) => void;
@@ -1258,7 +1274,7 @@ function ItemBody({
         </details>
       );
     case "tool":
-      return <ToolView item={item} onError={onError} />;
+      return <ToolView item={item} roots={roots} onError={onError} />;
     case "turn_end":
       return (
         <div className={`turn-end ${item.stopReason !== "end_turn" ? "turn-end-warn" : ""}`}>

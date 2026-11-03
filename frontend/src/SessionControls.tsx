@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { EngineService, MODES, type SessionOption, type SessionOptionsReport } from "./api.ts";
 
 // What can be changed in a session, beside where the next message is written
@@ -14,6 +14,8 @@ interface Props {
   onMode: (mode: string) => void;
   onOtherModel: () => void;
   onRules: () => void;
+  // The session's token optimizer, shown with the rest.
+  optimizer: ReactNode;
   onError: (err: unknown) => void;
 }
 
@@ -31,8 +33,10 @@ function grouped(o: SessionOption) {
 }
 
 const OTHER = "\u0000other";
+// The permissions menu's way to the session's rules.
+const RULES = "\u0000rules";
 
-export default function SessionControls({ sessionId, mode, canBypass, version, onMode, onOtherModel, onRules, onError }: Props) {
+export default function SessionControls({ sessionId, mode, canBypass, version, onMode, onOtherModel, onRules, optimizer, onError }: Props) {
   const [report, setReport] = useState<SessionOptionsReport | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -64,7 +68,7 @@ export default function SessionControls({ sessionId, mode, canBypass, version, o
     <div className="session-controls">
       {(report?.options ?? []).map((o) => (
         <label key={o.id} className="session-control" title={o.choices?.find((c) => c.value === o.current)?.description || undefined}>
-          {o.name || o.id}{" "}
+          <span className="sr-only">{o.name || o.id}</span>
           <select value={o.current} onChange={(e) => choose(o, e.target.value)}>
             {grouped(o).map((g) =>
               g.group ? (
@@ -93,19 +97,20 @@ export default function SessionControls({ sessionId, mode, canBypass, version, o
         </button>
       )}
       {report?.note && <span className="muted session-control-note">{report.note}</span>}
-      <label className="session-control" title={hint}>
-        Permissions{" "}
-        <select value={mode} onChange={(e) => onMode(e.target.value)}>
+      {optimizer}
+      <label className="session-control" data-mode={mode} title={hint}>
+        <span className="sr-only">Permissions</span>
+        <select value={mode} onChange={(e) => (e.target.value === RULES ? onRules() : onMode(e.target.value))}>
           {MODES.map((m) => (
             <option key={m.id} value={m.id} disabled={m.id === "bypass" && !canBypass && mode !== "bypass"} title={m.hint}>
               {m.id === "bypass" && !canBypass && mode !== "bypass" ? `${m.name} (needs a trusted project and Settings)` : m.name}
             </option>
           ))}
+          <option value={RULES} title="See and change what this session allows and denies without asking">
+            Rules…
+          </option>
         </select>
       </label>
-      <button className="link" onClick={onRules} title="See and change what this session allows and denies without asking">
-        Rules…
-      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { contrast, pickLabel, screenName, tabAfterKey, toolStatusLabel, visibleCommand } from "./a11y.ts";
+import { contrast, pickLabel, quietCommand, screenName, tabAfterKey, toolStatusLabel, visibleCommand } from "./a11y.ts";
 
 test("a screen has a name, and a session goes by its title", () => {
   assert.equal(screenName("board"), "Board");
@@ -85,4 +85,18 @@ test("an approval shows line breaks and hidden characters in a command", () => {
   assert.equal(visibleCommand("a\u200Bb"), "a⟦U+200B⟧b");
   assert.equal(visibleCommand("a\u001b[2Kb"), "a⟦U+001B⟧[2Kb");
   assert.equal(visibleCommand("café ü"), "café ü");
+});
+
+test("quietCommand drops a cd into the session's own folder, and nothing else", () => {
+  const roots = ["/work/app", "/work/app-tree"];
+  assert.equal(quietCommand("cd /work/app && make test", roots), "make test");
+  assert.equal(quietCommand("cd /work/app; ls", roots), "ls");
+  assert.equal(quietCommand("cd /work/app\ncat x", roots), "cat x");
+  assert.equal(quietCommand('cd "/work/app-tree" && ls', roots), "ls");
+  // Another folder, one that only starts the same, and nothing after it.
+  assert.equal(quietCommand("cd /etc && rm x", roots), "cd /etc && rm x");
+  assert.equal(quietCommand("cd /work/app/sub && ls", roots), "cd /work/app/sub && ls");
+  assert.equal(quietCommand("cd /work/app2 && ls", ["/work/app"]), "cd /work/app2 && ls");
+  assert.equal(quietCommand("cd /work/app", roots), "cd /work/app");
+  assert.equal(quietCommand("make test", roots), "make test");
 });

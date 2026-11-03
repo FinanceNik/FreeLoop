@@ -352,8 +352,47 @@ fieldset {
 }
 
 .sidebar footer {
-  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
   border-top: 1px solid var(--border);
+}
+
+.footer-links {
+  display: flex;
+  gap: 2px;
+}
+
+.footer-links button {
+  padding: 3px 10px;
+  font-size: calc(12rem / 14);
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.footer-links button:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.footer-links button[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-row .settings-link {
+  flex: 1;
+  width: auto;
+  min-width: 0;
 }
 
 /* One entry for the whole settings area, as in most Mac apps. */
@@ -381,13 +420,6 @@ fieldset {
 .settings-nav button[aria-current="page"] {
   background: var(--accent-soft);
   color: var(--link);
-}
-
-.settings-link kbd {
-  margin-left: auto;
-  font: inherit;
-  font-size: calc(12rem / 14);
-  color: var(--muted);
 }
 
 .icon {
@@ -477,8 +509,8 @@ fieldset {
   align-items: flex-start;
   gap: 3px;
   width: 100%;
-  margin-bottom: 2px;
-  padding: 7px 10px;
+  margin-bottom: 1px;
+  padding: 5px 10px;
   text-align: left;
   background: transparent;
   border-color: transparent;
@@ -499,8 +531,39 @@ fieldset {
   color: var(--text);
 }
 
+/* The title and, unless the session is idle, its status. */
+.session-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.session-line .badge {
+  flex: none;
+}
+
+.session-project {
+  flex: 0 1 auto;
+  min-width: 2em;
+  max-width: 45%;
+  margin-left: auto;
+  overflow: hidden;
+  font-size: calc(11rem / 14);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-by {
+  justify-content: space-between;
+  font-size: calc(12rem / 14);
+}
+
 .session-title {
-  font-weight: 500;
+  min-width: 0;
+  font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -523,24 +586,73 @@ fieldset {
 
 .project-name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   font-size: calc(12rem / 14);
   font-weight: 600;
   color: var(--muted);
-  margin: 8px 10px 4px;
+  margin: 8px 10px 2px 4px;
+}
+
+.project-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 1px 4px;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border-color: transparent;
+}
+
+.project-toggle:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+}
+
+.project-toggle svg {
+  flex: none;
+  transition: transform 0.1s;
+}
+
+.project-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
 }
 
 .filters {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 0 12px 10px;
+  padding: 0 12px 8px;
+}
+
+.filter-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .filters input[type="search"] {
+  flex: 1;
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 4px 6px;
+  color: var(--muted);
+}
+
+.filter-toggle[aria-expanded="true"] {
+  color: var(--link);
 }
 
 .filters > .row {
@@ -710,6 +822,9 @@ fieldset {
   display: flex;
   flex: 1;
   min-height: 0;
+  /* A pane narrower than the conversation's column (760px) squeezes the
+     column; without this the session keeps its width and runs past the pane. */
+  min-width: 0;
 }
 
 .session-layout > .session {
@@ -727,14 +842,20 @@ fieldset {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  padding: 14px 20px 12px;
+  gap: 12px;
+  padding: 8px 12px 8px 20px;
   border-bottom: 1px solid var(--border);
 }
 
 .session-header h2 {
+  flex: 0 1 auto;
+  min-width: 4em;
   margin: 0;
-  font-size: calc(16rem / 14);
+  overflow: hidden;
+  font-size: calc(14rem / 14);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: text;
 }
 
@@ -743,48 +864,58 @@ fieldset {
   font-size: calc(12rem / 14);
 }
 
-/* The folder on one line; the whole path shows on hover. */
-.session-path {
-  display: inline-block;
-  max-width: 34ch;
+/* One line: the title, then what it is on, which gives way first. */
+.session-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-titleline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-sub {
+  flex: 0 1000 auto;
+  min-width: 0;
   overflow: hidden;
+  font-size: calc(12rem / 14);
   text-overflow: ellipsis;
   white-space: nowrap;
-  vertical-align: bottom;
 }
 
-/* The title side and the controls both shrink, and the controls wrap,
-   so nothing in the header spills over the right panel. */
-.session-header > div:first-child {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.session-controls,
-.session-controls > .row {
-  min-width: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.session-controls {
+.session-actions {
   display: flex;
-  gap: 10px;
+  flex: none;
   align-items: center;
-}
-
-.session-controls .row {
-  gap: 4px;
-}
-
-/* The model, mode and token line under the actions. */
-.session-controls > span,
-.session-controls > label {
+  gap: 2px;
   font-size: calc(12rem / 14);
 }
 
-.session-controls select {
-  padding: 3px 8px;
+.session-actions > button,
+.session-actions .export-menu summary {
+  padding: 2px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.session-actions > button:hover:not(:disabled),
+.session-actions .export-menu summary:hover {
+  background: var(--surface);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.session-actions .context-meter {
+  margin-right: 6px;
+}
+
+.export-group {
+  padding: 2px 10px;
+  font-size: calc(11rem / 14);
 }
 
 button[aria-pressed="true"],
@@ -961,6 +1092,27 @@ button.ghost[aria-pressed="true"] {
   padding: 8px 12px;
 }
 
+/* A finished call is a line; it becomes a card when opened. */
+.tool-completed:not([open]) {
+  border-color: transparent;
+  background: transparent;
+  padding-block: 2px;
+}
+
+.tool-run > summary {
+  cursor: pointer;
+  padding: 2px 12px;
+  font-size: calc(12rem / 14);
+}
+
+.tool-run > summary:hover {
+  color: var(--text);
+}
+
+.tool-run[open] > summary {
+  margin-bottom: 4px;
+}
+
 .tool summary {
   cursor: pointer;
   display: flex;
@@ -1134,26 +1286,56 @@ button.ghost[aria-pressed="true"] {
   box-sizing: border-box;
 }
 
-.composer textarea {
-  resize: vertical;
-  min-height: 56px;
+/* The message and what applies to it are one box. */
+.composer-box {
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
-  padding: 12px 14px;
-  line-height: 1.5;
 }
 
-.composer textarea:focus {
+.composer-box:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.composer textarea,
+.composer textarea:focus {
+  box-sizing: border-box;
+  resize: none;
+  max-height: 40vh;
+  overflow-y: auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  padding: 10px 14px 6px;
+  line-height: 1.5;
 }
 
 .composer-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  padding: 2px 6px 6px 8px;
+}
+
+.composer-attach {
+  display: inline-flex;
+  padding: 4px 6px;
+  color: var(--muted);
+}
+
+/* A pane the user is not in keeps its conversation's room; these come back
+   when they click into it. */
+.pane-split:not(.pane-active) .composer-actions {
+  display: none;
+}
+
+.pane-split:not(.pane-active) .composer textarea {
+  padding-bottom: 10px;
 }
 
 .composer-spacer {
@@ -1181,8 +1363,35 @@ button.ghost[aria-pressed="true"] {
   white-space: nowrap;
 }
 
+/* Quiet menus that read as text until pointed at. */
 .session-control select {
+  appearance: none;
+  field-sizing: content;
   max-width: 11rem;
+  padding: 2px 8px;
+  overflow: hidden;
+  font-size: calc(12rem / 14);
+  text-overflow: ellipsis;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.session-control select:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Anything looser than asking stands out, bypass the most. */
+.session-control[data-mode="accept_edits"] select {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.session-control[data-mode="bypass"] select {
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-weight: 600;
 }
 
 .session-control-note {
@@ -1512,19 +1721,6 @@ button.ghost[aria-pressed="true"] {
   container-type: size;
 }
 
-/* Short panes keep their room for the conversation. */
-@container (max-height: 640px) {
-  .pane-split .composer textarea {
-    min-height: 40px;
-    height: 40px;
-    padding: 8px 12px;
-  }
-
-  .pane-split .session-header {
-    padding-block: 8px;
-  }
-}
-
 /* A line around the pane the keyboard goes to, drawn over its contents. */
 .pane-split.pane-active::after,
 .pane-drop::after {
@@ -1611,12 +1807,6 @@ button.ghost[aria-pressed="true"] {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin: 0 8px 8px;
-  padding: 0 10px;
-}
-
-.layout-switch .muted {
-  margin-right: auto;
 }
 
 .layout-switch button {
@@ -1730,10 +1920,6 @@ details.choice[open] > summary h3::after {
 
 .attention-link-on {
   font-weight: 600;
-}
-
-.attention-link + .attention-link {
-  margin-top: -6px;
 }
 
 /* Board view (GUI-016). */

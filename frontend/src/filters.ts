@@ -66,3 +66,40 @@ export function saveFilter(list: SavedFilter[], name: string, f: SessionFilter):
   const i = list.findIndex((x) => x.name.toLowerCase() === n.toLowerCase());
   return i < 0 ? [...list, entry] : list.map((x, j) => (j === i ? entry : x));
 }
+
+// statusSummary counts sessions by status, most urgent first: what a collapsed
+// project still shows, so nothing waiting on the user is hidden (GUI-001).
+export function statusSummary(sessions: { status: string }[]): { status: string; count: number }[] {
+  const order = ["waiting_permission", "waiting_input", "error", "running", "queued"];
+  const rank = (status: string) => (order.includes(status) ? order.indexOf(status) : order.length);
+  const counts = new Map<string, number>();
+  for (const s of sessions) counts.set(s.status, (counts.get(s.status) ?? 0) + 1);
+  return [...counts].map(([status, count]) => ({ status, count })).sort((a, b) => rank(a.status) - rank(b.status));
+}
+
+// dateGroups sorts sessions into calendar days counted back from now, by when
+// each was last used (SES-021), most recent first and empty groups left out.
+// Within a group the order moves by the minute, so that sessions streaming at
+// the same time do not keep swapping places under the pointer.
+export function dateGroups<T extends { id: string; updatedAt: unknown }>(sessions: T[], now: Date): { label: string; sessions: T[] }[] {
+  const dayStart = (back: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - back).getTime();
+  const edges: [string, number][] = [
+    ["Today", dayStart(0)],
+    ["Yesterday", dayStart(1)],
+    ["Previous 7 days", dayStart(7)],
+    ["Previous 30 days", dayStart(30)],
+    ["Older", -Infinity],
+  ];
+  const used = (s: T) => {
+    const t = new Date(s.updatedAt as string).getTime();
+    return Number.isNaN(t) ? -Infinity : t;
+  };
+  const minute = (s: T) => Math.floor(used(s) / 60000);
+  const sorted = [...sessions].sort((a, b) => minute(b) - minute(a) || a.id.localeCompare(b.id));
+  return edges
+    .map(([label, from], i) => ({
+      label,
+      sessions: sorted.filter((s) => used(s) >= from && (i === 0 || used(s) < edges[i - 1][1])),
+    }))
+    .filter((g) => g.sessions.length > 0);
+}

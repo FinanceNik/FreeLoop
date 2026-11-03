@@ -26,7 +26,7 @@ import { HIT_LABEL, snippetParts } from "./search.ts";
 import { formatCost } from "./cost.ts";
 import { windowSession } from "./windows.ts";
 import * as ws from "./workspace.ts";
-import { allTags, isEmpty, matches, parseQuery, sameFilter, saveFilter, type SavedFilter, type SessionFilter } from "./filters.ts";
+import { allTags, dateGroups, isEmpty, matches, parseQuery, sameFilter, saveFilter, statusSummary, type SavedFilter, type SessionFilter } from "./filters.ts";
 import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import SessionView from "./SessionView.tsx";
@@ -48,6 +48,7 @@ import Workspace, { SESSION_DRAG_TYPE } from "./Workspace.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
+import { ChevronIcon, FilterIcon } from "./icons.tsx";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { applyFonts, type FontChoice } from "./fonts.ts";
 import { inSettings, isSettingsShortcut, MAX_FONT_SIZE, textSizeAfter } from "./settings.ts";
@@ -84,9 +85,45 @@ const STATUS_LABEL: Record<string, string> = {
   error: "Error",
 };
 
+const COLLAPSED_KEY = "freeloop.collapsedProjects";
+const GROUP_BY_KEY = "freeloop.groupBy";
+
+type GroupBy = "project" | "date";
+
+function readGroupBy(): GroupBy {
+  try {
+    return localStorage.getItem(GROUP_BY_KEY) === "date" ? "date" : "project";
+  } catch {
+    return "project";
+  }
+}
+
+function readCollapsedProjects(): string[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+    return Array.isArray(list) ? list.filter((k) => typeof k === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 // A session's own window (GUI-015) shows that session alone; every window
 // receives every engine event.
 const STANDALONE = windowSession(window.location.search);
+
+// Without project headings, a row says which project it belongs to, and a
+// project that needs something still shows it.
+function RowProject({ session, project }: { session: Session; project?: ProjectInfo }) {
+  if (project?.missing) return <span className="badge badge-error">missing</span>;
+  const name = project?.name ?? basename(session.projectRoot);
+  const untrusted = project && !project.trusted;
+  return (
+    <span className="muted session-project" title={`${project?.root ?? session.projectRoot}${untrusted ? " (untrusted: global settings only)" : ""}`}>
+      {name}
+      {untrusted ? " · untrusted" : ""}
+    </span>
+  );
+}
 
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -145,6 +182,9 @@ export default function App() {
   // The name being typed for a new saved filter, while the field is open.
   const [filterName, setFilterName] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [collapsedProjects, setCollapsedProjects] = useState<string[]>(readCollapsedProjects);
+  const [groupBy, setGroupBy] = useState<GroupBy>(readGroupBy);
   // Full-text results for the sidebar query (SES-007), for that query.
   const [found, setFound] = useState<{ query: string; results: SessionHits[] } | null>(null);
   // Sessions that need the user (GUI-002).
@@ -643,17 +683,51 @@ export default function App() {
       (showArchived ? s.status === "archived" : s.status !== "archived") &&
       matches(s, filter),
   );
-  for (const s of visible) {
-    const project = projects.find((p) => p.id === s.projectId);
-    const key = project?.id ?? s.projectRoot;
-    let g = groups.find((x) => x.key === key);
-    if (!g) {
-      g = { key, name: project?.name ?? basename(s.projectRoot), project, sessions: [] };
-      groups.push(g);
+  if (groupBy === "date") {
+    for (const d of dateGroups(visible, new Date())) groups.push({ key: `date:${d.label}`, name: d.label, sessions: d.sessions });
+  } else {
+    for (const s of visible) {
+      const project = projects.find((p) => p.id === s.projectId);
+      const key = project?.id ?? s.projectRoot;
+      let g = groups.find((x) => x.key === key);
+      if (!g) {
+        g = { key, name: project?.name ?? basename(s.projectRoot), project, sessions: [] };
+        groups.push(g);
+      }
+      g.sessions.push(s);
     }
-    g.sessions.push(s);
   }
-  listedRef.current = groups.flatMap((g) => g.sessions);
+  const chooseGroupBy = (next: GroupBy) => {
+    setGroupBy(next);
+    try {
+      localStorage.setItem(GROUP_BY_KEY, next);
+    } catch {
+      // Only a convenience: it is back to projects next time.
+    }
+  };
+  // A search or filter shows what it found, in collapsed projects too.
+  const isCollapsed = (key: string) => isEmpty(filter) && !showArchived && collapsedProjects.includes(key);
+  const toggleProject = (key: string) => {
+    const next = collapsedProjects.includes(key) ? collapsedProjects.filter((k) => k !== key) : [...collapsedProjects, key];
+    setCollapsedProjects(next);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+    } catch {
+      // Only a convenience: it is back to open next time.
+    }
+  };
+  const isIdleOrDone = (s: Session) => s.status === "idle" || s.status === "archived";
+  // ⌘1 to ⌘9 go down the sessions that can be seen.
+  listedRef.current = groups.filter((g) => !isCollapsed(g.key)).flatMap((g) => g.sessions);
+  const filterChips = [
+    ...(statusFilter ? [{ label: STATUS_LABEL[statusFilter] ?? statusFilter, clear: () => setStatusFilter("") }] : []),
+    ...tagFilter.map((t) => ({ label: `#${t}`, clear: () => setTagFilter(tagFilter.filter((x) => x !== t)) })),
+    ...(showArchived ? [{ label: "Archived", clear: () => setShowArchived(false) }] : []),
+  ];
+  const openAttention = () => {
+    refreshAttention();
+    setScreen({ kind: "attention" });
+  };
 
   // Each waiting request counts, and each session in error or waiting for a
   // reply without a request.
@@ -694,6 +768,12 @@ export default function App() {
         group: "Action",
         keywords: "search filter transcripts",
         run: () => searchInput.current?.focus(),
+      },
+      {
+        id: "app:group-by",
+        title: groupBy === "date" ? "Group sessions by project" : "Group sessions by last used",
+        group: "Filter",
+        run: () => chooseGroupBy(groupBy === "date" ? "project" : "date"),
       },
       {
         id: "app:archived",
@@ -816,78 +896,82 @@ export default function App() {
         <aside className="sidebar">
           <header>
             <h1>Freeloop</h1>
-            <button className="primary" onClick={() => setScreen({ kind: "new" })}>
+            <button onClick={() => setScreen({ kind: "new" })}>
               New session
             </button>
           </header>
-          <button
-            className={`attention-link ${attentionCount > 0 ? "attention-link-on" : ""}`}
-            aria-current={screen.kind === "attention" ? "page" : undefined}
-            aria-keyshortcuts={ariaKeys(bindingOf("attention"))}
-            title={keyLabel(bindingOf("attention"))}
-            onClick={() => {
-              refreshAttention();
-              setScreen({ kind: "attention" });
-            }}
-          >
-            Needs attention
-            {attentionCount > 0 && <span className="badge badge-waiting_permission">{attentionCount}</span>}
-          </button>
-          <button className="attention-link" aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
-            Board
-          </button>
-          <button
-            className="attention-link"
-            aria-current={screen.kind === "usage" ? "page" : undefined}
-            title="Drag to a pane to watch it beside your sessions"
-            draggable={!STANDALONE}
-            onDragStart={(e) => {
-              e.dataTransfer.setData(SESSION_DRAG_TYPE, ws.USAGE_PANE);
-              e.dataTransfer.effectAllowed = "move";
-            }}
-            onClick={() => setScreen({ kind: "usage" })}>
-            Usage
-          </button>
-          <div className="layout-switch" role="group" aria-label="Sessions side by side">
-            <span className="muted">Panes</span>
-            {([1, 2, 3, 4] as const).map((n) => (
-              <button
-                key={n}
-                className="ghost"
-                aria-pressed={work.layout === n}
-                aria-label={n === 1 ? "One pane" : `${n} panes`}
-                title={n === 1 ? "One session" : `${n} sessions side by side`}
-                onClick={() => showWork(ws.chooseLayout(work, n))}
-              >
-                <Icon name={`panes-${n}`} />
-              </button>
-            ))}
-          </div>
+          {attentionCount > 0 && (
+            <button
+              className="attention-link attention-link-on"
+              aria-current={screen.kind === "attention" ? "page" : undefined}
+              aria-keyshortcuts={ariaKeys(bindingOf("attention"))}
+              title={keyLabel(bindingOf("attention"))}
+              onClick={openAttention}
+            >
+              Needs attention
+              <span className="badge badge-waiting_permission">{attentionCount}</span>
+            </button>
+          )}
           <div className="filters">
-            <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
-            <div className="row">
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-                <option value="">Any status</option>
-                <option value="waiting_permission">Needs you</option>
-                <option value="running">Running</option>
-                <option value="idle">Idle</option>
-                <option value="error">Error</option>
-              </select>
-              {tagsInUse.length > 0 && (
-                <select value={tagFilter[0] ?? ""} onChange={(e) => setTagFilter(e.target.value ? [e.target.value] : [])} aria-label="Tag">
-                  <option value="">Any tag</option>
-                  {tagsInUse.map((t) => (
-                    <option key={t} value={t}>
-                      #{t}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <label className="row muted">
-                <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Archived
-              </label>
+            <div className="filter-search">
+              <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <button
+                className="ghost filter-toggle"
+                aria-expanded={filtersOpen}
+                aria-label={filterChips.length > 0 ? `Filters, ${filterChips.length} on` : "Filters"}
+                title="Status, tags, archived and saved filters"
+                onClick={() => setFiltersOpen(!filtersOpen)}
+              >
+                <FilterIcon />
+                {filterChips.length > 0 && <span aria-hidden="true">{filterChips.length}</span>}
+              </button>
             </div>
-            {(savedFilters.length > 0 || !isEmpty(filter)) && (
+            {!filtersOpen && filterChips.length > 0 && (
+              <div className="saved-filters" role="group" aria-label="Filters on">
+                {filterChips.map((c) => (
+                  <span key={c.label} className="saved-filter saved-filter-on">
+                    <span className="saved-filter-name">{c.label}</span>
+                    <button className="saved-filter-remove" aria-label={`Remove the filter ${c.label}`} onClick={c.clear}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {filtersOpen && (
+              <label className="row muted group-by">
+                Group by
+                <select value={groupBy} onChange={(e) => chooseGroupBy(e.target.value as GroupBy)}>
+                  <option value="project">Project</option>
+                  <option value="date">Last used</option>
+                </select>
+              </label>
+            )}
+            {filtersOpen && (
+              <div className="row">
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+                  <option value="">Any status</option>
+                  <option value="waiting_permission">Needs you</option>
+                  <option value="running">Running</option>
+                  <option value="idle">Idle</option>
+                  <option value="error">Error</option>
+                </select>
+                {tagsInUse.length > 0 && (
+                  <select value={tagFilter[0] ?? ""} onChange={(e) => setTagFilter(e.target.value ? [e.target.value] : [])} aria-label="Tag">
+                    <option value="">Any tag</option>
+                    {tagsInUse.map((t) => (
+                      <option key={t} value={t}>
+                        #{t}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <label className="row muted">
+                  <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Archived
+                </label>
+              </div>
+            )}
+            {filtersOpen && (savedFilters.length > 0 || !isEmpty(filter)) && (
               <div className="saved-filters" role="group" aria-label="Saved filters">
                 {savedFilters.map((f) => (
                   <span key={f.name} className={`saved-filter ${sameFilter(f, filter) ? "saved-filter-on" : ""}`}>
@@ -939,8 +1023,17 @@ export default function App() {
           <nav aria-label="Projects and sessions">
             {groups.map((g) => (
               <section key={g.key} className="project-group">
-                <h2 className="project-name" title={g.project?.root ?? g.key}>
-                  {g.name}
+                <h2 className="project-name" title={g.project?.root ?? (groupBy === "date" ? undefined : g.key)}>
+                  <button className="project-toggle" aria-expanded={!isCollapsed(g.key)} onClick={() => toggleProject(g.key)}>
+                    <ChevronIcon />
+                    <span>{g.name}</span>
+                  </button>
+                  {isCollapsed(g.key) &&
+                    statusSummary(sessions.filter((s) => !isIdleOrDone(s) && g.sessions.some((x) => x.id === s.id || x.id === s.parentId))).map((c) => (
+                      <span key={c.status} className={`badge badge-${c.status}`}>
+                        {c.count} {(STATUS_LABEL[c.status] ?? c.status).toLowerCase()}
+                      </span>
+                    ))}
                   {g.project && !g.project.trusted && !g.project.missing && (
                     <span className="muted untrusted" title="Untrusted: global settings only">
                       untrusted
@@ -955,7 +1048,7 @@ export default function App() {
                     </>
                   )}
                 </h2>
-                <ul>
+                <ul hidden={isCollapsed(g.key)}>
                   {g.sessions.map((s) => (
                     <li key={s.id}>
                       <button
@@ -963,7 +1056,7 @@ export default function App() {
                         aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
                         aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
                         data-shown={!STANDALONE && screen.kind === "session" && work.panes.includes(s.id) ? "" : undefined}
-                        title="⌘-click or drag to open it beside what is open"
+                        title={`${s.branch ? `${s.branch} · ` : ""}⌘-click or drag to open it beside what is open`}
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData(SESSION_DRAG_TYPE, s.id);
@@ -971,16 +1064,21 @@ export default function App() {
                         }}
                         onClick={(e) => openSession(s.id, undefined, e.metaKey ? "new" : "active")}
                       >
-                        <span className="session-title">{s.title}</span>
-                        <span className="session-meta">
-                          <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
-                          {s.branch && <span className="muted">{s.branch}</span>}
-                          {(s.tags ?? []).map((t) => (
-                            <span key={t} className="tag">
-                              #{t}
-                            </span>
-                          ))}
+                        <span className="session-line">
+                          <span className="session-title">{s.title}</span>
+                          {groupBy === "date" && <RowProject session={s} project={projects.find((p) => p.id === s.projectId)} />}
+                          {s.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>}
                         </span>
+                        {((s.worktree && s.branch) || (s.tags ?? []).length > 0) && (
+                          <span className="session-meta">
+                            {s.worktree && s.branch && <span className="muted">{s.branch}</span>}
+                            {(s.tags ?? []).map((t) => (
+                              <span key={t} className="tag">
+                                #{t}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </button>
                       {subagents(s.id).length > 0 && (
                         <ul className="subagents" aria-label={`Subagents of ${s.title}`}>
@@ -1047,28 +1145,69 @@ export default function App() {
               Local only
             </button>
           )}
-          {today && (today.models ?? []).length > 0 && (
+          {today && (today.models ?? []).some((m) => m.priced) && (
             <button
               className="link today"
               title="Estimated from the price table in Settings; calls to models without a price are left out. Opens the usage dashboard."
               onClick={() => setScreen({ kind: "usage" })}
             >
-              {(today.models ?? []).some((m) => m.priced)
-                ? `Today ≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`
-                : "Today: no prices set"}
+              {`Today ≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`}
             </button>
           )}
           <footer>
-            <button
-              className="settings-link"
-              aria-current={inSettings(screen.kind) ? "page" : undefined}
-              aria-keyshortcuts={ariaKeys(bindingOf("settings"))}
-              onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen({ kind: "settings" }))}
-            >
-              <Icon name="general" />
-              Settings
-              <kbd aria-hidden="true">{keyLabel(bindingOf("settings"))}</kbd>
-            </button>
+            <div className="footer-links">
+              {attentionCount === 0 && (
+                <button
+                  aria-current={screen.kind === "attention" ? "page" : undefined}
+                  aria-keyshortcuts={ariaKeys(bindingOf("attention"))}
+                  title={keyLabel(bindingOf("attention"))}
+                  onClick={openAttention}
+                >
+                  Attention
+                </button>
+              )}
+              <button aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
+                Board
+              </button>
+              <button
+                aria-current={screen.kind === "usage" ? "page" : undefined}
+                title="Drag to a pane to watch it beside your sessions"
+                draggable={!STANDALONE}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(SESSION_DRAG_TYPE, ws.USAGE_PANE);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onClick={() => setScreen({ kind: "usage" })}
+              >
+                Usage
+              </button>
+            </div>
+            <div className="footer-row">
+              <button
+                className="settings-link"
+                aria-current={inSettings(screen.kind) ? "page" : undefined}
+                aria-keyshortcuts={ariaKeys(bindingOf("settings"))}
+                title={keyLabel(bindingOf("settings"))}
+                onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen({ kind: "settings" }))}
+              >
+                <Icon name="general" />
+                Settings
+              </button>
+              <div className="layout-switch" role="group" aria-label="Sessions side by side">
+                {([1, 2, 3, 4] as const).map((n) => (
+                  <button
+                    key={n}
+                    className="ghost"
+                    aria-pressed={work.layout === n}
+                    aria-label={n === 1 ? "One pane" : `${n} panes`}
+                    title={n === 1 ? "One session" : `${n} sessions side by side`}
+                    onClick={() => showWork(ws.chooseLayout(work, n))}
+                  >
+                    <Icon name={`panes-${n}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
           </footer>
         </aside>
       )}

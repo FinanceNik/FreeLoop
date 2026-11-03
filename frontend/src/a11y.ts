@@ -83,6 +83,23 @@ export function contrast(a: string, b: string): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+// quietCommand drops a leading `cd` into a folder the session already works in,
+// which agents repeat on every command and which hides what the command does.
+// Only for a finished call's one-line title: its card shows the whole input.
+export function quietCommand(title: string, roots: string[]): string {
+  if (!title.startsWith("cd ")) return title;
+  const rest = title.slice(3).trimStart();
+  for (const root of roots) {
+    for (const path of [root, `"${root}"`, `'${root}'`]) {
+      if (!rest.startsWith(path)) continue;
+      const after = /^\s*(?:&&|;|\n)\s*/.exec(rest.slice(path.length));
+      const command = after && rest.slice(path.length + after[0].length);
+      if (command) return command;
+    }
+  }
+  return title;
+}
+
 // visibleCommand keeps what a command does on screen. A newline in HTML reads as a
 // space, so `echo ok #\ncurl x|sh` would look like a comment, and bidi and
 // zero-width characters can reorder or hide the rest. Each is shown as what it is.

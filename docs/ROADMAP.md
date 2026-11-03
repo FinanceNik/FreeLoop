@@ -305,6 +305,11 @@ What the open "later" list held that follows from the sandbox or needs no accoun
 
 1. **Custom colors (GUI-022).** *Checked in the browser: both directions between the editor and `colors.json`, a bad value, broken JSON, a restart, both appearances and Reset. The color picker's panel and "Open colors.json" need the native window, so they were not tried.* Settings → Appearance changes the app's colors for each appearance, live, and `colors.json` in the data folder holds the same set.
 
+### A quiet window and grouping by date (built 2026-11-03)
+
+1. **A quiet window (GUI-026).** *The user looked at the built app and found it much better. Unit tests cover which tool calls collapse, which `cd` is dropped and a collapsed project's summary; narrow panes, the permissions menu's Rules item and VoiceOver were not gone through.* The Approvals tab stays, by the user's choice.
+2. **Grouping by last used (SES-021).** *Unit tests cover the day boundaries and the order; not looked at in the app when written down.*
+
 ### Fonts (built 2026-11-03)
 
 1. **Fonts (GUI-025).** *Checked in the browser with the demo provider: both fonts on the conversation, tool cards, inline code, diffs, a review comment and the terminal, live from the menu, a typed name and an edit of the file, a restart, Back to the app's own font, a hostile value in the file (reported, no request reached a listener on its address), a missing font. Also in a real `WKWebView` pointed at the same app, where Manrope and JetBrains Mono from `~/Library/Fonts` draw and are listed, and the terminal changes font live. That run could not draw terminal text off screen, so columns there are checked from xterm's numbers only, and the native window was not opened.* Settings → Appearance has a Text and a Code font; `ui.textFont` and `ui.codeFont` in `config.yaml` hold them (`internal/config/fonts.go`, `frontend/src/fonts.ts`, `FontEditor.tsx`).

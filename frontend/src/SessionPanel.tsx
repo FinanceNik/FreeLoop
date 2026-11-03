@@ -25,6 +25,8 @@ interface Props {
   provider?: ProviderInfo;
   environment?: EnvironmentInfo;
   configVersion: number;
+  // The session's estimated cost, as the Info tab shows it.
+  costLabel: string;
   // Puts a review of the diff into the composer (GUI-019).
   onReview: (text: string) => void;
   // Changes when a terminal was opened elsewhere, to show it.
@@ -41,11 +43,13 @@ export function showTool(toolCallId: string) {
   const el = document.querySelector(`.pane-active ${sel}`) ?? document.querySelector(sel);
   if (!el) return;
   if (el instanceof HTMLDetailsElement) el.open = true;
+  // It may be inside a collapsed run of tool calls.
+  for (let up = el.parentElement; up; up = up.parentElement) if (up instanceof HTMLDetailsElement) up.open = true;
   const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   el.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
 }
 
-export default function SessionPanel({ session, tab, onTab: setTab, view, provider, environment, configVersion, onReview, terminalNonce, onClose, onError }: Props) {
+export default function SessionPanel({ session, tab, onTab: setTab, view, provider, environment, configVersion, costLabel, onReview, terminalNonce, onClose, onError }: Props) {
   const data = panelData(view);
   // Uncommitted files, from the latest git state.
   const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
@@ -106,6 +110,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
             provider={provider}
             environment={environment}
             configVersion={configVersion}
+            costLabel={costLabel}
             onError={onError}
           />
         )}
@@ -292,10 +297,11 @@ interface InfoProps {
   provider?: ProviderInfo;
   environment?: EnvironmentInfo;
   configVersion: number;
+  costLabel: string;
   onError: (err: unknown) => void;
 }
 
-function Info({ session, view, turns, provider, environment, configVersion, onError }: InfoProps) {
+function Info({ session, view, turns, provider, environment, configVersion, costLabel, onError }: InfoProps) {
   const [rules, setRules] = useState<Rule[]>([]);
   // Refetched when a decision may have saved a rule or the files changed.
   const saved = view.items.filter((i) => i.kind === "tool" && i.permission?.decided?.persisted).length;
@@ -323,6 +329,16 @@ function Info({ session, view, turns, provider, environment, configVersion, onEr
     ["Input tokens", u.inputTokens.toLocaleString()],
     ["Cache reads / writes", `${u.cacheReadTokens.toLocaleString()} / ${u.cacheWriteTokens.toLocaleString()}`],
     ["Output tokens", u.outputTokens.toLocaleString()],
+    ...(view.context
+      ? ([
+          [
+            "Context",
+            view.context.window > 0 ? `${Math.round((100 * view.context.tokens) / view.context.window)} % of ${Math.round(view.context.window / 1000)}k` : `${Math.round(view.context.tokens / 1000)}k tokens`,
+          ],
+        ] as [string, ReactNode][])
+      : []),
+    ["Estimated cost", costLabel],
+    ...(session.portBase > 0 ? ([["Ports", `${session.portBase}–${session.portBase + 9}`]] as [string, ReactNode][]) : []),
     ["Session ID", <code>{session.id}</code>],
   ];
   return (

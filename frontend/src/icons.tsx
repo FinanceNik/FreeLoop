@@ -61,6 +61,30 @@ export function LayoutIcon({ n }: { n: 1 | 2 | 3 | 4 }) {
   );
 }
 
+export function FilterIcon() {
+  return (
+    <Icon>
+      <path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" />
+    </Icon>
+  );
+}
+
+export function ChevronIcon() {
+  return (
+    <Icon size={12}>
+      <path d="m9 18 6-6-6-6" />
+    </Icon>
+  );
+}
+
+export function PaperclipIcon() {
+  return (
+    <Icon>
+      <path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" />
+    </Icon>
+  );
+}
+
 export function CloseIcon() {
   return (
     <Icon size={14}>

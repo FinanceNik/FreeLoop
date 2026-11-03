@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { apply, awaitingDecision, buildView, emptyTranscript, lineDiff, panelData, summary, type TranscriptEvent } from "./transcript.ts";
+import { apply, awaitingDecision, buildView, emptyTranscript, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
 
 const ev = (seq: number, data: unknown = {}): TranscriptEvent => ({
   v: 1,
@@ -330,4 +330,19 @@ test("commands the sandbox ran stay out of the decided list (ENV-009)", () => {
   ].map((e, i) => ({ ...e, seq: i + 1, sessionId: "s", at: "" }));
   const data = panelData(buildView(evs as never));
   assert.deepEqual(data.decided.map((i) => i.toolCallId), ["b"]);
+});
+
+test("toolRuns groups finished calls and leaves out what the user must see", () => {
+  const tool = (key: string, extra: Record<string, unknown> = {}) => ({ kind: "tool", key, status: "completed", tool: "shell", ...extra }) as unknown as Item;
+  const agent = (key: string) => ({ kind: "agent", key, text: "x" }) as unknown as Item;
+  const shape = (items: Item[]) => toolRuns(items).map((r) => r.items.map((i) => i.key).join(""));
+  assert.deepEqual(shape([tool("a"), tool("b"), agent("c"), tool("d"), tool("e"), tool("f")]), ["ab", "c", "def"]);
+  // Running, failed, refused, waiting and a plan each stand alone and break a run.
+  assert.deepEqual(shape([tool("a"), tool("b", { status: "in_progress" }), tool("c")]), ["a", "b", "c"]);
+  assert.deepEqual(shape([tool("a"), tool("b", { status: "failed" }), tool("c")]), ["a", "b", "c"]);
+  assert.deepEqual(shape([tool("a"), tool("b", { permission: { requestId: "r", options: [], decided: { outcome: "denied" } } }), tool("c")]), ["a", "b", "c"]);
+  assert.deepEqual(shape([tool("a"), tool("b", { permission: { requestId: "r", options: [{ optionId: "o" }] } }), tool("c")]), ["a", "b", "c"]);
+  assert.deepEqual(shape([tool("a"), tool("b", { tool: "present_plan" }), tool("c")]), ["a", "b", "c"]);
+  // An allowed call stays quiet.
+  assert.deepEqual(shape([tool("a"), tool("b", { permission: { requestId: "r", options: [{ optionId: "o" }], decided: { outcome: "allowed" } } })]), ["ab"]);
 });
