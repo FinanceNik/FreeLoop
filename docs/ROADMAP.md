@@ -327,7 +327,7 @@ Rewriting shell commands so their output costs fewer tokens (HRN-019, OQ-029). N
 
 1. **The built-in harness and the session dropdown.** *Built 2026-11-02; tested with a stand-in program, with real RTK 1.1.0 unconfined and under the real Seatbelt sandbox, and in the browser with the demo provider. Real models' behaviour with shortened output, Docker and a Homebrew-installed binary are not checked.* `internal/engine/optimizers.go` asks the program for a rewrite after approval and checks it (`validRewrite`); the shell tool has a permanent `raw` option, so the tool list and the prompt cache do not change with the switch; `optimizer_changed` records the choice; the Optimizer dropdown is in the session header and the ⌘K palette.
 2. **Defaults, setup and files.** *Built 2026-11-02; tested with a stand-in program and checked in the browser with real RTK and with none on the PATH.* A Token optimizers page in Settings shows where each program is, a Check button that runs it, the install command and the default for new sessions (`defaults.optimizer`); profiles have `optimizer:`, the new-session form and `freeloop new -optimizer` choose one, `freeloop optimizer <session> [id|off]` and the socket's `sessions.optimizers` and `sessions.setOptimizer` switch one; `optimizers/<id>.yaml` adds or replaces one, hot-reloaded and included in backups. Choosing one that is not installed offers to type its install command in the session's terminal.
-3. Measured savings per session from `rtk gain`, the Usage tab by optimizer, on and off in Compare (HRN-016).
+3. Measured savings per session from `rtk gain`, the Usage tab by optimizer, on and off in Compare (HRN-016). *Dropped 2026-11-03 (OQ-031): the savings measured were 0.18 %, so RTK is off by default and nothing more is built on it.*
 4. **Claude Code and installing from the session.** *Built 2026-11-03; run through the real Claude Code adapter (0.99.1) with real RTK 1.1.0 on a stand-in model: read-only commands ran shorter with no prompt, `touch` and `git push` asked with the original shown, off gave raw output and on again the short form. The install button was tried against GitHub. A real model and a signed-in Claude Code were not tried.* `sessionOptimizer.forAgent` answers the plugin's `PreToolUse` hook (`freeloop optimizer-hook`, `sessions.rewriteForAgent`), the ACP client maps a rewrite back with `Original`, and a tool call's `via` names the optimizer. `internal/engine/optimizerinstall.go` downloads `rtk-oss`. A global `rtk init -g` hook gets a warning in the session.
 5. Custom harnesses through `terminal/create`.
 
@@ -367,6 +367,18 @@ Not done: reaping after a crash, storage views and pruning, sharing checkpoints 
 Found on the way: `session/load` adds two metadata lines to the session's file, and `session/fork` leaves the original unchanged, which is why the import copies. The replay stops at the last compaction: 76 of the 9,677 tool calls of the largest session came back. `session/list` without a folder missed two of six sessions that the same call with their folder found, so the import also asks about every project here. An agent names its copy `<title> (fork)`, so an imported session keeps its title.
 
 Not in: reading Claude Code's files to show what was compacted away. They are not a documented format, and the agent's context would not change.
+
+### Direction (2026-11-03)
+
+After a look at everything built, the one claim worth selling: **every coding agent, vendor or local, runs under the user's permission policy and the user's accounting, and neither the agent nor the repository can loosen either.** Two things proved it on 2026-11-03: an agent that switched itself to bypass stayed in plan (`internal/harness/acp/acp.go`), and a repository's `.claude/settings.json` allowing `Bash(*)` got a `git push` past Claude Code's own gate and not past the broker (OQ-029). Freeloop's token counts for Claude Code now match the agent's own reported cost to the digit (PRV-008), which no vendor's view gives across agents.
+
+What follows, in order, before anything else in v1:
+
+1. **What the policy held (SEC-014).** Make the policy visible: what it stopped, in the session and across sessions.
+2. **A cost summary to share (GUI-029).** Make the cost view the one people show each other.
+3. The release: the definition of done above, with signing as OQ-009 has it.
+
+Not before those: features that copy a vendor app's. Token optimizers get no more work (OQ-031). What the vision lists as borrowed from vendor apps stays built; nothing more of that kind is added without a reason in this list.
 
 ## Later (unscheduled)
 

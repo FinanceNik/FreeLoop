@@ -60,6 +60,8 @@ Avoid:
 
 ## Where Freeloop is genuinely different
 
+In one sentence: every coding agent, vendor or local, runs under your permission policy and your accounting, and neither the agent nor the repository can loosen either (`docs/ROADMAP.md`, direction of 2026-11-03). The five below are what that rests on.
+
 1. **One approval inbox across sessions and repos.** No orchestrator found does this. Every permission request from every harness lands in one queue with inline approve and a jump to context.
 2. **Any model and any harness under one permission model.** The GUI never special-cases a harness. The built-in loop, ACP agents and CLI wrappers render the same, are approved the same and are logged the same.
 3. **Environments are first-class.** Tools, secrets and permission policy belong to the environment, not the agent. The same session type runs in a folder today and in a container tomorrow.
