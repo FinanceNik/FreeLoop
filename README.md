@@ -55,7 +55,7 @@ Everything is in `~/Library/Application Support/freeloop/`, readable and editabl
 
 A project can add `.freeloop/rules.yaml` (deny rules) and `.freeloop/profiles/`, read once the project is trusted. Set `FREELOOP_HOME` to use another folder.
 
-Freeloop sends nothing anywhere except to the providers, MCP servers and agents you configure. There is no telemetry. [docs/SECURITY.md](docs/SECURITY.md) describes the threat model and the limits you should know, among them that the local environment is not a sandbox.
+Freeloop has no telemetry. It connects to the providers, MCP servers and agents you configure, and to three things only if you use them: the update check you can turn on in Settings (GitHub), a token optimizer's pinned download when you click it (GitHub), and the MCP registry when you browse it. [docs/SECURITY.md](docs/SECURITY.md) describes the threat model and the limits you should know, among them that the local environment is not a sandbox.
 
 ## Develop
 

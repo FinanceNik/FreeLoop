@@ -525,6 +525,11 @@ func (s *EngineService) TypeOptimizerInstall(ctx context.Context, sessionID, id 
 }
 
 // SetOptimizer switches a session's token optimizer (HRN-019).
+// OptimizerSavings says what a session's optimizer reports having saved, or nil.
+func (s *EngineService) OptimizerSavings(ctx context.Context, sessionID string) (*engine.OptimizerSavings, error) {
+	return s.eng.CheckOptimizerSavings(ctx, sessionID)
+}
+
 func (s *EngineService) SetOptimizer(ctx context.Context, sessionID, optimizerID string) error {
 	return s.eng.SetOptimizer(ctx, sessionID, optimizerID)
 }

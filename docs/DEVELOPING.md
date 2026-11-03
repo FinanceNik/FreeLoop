@@ -28,7 +28,7 @@ Rules the lint enforces (`internal/archtest`): no `os/exec` or file I/O in the e
 ## Build and test
 
 - `make tools` once, then `make dev` (live reload; `FREELOOP_DEV=1` adds a scripted demo provider, `FREELOOP_HOME=/some/dir` keeps your data apart).
-- `make test` runs the Go tests with the race detector and the frontend tests (`node --test`, no framework). One test: `go test ./internal/<pkg>/ -run '^TestName$'`.
+- `make test` runs the Go tests, `cmd/` included, with the race detector and the frontend tests (`node --test`, no framework). One test: `go test ./internal/<pkg>/ -run '^TestName$'`.
 - `make lint` runs gofmt, `go vet`, the architecture test and `tsc`. Both pass before every commit.
 - A UI change is checked in the running app: build the frontend, `go build -tags server ./cmd/freeloop`, run it with `FREELOOP_DEV=1 FREELOOP_HOME=<scratch> WAILS_SERVER_PORT=<port>` and open it in a browser. **That build serves the whole engine on a local port, with no sign-in:** any process on this Mac, other users' and sandboxed commands included, can call it, and through a terminal run commands as you. Use it on scratch data, stop it when done, and never ship it. Keychain items are shared across data folders, so give a test provider a name of its own: one with a real provider's name overwrites its key, or set `FREELOOP_DEV_SECRETS=memory` to leave the Keychain out; with that, a scratch folder's approvals last only until the app stops. That build has no dialogs: `FREELOOP_DEV_BACKUP=<file>` is the backup a restore previews.
 - Docker tests need a running daemon (Colima or Docker Desktop) and skip without one.
@@ -88,6 +88,8 @@ The agent runs in the session's environment, its file and terminal requests go t
 `make verify-repro REF=<tag>` builds a commit twice from clean clones and compares every file; CI does this for tags. To check a release yourself, check out its tag and install what `BUILDINFO.txt` names: the same Go (`go.mod`'s toolchain fetches it), Node and Xcode command line tools, since the linker and the SDK shape the binary. Then run `make package` and compare `bin/Freeloop.app` with `APP-FILES.sha256`.
 
 Two things differ by design. A DMG is stamped with the time, so compare the app inside it. Should a build ever carry a Developer ID signature, which releases do not (OQ-009), it is dated, so remove it first (`codesign --remove-signature`) and sign both ad hoc.
+
+`make notices` writes `bin/THIRD_PARTY_NOTICES.txt`, the license and notice files of the same things, which goes in the DMG and the release. It names on stderr anything with no such file, for you to check before a release; `@wailsio/runtime` is one, with its license in the Wails Go module that is also listed.
 
 The bill lists what is in the app: Go modules from the binary's build information, and the frontend's packages from its lockfile without those only its build uses. It does not list the agents a preset downloads when you use it (their versions are in `internal/config/presets.go`), nor the operating system's frameworks.
 
@@ -157,6 +159,8 @@ dataEnv:                    # optional: variables pointing at files in the sessi
   RTK_DB_PATH: tracking.db
 install: brew install rtk   # optional, one line: typed into a terminal for the user to run
 ```
+
+The model is told once when an optimizer comes on (`optimizerNote`, through `harness.Prompt.Note`, which the transcript does not show). A built-in optimizer can name `Gain`, the arguments that print its savings as JSON (`parseGain`); a file cannot, so a file's optimizer shows only the count of commands it shortened.
 
 Only a built-in can offer a one-click install, through `Download` in `config.BuiltinOptimizers`: a version and, per architecture, a `.tar.gz` URL and its SHA-256. A file cannot, so no file makes the app fetch anything.
 

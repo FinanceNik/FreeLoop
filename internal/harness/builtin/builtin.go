@@ -265,6 +265,9 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		return s.endTurn(harness.StopEndTurn, s.compact(ctx, "manual"))
 	}
 	parts := []provider.Part{{Type: provider.PartText, Text: s.expand(p.Text)}}
+	if p.Note != "" {
+		parts = append([]provider.Part{{Type: provider.PartText, Text: p.Note}}, parts...)
+	}
 	for _, r := range p.Resources {
 		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "resource_link", URI: r.URI, Name: r.Path}})
 		parts = append(parts, provider.Part{Type: provider.PartText, Text: harness.ResourceText(r)})

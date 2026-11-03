@@ -93,5 +93,5 @@ Avoid:
 
 - **M1:** the author uses it for at least one real task a day for a week and prefers it for that task.
 - **MVP:** the author stops using the vendor desktop app for parallel sessions; two weeks without transcript loss or session cross-talk.
-- **v1:** five people other than the author use it for a week and their blocking issues are fixed; builds are signed.
+- **v1:** five people other than the author use it for a week and their blocking issues are fixed. Builds are not signed (OQ-009).
 - **Long run:** a new agent appearing in the ACP registry works in Freeloop the same day, with a configuration entry and no code.

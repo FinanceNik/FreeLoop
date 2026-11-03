@@ -67,6 +67,9 @@ type Optimizer struct {
 	Install string `yaml:"install,omitempty"`
 	// Download is what the app can fetch for the user; a file cannot name one.
 	Download *OptimizerDownload `yaml:"-"`
+	// Gain are the arguments that print what it has saved, as JSON a built-in one's
+	// report is known to have. A file cannot name them.
+	Gain []string `yaml:"-"`
 	// Source is the file it came from; empty for a built-in one.
 	Source string `yaml:"-"`
 }
@@ -92,6 +95,7 @@ func BuiltinOptimizers() []Optimizer {
 		Rewrite: []string{"rewrite"}, RewriteExits: []int{0, 3},
 		ProbeCommand: "git status", ProbeWant: "rtk git status",
 		Version: []string{"--version"},
+		Gain:    []string{"gain", "--format", "json"},
 		// Tried raw and rewritten in identical repositories, with copies of each
 		// planted in the repository. Others, such as gh and curl, await the same.
 		Rewrites: map[string]string{

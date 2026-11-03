@@ -14,14 +14,29 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 )
 
-// The version the app reports is the one the build files give it.
+// The version the app reports is the one every build file gives it. A release that
+// bumps one and not the others would tell its users to update forever.
 func TestAppVersionMatchesTheBuild(t *testing.T) {
-	b, err := os.ReadFile("../../build/config.yml")
-	if err != nil {
-		t.Fatal(err)
+	for file, want := range map[string]string{
+		"../../build/config.yml":            `version: "` + AppVersion + `"`,
+		"../../build/darwin/Info.plist":     `<string>` + AppVersion + `</string>`,
+		"../../build/darwin/Info.dev.plist": `<string>` + AppVersion + `</string>`,
+		"../../frontend/package.json":       `"version": "` + AppVersion + `"`,
+	} {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), want) {
+			t.Errorf("%s does not give version %s", file, AppVersion)
+		}
 	}
-	if !strings.Contains(string(b), `version: "`+AppVersion+`"`) {
-		t.Errorf("build/config.yml does not give version %s", AppVersion)
+	// CFBundleVersion and CFBundleShortVersionString, in both.
+	for _, file := range []string{"../../build/darwin/Info.plist", "../../build/darwin/Info.dev.plist"} {
+		b, _ := os.ReadFile(file)
+		if n := strings.Count(string(b), `<string>`+AppVersion+`</string>`); n != 2 {
+			t.Errorf("%s gives version %s %d times", file, AppVersion, n)
+		}
 	}
 }
 

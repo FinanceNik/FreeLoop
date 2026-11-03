@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { apply, awaitingDecision, buildView, emptyTranscript, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
+import { optimizerCounts, apply, awaitingDecision, buildView, emptyTranscript, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
 
 const ev = (seq: number, data: unknown = {}): TranscriptEvent => ({
   v: 1,
@@ -346,3 +346,23 @@ test("toolRuns groups finished calls and leaves out what the user must see", () 
   // An allowed call stays quiet.
   assert.deepEqual(shape([tool("a"), tool("b", { permission: { requestId: "r", options: [{ optionId: "o" }], decided: { outcome: "allowed" } } })]), ["ab"]);
 });
+
+const shell = (id: string, via?: string) => ({ kind: "tool", toolKind: "execute", toolCallId: id, via, content: [] }) as never;
+const read = { kind: "tool", toolKind: "read", toolCallId: "r", content: [] } as never;
+const set = (optimizer: string) => ({ kind: "notice", optimizer, message: "", warn: false }) as never;
+
+test("an optimizer's count takes only shell commands from while it was on", () => {
+  assert.deepEqual(optimizerCounts({ items: [shell("a"), set("rtk"), shell("b"), shell("c", "RTK"), read, set(""), shell("d")] }, false), { commands: 2, rewritten: 1 });
+});
+
+test("a session started with an optimizer counts from the start", () => {
+  assert.deepEqual(optimizerCounts({ items: [shell("a", "RTK"), shell("b")] }, true), { commands: 2, rewritten: 1 });
+  assert.deepEqual(optimizerCounts({ items: [shell("a"), set(""), shell("b")] }, false), { commands: 1, rewritten: 0 });
+  assert.deepEqual(optimizerCounts({ items: [shell("a")] }, false), { commands: 0, rewritten: 0 });
+});
+
+test("a rewrite the content records counts too", () => {
+  const item = { kind: "tool", toolKind: "execute", toolCallId: "a", content: [{ type: "terminal_output", via: "RTK" }] } as never;
+  assert.deepEqual(optimizerCounts({ items: [item] }, true), { commands: 1, rewritten: 1 });
+});
+

@@ -31,6 +31,8 @@ tasks:
     sources:
       - "**/*"
       - exclude: node_modules/**/*
+      # Its own output, or every build would make the next one stale.
+      - exclude: dist/**/*
     generates:
       - dist/**/*
     deps:

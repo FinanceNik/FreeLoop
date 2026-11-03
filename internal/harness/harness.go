@@ -341,6 +341,9 @@ type Prompt struct {
 	// Images are pictures the user attached (SES-015), with their data;
 	// the engine has stored each as an attachment of the session.
 	Images []provider.Image
+	// Note is for the model, before the message. The transcript does not show it:
+	// the user did not write it.
+	Note string
 }
 
 // Subagents runs a child agent on a task and returns its final reply and

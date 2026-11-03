@@ -24,7 +24,9 @@ var execAllowed = []string{"internal/environment"}
 // Direct file-system access is allowed in the environment layer and in the
 // app's own infrastructure: the store, config loading and the platform layer.
 // Everything else, the harnesses above all, goes through an Environment.
-var fsAllowed = []string{"internal/environment", "internal/store", "internal/config", "internal/platform/darwin"}
+// cmd/freeloop-sbom is a tool make release runs on the build machine, to read the
+// licenses of what went into the app; it is not part of the app.
+var fsAllowed = []string{"internal/environment", "internal/store", "internal/config", "internal/platform/darwin", "cmd/freeloop-sbom"}
 
 // Only the Wails adapter may depend on Wails; the engine stays
 // transport-agnostic.
