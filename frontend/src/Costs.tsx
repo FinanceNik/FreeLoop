@@ -20,6 +20,7 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
         first, for another price or a model not on the list. The model can be a pattern such as <code>claude-*</code>; the first matching row applies.
       </p>
       {prices.length > 0 && (
+        <div className="prices-scroll">
         <table className="prices">
           <thead>
             <tr>
@@ -28,8 +29,8 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
               <th>Input</th>
               <th>Output</th>
               <th>Cache read</th>
-              <th>Cache write 5 min</th>
-              <th>Cache write 1 hour</th>
+              <th>5-min write</th>
+              <th>1-hour write</th>
               <th />
             </tr>
           </thead>
@@ -72,6 +73,7 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
             ))}
           </tbody>
         </table>
+        </div>
       )}
       <div className="row">
         <button type="button" onClick={() => onChange([...prices, { providerId: "", model: "", input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0 }])}>
@@ -81,6 +83,7 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
       {list && (
         <details>
           <summary>List prices</summary>
+          <div className="prices-scroll">
           <table className="prices">
             <thead>
               <tr>
@@ -88,8 +91,8 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
                 <th>Input</th>
                 <th>Output</th>
                 <th>Cache read</th>
-                <th>Cache write 5 min</th>
-                <th>Cache write 1 hour</th>
+                <th>5-min write</th>
+                <th>1-hour write</th>
               </tr>
             </thead>
             <tbody>
@@ -108,6 +111,7 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
                 ))}
             </tbody>
           </table>
+          </div>
         </details>
       )}
     </>

@@ -2655,8 +2655,27 @@ table.usage td {
   padding: 2px 6px;
 }
 
+table.prices th {
+  vertical-align: bottom;
+}
+
+table.prices input {
+  box-sizing: border-box;
+}
+
 table.prices input[type="number"] {
-  width: 6em;
+  width: 5em;
+  padding-inline: 6px;
+}
+
+table.prices input:not([type="number"]) {
+  width: 100%;
+  min-width: 8em;
+}
+
+/* A narrow pane scrolls the table, not the page. */
+.prices-scroll {
+  overflow-x: auto;
 }
 
 table.usage td:nth-child(n + 3),
