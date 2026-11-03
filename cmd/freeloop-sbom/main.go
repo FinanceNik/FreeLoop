@@ -28,7 +28,7 @@ func main() {
 	flag.Parse()
 	var src *sbom.NoticeSources
 	if *notices {
-		src = &sbom.NoticeSources{ModCache: *modCache, NodeModules: *nodeModules}
+		src = &sbom.NoticeSources{ModCache: os.DirFS(*modCache), NodeModules: os.DirFS(*nodeModules)}
 	}
 	if err := run(*binary, *version, src); err != nil {
 		fmt.Fprintln(os.Stderr, "freeloop-sbom:", err)

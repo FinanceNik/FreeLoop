@@ -3,9 +3,10 @@ package sbom
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io/fs"
+	"path"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // built it, which holds every package the build used.
 type NoticeSources struct {
 	// ModCache is `go env GOMODCACHE`, NodeModules the frontend's node_modules.
-	ModCache, NodeModules string
+	ModCache, NodeModules fs.FS
 }
 
 // Notices writes the license and notice files of everything in a build, the same
@@ -27,13 +28,17 @@ func Notices(app App, info *debug.BuildInfo, packageLock []byte, src NoticeSourc
 	if err := json.Unmarshal(packageLock, &lock); err != nil {
 		return nil, nil, fmt.Errorf("package-lock.json: %w", err)
 	}
-	type pkg struct{ name, version, dir string }
+	type pkg struct {
+		name, version string
+		root          fs.FS
+		dir           string
+	}
 	var pkgs []pkg
 	for _, d := range info.Deps {
 		if d.Replace != nil {
 			d = d.Replace
 		}
-		pkgs = append(pkgs, pkg{d.Path, d.Version, filepath.Join(src.ModCache, escapeModule(d.Path)+"@"+escapeModule(d.Version))})
+		pkgs = append(pkgs, pkg{d.Path, d.Version, src.ModCache, escapeModule(d.Path) + "@" + escapeModule(d.Version)})
 	}
 	for key, p := range lock.Packages {
 		if !strings.HasPrefix(key, "node_modules/") || p.Dev || p.DevOpt || p.Link {
@@ -41,8 +46,7 @@ func Notices(app App, info *debug.BuildInfo, packageLock []byte, src NoticeSourc
 		}
 		name := key[strings.LastIndex(key, "node_modules/")+len("node_modules/"):]
 		// A nested copy is under its parent, not at the top.
-		dir := filepath.Join(src.NodeModules, strings.TrimPrefix(key, "node_modules/"))
-		pkgs = append(pkgs, pkg{name, p.Version, dir})
+		pkgs = append(pkgs, pkg{name, p.Version, src.NodeModules, strings.TrimPrefix(key, "node_modules/")})
 	}
 	slices.SortFunc(pkgs, func(a, b pkg) int {
 		if c := strings.Compare(a.name, b.name); c != 0 {
@@ -55,7 +59,7 @@ func Notices(app App, info *debug.BuildInfo, packageLock []byte, src NoticeSourc
 	var out bytes.Buffer
 	fmt.Fprintf(&out, "%s %s includes the following software, under these licenses.\n", app.Name, app.Version)
 	for _, p := range pkgs {
-		files, err := licenseFiles(p.dir)
+		files, err := licenseFiles(p.root, p.dir)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -65,7 +69,7 @@ func Notices(app App, info *debug.BuildInfo, packageLock []byte, src NoticeSourc
 		}
 		fmt.Fprintf(&out, "\n\n================================================================\n%s %s\n================================================================\n", p.name, p.version)
 		for _, f := range files {
-			b, err := os.ReadFile(filepath.Join(p.dir, f))
+			b, err := fs.ReadFile(p.root, path.Join(p.dir, f))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -78,9 +82,9 @@ func Notices(app App, info *debug.BuildInfo, packageLock []byte, src NoticeSourc
 }
 
 // licenseFiles names a package's license and notice files, in order.
-func licenseFiles(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
+func licenseFiles(root fs.FS, dir string) ([]string, error) {
+	entries, err := fs.ReadDir(root, dir)
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {

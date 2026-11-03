@@ -43,7 +43,7 @@ func TestNotices(t *testing.T) {
 		"node_modules/devonly":{"version":"1.0.0","dev":true},
 		"node_modules/gone":{"version":"1.0.0"}
 	}}`)
-	src := NoticeSources{ModCache: filepath.Join(root, "mod"), NodeModules: filepath.Join(root, "node")}
+	src := NoticeSources{ModCache: os.DirFS(filepath.Join(root, "mod")), NodeModules: os.DirFS(filepath.Join(root, "node"))}
 	text, missing, err := Notices(App{Name: "Freeloop", Version: "0.1.0"}, info, lock, src)
 	if err != nil {
 		t.Fatal(err)
