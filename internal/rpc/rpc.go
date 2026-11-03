@@ -256,6 +256,21 @@ func (s *Server) call(ctx context.Context, method string, raw json.RawMessage) (
 			return nil, err
 		}
 		return struct{}{}, e.SetSessionOption(ctx, p.ID, p.Option, p.Value)
+	case "sessions.importable":
+		var p struct {
+			Profile string `json:"profile"`
+			Folder  string `json:"folder"`
+		}
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		return e.AgentSessions(ctx, p.Profile, p.Folder)
+	case "sessions.import":
+		var p engine.ImportSessionRequest
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		return e.ImportAgentSession(ctx, p)
 	case "sessions.rewriteForAgent":
 		var p rewriteP
 		if err := decode(raw, &p); err != nil {

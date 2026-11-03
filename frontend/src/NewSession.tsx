@@ -38,6 +38,7 @@ interface Props {
   // A comparison of one task on several profiles started (HRN-016).
   onCompare: (tag: string) => void;
   onProjectsChanged: () => void;
+  onImport?: () => void;
   onManageProviders: () => void;
   onProvidersChanged: () => void;
   onError: (err: unknown) => void;
@@ -50,7 +51,7 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, onCreated, onCompare, onProjectsChanged, onManageProviders, onProvidersChanged, onError }: Props) {
+export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, onCreated, onCompare, onProjectsChanged, onImport, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers.find((p) => !p.builtin) ?? providers[0];
   // An agent that signs in by itself (Claude Code with a subscription)
@@ -655,6 +656,11 @@ export default function NewSession({ providers, projects, environments, profiles
           <button type="submit" className="primary" disabled={busy || !root || !!harness?.missing || (usesProvider && (!model.trim() || (blocked && caps?.source !== "unknown")))}>
             {busy ? "Starting…" : extra.length > 0 ? `Start ${extra.length + 1} runs` : "Start session"}
           </button>
+          {onImport && (
+            <button type="button" className="link" onClick={onImport}>
+              Import an existing session…
+            </button>
+          )}
         </div>
       </form>
     </section>

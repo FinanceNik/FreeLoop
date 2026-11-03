@@ -32,6 +32,11 @@ const LoadVar = "FREELOOP_ACP_TEST_LOAD"
 // say "images: <n>" for the image blocks of each prompt (SES-015).
 const ImageVar = "FREELOOP_ACP_TEST_IMAGE"
 
+// ImportVar, set to 1, makes the agent keep two sessions it can list, copy and
+// replay (SES-020). The replay asks for permission, writes a file and asks for a
+// terminal, none of which a client that only reads may grant.
+const ImportVar = "FREELOOP_ACP_TEST_IMPORT"
+
 // Serve runs the agent on stdin and stdout until the client disconnects and
 // reports whether it did, so a TestMain can return early.
 func Serve() bool {
@@ -50,6 +55,7 @@ type agent struct {
 	conn   *sdk.AgentSideConnection
 	mcp    []string
 	loaded string
+	forked bool
 	// plugin is the local plugin folder session/new or session/load passed
 	// in _meta.claudeCode.options.plugins (SKL-008).
 	plugin string
@@ -70,8 +76,12 @@ func pluginOf(meta map[string]any) string {
 }
 
 func (a *agent) Initialize(context.Context, sdk.InitializeRequest) (sdk.InitializeResponse, error) {
+	var sessions sdk.SessionCapabilities
+	if os.Getenv(ImportVar) == "1" {
+		sessions = sdk.SessionCapabilities{List: &sdk.SessionListCapabilities{}, Fork: &sdk.SessionForkCapabilities{}}
+	}
 	return sdk.InitializeResponse{ProtocolVersion: sdk.ProtocolVersionNumber, AuthMethods: []sdk.AuthMethod{},
-		AgentCapabilities: sdk.AgentCapabilities{LoadSession: os.Getenv(LoadVar) == "1", McpCapabilities: sdk.McpCapabilities{Http: true},
+		AgentCapabilities: sdk.AgentCapabilities{LoadSession: os.Getenv(LoadVar) == "1" || os.Getenv(ImportVar) == "1", SessionCapabilities: sessions, McpCapabilities: sdk.McpCapabilities{Http: true},
 			PromptCapabilities: sdk.PromptCapabilities{Image: os.Getenv(ImageVar) == "1"}}}, nil
 }
 
@@ -101,6 +111,9 @@ func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResp
 		say("loaded: " + a.loaded)
 	}
 	say("mcp: " + strings.Join(a.mcp, ","))
+	if os.Getenv(ImportVar) == "1" {
+		a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: r.SessionId, Update: sdk.SessionUpdate{SessionInfoUpdate: &sdk.SessionSessionInfoUpdate{Title: sdk.Ptr("The agent's name for its copy (fork)")}}})
+	}
 	if os.Getenv(ImageVar) == "1" {
 		n := 0
 		for _, b := range r.Prompt {
@@ -162,8 +175,31 @@ func (a *agent) Logout(context.Context, sdk.LogoutRequest) (sdk.LogoutResponse, 
 func (a *agent) CloseSession(context.Context, sdk.CloseSessionRequest) (sdk.CloseSessionResponse, error) {
 	return sdk.CloseSessionResponse{}, nil
 }
-func (a *agent) ListSessions(context.Context, sdk.ListSessionsRequest) (sdk.ListSessionsResponse, error) {
-	return sdk.ListSessionsResponse{}, nil
+func (a *agent) ListSessions(_ context.Context, r sdk.ListSessionsRequest) (sdk.ListSessionsResponse, error) {
+	cwd, _ := os.Getwd()
+	if r.Cwd != nil {
+		cwd = *r.Cwd
+	}
+	// Two pages, as an agent with many sessions sends them.
+	if r.Cursor == nil {
+		next := "page2"
+		return sdk.ListSessionsResponse{NextCursor: &next, Sessions: []sdk.SessionInfo{
+			{SessionId: "old-1", Cwd: cwd, Title: sdk.Ptr("First session"), UpdatedAt: sdk.Ptr("2026-10-01T10:00:00.000Z")},
+		}}, nil
+	}
+	return sdk.ListSessionsResponse{Sessions: []sdk.SessionInfo{
+		{SessionId: "old-2", Cwd: cwd, Title: sdk.Ptr("Second session"), UpdatedAt: sdk.Ptr("2026-10-02T10:00:00.000Z")},
+		{SessionId: "gone", Cwd: "/nonexistent/folder", Title: sdk.Ptr("Folder removed")},
+	}}, nil
+}
+
+// UnstableForkSession copies a session.
+func (a *agent) UnstableForkSession(_ context.Context, r sdk.UnstableForkSessionRequest) (sdk.UnstableForkSessionResponse, error) {
+	if r.SessionId == "broken" {
+		return sdk.UnstableForkSessionResponse{}, sdk.NewInternalError(nil)
+	}
+	a.forked = true
+	return sdk.UnstableForkSessionResponse{SessionId: "fork-of-" + r.SessionId}, nil
 }
 func (a *agent) ResumeSession(context.Context, sdk.ResumeSessionRequest) (sdk.ResumeSessionResponse, error) {
 	return sdk.ResumeSessionResponse{}, nil
@@ -175,6 +211,49 @@ func (a *agent) SetSessionConfigOption(context.Context, sdk.SetSessionConfigOpti
 func (a *agent) LoadSession(ctx context.Context, r sdk.LoadSessionRequest) (sdk.LoadSessionResponse, error) {
 	a.loaded = string(r.SessionId)
 	a.plugin = pluginOf(r.Meta)
+	if os.Getenv(ImportVar) == "1" {
+		a.replay(ctx, r.SessionId)
+	}
 	a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: r.SessionId, Update: sdk.UpdateAgentMessageText("replayed history")})
 	return sdk.LoadSessionResponse{}, nil
+}
+
+// onePixel is the smallest PNG, as an agent replays a picture from a prompt.
+const onePixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+
+// replay sends a session's history, and tries what a replay must not be able to do.
+func (a *agent) replay(ctx context.Context, id sdk.SessionId) {
+	send := func(u sdk.SessionUpdate) {
+		a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: id, Update: u})
+	}
+	// Only the import's own load tries it, the one in the process that made the copy:
+	// a session that later continues the copy has a broker that would ask the user.
+	cwd, _ := os.Getwd()
+	path := filepath.Join(cwd, "replay-wrote-this.txt")
+	if a.forked {
+		res, err := a.conn.RequestPermission(ctx, sdk.RequestPermissionRequest{
+			SessionId: id,
+			ToolCall:  sdk.ToolCallUpdate{ToolCallId: "ask", Title: sdk.Ptr("Write"), Kind: sdk.Ptr(sdk.ToolKindEdit), Locations: []sdk.ToolCallLocation{{Path: path}}},
+			Options:   []sdk.PermissionOption{{OptionId: "yes", Name: "Allow", Kind: sdk.PermissionOptionKindAllowOnce}},
+		})
+		if err == nil && res.Outcome.Selected != nil {
+			send(sdk.UpdateAgentMessageText("permission was granted"))
+		}
+		a.conn.WriteTextFile(ctx, sdk.WriteTextFileRequest{SessionId: id, Path: path, Content: "x"})
+		if _, err := a.conn.CreateTerminal(ctx, sdk.CreateTerminalRequest{SessionId: id, Command: "sh", Args: []string{"-c", "touch replay-ran-this"}}); err == nil {
+			send(sdk.UpdateAgentMessageText("a terminal was granted"))
+		}
+	}
+	send(sdk.UpdateUserMessageText("first question from " + string(id)))
+	send(sdk.UpdateUserMessage(sdk.ImageBlock(onePixel, "image/png")))
+	first, second := sdk.UpdateAgentMessageText("first answer"), sdk.UpdateAgentMessageText("second answer")
+	first.AgentMessageChunk.MessageId, second.AgentMessageChunk.MessageId = sdk.Ptr("m1"), sdk.Ptr("m2")
+	send(first)
+	send(second)
+	send(sdk.StartToolCall("done", "Read a.txt", sdk.WithStartKind(sdk.ToolKindExecute), sdk.WithStartRawInput(map[string]any{"command": "cat a.txt"})))
+	send(sdk.UpdateToolCall("done", sdk.WithUpdateStatus(sdk.ToolCallStatusCompleted), sdk.WithUpdateContent([]sdk.ToolCallContent{
+		sdk.ToolContent(sdk.TextBlock("contents")), sdk.ToolContent(sdk.ImageBlock(onePixel, "image/png")),
+	})))
+	send(sdk.StartToolCall("open", "Never finished", sdk.WithStartKind(sdk.ToolKindExecute)))
+	send(sdk.SessionUpdate{SessionInfoUpdate: &sdk.SessionSessionInfoUpdate{Title: sdk.Ptr("A title the replay must not set")}})
 }

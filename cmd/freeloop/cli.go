@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/engine"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/permission"
@@ -22,7 +23,7 @@ import (
 // API: what it starts shows in the app at once, and approvals stay with
 // the app's permission broker.
 
-var commands = []string{"sessions", "new", "prompt", "events", "approvals", "approve", "deny", "optimizer", "help"}
+var commands = []string{"sessions", "new", "import", "prompt", "events", "approvals", "approve", "deny", "optimizer", "help"}
 
 func isCommand(arg string) bool { return slices.Contains(commands, arg) }
 
@@ -31,6 +32,7 @@ const usage = `freeloop <command> [arguments]
   sessions                       list sessions
   new <folder> [-title t] [-profile p] [-provider id] [-model m] [-mode m] [-environment e] [-optimizer o]
                                  start a session in a project folder; prints its ID
+  import -profile p [folder] [id] list an external agent's own sessions, or import one into a new session
   prompt <session> <text…>       send a message and print the reply as it comes
   events <session> [-after n]    print a session's events as JSON lines
   approvals                      list requests waiting for a decision
@@ -153,6 +155,43 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 				fmt.Fprintf(out, " (%s)", oneLine(o.Reason))
 			}
 			fmt.Fprintln(out)
+		}
+		return nil
+	case "import":
+		fs := flag.NewFlagSet("import", flag.ContinueOnError)
+		profile := fs.String("profile", config.ClaudeCodePresetID, "the external agent's profile")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		folder, id := fs.Arg(0), fs.Arg(1)
+		if folder != "" {
+			abs, err := filepath.Abs(folder)
+			if err != nil {
+				return err
+			}
+			folder = abs
+		}
+		if id != "" {
+			var ses session.Session
+			if err := c.Call("sessions.import", map[string]any{"profileId": *profile, "folder": folder, "id": id}, &ses); err != nil {
+				return err
+			}
+			fmt.Fprintln(out, ses.ID)
+			return nil
+		}
+		var list []engine.AgentSession
+		if err := c.Call("sessions.importable", map[string]any{"profile": *profile, "folder": folder}, &list); err != nil {
+			return err
+		}
+		for _, s := range list {
+			state := "new"
+			switch {
+			case s.SessionID != "":
+				state = "imported"
+			case s.Missing:
+				state = "folder gone"
+			}
+			fmt.Fprintf(out, "%s  %s  %s  %s  %s\n", s.ID, s.UpdatedAt.Local().Format("2006-01-02 15:04"), state, oneLine(s.Folder), oneLine(s.Title))
 		}
 		return nil
 	case "prompt":

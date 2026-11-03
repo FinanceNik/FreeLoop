@@ -67,6 +67,9 @@ type Session struct {
 	// Effort is what the user chose for this session (PRV-014), set by
 	// effort_changed events; empty takes the profile's.
 	Effort string `json:"effort"`
+	// ImportedFrom names the agent's session this one was imported from
+	// (SES-020), as harness:session; empty for any other.
+	ImportedFrom string `json:"importedFrom"`
 	// PortBase is the first of ten ports a worktree session's commands
 	// get as FREELOOP_PORT (SES-016); 0 for none.
 	PortBase  int       `json:"portBase"`

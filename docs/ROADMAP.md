@@ -344,6 +344,14 @@ Not done: reaping after a crash, storage views and pruning, sharing checkpoints 
 3. **Finder (GUI-024).** *The click was tried in the app on a scratch project and reported no error; a window opening was not observed from here, and `open` behaviour was tested with a harmless fake app.* `darwin.FolderArgv`.
 4. **Permissions in the session (SEC-002, GUI-007).** *Checked in the browser, across a reload.* Permissions beside the composer, Rules… opening the panel, where rules are added and removed for the session or for all sessions (`session_rule_changed`).
 
+### Session import (built 2026-11-03)
+
+1. **Importing an agent's own sessions (SES-020).** *Run through the real Claude Code adapter (0.99.1) and `claude` 2.1.317 on a stand-in model and a scratch home, in the browser and from the command line: a session made with `claude -p` imported, and the next prompt reached the model with the earlier messages and tool output. Copies of three of the user's sessions (7, 42 and 281 MB) imported in 2 to 3 seconds, all 45 pictures of one showed, and no tool call was left running. A real signed-in Claude Code and a real model were not tried.* `internal/harness/acp/browse.go` lists, copies and replays with a process that can ask for nothing; `internal/engine/sessionimport.go` makes the session; `SessionImport.tsx` is the top of the Import page, with a link from the new-session form; `freeloop import` and the socket's `sessions.importable` and `sessions.import` do the same. `session_imported` records the source, and what comes before it stays out of the usage views.
+
+Found on the way: `session/load` adds two metadata lines to the session's file, and `session/fork` leaves the original unchanged, which is why the import copies. The replay stops at the last compaction: 76 of the 9,677 tool calls of the largest session came back. `session/list` without a folder missed two of six sessions that the same call with their folder found, so the import also asks about every project here. An agent names its copy `<title> (fork)`, so an imported session keeps its title.
+
+Not in: reading Claude Code's files to show what was compacted away. They are not a documented format, and the agent's context would not change.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

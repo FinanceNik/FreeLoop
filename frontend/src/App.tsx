@@ -51,6 +51,7 @@ import SettingsNav, { Icon } from "./SettingsNav.tsx";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { inSettings, isSettingsShortcut, MAX_FONT_SIZE, textSizeAfter } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
+import SessionImport from "./SessionImport.tsx";
 import { basename } from "./paths.ts";
 
 type Screen =
@@ -661,6 +662,7 @@ export default function App() {
       page("usage-pane", "Show usage in a pane", () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new")), { keywords: "live tokens cost graph 12 24 hours side by side" }),
       page("usage", "Usage", () => setScreen({ kind: "usage" }), { keywords: "cost tokens analytics dashboard spend", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
       page("import", "Import from Claude Code", () => setScreen({ kind: "import" })),
+      page("import-sessions", "Import sessions", () => setScreen({ kind: "import" }), { keywords: "claude code agent transcript history resume" }),
       page("backup", "Back up or restore the configuration", () => setScreen({ kind: "settings" }), { keywords: "export import settings providers profiles" }),
       page("guide", "Setup guide", () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
       {
@@ -1113,6 +1115,7 @@ export default function App() {
             onManageProviders={() => setScreen({ kind: "providers" })}
             onProvidersChanged={refreshProviders}
             onProjectsChanged={refreshProjects}
+            onImport={() => setScreen({ kind: "import" })}
             onCompare={(tag) => {
               refreshSessions();
               setScreen({ kind: "compare", tag });
@@ -1183,7 +1186,12 @@ export default function App() {
               {screen.kind === "mcp" && <MCP configVersion={configVersion} onImport={() => setScreen({ kind: "import" })} onError={report} />}
               {screen.kind === "import" && (
                 <section className="page">
-                  <h2>Import from Claude Code</h2>
+                  <h2>Import</h2>
+                  <section>
+                    <h3>Sessions</h3>
+                    <SessionImport profiles={profiles} projects={projects} onOpen={(sid) => openSession(sid)} onImported={() => { refreshSessions(); refreshProjects(); }} onError={report} />
+                  </section>
+                  <h3>Settings from Claude Code</h3>
                   <ClaudeImport onError={report} />
                 </section>
               )}

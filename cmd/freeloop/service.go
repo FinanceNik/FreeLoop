@@ -497,6 +497,16 @@ func (s *EngineService) SetDefaultOptimizer(ctx context.Context, id string) (con
 	return s.eng.SetDefaultOptimizer(ctx, id)
 }
 
+// AgentSessions lists an external agent's own sessions (SES-020).
+func (s *EngineService) AgentSessions(ctx context.Context, profileID, folder string) ([]engine.AgentSession, error) {
+	return s.eng.AgentSessions(ctx, profileID, folder)
+}
+
+// ImportAgentSession imports one of an external agent's sessions.
+func (s *EngineService) ImportAgentSession(ctx context.Context, req engine.ImportSessionRequest) (session.Session, error) {
+	return s.eng.ImportAgentSession(ctx, req)
+}
+
 // InstallOptimizer downloads a token optimizer's program into the app's own folder,
 // on the user's asking (HRN-019).
 func (s *EngineService) InstallOptimizer(ctx context.Context, id string) (engine.OptimizerStatus, error) {

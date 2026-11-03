@@ -6,7 +6,7 @@ const SCREEN_NAMES: Record<string, string> = {
   board: "Board",
   compare: "Compare runs",
   environments: "Environments",
-  import: "Import from Claude Code",
+  import: "Import",
   mcp: "MCP servers",
   new: "New session",
   onboarding: "Getting started",

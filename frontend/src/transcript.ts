@@ -238,8 +238,12 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         }
         if (d.content?.type === "image") {
           const uri = d.content.uri ?? "";
-          if (prev?.kind === "user" && uri.startsWith("attachment:"))
-            items[items.length - 1] = { ...prev, rev, images: [...(prev.images ?? []), { name: uri.slice("attachment:".length), mimeType: d.content.mimeType ?? "" }] };
+          const image = { name: uri.slice("attachment:".length), mimeType: d.content.mimeType ?? "" };
+          if (uri.startsWith("attachment:")) {
+            if (prev?.kind === "user") items[items.length - 1] = { ...prev, rev, images: [...(prev.images ?? []), image] };
+            // An imported message may start with its picture (SES-020).
+            else items.push({ kind: "user", key, rev, text: "", ts: ev.ts, files: [], images: [image], checkpointSeq: checkpoint ?? undefined });
+          }
           break;
         }
         items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [], checkpointSeq: checkpoint ?? undefined });

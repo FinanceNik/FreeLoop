@@ -46,7 +46,8 @@
         "worktree_setup",
         "optimizer_changed",
         "effort_changed",
-        "session_rule_changed"
+        "session_rule_changed",
+        "session_imported"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -117,11 +118,25 @@
       "then": { "properties": { "data": { "$ref": "#/$defs/effortChanged" } } }
     },
     {
+      "if": { "properties": { "type": { "const": "session_imported" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/sessionImported" } } }
+    },
+    {
       "if": { "properties": { "type": { "const": "session_rule_changed" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/sessionRuleChanged" } } }
     }
   ],
   "$defs": {
+    "sessionImported": {
+      "type": "object",
+      "description": "The agent's session this one was imported from. What it replayed comes before this event, and the usage views leave it out.",
+      "required": ["harness", "source"],
+      "properties": {
+        "harness": { "type": "string" },
+        "source": { "type": "string" },
+        "copy": { "type": "string" }
+      }
+    },
     "sessionRuleChanged": {
       "type": "object",
       "description": "A rule the user added to a session, or removed from it.",

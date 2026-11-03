@@ -37,6 +37,9 @@ const StartTimeout = 2 * time.Minute
 // resourceNotFound is ACP's error code for a file or session that is not there.
 const resourceNotFound = -32002
 
+// errBrowsing refuses what an agent asks of a process started only to read its sessions.
+var errBrowsing = errors.New("this agent was started only to read its sessions")
+
 // Harness runs the agent a preset names.
 type Harness struct {
 	Preset config.HarnessPreset
@@ -60,6 +63,11 @@ type session struct {
 	// loading drops the history an agent replays on session/load: the
 	// transcript has it already.
 	loading bool
+	// replay, while a session is imported (SES-020), takes what the agent replays.
+	replay func(event.Type, map[string]any)
+	// browsing marks a process started only to list, copy or read the agent's
+	// sessions: it may not ask for anything or touch anything.
+	browsing bool
 	// approved holds what the user or a rule just allowed for a permission
 	// request, so the agent's own fs/terminal request for the same thing
 	// does not ask twice.
@@ -92,34 +100,12 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 		mode = permission.ModeAsk
 	}
 	s := &session{p: p, preset: h.Preset, env: p.Env, mode: mode, terms: map[string]*terminal{}}
-	proc, err := sp.Spawn(context.Background(), environment.SpawnSpec{
-		Argv: append([]string{h.Preset.Command}, h.Preset.Args...), Env: h.Preset.Env, LoginShell: true,
-	})
+	ctx, cancel := context.WithTimeout(ctx, StartTimeout)
+	defer cancel()
+	init, err := s.start(ctx, sp)
 	if err != nil {
 		return nil, err
 	}
-	s.proc = proc
-	s.conn = sdk.NewClientSideConnection(s, proc.Stdin(), proc.Stdout())
-
-	ctx, cancel := context.WithTimeout(ctx, StartTimeout)
-	defer cancel()
-	fail := func(step string, err error) (harness.Session, error) {
-		proc.Kill()
-		msg := fmt.Sprintf("%s: %s: %v", h.Preset.Name, step, err)
-		if tail := strings.TrimSpace(proc.Stderr()); tail != "" {
-			msg += " (" + lastLine(tail) + ")"
-		}
-		return nil, errors.New(msg)
-	}
-	init, err := s.conn.Initialize(ctx, sdk.InitializeRequest{
-		ProtocolVersion:    sdk.ProtocolVersionNumber,
-		ClientCapabilities: sdk.ClientCapabilities{Fs: sdk.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true}, Terminal: true},
-		ClientInfo:         &sdk.Implementation{Name: "freeloop", Version: "0.1"},
-	})
-	if err != nil {
-		return fail("initialize", err)
-	}
-	s.caps = init.AgentCapabilities
 	if p.ExternalID != "" {
 		if s.load(ctx, p.ExternalID) {
 			s.applyMode(ctx)
@@ -136,13 +122,45 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 			}
 			err = fmt.Errorf("%w; %s", err, how)
 		}
-		return fail("new session", err)
+		return nil, s.startFailed("new session", err)
 	}
 	s.id = ns.SessionId
 	s.applyMode(ctx)
 	s.reportOptions(ns.ConfigOptions)
 	s.restoreOptions(ctx)
 	return s, nil
+}
+
+// start spawns the agent and initializes it.
+func (s *session) start(ctx context.Context, sp environment.Spawner) (sdk.InitializeResponse, error) {
+	proc, err := sp.Spawn(context.Background(), environment.SpawnSpec{
+		Argv: append([]string{s.preset.Command}, s.preset.Args...), Env: s.preset.Env, LoginShell: true,
+	})
+	if err != nil {
+		return sdk.InitializeResponse{}, err
+	}
+	s.proc = proc
+	s.conn = sdk.NewClientSideConnection(s, proc.Stdin(), proc.Stdout())
+	init, err := s.conn.Initialize(ctx, sdk.InitializeRequest{
+		ProtocolVersion:    sdk.ProtocolVersionNumber,
+		ClientCapabilities: sdk.ClientCapabilities{Fs: sdk.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true}, Terminal: true},
+		ClientInfo:         &sdk.Implementation{Name: "freeloop", Version: "0.1"},
+	})
+	if err != nil {
+		return init, s.startFailed("initialize", err)
+	}
+	s.caps = init.AgentCapabilities
+	return init, nil
+}
+
+// startFailed ends the agent and says what went wrong, with its last words.
+func (s *session) startFailed(step string, err error) error {
+	s.proc.Kill()
+	msg := fmt.Sprintf("%s: %s: %v", s.preset.Name, step, err)
+	if tail := strings.TrimSpace(s.proc.Stderr()); tail != "" {
+		msg += " (" + lastLine(tail) + ")"
+	}
+	return errors.New(msg)
 }
 
 // reportOptions takes what the agent said it can change, and records it, so the
@@ -479,9 +497,9 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 // than the schema are left out.
 func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) error {
 	s.mu.Lock()
-	loading := s.loading
+	loading, replay := s.loading, s.replay
 	s.mu.Unlock()
-	if loading {
+	if loading || s.browsing && replay == nil {
 		return nil
 	}
 	b, err := json.Marshal(n.Update)
@@ -504,8 +522,18 @@ func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) er
 			}
 		}
 	}
+	if replay != nil {
+		if t == event.ToolCall {
+			kind, _ := m["kind"].(string)
+			m["tool"] = toolName(kind)
+		}
+		replay(t, m)
+		return nil
+	}
 	s.showOriginal(m)
 	switch {
+	case t == event.SessionInfoUpdate && s.p.KeepTitle:
+		return nil
 	case t == event.ConfigOptionUpdate:
 		if raw, err := json.Marshal(m["configOptions"]); err == nil {
 			s.mu.Lock()
@@ -575,6 +603,9 @@ func toolName(kind string) string {
 // RequestPermission asks the broker (SEC-003) and answers with the agent's
 // option of the decided kind.
 func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermissionRequest) (sdk.RequestPermissionResponse, error) {
+	if s.browsing {
+		return sdk.RequestPermissionResponse{Outcome: sdk.NewRequestPermissionOutcomeCancelled()}, nil
+	}
 	kind := permission.KindOther
 	if r.ToolCall.Kind != nil {
 		kind = permission.Kind(*r.ToolCall.Kind)
@@ -700,6 +731,9 @@ func (s *session) ask(ctx context.Context, kind permission.Kind, title, path, co
 // ReadTextFile reads through the environment. Reads inside the project are
 // allowed by policy; outside it the broker asks.
 func (s *session) ReadTextFile(ctx context.Context, r sdk.ReadTextFileRequest) (sdk.ReadTextFileResponse, error) {
+	if s.browsing {
+		return sdk.ReadTextFileResponse{}, errBrowsing
+	}
 	path := s.env.Resolve(r.Path)
 	if !s.covered([]permission.Kind{permission.KindRead, permission.KindEdit}, path, "", false) {
 		if err := s.ask(ctx, permission.KindRead, "Read "+filepath.Base(path), path, "", ""); err != nil {
@@ -736,6 +770,9 @@ func (s *session) ReadTextFile(ctx context.Context, r sdk.ReadTextFileRequest) (
 // WriteTextFile writes through the environment, asking the broker unless
 // the user just approved a change to that file.
 func (s *session) WriteTextFile(ctx context.Context, r sdk.WriteTextFileRequest) (sdk.WriteTextFileResponse, error) {
+	if s.browsing {
+		return sdk.WriteTextFileResponse{}, errBrowsing
+	}
 	path := s.env.Resolve(r.Path)
 	if !s.covered([]permission.Kind{permission.KindEdit, permission.KindDelete, permission.KindMove}, path, "", true) {
 		if err := s.ask(ctx, permission.KindEdit, "Write "+filepath.Base(path), path, "", ""); err != nil {
@@ -754,6 +791,9 @@ type terminal struct {
 }
 
 func (s *session) CreateTerminal(ctx context.Context, r sdk.CreateTerminalRequest) (sdk.CreateTerminalResponse, error) {
+	if s.browsing {
+		return sdk.CreateTerminalResponse{}, errBrowsing
+	}
 	line := strings.TrimSpace(r.Command + " " + strings.Join(r.Args, " "))
 	// What decides what runs is part of what is approved: PATH=./evil, or a folder
 	// with its own Makefile, changes what the same words do.

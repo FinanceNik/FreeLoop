@@ -376,7 +376,7 @@ export default function Settings({ config, providers, environments, profiles, pr
 
         <h3>Claude Code</h3>
         <p className="muted">
-          Copy MCP servers, permission rules and skills from Claude Code. <button type="button" className="link" onClick={onImport}>Import from Claude Code…</button>
+          Copy sessions, MCP servers, permission rules and skills from Claude Code. <button type="button" className="link" onClick={onImport}>Import from Claude Code…</button>
         </p>
 
         <h3>Notifications</h3>

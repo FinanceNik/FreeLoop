@@ -309,6 +309,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		}
 		params.MCPServers = e.agentServers(prof)
 		params.ExternalID = ses.ExternalID
+		params.KeepTitle = ses.ImportedFrom != ""
 		hs, err = acp.Harness{Preset: preset}.NewSession(ctx, params)
 	}
 	if err != nil {

@@ -274,6 +274,8 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 			Tags          []string `json:"tags"`
 			Optimizer     string   `json:"optimizer"`
 			Effort        string   `json:"effort"`
+			Harness       string   `json:"harness"`
+			Source        string   `json:"source"`
 		}
 		json.Unmarshal(data, &d)
 		switch {
@@ -305,6 +307,9 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 		case typ == event.EffortChanged:
 			sets += `, effort = ?`
 			args = append(args, d.Effort)
+		case typ == event.SessionImported:
+			sets += `, imported_from = ?`
+			args = append(args, d.Harness+":"+d.Source)
 		}
 		// The transcript is the source of truth; a failed index update is
 		// repaired from it on the next open, so it does not fail the append.
@@ -401,7 +406,7 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
-const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, optimizer, effort, port_base, last_seq, created_at, updated_at`
+const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, optimizer, effort, port_base, last_seq, created_at, updated_at, imported_from`
 
 type scanner interface{ Scan(...any) error }
 
@@ -410,7 +415,7 @@ func scanSession(r scanner) (session.Session, error) {
 	var created, updated int64
 	var tags string
 	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectID, &ses.ProjectRoot, &ses.EnvironmentID,
-		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.Optimizer, &ses.Effort, &ses.PortBase, &ses.LastSeq, &created, &updated); err != nil {
+		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.Optimizer, &ses.Effort, &ses.PortBase, &ses.LastSeq, &created, &updated, &ses.ImportedFrom); err != nil {
 		return session.Session{}, err
 	}
 	ses.Tags = strings.Fields(tags)
@@ -522,6 +527,8 @@ var migrations = []string{
 	ALTER TABLE sessions ADD COLUMN recent_seq INTEGER NOT NULL DEFAULT 0;`,
 	// The effort chosen for a session (PRV-014).
 	`ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT '';`,
+	// The agent's session an imported one came from (SES-020).
+	`ALTER TABLE sessions ADD COLUMN imported_from TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.

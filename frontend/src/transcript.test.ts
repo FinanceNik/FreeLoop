@@ -269,6 +269,16 @@ test("the optimizer's name stays on a tool call when its output arrives (HRN-019
   assert.equal(t.via, "RTK");
 });
 
+test("an imported message can start with its picture (SES-020)", () => {
+  const v = buildView([
+    { ...ev(1, { content: { type: "image", uri: "attachment:a.png", mimeType: "image/png" } }), type: "user_message_chunk" },
+    { ...ev(2, { content: { type: "image", uri: "not-ours", mimeType: "image/png" } }), type: "user_message_chunk" },
+  ]);
+  const users = v.items.filter((i) => i.kind === "user");
+  assert.equal(users.length, 1);
+  assert.deepEqual(users[0].kind === "user" ? users[0].images : [], [{ name: "a.png", mimeType: "image/png" }]);
+});
+
 test("pictures the user attached join their message (SES-015)", () => {
   const view = buildView([
     { v: 1, seq: 1, ts: "2026-10-31T10:00:00Z", sid: "s", type: "user_message_chunk", data: { content: { type: "text", text: "what is this?" } } },

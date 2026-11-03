@@ -80,6 +80,8 @@ type ConfigChange struct {
 
 // Engine is safe for concurrent use.
 type Engine struct {
+	// importMu lets one session import at a time (SES-020).
+	importMu sync.Mutex
 	// hookProgram is what an agent's hook runs to reach the app (HRN-019).
 	hookProgram string
 	// storageFailing is set while events cannot be saved, for the sessions in

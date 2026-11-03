@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
@@ -91,6 +92,10 @@ type Params struct {
 	// Options are the choices the session's agent last reported, put back when it
 	// starts again, since a new process begins with its defaults (PRV-014).
 	Options []OptionValue
+	// KeepTitle leaves the session's title alone when the agent reports one: an
+	// imported session has the title it was chosen by, and an agent names its
+	// copy differently (SES-020).
+	KeepTitle bool
 	// ExternalID, when set, is the harness-side session to load instead of
 	// starting a new one (SES-003).
 	ExternalID string
@@ -297,6 +302,14 @@ type Command struct {
 	Name        string
 	Description string
 	Prompt      string
+}
+
+// StoredSession is a session an agent keeps by itself (SES-020).
+type StoredSession struct {
+	ID        string
+	Title     string
+	Folder    string
+	UpdatedAt time.Time
 }
 
 // Harness creates sessions.

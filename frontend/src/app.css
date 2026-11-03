@@ -4065,3 +4065,23 @@ table.hooks .hook-command {
   flex: 1 0 100%;
   margin: 0;
 }
+
+/* The session import (SES-020). */
+.session-import-where {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.session-import-where input[type="search"] {
+  flex: 1 1 200px;
+}
+
+.session-import-list {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.session-import-list strong {
+  overflow-wrap: anywhere;
+}

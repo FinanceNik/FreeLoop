@@ -80,6 +80,12 @@ func foldActivity(events []event.Event, copiedSeq int64) []store.ActivityCount {
 	tools := map[string]*toolRun{}
 	asks := map[string]ask{}
 	var turnStart time.Time
+	// What an import replayed happened earlier, on a day nothing records.
+	for _, ev := range events {
+		if ev.Type == event.SessionImported {
+			copiedSeq = max(copiedSeq, ev.Seq)
+		}
+	}
 	for _, ev := range events {
 		if ev.Seq <= copiedSeq {
 			continue

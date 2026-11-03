@@ -72,6 +72,9 @@ const (
 	EffortChanged Type = "effort_changed"
 	// SessionRuleChanged records a rule the user added to or removed from a session.
 	SessionRuleChanged Type = "session_rule_changed"
+	// SessionImported records where an imported session came from (SES-020).
+	// What it replayed comes before it.
+	SessionImported Type = "session_imported"
 )
 
 // ACPTypes lists the variants that come from ACP, in schema order.
@@ -85,7 +88,7 @@ var ACPTypes = []Type{
 var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
-	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged,
+	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged, SessionImported,
 }
 
 // AllTypes returns every known variant.
@@ -220,6 +223,16 @@ type ModelChangedData struct {
 // EffortChangedData is the payload of effort_changed (PRV-014).
 type EffortChangedData struct {
 	Effort string `json:"effort"`
+}
+
+// SessionImportedData is the payload of session_imported: the agent and its
+// session a copy was made from.
+type SessionImportedData struct {
+	Harness string `json:"harness"`
+	Source  string `json:"source"`
+	// Copy is the agent's own copy the session continues; empty when the agent
+	// cannot copy, and the session continues the original.
+	Copy string `json:"copy,omitempty"`
 }
 
 // OptimizerChangedData is the payload of optimizer_changed (HRN-019); an
