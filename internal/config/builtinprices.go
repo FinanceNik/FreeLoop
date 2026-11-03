@@ -17,6 +17,7 @@ type listPrice struct {
 //   - https://platform.claude.com/docs/en/about-claude/pricing
 //   - https://developers.openai.com/api/docs/pricing
 //   - https://aistudio.google.com/docs/pricing
+//   - https://openrouter.ai/api/v1/models, for the qwen/ names, which are OpenRouter's
 //
 // Not counted, since a call's usage does not say: Claude's fast mode and US-only
 // inference, batch rates, Gemini's audio rates and hourly cache storage, OpenAI's
@@ -110,6 +111,7 @@ var listPrices = []listPrice{
 	{model: "gemini-2.5-pro", input: 1.25, output: 10, read: 0.125, longOver: 200_000},
 	{model: "gemini-2.5-flash", input: 0.3, output: 2.5, read: 0.03},
 	{model: "gemini-2.5-flash-lite", input: 0.1, output: 0.4, read: 0.01},
+	{model: "qwen/qwen3.8-flash", input: 0.15, output: 0.47, read: 0.016},
 }
 
 // builtinPrices holds a row for each model's name and one for its dated names,

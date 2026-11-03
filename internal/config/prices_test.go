@@ -98,3 +98,15 @@ func TestBuiltinPrices(t *testing.T) {
 		t.Errorf("a row without an hour's rate charged %v, want 2", got)
 	}
 }
+
+// Through OpenRouter this model's ID has its vendor in front, and a cache read costs
+// a tenth of an input, near enough.
+func TestQwenFlashIsPriced(t *testing.T) {
+	p, ok := FindPrice(BuiltinPrices(), "openrouter", "qwen/qwen3.8-flash")
+	if !ok || p.Input != 0.15 || p.Output != 0.47 || p.CacheRead != 0.016 {
+		t.Errorf("%v %+v", ok, p)
+	}
+	if _, ok := FindPrice(BuiltinPrices(), "openrouter", "qwen/qwen3.8-max-prime"); ok {
+		t.Error("the row reaches another Qwen model, at the wrong price")
+	}
+}
