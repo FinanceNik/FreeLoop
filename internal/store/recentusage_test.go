@@ -115,3 +115,37 @@ func TestUsageKeepsWhatPricesDependOn(t *testing.T) {
 		t.Errorf("per day: %+v", day)
 	}
 }
+
+// A database of an earlier build gets the columns without a higher schema version,
+// so that build can still open it, and what it writes without them still works.
+func TestAddedColumnsLeaveTheSchemaVersionAlone(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range addedColumns {
+		if _, err := s.db.Exec(`ALTER TABLE ` + c.table + ` DROP COLUMN ` + c.column); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	for range 2 { // and again, with them there
+		s, err = Open(Options{Dir: dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var version int
+		if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != len(migrations) {
+			t.Errorf("schema version %d, %v; want %d", version, err, len(migrations))
+		}
+		if _, err := s.db.Exec(`INSERT INTO usage (day, session_id, provider_id, model, input, output, cache_read, cache_write, calls)
+			VALUES ('2026-11-03', 's', 'p', 'm', 1, 1, 1, 1, 1) ON CONFLICT DO NOTHING`); err != nil {
+			t.Errorf("an earlier build's write: %v", err)
+		}
+		if _, err := s.UsageSince(context.Background(), "2026-11-01"); err != nil {
+			t.Errorf("reading usage: %v", err)
+		}
+		s.Close()
+	}
+}

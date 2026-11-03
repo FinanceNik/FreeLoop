@@ -604,9 +604,33 @@ var migrations = []string{
 	`ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT '';`,
 	// The agent's session an imported one came from (SES-020).
 	`ALTER TABLE sessions ADD COLUMN imported_from TEXT NOT NULL DEFAULT '';`,
+}
+
+// addedColumns are columns that older builds can live with: they name the columns
+// they write, and the default fills these. They are no migrations, since a migration
+// raises the schema version and a build older than it then refuses the database, so
+// going back to one would mean losing it.
+var addedColumns = []struct{ table, column, definition string }{
 	// Cache writes that last an hour cost more (PRV-008). Earlier calls did not say.
-	`ALTER TABLE usage ADD COLUMN cache_write_1h INTEGER NOT NULL DEFAULT 0;
-	ALTER TABLE usage_recent ADD COLUMN cache_write_1h INTEGER NOT NULL DEFAULT 0;`,
+	{"usage", "cache_write_1h", "INTEGER NOT NULL DEFAULT 0"},
+	{"usage_recent", "cache_write_1h", "INTEGER NOT NULL DEFAULT 0"},
+}
+
+// addColumns adds what addedColumns holds and the database does not.
+func addColumns(db *sql.DB) error {
+	for _, c := range addedColumns {
+		var have int
+		if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, c.table, c.column).Scan(&have); err != nil {
+			return fmt.Errorf("store: look for %s.%s: %w", c.table, c.column, err)
+		}
+		if have > 0 {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, c.table, c.column, c.definition)); err != nil {
+			return fmt.Errorf("store: add %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	return nil
 }
 
 // migrate applies pending migrations, tracked in PRAGMA user_version.
@@ -635,7 +659,7 @@ func migrate(db *sql.DB) error {
 			return err
 		}
 	}
-	return nil
+	return addColumns(db)
 }
 
 // DeleteSession removes a session's transcript folder and its database row
