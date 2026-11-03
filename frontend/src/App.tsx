@@ -49,6 +49,7 @@ import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
 import { applyColors, type ColorSet } from "./colors.ts";
+import { applyFonts, type FontChoice } from "./fonts.ts";
 import { inSettings, isSettingsShortcut, MAX_FONT_SIZE, textSizeAfter } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
 import SessionImport from "./SessionImport.tsx";
@@ -101,6 +102,7 @@ export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
   setBindings(config?.ui.shortcuts);
   const fontPending = useRef<number | null>(null);
+  const fontsPending = useRef<FontChoice | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "none" });
   const mainBox = useRef<HTMLElement>(null);
   const [heardScreen, setHeardScreen] = useState("");
@@ -247,14 +249,15 @@ export default function App() {
       });
   };
 
-  // Appearance (GUI-011): theme and font size from config.yaml.
+  // Appearance (GUI-011, GUI-025): theme, font size and fonts from config.yaml.
   useEffect(() => {
     if (!config) return;
     const root = document.documentElement;
     if (config.ui.theme === "system") delete root.dataset.theme;
     else root.dataset.theme = config.ui.theme;
     root.style.setProperty("--font-size", `${config.ui.fontSize || 14}px`);
-  }, [config?.ui.theme, config?.ui.fontSize]);
+    applyFonts(root.style, config.ui);
+  }, [config?.ui.theme, config?.ui.fontSize, config?.ui.textFont, config?.ui.codeFont]);
 
   // The user's colors (GUI-022). A change shows at once and is saved a moment
   // later; until then it is newer than the file, so a reload leaves it alone.
@@ -282,6 +285,7 @@ export default function App() {
       .then((disk) => {
         // A size chosen with ⌘+ or ⌘- and not saved yet is newer than the file.
         const c = fontPending.current === null ? disk : { ...disk, ui: { ...disk.ui, fontSize: fontPending.current } };
+        if (fontsPending.current) c.ui = { ...c.ui, ...fontsPending.current };
         setConfig((old) => (old && JSON.stringify(old) === JSON.stringify(c) ? old : c));
       })
       .catch(report);
@@ -511,6 +515,25 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // The fonts of Settings → Appearance (GUI-025) show at once and are saved a
+  // moment later, as one change for a name being typed.
+  const fontsSave = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const changeFonts = (next: FontChoice) => {
+    const now = configNow.current;
+    if (!now) return;
+    fontsPending.current = next;
+    setConfig({ ...now, ui: { ...now.ui, ...next } });
+    clearTimeout(fontsSave.current);
+    fontsSave.current = setTimeout(() => {
+      if (!configNow.current) return;
+      EngineService.SaveSettings(configNow.current)
+        .catch(report)
+        .finally(() => {
+          if (fontsPending.current === next) fontsPending.current = null;
+        });
+    }, 300);
+  };
 
   // The first-run guide (GUI-010) opens once, before the first session.
   useEffect(() => {
@@ -1174,7 +1197,8 @@ export default function App() {
                   onImport={() => setScreen({ kind: "import" })}
                   onProviders={() => setScreen({ kind: "providers" })}
                   colors={colors}
-                onColors={changeColors}
+                  onColors={changeColors}
+                  onFonts={changeFonts}
                 onSaved={setConfig} onError={report} />
               )}
               {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}

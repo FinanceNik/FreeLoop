@@ -180,6 +180,11 @@ type UI struct {
 	Theme string `yaml:"theme" json:"theme"`
 	// FontSize is the base font size in points, 11 to 20.
 	FontSize int `yaml:"fontSize,omitempty" json:"fontSize"`
+	// TextFont is the family name for the interface and messages, CodeFont
+	// the one for code, tool output, diffs and the terminal (GUI-025). Empty
+	// means the app's own.
+	TextFont string `yaml:"textFont,omitempty" json:"textFont"`
+	CodeFont string `yaml:"codeFont,omitempty" json:"codeFont"`
 	// Shortcuts are the user's changes to the app's keyboard shortcuts, by name
 	// (SET-006). A name left out keeps its default.
 	Shortcuts map[string]string `yaml:"shortcuts,omitempty" json:"shortcuts"`
@@ -211,6 +216,8 @@ func (c *Config) Validate() []Issue {
 		issues = append(issues, Issue{Field: "ui.fontSize", Message: fmt.Sprintf("%d is outside 11 to 20", c.UI.FontSize)})
 		c.UI.FontSize = def.UI.FontSize
 	}
+	issues = append(issues, validateFont("ui.textFont", &c.UI.TextFont)...)
+	issues = append(issues, validateFont("ui.codeFont", &c.UI.CodeFont)...)
 	var priceIssues, hookIssues []Issue
 	c.Prices, priceIssues = validatePrices(c.Prices)
 	c.Hooks, hookIssues = validateHooks(c.Hooks, "hooks")

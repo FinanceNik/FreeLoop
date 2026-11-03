@@ -100,13 +100,19 @@ function themeColors() {
   return { background: v("--bg-card") || "#1b1b1a", foreground: v("--text") || "#ececea", cursor: v("--text") || "#ececea" };
 }
 
+// The code font in force (GUI-025): xterm takes its font as a value, not from
+// the page's style sheet.
+function codeFont() {
+  return getComputedStyle(document.documentElement).getPropertyValue("--mono").trim() || "monospace";
+}
+
 function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [exited, setExited] = useState<number | null>(null);
 
   useEffect(() => {
     const term = new Terminal({
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontFamily: codeFont(),
       // Two points under the app's text, as it was at the default of 14.
       fontSize: (parseFloat(getComputedStyle(document.documentElement).fontSize) || 14) - 2,
       cursorBlink: true,
@@ -134,9 +140,10 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
       EngineService.ResizeTerminal(id, next.cols, next.rows).catch(() => {});
     };
     const observer = new ResizeObserver(() => fit());
-    // The text size can change while the terminal is open.
+    // The text size and the code font can change while the terminal is open.
     const rootStyle = new MutationObserver(() => {
       term.options.fontSize = (parseFloat(getComputedStyle(document.documentElement).fontSize) || 14) - 2;
+      term.options.fontFamily = codeFont();
       fit();
     });
     rootStyle.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });

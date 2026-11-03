@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
+import FontEditor from "./FontEditor.tsx";
 import type { ColorSet } from "./colors.ts";
+import type { FontChoice } from "./fonts.ts";
 import { bindingOf, keyLabel } from "./shortcuts.ts";
 import { Browser } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
@@ -20,6 +22,7 @@ interface Props {
   onProviders: () => void;
   colors: ColorSet;
   onColors: (c: ColorSet) => void;
+  onFonts: (f: FontChoice) => void;
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
 }
@@ -108,7 +111,7 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
   );
 }
 
-export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onSaved, onError }: Props) {
+export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
   // Connections local-only mode refused (NFR-OFF-003).
@@ -139,11 +142,14 @@ export default function Settings({ config, providers, environments, profiles, pr
         if (r) setRestored(r);
       })
       .catch(onError);
-  // ⌘+ and ⌘- change one field; the rest of the form may hold unsaved edits.
-  // Approving a command is not an edit either.
-  const { ui: { fontSize: savedFontSize, ...savedUi }, commandApprovals: _approvals, ...savedRest } = config;
+  // ⌘+ and ⌘- change one field, and the fonts save themselves; the rest of the
+  // form may hold unsaved edits. Approving a command is not an edit either.
+  const { ui: { fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont, ...savedUi }, commandApprovals: _approvals, ...savedRest } = config;
   useEffect(() => setForm(config), [JSON.stringify([savedRest, savedUi])]);
-  useEffect(() => setForm((f) => ({ ...f, ui: { ...f.ui, fontSize: savedFontSize } })), [savedFontSize]);
+  useEffect(
+    () => setForm((f) => ({ ...f, ui: { ...f.ui, fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont } })),
+    [savedFontSize, savedTextFont, savedCodeFont],
+  );
   // The opt-in update check (OQ-015).
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
@@ -204,6 +210,9 @@ export default function Settings({ config, providers, environments, profiles, pr
             {keyLabel(bindingOf("textLarger"))} and {keyLabel(bindingOf("textSmaller"))} change this from anywhere in the app.
           </span>
         </label>
+
+        <h3>Fonts</h3>
+        <FontEditor textFont={config.ui.textFont} codeFont={config.ui.codeFont} onChange={onFonts} />
 
         <h3>Colors</h3>
         <ColorEditor colors={colors} onChange={onColors} onError={onError} />
