@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "rea
 import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
 import LiveUsage from "./LiveUsage.tsx";
+import { basename } from "./paths.ts";
 import { tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
 
 // The panes of the main window (GUI-017). The rules are in workspace.ts; this
@@ -22,11 +23,16 @@ interface Props {
   // Opens the full usage page.
   onUsagePage: () => void;
   onError: (err: unknown) => void;
+  // Sessions that finished work the user has not seen (SES-022).
+  unread: readonly string[];
+  // How a session's status reads, and whether the panes are tabs just now.
+  statusLabel: Record<string, string>;
+  onTabbed: (tabbed: boolean) => void;
 }
 
 const MAX_OFFERED = 6;
 
-export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onClose, onNew, onUsagePage, onError }: Props) {
+export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onClose, onNew, onUsagePage, onError, unread, statusLabel, onTabbed }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -39,6 +45,18 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
 
   const split = work.layout > 1;
   const asTabs = tabbed(work, width);
+  useEffect(() => onTabbed(asTabs), [asTabs]);
+  // A hidden pane still needs to be able to say it wants the user.
+  const statusOf = (sid: string | null) => {
+    const s = session(sid);
+    if (!s) return null;
+    return (
+      <>
+        {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" />}
+        {s.status !== "idle" && <span className={`badge badge-${s.status}`}>{statusLabel[s.status] ?? s.status}</span>}
+      </>
+    );
+  };
   const session = (sid: string | null) => (sid ? sessions.find((s) => s.id === sid) : undefined);
   const titleOf = (sid: string | null) => (sid === USAGE_PANE ? "Usage" : (session(sid)?.title ?? "Empty"));
   // Sessions an empty pane offers: not shown yet, most recent first.
@@ -79,7 +97,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               onDragOver={(e) => dragOver(e, i)}
               onDrop={(e) => drop(e, i)}
             >
-              {titleOf(sid)}
+              {titleOf(sid)} {statusOf(sid)}
             </button>
           ))}
         </div>
@@ -127,7 +145,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
                       {offered.map((o) => (
                         <li key={o.id}>
                           <button className="pane-offer" onClick={() => onPlace(o.id, i)}>
-                            {o.title}
+                            {o.title} <span className="muted">{basename(o.projectRoot)}</span> {statusOf(o.id)}
                           </button>
                         </li>
                       ))}

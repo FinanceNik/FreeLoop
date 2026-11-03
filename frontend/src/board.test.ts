@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { columns, since } from "./board.ts";
 
-test("sessions go to their status's column, newest first", () => {
+test("sessions go to their status's column, newest first, and the longest wait first where they need the user", () => {
   const cols = columns([
     { id: "a", status: "idle", updatedAt: "2026-10-31T10:00:00Z" },
     { id: "b", status: "error", updatedAt: "2026-10-31T09:00:00Z" },
@@ -14,7 +14,7 @@ test("sessions go to their status's column, newest first", () => {
   assert.deepEqual(
     cols.map((c) => [c.key, c.sessions.map((s) => s.id)]),
     [
-      ["needs", ["d", "b"]],
+      ["needs", ["b", "d"]],
       ["running", ["f"]],
       ["idle", ["c", "a"]],
     ],

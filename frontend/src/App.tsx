@@ -41,7 +41,9 @@ import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
 import Environments from "./Environments.tsx";
 import Settings from "./Settings.tsx";
-import Attention from "./Attention.tsx";
+import Attention, { RequestView } from "./Attention.tsx";
+import { addError, errorLine } from "./errorlist.ts";
+import { finishedTurn, markFinished, markRead, onScreen, parseUnread, UNREAD_KEY } from "./unread.ts";
 import Profiles from "./Profiles.tsx";
 import Onboarding from "./Onboarding.tsx";
 import Workspace, { SESSION_DRAG_TYPE } from "./Workspace.tsx";
@@ -171,7 +173,18 @@ export default function App() {
   const waitingApproval = issues.length - problems.length;
   // The last session opened, for the rules page's session scope.
   const [lastSessionId, setLastSessionId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+  // Sessions that finished out of sight (SES-022); see the effects below.
+  const [unread, setUnread] = useState<readonly string[]>(() => {
+    try {
+      return parseUnread(localStorage.getItem(UNREAD_KEY));
+    } catch {
+      return [];
+    }
+  });
+  const [tabbedPanes, setTabbedPanes] = useState(false);
+  const [windowFocused, setWindowFocused] = useState(() => document.hasFocus());
+  const seenNow = useRef<string[]>([]);
   // Bumped when config files change on disk, so pages refetch (SET-001).
   const [configVersion, setConfigVersion] = useState(0);
   // Sidebar filters (SES-004).
@@ -205,7 +218,7 @@ export default function App() {
   // seen meanwhile and needs one more fetch.
   const fetching = useRef<Map<string, boolean>>(new Map());
 
-  const report = (err: unknown) => setError(errorText(err));
+  const report = (err: unknown, sessionTitle?: string) => setErrors((list) => addError(list, errorLine(errorText(err), sessionTitle)));
 
   // A list can arrive after events that changed a session since it was
   // read, or after a list asked for later; neither replaces newer state.
@@ -366,6 +379,7 @@ export default function App() {
     return Events.On(EVENT_NAME, ({ data: ev }) => {
       ingest(ev.sid, [ev]);
       if (ev.type === "turn_ended") refreshToday();
+      if (finishedTurn(ev)) setUnread((list) => markFinished(list, ev.sid, seenNow.current));
       if (ev.type === "permission_requested" || ev.type === "permission_decided" || ev.type === "session_status") scheduleAttention();
       setSessions((list) => {
         const i = list.findIndex((s) => s.id === ev.sid);
@@ -841,6 +855,32 @@ export default function App() {
     return items;
   };
 
+  // What the user can see decides what is news, and seeing it ends the news.
+  seenNow.current = STANDALONE
+    ? selected && windowFocused ? [selected.id] : []
+    : onScreen({ panes: work.panes, active: work.active, tabbed: tabbedPanes, showingPanes: screen.kind === "session", focused: windowFocused });
+  const seenKey = seenNow.current.join(" ");
+  useEffect(() => {
+    setUnread((list) => markRead(list, seenNow.current));
+  }, [seenKey]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(UNREAD_KEY, JSON.stringify(unread));
+    } catch {
+      // A convenience: without storage the marks last until the app quits.
+    }
+  }, [unread]);
+  useEffect(() => {
+    const focus = () => setWindowFocused(true);
+    const blur = () => setWindowFocused(false);
+    window.addEventListener("focus", focus);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("focus", focus);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
+
   const sessionView = (s: Session, active = true, onClosePane?: () => void) => (
     <SessionView
       key={s.id}
@@ -865,7 +905,7 @@ export default function App() {
       onProjectsChanged={refreshProjects}
       configVersion={configVersion}
       allowBypass={config?.permissions.allowBypass ?? false}
-      onError={report}
+      onError={(err) => report(err, s.title)}
       onOpenWindow={STANDALONE ? undefined : () => openWindow(s.id)}
       active={active}
       onClosePane={onClosePane}
@@ -1065,6 +1105,7 @@ export default function App() {
                         onClick={(e) => openSession(s.id, undefined, e.metaKey ? "new" : "active")}
                       >
                         <span className="session-line">
+                          {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" title="Finished while you were away" />}
                           <span className="session-title">{s.title}</span>
                           {groupBy === "date" && <RowProject session={s} project={projects.find((p) => p.id === s.projectId)} />}
                           {s.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>}
@@ -1243,11 +1284,11 @@ export default function App() {
             </ul>
           </div>
         )}
-        {error && (
-          <div role="alert" className="banner error">
-            {error} <button onClick={() => setError(null)}>Dismiss</button>
+        {errors.map((line) => (
+          <div key={line} role="alert" className="banner error">
+            {line} <button onClick={() => setErrors((list) => list.filter((l) => l !== line))}>Dismiss</button>
           </div>
-        )}
+        ))}
 
         {STANDALONE && selected && screen.kind === "session" && sessionView(selected)}
         {!STANDALONE && screen.kind === "session" && (
@@ -1255,6 +1296,9 @@ export default function App() {
             work={work}
             sessions={sessions}
             renderSession={sessionView}
+            unread={unread}
+            statusLabel={STATUS_LABEL}
+            onTabbed={setTabbedPanes}
             onActivate={activatePane}
             onPlace={(sid, i) => showWork(ws.placeIn(workRef.current, sid, i))}
             onClose={(i) => showWork(ws.closePane(workRef.current, i))}
@@ -1385,6 +1429,11 @@ export default function App() {
             sessions={visible.filter((s) => s.status !== "archived")}
             projectName={(s) => projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)}
             statusLabel={STATUS_LABEL}
+            unread={unread}
+            renderRequest={(sid) => {
+              const req = attention.find((it) => it.session.id === sid)?.requests?.[0];
+              return req ? <RequestView key={req.requestId} req={req} onError={report} /> : null;
+            }}
             filtered={!isEmpty(filter)}
             onOpen={(id) => openSession(id)}
           />

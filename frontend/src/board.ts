@@ -12,14 +12,15 @@ const COLUMNS: { key: string; title: string; statuses: string[] }[] = [
   { key: "idle", title: "Idle", statuses: ["idle"] },
 ];
 
-// columns sorts sessions into the board's columns, the most recently
-// updated first in each; archived sessions are not on the board.
+// columns sorts sessions into the board's columns, the most recently updated
+// first, except that what needs the user has waited longest first, as in the
+// attention view; archived sessions are not on the board.
 export function columns<T extends Card>(sessions: T[]): Column<T>[] {
   const time = (s: Card) => new Date(s.updatedAt).getTime() || 0;
   return COLUMNS.map((c) => ({
     key: c.key,
     title: c.title,
-    sessions: sessions.filter((s) => c.statuses.includes(s.status)).sort((a, b) => time(b) - time(a)),
+    sessions: sessions.filter((s) => c.statuses.includes(s.status)).sort((a, b) => (c.key === "needs" ? time(a) - time(b) : time(b) - time(a))),
   }));
 }
 

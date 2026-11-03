@@ -120,6 +120,7 @@ func main() {
 	// files while its session shows as idle.
 	var once sync.Once
 	var closers []func()
+	guard := &quitGuard{eng: eng}
 	shutdown := func() {
 		once.Do(func() {
 			done := make(chan struct{})
@@ -172,7 +173,9 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 		OnShutdown: shutdown,
+		ShouldQuit: func() bool { return guard.shouldQuit() },
 	})
+	guard.app = app
 
 	svc.app, svc.desk, svc.logPath = app, desk, config.LogPath(dataDir)
 	// MCP sign-ins open in the user's browser (MCP-006).
@@ -194,6 +197,7 @@ func main() {
 	})
 
 	desk.start(app, win)
+	guard.watch(win)
 
 	// Bridge: every event the engine persists goes to the UI. Events that
 	// change what needs attention also refresh the dock badge, once per

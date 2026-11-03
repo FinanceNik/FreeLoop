@@ -4306,3 +4306,23 @@ table.hooks .hook-command {
 .session-import-list strong {
   overflow-wrap: anywhere;
 }
+
+/* A session that finished out of sight (SES-022). */
+.unread-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+/* The request the approval keys act on (GUI-002). */
+.attention-current {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+

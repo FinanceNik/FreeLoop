@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { columns, since } from "./board.ts";
 
 type Card = { id: string; title: string; status: string; updatedAt: string | Date; projectRoot: string; projectId: string; branch?: string; tags?: string[] | null };
@@ -10,12 +11,18 @@ export default function Board<T extends Card>({
   projectName,
   statusLabel,
   filtered,
+  unread,
+  renderRequest,
   onOpen,
 }: {
   sessions: T[];
   projectName: (s: T) => string;
   statusLabel: Record<string, string>;
   filtered: boolean;
+  // Sessions that finished work the user has not seen (SES-022).
+  unread: readonly string[];
+  // The approval a session waits on longest, answered on its card.
+  renderRequest: (sid: string) => ReactNode;
   onOpen: (id: string) => void;
 }) {
   const cols = columns(sessions);
@@ -38,7 +45,10 @@ export default function Board<T extends Card>({
               {c.sessions.map((s) => (
                 <li key={s.id}>
                   <button className="board-card" onClick={() => onOpen(s.id)}>
-                    <span className="board-card-title">{s.title}</span>
+                    <span className="board-card-title">
+                      {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" />}
+                      {s.title}
+                    </span>
                     <span className="muted board-card-where">
                       {projectName(s)}
                       {s.branch ? ` · ${s.branch}` : ""}
@@ -53,6 +63,7 @@ export default function Board<T extends Card>({
                       ))}
                     </span>
                   </button>
+                  {renderRequest(s.id)}
                 </li>
               ))}
               {c.sessions.length === 0 && <li className="muted board-empty">None</li>}
