@@ -10,7 +10,7 @@ export MACOSX_DEPLOYMENT_TARGET := 14.0
 export CGO_CFLAGS := -O2 -g -mmacosx-version-min=14.0
 export CGO_LDFLAGS := -mmacosx-version-min=14.0
 
-.PHONY: help tools dev build package dmg release verify-repro verify-deps bindings test test-keychain verify-agents memcheck frontend-test lint fmt clean
+.PHONY: help tools dev build package dmg release verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -59,9 +59,15 @@ verify-deps: ## Check modules against go.sum and that go.mod is tidy (needs the 
 	go mod verify
 	go mod tidy -diff
 
-test: ## Run Go engine tests (race detector on) and frontend tests
+test: ## Run Go tests (race detector on) and frontend tests
 	go test -race ./internal/...
+	$(MAKE) cmd-test
 	$(MAKE) frontend-test
+
+# cmd/freeloop embeds the built frontend, so it needs one to compile.
+cmd-test: frontend/node_modules bindings
+	cd frontend && npm run build
+	go test -race ./cmd/...
 
 memcheck: package ## Measure idle memory with ten sessions against the 300 MB budget (NFR-PERF-004; opens the app)
 	scripts/memcheck.sh bin/Freeloop.app/Contents/MacOS/Freeloop 300

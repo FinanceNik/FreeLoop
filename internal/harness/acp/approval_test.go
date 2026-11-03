@@ -16,6 +16,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
+	"github.com/FinanceNik/Freeloop/internal/harness/acp/acptest"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 )
 
@@ -268,5 +269,40 @@ func TestStoppingATurnEndsItsApprovals(t *testing.T) {
 	}
 	if p := broker.Pending(); len(p) != 0 {
 		t.Errorf("still waiting: %+v", p)
+	}
+}
+
+// SES-003: an agent that cannot load its session gets the conversation in its next
+// prompt, and only that one.
+func TestAnAgentThatCannotLoadGetsARecap(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+	env, err := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root), Shell: []string{"sh", "-c"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &recorder{}
+	broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
+	exe, _ := os.Executable()
+	h := Harness{Preset: config.HarnessPreset{ID: "ref", Name: "Reference", Command: exe, Env: map[string]string{acptest.EnvVar: "1"}}}
+	got, err := h.NewSession(context.Background(), harness.Params{
+		SessionID: "ses", Env: env, Broker: broker, Mode: permission.ModeAsk, Emit: rec.emit,
+		ExternalID: "old", Recap: func() string { return "the story so far" },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Close()
+	s := got.(*session)
+	if !strings.Contains(rec.text(event.Notice), "recap") {
+		t.Errorf("notice: %s", rec.text(event.Notice))
+	}
+	if r := s.takeRecap(); r != "the story so far" {
+		t.Errorf("recap = %q", r)
+	}
+	if r := s.takeRecap(); r != "" {
+		t.Errorf("a second recap = %q", r)
 	}
 }

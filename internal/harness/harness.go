@@ -99,7 +99,10 @@ type Params struct {
 	// ExternalID, when set, is the harness-side session to load instead of
 	// starting a new one (SES-003).
 	ExternalID string
-	Emit       Emitter
+	// Recap, when set, is the conversation so far as text, for an agent that could
+	// not load ExternalID and so starts with no memory of it (SES-003).
+	Recap func() string
+	Emit  Emitter
 }
 
 // CommandOptimizer is asked about every shell command the broker has approved,

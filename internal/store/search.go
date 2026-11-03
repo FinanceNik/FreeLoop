@@ -356,6 +356,17 @@ func (s *Store) IndexAll(ctx context.Context) error {
 			return ctx.Err()
 		}
 		s.mu.Lock()
+		// Being opened, or read by an earlier pass: that finishes first.
+		for s.indexing[id] != nil {
+			ch := s.indexing[id]
+			s.mu.Unlock()
+			select {
+			case <-ch:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			s.mu.Lock()
+		}
 		if t, open := s.files[id]; open {
 			s.mu.Unlock()
 			t.mu.Lock()

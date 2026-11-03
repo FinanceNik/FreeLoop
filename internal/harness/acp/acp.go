@@ -72,6 +72,9 @@ type session struct {
 	// request, so the agent's own fs/terminal request for the same thing
 	// does not ask twice.
 	approved approval
+	// owedRecap is what the next prompt starts with: the conversation so far, for
+	// an agent that could not load it.
+	owedRecap string
 	// turn is the context of the prompt running, or of one the agent never
 	// answered after it was stopped; what the agent asks during it ends with it.
 	turn  context.Context
@@ -114,6 +117,9 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 			s.applyMode(ctx)
 			s.restoreOptions(ctx)
 			return s, nil
+		}
+		if p.Recap != nil {
+			s.owedRecap = p.Recap()
 		}
 	}
 	ns, err := s.conn.NewSession(ctx, sdk.NewSessionRequest{Cwd: s.env.Root(), McpServers: s.mcpServers(), Meta: s.sessionMeta()})
@@ -249,8 +255,17 @@ func (s *session) load(ctx context.Context, id string) bool {
 		}
 		why = err.Error()
 	}
-	s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("%s started a new session: %s. It does not remember the conversation above.", s.preset.Name, why)})
+	s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("%s started a new session: %s. It does not remember the conversation above, so its next message starts with a recap of it.", s.preset.Name, why)})
 	return false
+}
+
+// takeRecap returns the recap the next prompt owes the agent, once.
+func (s *session) takeRecap() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recap := s.owedRecap
+	s.owedRecap = ""
+	return recap
 }
 
 // ExternalID is the agent's session ID.
@@ -425,6 +440,9 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "running"})
 	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}})
 	blocks := []sdk.ContentBlock{sdk.TextBlock(p.Text)}
+	if recap := s.takeRecap(); recap != "" {
+		blocks = append([]sdk.ContentBlock{sdk.TextBlock(recap)}, blocks...)
+	}
 	for _, r := range p.Resources {
 		s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "resource_link", URI: r.URI, Name: r.Path}})
 		if s.caps.PromptCapabilities.EmbeddedContext {

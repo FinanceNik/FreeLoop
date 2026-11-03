@@ -297,10 +297,19 @@ func startLog(dataDir string) *logOutput {
 		log.SetOutput(out)
 		return out
 	}
+	logFile := config.NewLogFile(dataDir, f)
 	if os.Getenv("FREELOOP_DEV") == "1" {
-		out.w = io.MultiWriter(os.Stderr, f)
+		out.w = io.MultiWriter(os.Stderr, logFile)
 	} else if err := environment.RedirectStderr(f); err != nil {
-		out.w = f
+		out.w = logFile
+	} else {
+		// Crash traces follow the log to its next file.
+		logFile.OnRotate = func(next *os.File) {
+			if err := environment.RedirectStderr(next); err != nil {
+				log.Printf("freeloop: crash traces stay in the old log: %v", err)
+			}
+		}
+		out.w = logFile
 	}
 	log.SetOutput(out)
 	return out

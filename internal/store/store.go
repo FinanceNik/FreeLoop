@@ -395,7 +395,24 @@ func (s *Store) transcript(ctx context.Context, sid string) (*transcript, error)
 		}
 		s.mu.Lock()
 	}
+	// Scanning a long transcript takes a while and other sessions must go on
+	// meanwhile, so it happens outside the lock. Callers for this session wait above.
+	ch := make(chan struct{})
+	s.indexing[sid] = ch
+	s.mu.Unlock()
+	t, err := s.openFile(ctx, sid)
+	s.mu.Lock()
 	defer s.mu.Unlock()
+	delete(s.indexing, sid)
+	close(ch)
+	if err != nil {
+		return nil, err
+	}
+	s.files[sid] = t
+	return t, nil
+}
+
+func (s *Store) openFile(ctx context.Context, sid string) (*transcript, error) {
 	ses, err := s.GetSession(ctx, sid)
 	if err != nil {
 		return nil, err
@@ -407,7 +424,6 @@ func (s *Store) transcript(ctx context.Context, sid string) (*transcript, error)
 	if t.lastSeq != ses.LastSeq {
 		s.repairRow(ctx, t, sid, ses.LastSeq)
 	}
-	s.files[sid] = t
 	return t, nil
 }
 
@@ -649,6 +665,15 @@ func (s *Store) DeleteSession(ctx context.Context, sid string) error {
 // SetExternalID records the harness-side ID of a session, for loading it
 // again after a restart (SES-003).
 func (s *Store) SetExternalID(ctx context.Context, sid, externalID string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET external_id = ? WHERE id = ?`, externalID, sid)
-	return err
+	if _, err := s.db.ExecContext(ctx, `UPDATE sessions SET external_id = ? WHERE id = ?`, externalID, sid); err != nil {
+		return err
+	}
+	// Beside the transcript too: without it a rebuilt index would start the agent
+	// on a new session under a transcript of the old one.
+	ses, err := s.GetSession(ctx, sid)
+	if err != nil {
+		return err
+	}
+	s.writeMeta(ses)
+	return nil
 }

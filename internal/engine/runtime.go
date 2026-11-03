@@ -320,6 +320,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		}
 		params.MCPServers = e.agentServers(prof)
 		params.ExternalID = ses.ExternalID
+		params.Recap = func() string { return recapOf(ses, events) }
 		params.KeepTitle = ses.ImportedFrom != ""
 		hs, err = acp.Harness{Preset: preset}.NewSession(ctx, params)
 	}
@@ -334,17 +335,18 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	// The container is in use either way: by this runtime, or by the one
-	// that won the race, which shares it.
-	ready = true
 	if existing, ok := e.runtimes[sid]; ok { // another caller won the race
+		// It shares the container, so that stays.
+		ready = true
 		hs.Close()
 		return existing, nil
 	}
 	if e.closing {
+		// Not ready: the deferred cleanup stops what this start began.
 		hs.Close()
 		return nil, errClosing
 	}
+	ready = true
 	r.hs = hs
 	e.refreshGitLater(r)
 	e.runtimes[sid] = r
@@ -519,11 +521,17 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 			e.bg.Go(func() { e.stopRuntime(r.sid) })
 			return
 		}
-		// Queued prompts would fail the same way until the user signs in.
+		// Queued prompts would fail the same way until the user signs in. The notice
+		// goes out after the lock: emitting takes e.mu, and stopIfIdle takes e.mu and
+		// then this one.
 		if errors.Is(err, harness.ErrSignIn) && len(r.queue) > 0 {
 			n := len(r.queue)
 			r.queue = nil
+			r.busy = false
+			close(r.done)
+			r.mu.Unlock()
 			e.emit(r.sid, event.Notice, event.NoticeData{Message: fmt.Sprintf("%d queued %s not sent; send %s again after signing in.", n, plural(n, "message was", "messages were"), plural(n, "it", "them"))})
+			return
 		}
 		if len(r.queue) == 0 {
 			r.busy = false

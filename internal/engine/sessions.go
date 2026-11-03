@@ -98,6 +98,18 @@ func (e *Engine) stopIfIdle(sid string) bool {
 	return true
 }
 
+// removeSessionData removes what a session keeps outside its transcript.
+func (e *Engine) removeSessionData(ses session.Session) {
+	if err := config.RemoveSessionPlugin(e.dataDir, ses.ID); err != nil {
+		log.Printf("engine: remove the skills of session %s: %v", ses.ID, err)
+	}
+	for _, sandboxed := range []bool{false, true} {
+		if err := environment.RemoveCache(e.optimizerDir(ses, sandboxed)); err != nil {
+			log.Printf("engine: remove the optimizer data of session %s: %v", ses.ID, err)
+		}
+	}
+}
+
 // ArchiveSession hides a session from the default list (SES-005), stopping
 // its turn first; archived false brings it back.
 func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) error {
@@ -119,6 +131,10 @@ func (e *Engine) ArchiveSession(ctx context.Context, sid string, archived bool) 
 		e.stopRuntime(sid)
 		e.closeTerminals(sid)
 		e.runArchiveScript(ctx, ses)
+		// A later start makes these again. An optimizer's recall database holds full
+		// command output, out of reach of the transcript's redaction, so it should
+		// not outlive the work.
+		e.removeSessionData(ses)
 		status = session.StatusArchived
 		// A worktree goes with the archive unless it holds uncommitted
 		// work; its branch and commits stay (SES-010).
@@ -151,14 +167,7 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 	}
 	e.stopRuntime(sid)
 	e.closeTerminals(sid)
-	if err := config.RemoveSessionPlugin(e.dataDir, sid); err != nil {
-		log.Printf("engine: remove the skills of deleted session %s: %v", sid, err)
-	}
-	for _, sandboxed := range []bool{false, true} {
-		if err := environment.RemoveCache(e.optimizerDir(ses, sandboxed)); err != nil {
-			log.Printf("engine: remove the optimizer data of deleted session %s: %v", sid, err)
-		}
-	}
+	e.removeSessionData(ses)
 	// Whatever the environment is now (it may have been deleted or changed
 	// kind), a container the session had, and an image built for it, go.
 	if _, err := environment.FindDocker(); err == nil {

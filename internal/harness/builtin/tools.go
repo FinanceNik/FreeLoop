@@ -53,7 +53,40 @@ func textContent(s string) map[string]any {
 	return map[string]any{"type": "content", "content": map[string]any{"type": "text", "text": s}}
 }
 
+// A diff goes into the transcript, and every later read of the session loads it,
+// so a small edit of a large file must not store the file twice on every edit.
+const (
+	wholeDiffUpTo  = 64 << 10
+	storedDiffUpTo = 256 << 10
+	diffContext    = 3
+)
+
+// shortDiff drops what both sides share, apart from a few lines around the change,
+// and names a change that is still too large rather than storing it.
+func shortDiff(oldText, newText string) (string, string) {
+	if len(oldText)+len(newText) <= wholeDiffUpTo {
+		return oldText, newText
+	}
+	a, b := strings.SplitAfter(oldText, "\n"), strings.SplitAfter(newText, "\n")
+	head := 0
+	for head < len(a) && head < len(b) && a[head] == b[head] {
+		head++
+	}
+	tail := 0
+	for tail < len(a)-head && tail < len(b)-head && a[len(a)-1-tail] == b[len(b)-1-tail] {
+		tail++
+	}
+	head, tail = max(0, head-diffContext), max(0, tail-diffContext)
+	oldText = strings.Join(a[head:len(a)-tail], "")
+	newText = strings.Join(b[head:len(b)-tail], "")
+	if len(oldText)+len(newText) > storedDiffUpTo {
+		return "", fmt.Sprintf("(A change of %d bytes replaced by %d, too large to show here. The file holds it.)\n", len(oldText), len(newText))
+	}
+	return oldText, newText
+}
+
 func diffContent(path, oldText, newText string) map[string]any {
+	oldText, newText = shortDiff(oldText, newText)
 	return map[string]any{"type": "diff", "path": path, "oldText": oldText, "newText": newText}
 }
 
