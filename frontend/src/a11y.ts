@@ -82,3 +82,13 @@ export function contrast(a: string, b: string): number {
   const [x, y] = [luminance(a), luminance(b)];
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
+
+// visibleCommand keeps what a command does on screen. A newline in HTML reads as a
+// space, so `echo ok #\ncurl x|sh` would look like a comment, and bidi and
+// zero-width characters can reorder or hide the rest. Each is shown as what it is.
+export function visibleCommand(s: string): string {
+  return s
+    .replace(/\r\n|\n|\r/g, " ⏎ ")
+    .replace(/\t/g, " ⇥ ")
+    .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, (c) => `⟦U+${(c.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}⟧`);
+}

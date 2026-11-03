@@ -147,9 +147,18 @@ func SaveMCP(dir string, servers []MCPServer) error {
 			return fmt.Errorf("%s: %w", s.ID, err)
 		}
 	}
+	path := filepath.Join(dir, MCPFileName)
+	if err := rewritable(path, func(b []byte) (int, error) {
+		var f mcpFile
+		err := strictDecode(b, &f)
+		return f.Version, err
+	}); err != nil {
+		return err
+	}
 	b, err := yaml.Marshal(mcpFile{Version: 1, Servers: servers})
 	if err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(dir, MCPFileName), b)
+	keepPrevious(path)
+	return writeAtomic(path, b)
 }

@@ -58,6 +58,9 @@ func Retryable(err error) (bool, time.Duration) {
 // response cut off before it began. (Local-only refusals and cancellations
 // are not: the harness checks the context first.)
 func transient(err error) bool {
+	if errors.Is(err, ErrStalled) || errors.Is(err, ErrStreamEnded) {
+		return true
+	}
 	var ne net.Error
 	if errors.As(err, &ne) && ne.Timeout() {
 		return true

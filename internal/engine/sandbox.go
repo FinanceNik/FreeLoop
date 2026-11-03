@@ -7,8 +7,10 @@ import (
 	"maps"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
@@ -67,7 +69,7 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 		return nil, nil, err
 	}
 	c := environment.Confinement{
-		Home: home, Write: []string{root}, Scratch: []string{cache, tmp, "/private/tmp"},
+		Home: home, Write: []string{root}, Scratch: []string{cache, tmp},
 		NoAccess:   e.broker.Policy().NeverRead(),
 		ReadAlways: []string{filepath.Join(environment.Canonical(e.dataDir), config.SkillsDir)},
 		Network:    environment.Network(cmp.Or(cfg.Sandbox.Network, string(environment.NetworkLocalhost))),
@@ -118,8 +120,18 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 	// starts there, and a nested project's settings become active when opened.
 	quoted := regexp.QuoteMeta(root)
 	c.ProtectedPatterns = append(c.ProtectedPatterns, "^"+quoted+"/.+/\\.git(/.*)?$", "^"+quoted+"/.+/\\."+regexp.QuoteMeta(strings.TrimPrefix(ProjectDir, "."))+"(/.*)?$")
+	c.ProtectedPatterns = append(c.ProtectedPatterns, bareRepositoryPatterns(quoted)...)
 	sid := ses.ID
 	allVars := e.loginVars(ctx, host)
+	// The user's name, as a global config of its own: a variable would beat what
+	// the repository says. A command can change this copy, which only it reads.
+	if e.loginGitConfig != "" {
+		own := filepath.Join(cache, "gitconfig")
+		if err := environment.WriteCacheFile(own, []byte(e.loginGitConfig)); err != nil {
+			return nil, nil, err
+		}
+		allVars["GIT_CONFIG_GLOBAL"] = own
+	}
 	maps.Copy(allVars, vars)
 	env, err := environment.NewLocal(environment.LocalOptions{
 		ID: cfg.ID, Root: root, Env: allVars, Guard: e.broker.Policy().Guard(root),
@@ -147,6 +159,20 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 	return env, closeEgress, nil
 }
 
+// bareRepositoryPatterns close a file named HEAD anywhere in the project except
+// inside .git. A folder with HEAD, objects and refs is a repository to git, whose
+// config it obeys. So a command could move .git/HEAD aside, which git itself has
+// to be able to replace, build one in the project, and have the user's own git
+// run what its config names, unconfined. HEAD is the rarest of the three names.
+// The case varies because APFS opens head as HEAD.
+func bareRepositoryPatterns(quotedRoot string) []string {
+	const head = "[Hh][Ee][Aa][Dd]"
+	// A first folder that is not .git. One character per bracket: the sandbox's
+	// regular expressions do not read [^./] as the two characters it says.
+	const first = `([^.][^/]*|\.[^g][^/]*|\.g[^i][^/]*|\.gi[^t][^/]*|\.git[^/]+|\.|\.g|\.gi)`
+	return []string{"^" + quotedRoot + "/" + head + "$", "^" + quotedRoot + "/" + first + "/(.*/)?" + head + "$"}
+}
+
 // gitProtected keeps a repository's config and hooks out of reach, as gitMounts
 // does for a container, and stops the folders that hold them being moved aside,
 // edited and moved back. Git needs the rest of its directory to commit, which
@@ -163,6 +189,9 @@ func (e *Engine) gitProtected(ctx context.Context, host *environment.Local, c *e
 	common = environment.Canonical(strings.TrimSpace(common))
 	own, _ := git(ctx, host, "rev-parse", "--path-format=absolute", "--git-dir")
 	own = environment.Canonical(strings.TrimSpace(own))
+	if plantedGitFile(host, own) {
+		return []string{filepath.Join(root, ".git")}
+	}
 	if !environment.Within(common, root) {
 		c.Write = append(c.Write, common)
 	}
@@ -231,11 +260,14 @@ func (e *Engine) loginVars(ctx context.Context, host *environment.Local) map[str
 				e.loginEnv[name] = value
 			}
 		}
-		for name, key := range map[string]string{"NAME": "user.name", "EMAIL": "user.email"} {
-			if v, ok := git(ctx, host, "config", "--global", "--get", key); ok && strings.TrimSpace(v) != "" {
-				e.loginEnv["GIT_AUTHOR_"+name] = strings.TrimSpace(v)
-				e.loginEnv["GIT_COMMITTER_"+name] = strings.TrimSpace(v)
+		e.loginGitConfig = ""
+		for _, key := range []string{"name", "email"} {
+			if v, ok := git(ctx, host, "config", "--global", "--get", "user."+key); ok && strings.TrimSpace(v) != "" {
+				e.loginGitConfig += "\t" + key + " = " + strconv.Quote(strings.TrimSpace(v)) + "\n"
 			}
+		}
+		if e.loginGitConfig != "" {
+			e.loginGitConfig = "[user]\n" + e.loginGitConfig
 		}
 		e.loginEnv["GIT_CONFIG_GLOBAL"] = "/dev/null"
 	})
@@ -248,14 +280,29 @@ var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // app sets itself, the ones that change what programs load, and secrets stay out.
 func keepLoginVar(name, value string) bool {
 	switch name {
-	case "HOME", "PWD", "OLDPWD", "SHLVL", "_", "TMPDIR", "USER", "LOGNAME", "SHELL", "SSH_AUTH_SOCK", "ZDOTDIR", "BASH_ENV", "ENV":
+	case "HOME", "PWD", "OLDPWD", "SHLVL", "_", "TMPDIR", "USER", "LOGNAME", "SHELL", "SSH_AUTH_SOCK", "ZDOTDIR", "BASH_ENV", "ENV",
+		"NODE_OPTIONS", "PYTHONSTARTUP", "RUBYOPT", "PERL5OPT", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_ASKPASS", "GIT_EXTERNAL_DIFF", "GIT_PAGER", "PAGER", "EDITOR", "VISUAL":
 		return false
 	}
 	if strings.HasPrefix(name, "DYLD_") || strings.HasPrefix(name, "LD_") || strings.HasPrefix(name, "FREELOOP_") {
 		return false
 	}
-	return !secretValue(name, value)
+	return !secretValue(name, value) && !secretShaped.MatchString(value) && !longToken(value)
 }
+
+// longToken reports an unbroken run of key characters, with both letters and
+// digits, long enough to be a key.
+func longToken(value string) bool {
+	if len(value) < 32 || strings.ContainsAny(value, "/:. ") {
+		return false
+	}
+	return strings.IndexFunc(value, unicode.IsDigit) >= 0 && strings.IndexFunc(value, unicode.IsLetter) >= 0
+}
+
+// secretShaped is a value that looks like a key whatever its variable is called:
+// the prefixes of the common services, and a long run of letters and digits (see
+// longToken), which a path or a setting is not.
+var secretShaped = regexp.MustCompile(`^(sk|pk|rk)[-_]|^(sk_live|sk_test|xox[a-z]|ghp|gho|ghu|ghs|ghr|github_pat|glpat|hf|npm|pypi|AKIA|ASIA|AIza|ya29|dop_v1|shpat|SG)[-_.A-Za-z0-9]{10,}|^eyJ[-_A-Za-z0-9]{10,}\.`)
 
 func expandHome(home, p string) string {
 	if p == "~" {

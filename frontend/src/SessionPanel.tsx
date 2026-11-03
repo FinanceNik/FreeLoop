@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { visibleCommand } from "./a11y.ts";
 import { tabAfterKey } from "./a11y.ts";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
 import { panelData, type SessionView, type ToolItem } from "./transcript.ts";
@@ -145,9 +146,9 @@ function Approvals({ pending, decided, onError }: { pending: ToolItem[]; decided
         {pending.map((t) => (
           <li key={t.toolCallId} className="panel-pending">
             <button className="link" onClick={() => showTool(t.toolCallId)}>
-              {t.title}
+              {visibleCommand(t.title)}
             </button>
-            {t.permission?.command && <code>{t.permission.command}</code>}
+            {t.permission?.command && <code>{visibleCommand(t.permission.command)}</code>}
             {t.permission?.paths?.map((p) => (
               <code key={p}>{p}</code>
             ))}

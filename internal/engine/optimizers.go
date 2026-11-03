@@ -434,7 +434,7 @@ func (e *Engine) probeOptimizer(ctx context.Context, env environment.Environment
 		p.reason = fmt.Sprintf("%s was found inside the project, at %s, which the repository could change, so it is not used.", o.Program, path)
 		return p
 	}
-	got, err := runRewrite(ctx, env, o, path, o.ProbeCommand)
+	got, err := runRewrite(ctx, env, o, path, o.ProbeCommand, probeTimeout)
 	if err != nil || got != o.ProbeWant {
 		p.reason = fmt.Sprintf("%s at %s does not rewrite commands as %s does, so it may be another program with the same name, or the session's environment may keep it from running.", o.Program, path, o.Name)
 		return p
@@ -451,14 +451,14 @@ func (e *Engine) probeOptimizer(ctx context.Context, env environment.Environment
 // runRewrite asks the program for a command's rewrite: "" when it has none, an
 // error when it did not answer. Only standard output counts, since standard
 // error carries its warnings.
-func runRewrite(ctx context.Context, env environment.Environment, o config.Optimizer, path, command string) (string, error) {
+func runRewrite(ctx context.Context, env environment.Environment, o config.Optimizer, path, command string, limit time.Duration) (string, error) {
 	// Without a home it reads no agent's settings: what may run is the broker's
 	// business.
 	vars := map[string]string{}
 	maps.Copy(vars, o.Env)
 	vars["HOME"] = "/nonexistent"
 	argv := append(append([]string{path}, o.Rewrite...), command)
-	res, err := env.Exec(ctx, environment.ExecSpec{Argv: argv, Env: vars, Cwd: neutralDir, Timeout: rewriteTimeout, MaxOutput: 1 << 16, SeparateStderr: true, ReadOnly: true})
+	res, err := env.Exec(ctx, environment.ExecSpec{Argv: argv, Env: vars, Cwd: neutralDir, Timeout: limit, MaxOutput: 1 << 16, SeparateStderr: true, ReadOnly: true})
 	if err != nil {
 		return "", err
 	}
@@ -577,7 +577,7 @@ func (s *sessionOptimizer) Rewrite(ctx context.Context, command string, raw bool
 	if raw || !rewritable(command, o) {
 		return out
 	}
-	rewritten, err := runRewrite(ctx, s.env, o, p.path, command)
+	rewritten, err := runRewrite(ctx, s.env, o, p.path, command, rewriteTimeout)
 	if err != nil {
 		// A stopped turn is not the program's failing.
 		if ctx.Err() == nil {

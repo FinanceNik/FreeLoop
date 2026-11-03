@@ -320,6 +320,10 @@ func parse(b []byte) (Config, []Issue) {
 		}
 		issues = append(issues, Issue{Message: err.Error() + " (ignored; the rest of the file applies)"})
 	}
+	// Saving would drop what this version does not know.
+	if cfg.Version > 1 {
+		return cfg, append(issues, Issue{Message: fmt.Sprintf("version %d was written by a newer version of Freeloop, so this one does not overwrite it", cfg.Version), Unreadable: true})
+	}
 	return cfg, append(issues, cfg.Validate()...)
 }
 

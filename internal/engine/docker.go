@@ -173,6 +173,10 @@ func (e *Engine) gitMounts(ctx context.Context, host *environment.Local, opts *e
 	common = strings.TrimSpace(common)
 	own, _ := git(ctx, host, "rev-parse", "--path-format=absolute", "--git-dir")
 	own = strings.TrimSpace(own)
+	// A planted .git must not mount another repository into the container.
+	if movedCommonDir(ctx, host) || plantedGitFile(host, own) {
+		return
+	}
 	if !environment.Within(common, opts.Root) {
 		opts.Mounts = append(opts.Mounts, common)
 	}

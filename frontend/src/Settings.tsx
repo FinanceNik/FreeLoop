@@ -433,6 +433,14 @@ export default function Settings({ config, providers, environments, profiles, pr
       </form>
 
       <div className="card">
+        <h3>Logs</h3>
+        <p className="muted">What went wrong, for a bug report. Logs stay on this Mac, with the secrets the app knows about removed. Read them before sharing them.</p>
+        <button type="button" onClick={() => EngineService.ShowLogs().catch(onError)}>
+          Show logs in Finder
+        </button>
+      </div>
+
+      <div className="card">
         <h3>Backup</h3>
         <p className="muted">
           Settings, providers, profiles, environments, rules, MCP servers and harness presets in one file. API keys and other secrets stay in the

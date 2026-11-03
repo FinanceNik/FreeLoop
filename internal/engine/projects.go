@@ -86,7 +86,9 @@ func (e *Engine) RelinkProject(ctx context.Context, id, root string) (session.Pr
 	if p.FirstCommit != "" && first != p.FirstCommit {
 		return session.Project{}, fmt.Errorf("%s is a different repository than %s (its first commit differs)", root, p.Name)
 	}
-	p.Root, p.FirstCommit = root, first
+	// Trust was for the folder that was there. A fork shares its first commit, and
+	// a folder that is not a repository has no fingerprint at all.
+	p.Root, p.FirstCommit, p.Trusted = root, first, false
 	if remote != "" {
 		p.Remote = remote
 	}

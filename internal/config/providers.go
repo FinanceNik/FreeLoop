@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -101,11 +102,60 @@ func LoadProviders(dir string) ([]Provider, []Issue, error) {
 
 // SaveProviders replaces providers.yaml atomically.
 func SaveProviders(dir string, providers []Provider) error {
+	path := filepath.Join(dir, ProvidersFileName)
+	if err := rewritable(path, func(b []byte) (int, error) {
+		var f providersFile
+		err := strictDecode(b, &f)
+		return f.Version, err
+	}); err != nil {
+		return err
+	}
 	b, err := yaml.Marshal(providersFile{Version: 1, Providers: providers})
 	if err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(dir, ProvidersFileName), b)
+	keepPrevious(path)
+	return writeAtomic(path, b)
+}
+
+// rewritable refuses to replace a file that could not be read. What the app holds
+// then is empty, not what the file says: one bad key, or a key from a newer
+// version, and the next save would keep only the new entry.
+func rewritable(path string, read func([]byte) (int, error)) error {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	version, err := read(b)
+	if err != nil {
+		return fmt.Errorf("%s cannot be read, so it is not overwritten; fix or remove it first: %w", filepath.Base(path), err)
+	}
+	if version > 1 {
+		return fmt.Errorf("%s was written by a newer version of Freeloop, so it is not overwritten", filepath.Base(path))
+	}
+	return nil
+}
+
+func strictDecode(b []byte, v any) error {
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true)
+	if err := dec.Decode(v); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
+}
+
+// keepPrevious leaves the file's last contents beside it, as name.bak: a save the
+// user regrets, or a bug, should not cost their providers or servers.
+func keepPrevious(path string) {
+	if b, err := os.ReadFile(path); err == nil {
+		if err := writeAtomic(path+".bak", b); err != nil {
+			log.Printf("config: keep a copy of %s: %v", filepath.Base(path), err)
+		}
+	}
 }
 
 func writeAtomic(path string, b []byte) error {

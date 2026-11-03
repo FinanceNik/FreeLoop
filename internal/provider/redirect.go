@@ -29,5 +29,5 @@ func StayOnHost(next *http.Request, via []*http.Request) error {
 // KeyClient is the client for requests carrying a key, through
 // http.DefaultTransport, so local-only mode covers it (NFR-OFF-003).
 func KeyClient() *http.Client {
-	return &http.Client{CheckRedirect: StayOnHost}
+	return &http.Client{Transport: stallTransport{}, CheckRedirect: StayOnHost}
 }

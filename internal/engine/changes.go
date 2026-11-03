@@ -154,6 +154,19 @@ func movedCommonDir(ctx context.Context, env environment.Environment) bool {
 	return filepath.Base(parent) != "worktrees" || filepath.Dir(parent) != common
 }
 
+// plantedGitFile reports a .git file that names a git directory which does not
+// name it back. A linked worktree's folder records its .git file; a .git file
+// written by anything else would have the sandbox or a container open up another
+// repository, whose config the user's own git trusts.
+func plantedGitFile(host *environment.Local, own string) bool {
+	dotGit := filepath.Join(host.Root(), ".git")
+	if fi, err := host.FS().Stat(dotGit); err != nil || fi.IsDir {
+		return false
+	}
+	back, err := host.FS().ReadFile(filepath.Join(own, "gitdir"))
+	return err != nil || environment.Canonical(strings.TrimSpace(string(back))) != environment.Canonical(dotGit)
+}
+
 // Changes lists the files that differ from the session's base commit plus
 // uncommitted ones, by path.
 func (e *Engine) Changes(ctx context.Context, sid string) (Changes, error) {
@@ -380,10 +393,26 @@ func (e *Engine) DiscardFile(ctx context.Context, sid, path string) error {
 	case !inHead:
 		_, err = gitOK(ctx, env, "rm", "--force", "--quiet", "--", path)
 	default:
+		// Restoring writes what HEAD holds, outside any sandbox. A confined agent
+		// can commit a file it may not write, and this would write it for it.
+		if actedOnFile(path) && e.sessionConfined(ctx, sid) {
+			return fmt.Errorf("%s is a file the app or your tools act on, and a confined session may have committed what is in it, so it is not restored from here. Check it, then restore it in a terminal", path)
+		}
 		_, err = gitOK(ctx, env, "checkout", "HEAD", "--", path)
 	}
 	e.gitChanged(sid)
 	return err
+}
+
+// sessionConfined reports a session whose commands run in a sandbox or container,
+// or one the app cannot tell about.
+func (e *Engine) sessionConfined(ctx context.Context, sid string) bool {
+	ses, err := e.store.GetSession(ctx, sid)
+	if err != nil {
+		return true
+	}
+	cfg, err := e.environment(ses.EnvironmentID)
+	return err != nil || cfg.SandboxOn() || cfg.Kind == string(environment.KindDocker)
 }
 
 // gitChanged records the session's new git state after a panel action.

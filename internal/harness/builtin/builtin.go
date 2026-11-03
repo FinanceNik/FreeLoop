@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdlog "log"
 	"math/rand/v2"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -641,7 +643,7 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 	}
 
 	s.p.Emit(event.ToolCallUpdate, map[string]any{"toolCallId": c.ToolCallID, "status": "in_progress"})
-	res, err := prepared.run(harness.WithToolCall(ctx, c.ToolCallID), d)
+	res, err := safeRun(prepared, harness.WithToolCall(ctx, c.ToolCallID), d)
 	if err != nil {
 		if ctx.Err() != nil {
 			return fail("Cancelled while running.", "failed")
@@ -785,8 +787,13 @@ func Restore(events []event.Event) []provider.Message {
 			Reset bool `json:"reset"`
 			Clear bool `json:"clear"`
 		}
-		if json.Unmarshal(ev.Data, &d) != nil || d.Index < 0 || d.Index > len(history) {
+		if json.Unmarshal(ev.Data, &d) != nil || d.Index < 0 {
 			continue
+		}
+		// A lost line must not cost everything after it: the screen shows the whole
+		// conversation, and the model would silently have forgotten it.
+		for len(history) < d.Index {
+			history = append(history, lostMessage(d.Index-len(history), d.Message.Role))
 		}
 		if d.Reset {
 			history = history[:d.Index]
@@ -801,6 +808,42 @@ func Restore(events []event.Event) []provider.Message {
 		}
 	}
 	return history
+}
+
+// safeRun keeps a bug in one tool from taking down the app and every session.
+func safeRun(c *call, ctx context.Context, d permission.Decision) (res result, err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			stdlog.Printf("builtin: a tool panicked: %v\n%s", v, debug.Stack())
+			err = fmt.Errorf("the tool failed unexpectedly: %v", v)
+		}
+	}()
+	return c.run(ctx, d)
+}
+
+// LostMessageText stands in for a message of the saved context that could not be
+// read.
+const LostMessageText = "[A message here was lost from the saved record of this conversation.]"
+
+// lostMessage takes the place of a lost message, with the role that keeps turns
+// alternating up to the message after the gap, which is left places away.
+func lostMessage(left int, next provider.Role) provider.Message {
+	role := provider.RoleAssistant
+	if (next == provider.RoleAssistant) == (left%2 == 1) {
+		role = provider.RoleUser
+	}
+	return provider.Message{Role: role, Parts: []provider.Part{{Type: provider.PartText, Text: LostMessageText}}}
+}
+
+// LostMessages counts the lost messages a restored history holds.
+func LostMessages(history []provider.Message) int {
+	n := 0
+	for _, m := range history {
+		if len(m.Parts) == 1 && m.Parts[0].Text == LostMessageText {
+			n++
+		}
+	}
+	return n
 }
 
 // remember keeps an image's data for later requests in this run.

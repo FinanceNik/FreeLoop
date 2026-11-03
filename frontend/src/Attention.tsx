@@ -1,3 +1,4 @@
+import { visibleCommand } from "./a11y.ts";
 import { optionLabel } from "./shortcuts.ts";
 import { useState } from "react";
 import { EngineService, type AttentionItem, type PermissionRequest } from "./api.ts";
@@ -80,9 +81,9 @@ function RequestView({ req, onError }: { req: PermissionRequest; onError: (err: 
   return (
     <div className="attention-request">
       <div>
-        <strong>{req.title}</strong> <span className="muted">{req.tool}</span>
+        <strong>{visibleCommand(req.title)}</strong> <span className="muted">{req.tool}</span>
       </div>
-      {req.command && <code className="attention-command">{req.command}</code>}
+      {req.command && <code className="attention-command">{visibleCommand(req.command)}</code>}
       {req.paths?.map((p) => (
         <code key={p} className="attention-command">
           {p}

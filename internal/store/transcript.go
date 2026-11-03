@@ -22,16 +22,22 @@ type transcript struct {
 	path    string
 	f       *os.File
 	lastSeq int64
-	dirty   bool
-	search  indexer // guarded by mu
+	// size is how much of the file holds whole lines.
+	size   int64
+	dirty  bool
+	search indexer // guarded by mu
 }
+
+// ErrWrite marks an event that could not be written to its transcript, as on a
+// full disk, unlike one that is refused or for a session that is gone.
+var ErrWrite = errors.New("could not write the transcript")
 
 // openTranscript opens path for appending. A torn last line, left by a crash
 // in the middle of a write, is truncated away; lastSeq is read from the file.
 // A damaged line elsewhere is repaired (see repairTranscript), so one bad
 // line does not make the whole session unreadable.
 func openTranscript(path string) (*transcript, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("store: open transcript: %w", err)
 	}
@@ -42,7 +48,7 @@ func openTranscript(path string) (*transcript, error) {
 		if err := repairTranscript(path); err != nil {
 			return nil, fmt.Errorf("store: repair %s: %w", path, err)
 		}
-		if f, err = os.OpenFile(path, os.O_RDWR, 0o600); err != nil {
+		if f, err = os.OpenFile(path, os.O_RDWR|os.O_APPEND, 0o600); err != nil {
 			return nil, fmt.Errorf("store: open transcript: %w", err)
 		}
 		lastSeq, validLen, err = scanTranscript(f)
@@ -59,7 +65,7 @@ func openTranscript(path string) (*transcript, error) {
 		f.Close()
 		return nil, err
 	}
-	return &transcript{path: path, f: f, lastSeq: lastSeq}, nil
+	return &transcript{path: path, f: f, lastSeq: lastSeq, size: validLen}, nil
 }
 
 // scanTranscript returns the last seq and the length of the file up to and
@@ -165,9 +171,17 @@ func (t *transcript) write(ev event.Event) error {
 	if bytes.IndexByte(b, '\n') >= 0 {
 		return fmt.Errorf("store: marshalled event contains a newline")
 	}
-	if _, err := t.f.Write(append(b, '\n')); err != nil {
-		return fmt.Errorf("store: append event: %w", err)
+	n, err := t.f.Write(append(b, '\n'))
+	if err != nil {
+		// A part of a line would swallow the next event when it is appended.
+		if n > 0 {
+			if terr := t.f.Truncate(t.size); terr != nil {
+				err = errors.Join(err, terr)
+			}
+		}
+		return fmt.Errorf("store: append event: %w: %w", ErrWrite, err)
 	}
+	t.size += int64(n)
 	t.lastSeq = ev.Seq
 	t.dirty = true
 	return nil

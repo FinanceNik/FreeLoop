@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -74,6 +75,10 @@ type ConfigChange struct {
 
 // Engine is safe for concurrent use.
 type Engine struct {
+	// storageFailing is set while events cannot be saved, for the sessions in
+	// storageStopped.
+	storageFailing atomic.Bool
+	storageStopped map[string]bool
 	// optimizers are the token optimizers sessions can choose (HRN-019).
 	optimizers []config.Optimizer
 	dataDir    string
@@ -93,6 +98,8 @@ type Engine struct {
 	// loginEnv is what shell startup files set, for commands in a sandbox.
 	loginOnce sync.Once
 	loginEnv  map[string]string
+	// loginGitConfig is the user's name and email as a git config file's text.
+	loginGitConfig string
 	// editorArgv is the command that opens a file for editing.
 	editorArgv func(path string) []string
 	// keyAddresses holds, by provider, the address its key is for.
@@ -220,6 +227,9 @@ func Open(opts Options) (*Engine, error) {
 	e.loadEnvironments()
 	e.loadPresets()
 	e.loadOptimizers()
+	if why := e.store.Rebuilt(); why != "" {
+		e.issues[issueRebuilt] = []config.Issue{{File: "freeloop.db", Message: why + " Sessions without their settings can be read but not continued, and projects need trusting again."}}
+	}
 	e.loadProfiles()
 	// MCP servers run in a local environment at the user's home: they are
 	// the app's, not one project's.
@@ -368,6 +378,9 @@ func (e *Engine) BlockedConnections() []netguard.Blocked {
 	return netguard.Attempts()
 }
 
+// Redact removes what the app knows to be secret from a line for its log.
+func (e *Engine) Redact(s string) string { return e.redactText(s) }
+
 // ConfigIssues returns the problems found while loading configuration.
 func (e *Engine) ConfigIssues() []config.Issue {
 	e.mu.Lock()
@@ -390,11 +403,13 @@ const (
 	issueMCP          = "mcp"
 	issuePresets      = "presets"
 	issueOptimizers   = "optimizers"
+	issueStorage      = "storage"
+	issueRebuilt      = "rebuilt"
 	issueColors       = "colors"
 	issueAddresses    = "addresses"
 )
 
-var issueOrder = []string{issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueAddresses}
+var issueOrder = []string{issueStorage, issueRebuilt, issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueAddresses}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()
@@ -477,6 +492,56 @@ func (e *Engine) write(sid string, typ event.Type, data any) {
 	}
 	if err != nil {
 		log.Printf("engine: record %s for %s: %v", typ, sid, err)
+		if errors.Is(err, store.ErrWrite) {
+			e.storageFailed(sid, err)
+		}
+		return
+	}
+	if e.storageFailing.Load() {
+		e.storageRecovered(sid)
+	}
+}
+
+// storageFailed stops a session whose events cannot be saved, and says why. A turn
+// that went on would change files and cost money with no record of it, and a lost
+// event cannot be got back. The transcript's own events cannot carry this, so it
+// goes where the app shows problems with its files.
+func (e *Engine) storageFailed(sid string, err error) {
+	e.mu.Lock()
+	if e.storageStopped == nil {
+		e.storageStopped = map[string]bool{}
+	}
+	first := !e.storageStopped[sid]
+	e.storageStopped[sid] = true
+	e.issues[issueStorage] = []config.Issue{{File: "sessions", Message: "Freeloop could not save to its data folder, so running turns were stopped: " + err.Error() + ". Free up disk space, then send the message again."}}
+	e.mu.Unlock()
+	e.storageFailing.Store(true)
+	if first {
+		e.bg.Go(func() {
+			e.Cancel(sid)
+			if e.onChange != nil {
+				e.onChange(ConfigChange{})
+			}
+		})
+	}
+}
+
+// storageRecovered clears the problem once this session's events save again.
+func (e *Engine) storageRecovered(sid string) {
+	e.mu.Lock()
+	delete(e.storageStopped, sid)
+	done := len(e.storageStopped) == 0
+	if done {
+		delete(e.issues, issueStorage)
+	}
+	e.mu.Unlock()
+	if done {
+		e.storageFailing.Store(false)
+		e.bg.Go(func() {
+			if e.onChange != nil {
+				e.onChange(ConfigChange{})
+			}
+		})
 	}
 }
 

@@ -435,6 +435,7 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 
 		sc := bufio.NewScanner(resp.Body)
 		sc.Buffer(make([]byte, 64*1024), 8*1024*1024)
+		sawDone := false
 		for sc.Scan() {
 			line := strings.TrimSpace(sc.Text())
 			data, ok := strings.CutPrefix(line, "data:")
@@ -443,6 +444,7 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 			}
 			data = strings.TrimSpace(data)
 			if data == "[DONE]" {
+				sawDone = true
 				break
 			}
 			var c chunk
@@ -518,6 +520,12 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 		}
 		if ctx.Err() != nil {
 			send(provider.Event{Type: provider.EventError, Err: ctx.Err()})
+			return
+		}
+		// Servers differ on [DONE] and on finish_reason, but one with neither just
+		// stopped sending.
+		if !sawDone && finish == "" {
+			send(provider.Event{Type: provider.EventError, Err: provider.ErrStreamEnded})
 			return
 		}
 

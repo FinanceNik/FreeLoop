@@ -35,6 +35,8 @@ func NewPolicy(home, appDataDir string) *Policy {
 		filepath.Join(home, ".netrc"),
 		filepath.Join(home, ".npmrc"),
 		filepath.Join(home, ".pypirc"),
+		filepath.Join(home, ".cargo", "credentials"),
+		filepath.Join(home, ".cargo", "credentials.toml"),
 		filepath.Join(home, ".git-credentials"),
 		filepath.Join(home, ".config", "gh"),
 		filepath.Join(home, ".config", "gcloud"),
@@ -134,6 +136,7 @@ func pathParts(roots []string, path string) []string {
 var ActedOnLater = []string{
 	".devcontainer", ".devcontainer.json", ".mcp.json", ".envrc", ".vscode", ".idea", ".husky", ".githooks",
 	".pre-commit-config.yaml", ".claude", ".gemini", ".codex", ".goose", ".opencode", "opencode.json", ".cursor",
+	".windsurf", ".continue", ".zed", ".mise.toml", ".tool-versions", ".nvim.lua", ".nvimrc", ".exrc", ".cargo",
 }
 
 // actedOn reports a path that is or is inside one of ActedOnLater.
@@ -144,8 +147,9 @@ func (p *Policy) actedOn(root string, paths []string) bool {
 		if len(parts) == 0 {
 			continue
 		}
+		// At any depth: opening a subfolder as a project makes its files active.
 		for _, name := range ActedOnLater {
-			if parts[0] == environment.FoldPath(name) {
+			if slices.Contains(parts, environment.FoldPath(name)) {
 				return true
 			}
 		}

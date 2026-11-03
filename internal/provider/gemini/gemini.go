@@ -364,6 +364,9 @@ func (p *Provider) run(seq iter.Seq2[*genai.GenerateContentResponse, error], sen
 			}
 		}
 	}
+	if finish == "" {
+		return provider.Event{}, provider.ErrStreamEnded
+	}
 	stop := provider.StopEndTurn
 	switch {
 	case calls > 0:

@@ -87,9 +87,22 @@ The agent runs in the session's environment, its file and terminal requests go t
 
 `make verify-repro REF=<tag>` builds a commit twice from clean clones and compares every file; CI does this for tags. To check a release yourself, check out its tag and install what `BUILDINFO.txt` names: the same Go (`go.mod`'s toolchain fetches it), Node and Xcode command line tools, since the linker and the SDK shape the binary. Then run `make package` and compare `bin/Freeloop.app` with `APP-FILES.sha256`.
 
-Two things differ by design. A DMG is stamped with the time, so compare the app inside it. A signature from a Developer ID (OQ-009) is dated, so remove it first (`codesign --remove-signature`) and sign both ad hoc.
+Two things differ by design. A DMG is stamped with the time, so compare the app inside it. Should a build ever carry a Developer ID signature, which releases do not (OQ-009), it is dated, so remove it first (`codesign --remove-signature`) and sign both ad hoc.
 
 The bill lists what is in the app: Go modules from the binary's build information, and the frontend's packages from its lockfile without those only its build uses. It does not list the agents a preset downloads when you use it (their versions are in `internal/config/presets.go`), nor the operating system's frameworks.
+
+## Logs and recovery
+
+`logs/freeloop.log` holds the log and, in a launched app, crash traces; a development build also keeps its terminal. Everything through `log` passes the engine's redaction. Deleting `freeloop.db` is safe: it is rebuilt from the daily copy, `meta.json` and the transcripts, with projects untrusted unless the copy says otherwise. A data folder takes one copy of the app at a time, so `make dev` beside an installed app needs its own `FREELOOP_HOME`.
+
+## Before the repository goes public
+
+The repository is private. Publishing exposes all of its history, so do these first, once no branch is in flight:
+
+1. **Commit identities.** Every commit carries its author's name and email, which a scan of the contents does not show. Rewrite them to the address meant to be public (`git filter-repo --mailmap`), force-push and reclone. That changes every commit hash, including those the roadmap quotes, so do it last. Set `user.email` for this repository first, or the next commit brings the old one back.
+2. **What GitHub holds beyond git.** Issues, pull requests, Actions logs and old branches become public too. Read them, and delete the branches that are not meant to be seen.
+3. **Scan again.** Search all of history, not only the current tree, for home paths, addresses, machine names and key patterns. The keys in tests are made up; check any that is new.
+4. **Turn on private vulnerability reporting** in the repository's settings, which is what `docs/SECURITY.md` points people to. The update check also works only once the repository is public.
 
 ## Writing your own harness
 

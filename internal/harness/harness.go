@@ -299,3 +299,7 @@ func ToolCall(ctx context.Context) string {
 // signed in to its own account; prompts queued behind it would fail the
 // same way.
 var ErrSignIn = errors.New("the agent is not signed in")
+
+// ErrAgentExited marks a prompt that failed because an external agent's process
+// ended. The session itself is fine; the next prompt can start the agent again.
+var ErrAgentExited = errors.New("the agent exited")

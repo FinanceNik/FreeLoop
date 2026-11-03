@@ -489,3 +489,26 @@ func TestMCPToolsAskAndStayOutOfPlanMode(t *testing.T) {
 		t.Error("offered in plan mode")
 	}
 }
+
+// One lost line must not silently cut everything after it from what the model has.
+func TestRestoreKeepsWhatFollowsAGap(t *testing.T) {
+	msg := func(role provider.Role, text string) provider.Message {
+		return provider.Message{Role: role, Parts: []provider.Part{{Type: provider.PartText, Text: text}}}
+	}
+	ev := func(i int, m provider.Message) event.Event {
+		b, _ := json.Marshal(map[string]any{"index": i, "message": m})
+		return event.Event{Type: event.HistoryMessage, Data: b}
+	}
+	got := Restore([]event.Event{
+		ev(0, msg(provider.RoleUser, "one")),
+		// 1 is lost.
+		ev(2, msg(provider.RoleUser, "three")),
+		ev(3, msg(provider.RoleAssistant, "four")),
+	})
+	if len(got) != 4 || got[2].Parts[0].Text != "three" || got[3].Parts[0].Text != "four" {
+		t.Fatalf("history: %+v", got)
+	}
+	if got[1].Role != provider.RoleAssistant || LostMessages(got) != 1 {
+		t.Errorf("the gap: %+v, %d", got[1], LostMessages(got))
+	}
+}

@@ -185,6 +185,14 @@ func PrivateCache(dir string) error {
 	return nil
 }
 
+// WriteCacheFile writes a file under the app's caches that only the user reads.
+func WriteCacheFile(path string, data []byte) error {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("environment: %w", err)
+	}
+	return nil
+}
+
 // RemoveCache deletes a folder made under the app's caches.
 func RemoveCache(dir string) error {
 	return os.RemoveAll(dir)

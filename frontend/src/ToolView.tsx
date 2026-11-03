@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { toolStatusLabel } from "./a11y.ts";
+import { toolStatusLabel, visibleCommand } from "./a11y.ts";
 import { EngineService } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import { APPROVAL_GRACE_MS, approvalHint, approvalShortcut, isTextField, optionKind, optionLabel } from "./shortcuts.ts";
@@ -59,7 +59,7 @@ export default function ToolView({ item, onError }: { item: Extract<Item, { kind
       <summary>
         <span className={`dot dot-${item.status}`} aria-hidden="true" />
         <span className="sr-only">{toolStatusLabel(item.status, waiting)} </span>
-        <span className="tool-title">{item.title}</span>
+        <span className="tool-title">{visibleCommand(item.title)}</span>
         <span className="muted"> {item.tool}</span>
         {via && <span className="muted"> · via {via}</span>}
         {shownDecision && (

@@ -372,9 +372,9 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 			a.res.StopReason = sdk.StopReasonCancelled
 		}
 	case <-s.conn.Done():
-		a.err = errors.New("the agent exited")
+		a.err = harness.ErrAgentExited
 		if tail := strings.TrimSpace(s.proc.Stderr()); tail != "" {
-			a.err = fmt.Errorf("the agent exited: %s", lastLine(tail))
+			a.err = fmt.Errorf("%w: %s", harness.ErrAgentExited, lastLine(tail))
 		}
 	}
 	stop := harness.StopReason(a.res.StopReason)

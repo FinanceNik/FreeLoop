@@ -82,7 +82,7 @@ func plainText(s string) string {
 
 // oneLine keeps a title on its line, so one cannot fake the rows after it.
 func oneLine(s string) string {
-	return strings.Join(strings.Fields(s), " ")
+	return strings.Join(strings.Fields(strings.NewReplacer("\r\n", " ⏎ ", "\n", " ⏎ ", "\r", " ⏎ ").Replace(s)), " ")
 }
 
 func marker(on bool) string {

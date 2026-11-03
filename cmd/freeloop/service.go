@@ -27,6 +27,8 @@ type EngineService struct {
 	eng  *engine.Engine
 	app  *application.App
 	desk *desktop
+	// logPath is the app's log file.
+	logPath string
 
 	// restoring is the backup last previewed. The page names only its
 	// fingerprint: the user chose the file, and nothing else can.
@@ -410,6 +412,11 @@ func (s *EngineService) ListHarnesses() []engine.HarnessInfo {
 // SetModel switches a built-in session's model (PRV-006).
 func (s *EngineService) SetModel(ctx context.Context, sessionID, providerID, model string) error {
 	return s.eng.SetModel(ctx, sessionID, providerID, model)
+}
+
+// ShowLogs shows the app's log file in Finder, for a bug report (NFR-PRIV-001).
+func (s *EngineService) ShowLogs() error {
+	return s.app.Env.OpenFileManager(s.logPath, true)
 }
 
 // Optimizers lists the token optimizers a session can use (HRN-019).

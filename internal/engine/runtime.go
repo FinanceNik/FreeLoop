@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -251,6 +252,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		// The profile's commands changed since the session last ran.
 		e.emit(sid, event.AvailableCommandsUpdate, advertised)
 	}
+	history := builtin.Restore(events)
+	if n := builtin.LostMessages(history); n > 0 {
+		e.emit(sid, event.Notice, event.NoticeData{Message: fmt.Sprintf("%d messages of this conversation could not be read from its saved record, so the model does not have them. The rest it still has.", n)})
+	}
 	params := harness.Params{
 		SessionID:      sid,
 		Env:            env,
@@ -258,7 +263,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		Model:          ses.Model,
 		Effort:         effort,
 		Mode:           permission.Mode(ses.Mode),
-		History:        builtin.Restore(events),
+		History:        history,
 		Attachment:     func(name string) ([]byte, error) { return e.store.Attachment(sid, name) },
 		DisabledTools:  envCfg.DisabledTools,
 		SystemPrompt:   prof.SystemPrompt,
@@ -471,13 +476,29 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 		r.mu.Unlock()
 		p.Resources = append(p.Resources, q.inline...)
 		p.Resources = append(p.Resources, e.readResources(ctx, r, q.refs)...)
-		_, err := r.hs.Prompt(ctx, p)
+		err := e.promptSafely(r, ctx, p)
 		if err != nil {
 			log.Printf("engine: prompt: %s", e.redactText(err.Error()))
 		}
 		r.mu.Lock()
 		r.cancel()
 		r.cancel = nil
+		// The agent is gone. Drop the runtime, so the next message starts it again
+		// and asks it to load the session (NFR-REL-002).
+		if errors.Is(err, harness.ErrAgentExited) {
+			dropped := len(r.queue)
+			r.queue = nil
+			r.busy = false
+			close(r.done)
+			r.mu.Unlock()
+			msg := "The agent stopped. Your next message starts it again."
+			if dropped > 0 {
+				msg = fmt.Sprintf("The agent stopped, so %d queued messages were not sent. Your next message starts it again.", dropped)
+			}
+			e.emit(r.sid, event.Notice, event.NoticeData{Message: msg})
+			e.bg.Go(func() { e.stopRuntime(r.sid) })
+			return
+		}
 		// Queued prompts would fail the same way until the user signs in.
 		if errors.Is(err, harness.ErrSignIn) && len(r.queue) > 0 {
 			n := len(r.queue)
@@ -495,6 +516,22 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 		r.turn = ctx
 		r.mu.Unlock()
 	}
+}
+
+// promptSafely runs a prompt, and turns a panic in it into this session's error: a
+// bug in one turn must not take down the app and every other session with it.
+func (e *Engine) promptSafely(r *runtime, ctx context.Context, p harness.Prompt) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			log.Printf("engine: session %s panicked: %v\n%s", r.sid, v, debug.Stack())
+			err = fmt.Errorf("internal error: %v", v)
+			e.emit(r.sid, event.Error, map[string]string{"message": "Something went wrong inside Freeloop and this turn stopped. The details are in its log."})
+			e.emit(r.sid, event.TurnEnded, map[string]string{"stopReason": string(harness.StopError)})
+			e.emit(r.sid, event.SessionStatus, map[string]string{"status": string(session.StatusError)})
+		}
+	}()
+	_, err = r.hs.Prompt(ctx, p)
+	return err
 }
 
 // release ends something other than a turn that held the session busy (a
@@ -602,7 +639,12 @@ func (e *Engine) Decide(req DecideRequest) error {
 // PendingPermissions returns every request waiting for the user, across
 // sessions, oldest first.
 func (e *Engine) PendingPermissions() []permission.Request {
-	return e.broker.Pending()
+	list := e.broker.Pending()
+	for i, r := range list {
+		// The transcript shows these redacted; so does this.
+		list[i].Title, list[i].Command, list[i].Input = e.redactText(r.Title), e.redactText(r.Command), e.redact(r.Input)
+	}
+	return list
 }
 
 // recover closes out sessions the app left mid-turn: pending requests are

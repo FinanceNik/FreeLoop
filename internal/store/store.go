@@ -48,6 +48,8 @@ type Options struct {
 
 // Store is safe for concurrent use.
 type Store struct {
+	// rebuilt says why the database was rebuilt when it opened.
+	rebuilt  string
 	db       *sql.DB
 	dir      string
 	onAppend func(event.Event)
@@ -74,26 +76,12 @@ func Open(opts Options) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(opts.Dir, "sessions"), 0o700); err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
-	// SQLite gives the WAL and shared-memory files the database's mode, and the
-	// database holds session titles, commands and search text.
-	dbPath := filepath.Join(opts.Dir, "freeloop.db")
-	if f, err := os.OpenFile(dbPath, os.O_CREATE|os.O_RDWR, 0o600); err == nil {
-		f.Close()
-	}
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		os.Chmod(dbPath+suffix, 0o600)
-	}
-	dsn := "file:" + dbPath +
-		"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
-	db, err := sql.Open("sqlite", dsn)
+	db, rebuilt, err := openOrRestore(opts.Dir, filepath.Join(opts.Dir, "freeloop.db"))
 	if err != nil {
-		return nil, fmt.Errorf("store: open db: %w", err)
-	}
-	if err := migrate(db); err != nil {
-		db.Close()
 		return nil, err
 	}
 	s := &Store{
+		rebuilt:  rebuilt,
 		db:       db,
 		dir:      opts.Dir,
 		onAppend: opts.OnAppend,
@@ -111,16 +99,29 @@ func Open(opts Options) (*Store, error) {
 	if interval <= 0 {
 		interval = 200 * time.Millisecond
 	}
-	go s.syncLoop(interval)
 	ctx, cancel := context.WithCancel(context.Background())
+	if rebuilt != "" {
+		if err := s.rebuildSessions(ctx); err != nil {
+			cancel()
+			db.Close()
+			return nil, err
+		}
+	}
+	go s.syncLoop(interval)
 	s.cancel = cancel
 	s.indexed.Add(1)
 	go func() {
 		defer s.indexed.Done()
+		s.backfillMeta(ctx)
+		s.backupDB(ctx)
 		s.IndexAll(ctx)
 	}()
 	return s, nil
 }
+
+// Rebuilt says why the session list was rebuilt from the transcripts when the
+// store opened, or "".
+func (s *Store) Rebuilt() string { return s.rebuilt }
 
 // Close fsyncs and closes every open transcript and the database.
 func (s *Store) Close() error {
@@ -159,6 +160,7 @@ func (s *Store) CreateSession(ctx context.Context, tmpl session.Session) (sessio
 	if err != nil {
 		return session.Session{}, fmt.Errorf("store: insert session: %w", err)
 	}
+	s.writeMeta(ses)
 	return ses, nil
 }
 

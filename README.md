@@ -2,7 +2,7 @@
 
 An open-source macOS app for running AI coding agents with your own models, switchable harnesses, Agent Skills, MCP servers and custom environments, built for running many sessions across many repositories at once. Apache-2.0.
 
-Status: early. Milestone M1 (the thin vertical slice) is built and M2 (the first public release) is in progress; [docs/ROADMAP.md](docs/ROADMAP.md) says what each covers. There is no signed release yet. The specification lives in [docs/](docs/).
+Status: early, and not yet released. Most of what v1 lists is built; [docs/ROADMAP.md](docs/ROADMAP.md) says what each milestone covers and what remains. Releases will not be signed or notarized. The specification is in `docs/`.
 
 ## What it does
 
@@ -25,7 +25,7 @@ make package   # build bin/Freeloop.app, ad-hoc signed
 make dmg       # optional: bin/Freeloop.dmg with the app and a link to Applications
 ```
 
-Move `bin/Freeloop.app` to Applications, or open the DMG and drag it there. It is not notarized yet, so the first time, right-click it and choose Open.
+Move `bin/Freeloop.app` to Applications, or open the DMG and drag it there. A build you made yourself opens normally. Releases are not signed or notarized, so macOS blocks a downloaded one the first time: try to open it, then choose Open Anyway in System Settings, under Privacy & Security. Check it against the release's `SHA256SUMS` first.
 
 ## First run
 
@@ -47,6 +47,9 @@ Everything is in `~/Library/Application Support/freeloop/`, readable and editabl
 | `rules.yaml` | global permission rules |
 | `mcp.yaml` | MCP servers |
 | `presets/harnesses/*.yaml` | external agents |
+| `optimizers/*.yaml` | token optimizers of your own |
+| `colors.json` | custom colors |
+| `logs/freeloop.log` | the app's log, which stays on this Mac; Settings shows it in Finder |
 | `skills/` | the skill store |
 | `sessions/<id>/events.jsonl` | each session's transcript |
 

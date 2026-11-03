@@ -179,7 +179,7 @@
       "type": "object",
       "required": ["status"],
       "properties": {
-        "status": { "enum": ["idle", "running", "waiting_permission", "waiting_input", "error", "archived"] }
+        "status": { "enum": ["idle", "running", "queued", "waiting_permission", "waiting_input", "error", "archived"] }
       }
     },
     "turnEnded": {

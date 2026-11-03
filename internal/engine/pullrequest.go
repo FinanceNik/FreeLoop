@@ -300,12 +300,13 @@ func prURL(out string) string {
 // pushBlocked says why the push and gh must not run in env, or "": beyond
 // what the diff panel refuses, a repository's own config can name programs
 // that a push (ssh, credential helpers, a local remote's receive-pack, a
-// transport a rewritten URL or protocol setting allows) or gh's own git calls
+// transport a rewritten URL or protocol setting allows, a proxy or a turned-off
+// certificate check that would hand it the user's token) or gh's own git calls
 // (fsmonitor) run. Those come from the user's global config only.
 func pushBlocked(ctx context.Context, env environment.Environment) string {
-	keys, ok := repoConfigKeys(ctx, env, `^(core\.(sshcommand|gitproxy|askpass|fsmonitor)|credential\..*helper|remote\..*\.(receivepack|uploadpack)|url\..*|protocol\..*)$`)
+	keys, ok := repoConfigKeys(ctx, env, `^(core\.(sshcommand|gitproxy|askpass|fsmonitor)|credential\..*helper|remote\..*\.(receivepack|uploadpack|pushurl|proxy)|url\..*|protocol\..*|http\..*)$`)
 	if len(keys) > 0 {
-		return fmt.Sprintf("This repository's own git config sets %s, which can run a program when pushing. Push from a terminal instead.", keys[0])
+		return fmt.Sprintf("This repository's own git config sets %s, which can run a program or send your token elsewhere when pushing. Push from a terminal instead.", keys[0])
 	}
 	if !ok {
 		return "Freeloop could not read this repository's git config, so it does not push from here."

@@ -150,3 +150,16 @@ func TestAMergeBringingInHooksAsksFirst(t *testing.T) {
 		t.Errorf("after confirming: %v", err)
 	}
 }
+
+// A merge asks about these however they are spelled and however deep they are.
+func TestActedOnFile(t *testing.T) {
+	for name, want := range map[string]bool{
+		".freeloop/hooks.yaml": true, ".FREELOOP/hooks.yaml": true, ".VSCODE/tasks.json": true, "sub/.envrc": true, "sub/.vscode/tasks.json": true,
+		"HEAD": true, "sub/head": true, ".gitmodules": true, ".pre-commit-conﬁg.yaml": true, ".mise.toml": true,
+		"a.txt": false, "src/head.go": false, "docs/vscode.md": false,
+	} {
+		if got := actedOnFile(name); got != want {
+			t.Errorf("actedOnFile(%q) = %v", name, got)
+		}
+	}
+}

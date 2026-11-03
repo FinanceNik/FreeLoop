@@ -19,7 +19,7 @@ If M1 overruns by more than two weeks, cut from M2 in the order given under "Cut
 
 Goal: a skeleton that proves the stack and fixes the boundaries everything else builds on.
 
-Status: built 2026-10-28; CI has not yet run on GitHub.
+Status: built 2026-10-28.
 
 Delivers: project layout, Apache-2.0 license, Wails v3 shell with a React/TypeScript frontend, Go engine as its own package tree (`internal/`, one Go module) with an in-process API and a boundary test keeping Wails out of it, event schema v0 (EXT-002), SQLite plus JSONL store (SES-002 skeleton), config loading (SET-001 skeleton), Keychain wrapper behind an interface (NFR-XPLAT-002), CI on a macOS runner (NFR-REL-003), lint rule enforcing ENV-001.
 
@@ -105,7 +105,7 @@ Definition of done:
 - The HRN-002 scenario runs inside a devcontainer with every shell call executing in the container.
 - A new harness scaffolded from the Python template runs a session within 15 minutes following docs only.
 - Gemini CLI, Codex CLI, Goose and OpenCode each pass the HRN-005 scenario from their presets.
-- Signed and notarized builds; Homebrew cask; a VoiceOver pass with no blocking issues.
+- A VoiceOver pass with no blocking issues.
 - At least five people other than the author have used it for a week and their blocking issues are fixed.
 
 ### Feature order (planned 2026-10-29)
@@ -319,6 +319,20 @@ A hardening pass on 2026-11-02 tried 130 commands raw and through real RTK in id
 
 Not in: output filters (`rtk pipe` shortened a 22 KB `git log` to 259 bytes in the test, which looks wrong), and gateways that sit in front of the model (they raise HRN-008 questions).
 
+### Production readiness (2026-11-03)
+
+A check of the whole app against v1, then the fixes it asked for. What it found and how it was proven is in `docs/SECURITY.md` for security. For data and reliability, each proven on the running app or a real volume:
+
+- **Quitting** stops sessions and their commands (`OnShutdown`, which a Mac's quit reaches where a deferred call does not). A hard kill or crash can still leave a command running; nothing reaps those at the next launch. There is no question before quitting with turns running.
+- **A full disk** stops the turn and says so in the problems banner, in place of dropping events unseen. A partly written line is rolled back, and transcripts open in append mode.
+- **`providers.yaml` and `mcp.yaml`** are not overwritten when they cannot be read or come from a newer version, and keep a `.bak`. A newer `config.yaml` is treated the same.
+- **The session list** is rebuilt from transcripts when the database is missing or damaged (`internal/store/recover.go`): a daily copy, then `meta.json` beside each transcript. Trust is not rebuilt unless the copy holds it.
+- **One copy per data folder** (a lock), and startup failures say why in a dialog in place of the app not opening.
+- **A log**, `logs/freeloop.log`, redacted and rotated, with crash traces, and a button in Settings.
+- **A panic** ends that turn or tool call, not the app. **A lost context line** no longer cuts what follows it, and the user is told. **A crashed agent** starts again at the next message. **A stream that stalls** ends after five minutes and is retried; **one that ends early** is an error, not a finished reply.
+
+Not done: reaping after a crash, storage views and pruning, sharing checkpoints between sessions, a universal build.
+
 ## Later (unscheduled)
 
 ENV-008 SSH, PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
@@ -342,4 +356,4 @@ If time runs short, remove from the current milestone in this order; each item i
 - Built-in harness before the ACP client: the built-in harness defines the event schema from real needs; mapping ACP onto a schema designed for the GUI is easier than the reverse.
 - Attention view and diff panel in the MVP, not M1: both matter only once several sessions and real edits exist, and M1 proves those first.
 - Docker after the MVP: the environment interface is in from M0 and the local implementation forces every tool through it, so the Docker implementation is additive rather than a refactor.
-- Signing and notarization at v1 at the latest: before then, friends-and-family installs can right-click to open; a public release to strangers should not require that.
+- No signing or notarization (OQ-009, the user's choice): a downloaded build asks to be allowed once in System Settings.

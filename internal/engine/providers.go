@@ -266,7 +266,12 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 		if err != nil {
 			return ProviderInfo{}, fmt.Errorf("read the API key from the Keychain: %w", err)
 		}
-		_, key, _ = unbindSecret(stored)
+		// Only a change the user makes here moves the key. The form sends back
+		// the address it was given, which may be one a file planted; saving another
+		// field must not tie the key to it.
+		if bound, old, ok := unbindSecret(stored); !ok || i < 0 || cfgs[i].BaseURL != cfg.BaseURL || keyAddress(cfgs[i]) == bound {
+			key = old
+		}
 	}
 	if key != "" {
 		ref := providerRef(req.ID)

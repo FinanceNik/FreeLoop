@@ -1,6 +1,6 @@
 # Requirements
 
-Project: **Freeloop**. Status: planning complete; M0 in progress. Companion documents: [VISION.md](VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [RISKS.md](RISKS.md), [SECURITY.md](SECURITY.md), [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+Project: **Freeloop**. Status: M0 and M1 built, M2 and M3 work under way; see [ROADMAP.md](ROADMAP.md). Companion documents: [VISION.md](VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [RISKS.md](RISKS.md), [SECURITY.md](SECURITY.md), [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 ## Conventions
 
@@ -148,7 +148,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **SEC-009** · MVP · **No undeclared network.** Outbound connections only to configured providers, MCP servers and harness endpoints; no telemetry; update checks opt-in. *Accept:* with no providers configured, a network monitor shows zero outbound connections from the app over 10 minutes.
 - **SEC-010** · MVP · **Untrusted tool output.** The built-in harness frames tool results and fetched content as data; instructions found there never change permission state or trigger actions without the usual approval. *Accept:* an `AGENTS.md`-style instruction planted in a file read by the agent cannot cause an auto-approved write.
 - **SEC-011** · v1 · **Sandboxed execution.** Through the Docker environment (ENV-005) or macOS's own sandbox (ENV-009). *Accept:* per ENV-005 and ENV-009.
-- **SEC-012** · v1 · **Signed and notarized builds, pinned dependencies, SBOM.** *Accept:* Gatekeeper opens the downloaded app without warnings; the release includes an SBOM.
+- **SEC-012** · v1 · **Pinned dependencies, SBOM, checksums.** Builds are ad-hoc signed, not notarized (OQ-009). *Accept:* the release includes an SBOM and checksums; the README says how to open the downloaded app.
 - **SEC-013** · MVP · **Reads outside the project root.** File reads, directory listings and searches outside the session's project root require approval in every mode except `bypass`; a fixed list of never-readable locations (`~/.ssh`, `~/.gnupg`, `~/.aws`, browser profiles, the Keychain database directory, the app's own config directory) is refused in every mode including `bypass`. *Accept:* in `accept-edits` mode a `read_file` of `~/.zshrc` prompts; a read of `~/.ssh/id_ed25519` is refused and recorded even in `bypass`.
 
 ### Settings (SET)
@@ -185,7 +185,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **NFR-SEC-001** · MVP · Secrets only in the Keychain (SEC-004); no secret material in logs, crash reports or exports.
 - **NFR-SEC-002** · MVP · Every side-effecting action is attributable in the transcript (SEC-007).
 - **NFR-SEC-003** · MVP · Threat model documented in `docs/SECURITY.md` before the first public release: prompt injection, malicious skills, malicious MCP servers, hostile repos, local attacker with the same user account.
-- **NFR-SEC-004** · v1 · Builds are reproducible from a tagged commit, signed and notarized; dependencies pinned with checksums.
+- **NFR-SEC-004** · v1 · Builds are reproducible from a tagged commit; dependencies pinned with checksums.
 - **NFR-SEC-005** · v1 · Sandboxing available for shell execution (Docker environment, or the native sandbox, ENV-009).
 
 ### Privacy (NFR-PRIV)
@@ -215,7 +215,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 ### Reliability and maintainability (NFR-REL)
 
 - **NFR-REL-001** · MVP · A GUI crash never loses transcript events already received (SES-002); sessions recover on relaunch.
-- **NFR-REL-002** · MVP · An external harness or MCP server crash is isolated to its session and shown as an error with a restart action.
+- **NFR-REL-002** · MVP · An external harness or MCP server crash is isolated to its session and shown as an error; the next message starts the agent again.
 - **NFR-REL-003** · MVP · Engine packages have unit tests; the provider and ACP layers have replayable fixtures; CI runs on a macOS runner on every commit.
 - **NFR-REL-004** · v1 · Contributor documentation: architecture overview, how to add a provider, a harness preset, an environment.
 

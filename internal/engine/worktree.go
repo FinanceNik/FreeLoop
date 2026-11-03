@@ -204,12 +204,27 @@ func mergeRisks(ctx context.Context, main environment.Environment, into, branch 
 		return []string{"(the changed files could not be listed)"}
 	}
 	for _, name := range strings.Split(names, "\x00") {
-		first, _, _ := strings.Cut(name, "/")
-		if name != "" && (first == ProjectDir || first == ".gitattributes" || first == ".gitmodules" || slices.Contains(permission.ActedOnLater, first)) {
+		if name != "" && actedOnFile(name) {
 			out = append(out, name)
 		}
 	}
 	return out
+}
+
+// actedOnFile reports a path in a repository, or any part of it, that something
+// outside a session acts on, spelled however the file system would still open it:
+// .FREELOOP/hooks.yaml is .freeloop/hooks.yaml on APFS. HEAD is on the list since
+// a commit can carry a repository in the checkout as well as a command can make
+// one (see bareRepositoryPatterns).
+func actedOnFile(name string) bool {
+	names := append([]string{ProjectDir, ".gitattributes", ".gitmodules", "HEAD"}, permission.ActedOnLater...)
+	for _, part := range strings.Split(name, "/") {
+		f := environment.FoldPath(part)
+		if slices.ContainsFunc(names, func(n string) bool { return environment.FoldPath(n) == f }) {
+			return true
+		}
+	}
+	return false
 }
 
 // MergeWorktree merges a session's branch into the branch the project's

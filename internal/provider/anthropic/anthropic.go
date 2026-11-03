@@ -243,6 +243,12 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 			send(provider.Event{Type: provider.EventError, Err: describe(err)})
 			return
 		}
+		// Only message_delta sets this, so a stream cut cleanly before it has no reply
+		// to trust, and possibly a tool call with empty arguments.
+		if msg.StopReason == "" {
+			send(provider.Event{Type: provider.EventError, Err: provider.ErrStreamEnded})
+			return
+		}
 		final := fromMessage(msg)
 		send(provider.Event{
 			Type:       provider.EventDone,
