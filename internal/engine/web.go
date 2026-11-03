@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
@@ -39,7 +40,12 @@ type sessionWeb struct {
 	client *http.Client
 }
 
-func (w sessionWeb) CanSearch() bool { return w.e.Config().Web.SearchURL != "" }
+func (w sessionWeb) CanSearch() bool { return w.e.searchApproved(w.e.Config().Web.SearchURL) }
+
+// searchApproved reports a search address that queries may go to.
+func (e *Engine) searchApproved(address string) bool {
+	return address != "" && e.commandApproved(config.AddressFingerprint("web.searchURL", address))
+}
 
 func (w sessionWeb) Fetch(ctx context.Context, raw string) (harness.WebPage, error) {
 	if netguard.LocalOnly() {
@@ -116,6 +122,9 @@ func (w sessionWeb) Search(ctx context.Context, query string) ([]web.Result, err
 		}
 		raw = strings.ReplaceAll(raw, "{key}", url.QueryEscape(key))
 	}
+	if !w.e.searchApproved(cfg.SearchURL) {
+		return nil, errors.New("the search endpoint has not been approved; approve it in Settings")
+	}
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, fmt.Errorf("the search endpoint is not an http or https address")
@@ -178,5 +187,17 @@ func (e *Engine) SetWebSearchKey(key string) error {
 		return nil
 	}
 	e.remember(key)
-	return e.secrets.Set(webSearchKey, bindSecret(originOf(e.Config().Web.SearchURL), key))
+	address := e.Config().Web.SearchURL
+	if err := e.secrets.Set(webSearchKey, bindSecret(originOf(address), key)); err != nil {
+		return err
+	}
+	// Entering the key is the user saying this address is where it goes.
+	if address == "" {
+		return nil
+	}
+	mark, err := e.approvalMark(config.AddressFingerprint("web.searchURL", address))
+	if err != nil {
+		return err
+	}
+	return e.addApprovals([]string{mark})
 }

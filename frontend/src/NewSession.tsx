@@ -16,6 +16,7 @@ import {
   type ProviderInfo,
   type Session,
   type OptimizerStatus,
+  type StartWaits,
 } from "./api.ts";
 import { inheritedLabel, OPTIMIZER_OFF } from "./optimizers.ts";
 import { orderModels } from "./models.ts";
@@ -164,6 +165,13 @@ export default function NewSession({ providers, projects, environments, profiles
   const projectProfiles = settings?.profiles ?? [];
   const allProfiles = [...profiles, ...projectProfiles];
   const profile = allProfiles.find((p) => p.id === profileId);
+  // What a file chose and the user has not approved does not apply yet (SET-005).
+  const [waits, setWaits] = useState<StartWaits | null>(null);
+  useEffect(() => {
+    EngineService.StartWaiting(profileId)
+      .then(setWaits)
+      .catch(() => setWaits(null));
+  }, [profileId, JSON.stringify(defaults)]);
   const harness = harnesses.find((h) => h.id === (profile?.harness || "builtin"));
   const usesProvider = !harness || harness.usesProvider;
   const env = environments.find((e) => e.id === (environmentId || "local"));
@@ -562,7 +570,7 @@ export default function NewSession({ providers, projects, environments, profiles
           <label>
             Token optimizer
             <select value={optimizer} onChange={(e) => setOptimizer(e.target.value)}>
-              <option value="">{inheritedLabel(profile?.optimizer, defaults?.optimizer, optimizers)}</option>
+              <option value="">{waits?.optimizer ? "Off, until you approve the file's choice in Settings" : inheritedLabel(profile?.optimizer, defaults?.optimizer, optimizers)}</option>
               <option value={OPTIMIZER_OFF}>Off</option>
               {optimizers.map((o) => (
                 <option key={o.id} value={o.id} disabled={o.needsApproval || (!o.path && env?.kind !== "docker")}>
@@ -576,7 +584,7 @@ export default function NewSession({ providers, projects, environments, profiles
           Permission mode
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="">
-              {profile?.mode ? "From the profile" : "From the environment"} ({MODES.find((m) => m.id === (profile?.mode || env?.defaultMode || "ask"))?.name})
+              {waits?.mode ? "Ask, until you approve the file's choice in Settings" : <>{profile?.mode ? "From the profile" : "From the environment"} ({MODES.find((m) => m.id === (profile?.mode || env?.defaultMode || "ask"))?.name})</>}
             </option>
             {MODES.filter((m) => m.id !== "bypass").map((m) => (
               <option key={m.id} value={m.id}>

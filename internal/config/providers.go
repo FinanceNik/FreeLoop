@@ -43,6 +43,15 @@ type ModelSettings struct {
 	Hidden   bool `yaml:"hidden,omitempty" json:"hidden,omitempty"`
 }
 
+// AddressFingerprint identifies what a provider sends and where to: address says
+// where, and its headers go along with every prompt.
+func (p Provider) AddressFingerprint(address string) string {
+	return commandFingerprint("provider", struct {
+		ID, Address string
+		Headers     map[string]string
+	}{p.ID, address, p.Headers})
+}
+
 // IsZero reports whether s holds no choice, so it need not be stored.
 func (s ModelSettings) IsZero() bool { return s.Tools == nil && !s.Favorite && !s.Hidden }
 

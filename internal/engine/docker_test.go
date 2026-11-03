@@ -42,6 +42,7 @@ func TestDockerSession(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
 	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "box.yaml"), []byte("name: Box\nkind: docker\nimage: alpine:3.20\nhealth: true\nenv:\n  GREETING: hi\n"), 0o600)
 	e.loadEnvironments()
+	approveFiles(t, e)
 	withScript(e, "s",
 		scripted.Step{Calls: []scripted.Call{{Name: "shell", Input: map[string]any{"command": "uname -s > uname.txt; echo $GREETING >> uname.txt"}}}},
 		scripted.Step{Text: "done"},
@@ -131,6 +132,7 @@ func TestDockerWorktreeGit(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
 	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "box.yaml"), []byte("name: Box\nkind: docker\nimage: alpine:3.20\n"), 0o600)
 	e.loadEnvironments()
+	approveFiles(t, e)
 	withScript(e, "s",
 		scripted.Step{Calls: []scripted.Call{{Name: "shell", Input: map[string]any{"command": "test -f " + common + "/HEAD && echo seen > seen.txt; " +
 			"touch " + common + "/hooks/pre-commit 2>/dev/null && echo hook >> wrote.txt; echo '[core]' >> " + common + "/config 2>/dev/null && echo config >> wrote.txt; true"}}}},
@@ -193,6 +195,7 @@ func TestDockerWorktreeScripts(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
 	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "box.yaml"), []byte("name: Box\nkind: docker\nimage: alpine:3.20\nenv:\n  GREETING: hi\n"), 0o600)
 	e.loadEnvironments()
+	approveFiles(t, e)
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: DemoProviderID, EnvironmentID: "box", Worktree: true})
 	if err != nil {
 		t.Fatal(err)

@@ -3891,3 +3891,73 @@ table.hooks .hook-command {
 .usage-heat-legend span:last-child {
   margin-left: 6px;
 }
+
+.restore-preview {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.restore-preview h4 {
+  margin: 0 0 6px;
+}
+
+.restore-preview code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.restore-preview ul {
+  margin: 4px 0 10px;
+  padding-left: 18px;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.banner li,
+.banner.row > span {
+  overflow-wrap: anywhere;
+}
+
+.banner.row > button {
+  flex: none;
+}
+
+.pending-list {
+  max-height: 26rem;
+  overflow-y: auto;
+}
+
+.restore-preview .pending-list ul {
+  max-height: none;
+  overflow: visible;
+}
+
+.pending-list h4,
+.pending-list h5 {
+  margin: 10px 0 4px;
+}
+
+.pending-list code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.pending-row {
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.pending-row > span {
+  min-width: 0;
+}
+
+.pending-row > button {
+  flex: none;
+}
+
+.pending-all {
+  justify-content: flex-end;
+  margin-top: 10px;
+}

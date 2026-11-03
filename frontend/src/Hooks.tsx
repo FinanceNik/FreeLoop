@@ -1,18 +1,12 @@
 import { useEffect, useState } from "react";
 import { EngineService, type Config, type Hook, type PendingCommand } from "./api.ts";
+import { approveAllQuestion, EVENTS, groupPending, pendingLabel } from "./pending.ts";
 
 // The global hooks in Settings (EXT-005). Profiles carry their own in their
 // YAML; a trusted project's are in .freeloop/hooks.yaml.
 
-const EVENTS = [
-  { id: "session_start", name: "Session start" },
-  { id: "pre_tool_use", name: "Before a tool call" },
-  { id: "permission_request", name: "Before asking you" },
-  { id: "post_tool_use", name: "After a tool call" },
-];
-
-// Hooks and agents from files that wait for approval (SET-005): a backup or
-// another program can put them there, so they run nothing until approved.
+// What waits for approval in the app's files (SET-005): a backup or another
+// program can put it there, so it does nothing until approved.
 export function PendingCommands({ version, onSaved, onError }: { version: unknown; onSaved: (c: Config) => void; onError: (err: unknown) => void }) {
   const [list, setList] = useState<PendingCommand[]>([]);
   const refresh = () =>
@@ -29,23 +23,51 @@ export function PendingCommands({ version, onSaved, onError }: { version: unknow
         refresh();
       })
       .catch(onError);
+  // Names what the card shows, so what arrived since keeps waiting. One that
+  // changed refuses the lot, and the card then shows what is there now.
+  const approveAll = () => {
+    if (!confirm(approveAllQuestion(list))) return;
+    EngineService.ApproveCommands(list.map((c) => c.fingerprint))
+      .then((saved) => {
+        onSaved(saved);
+        refresh();
+      })
+      .catch((err) => {
+        onError(err);
+        refresh();
+      });
+  };
   if (list.length === 0) return null;
   return (
-    <div className="card">
-      <h3>Waiting for your approval</h3>
+    <div className="card" id="pending-approvals">
+      <h3>Waiting for your approval ({list.length})</h3>
       <p className="muted">
-        These are in the app's config files, but were not written or approved in the app: they may come from a restored backup, or from a file edited outside the app. They run nothing until you approve them as they are now. Approve only what you recognize.
+        These are in the app's config files, but were not written or approved in the app: they may come from a restored backup, or from a file edited outside the app. Until you approve them as they are now, hooks and agents run nothing, allow rules and settings do not apply, no session can use an environment, and nothing is sent to an address. Approve only what you recognize.
       </p>
-      {list.map((c, i) => (
-        <div className="row" key={i}>
-          <span>
-            {c.kind === "hook" ? `Hook (${EVENTS.find((e) => e.id === c.event)?.name ?? c.event})` : "Agent"} from {c.source} runs <code>{c.runs}</code>
-          </span>
-          <button type="button" onClick={() => approve(c)}>
-            Approve
+      <div className="pending-list" tabIndex={0} role="group" aria-label={`${list.length} waiting for approval`}>
+        {groupPending(list).map((g) => (
+          <div key={g.title}>
+            <h4>{g.title}</h4>
+            {g.items.map((c) => (
+              <div className="row pending-row" key={c.fingerprint + c.source}>
+                <span>
+                  {pendingLabel(c)} from {c.source}: <code>{c.runs}</code>
+                </span>
+                <button type="button" onClick={() => approve(c)}>
+                  Approve
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {list.length > 1 && (
+        <div className="row pending-all">
+          <button type="button" onClick={approveAll}>
+            Approve all {list.length}…
           </button>
         </div>
-      ))}
+      )}
     </div>
   );
 }

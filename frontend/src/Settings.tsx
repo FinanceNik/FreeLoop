@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
 import type { ColorSet } from "./colors.ts";
@@ -6,7 +6,8 @@ import { bindingOf, keyLabel } from "./shortcuts.ts";
 import { Browser } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
 import { HookTable, PendingCommands } from "./Hooks.tsx";
-import { EngineService, type Blocked, type ConfigRestore, type Config, type UpdateInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
+import { groupPending, pendingLabel } from "./pending.ts";
+import { EngineService, type Blocked, type ConfigPreview, type ConfigRestore, type Config, type UpdateInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
   config: Config;
@@ -23,6 +24,90 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
+// What restoring a backup would do, before anything changes (SET-005).
+function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPreview; onRestore: () => void; onCancel: () => void }) {
+  const files = preview.files ?? [];
+  const count = (change: string) => files.filter((f) => f.change === change).length;
+  const gone = preview.gone ?? [];
+  const addresses = preview.addresses ?? [];
+  const waiting = preview.needApproval ?? [];
+  const keys = preview.needKeys ?? [];
+  // It opens under the button, at the bottom of a long page.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    box.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+  return (
+    <div className="restore-preview" ref={box} role="group" aria-label="What restoring this backup would do">
+      <h4>Restore this backup?</h4>
+      <p className="muted">Nothing has changed yet. The files it replaces are kept in the data folder's backups folder, and local-only mode stays on if it is on.</p>
+      <details>
+        <summary>
+          {files.length} files: {count("replaced")} replaced, {count("new")} new, {count("same")} unchanged
+        </summary>
+        <ul>
+          {files.map((f) => (
+            <li key={f.path}>
+              <code>{f.path}</code> <span className="muted">{f.change}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+      {gone.length > 0 && (
+        <>
+          <p className="error-text">These would stop applying, because the backup's files do not have them:</p>
+          <ul>
+            {gone.map((g) => (
+              <li key={g}>{g}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {addresses.length > 0 && (
+        <>
+          <p>Where things would be sent:</p>
+          <ul>
+            {addresses.map((a) => (
+              <li key={a.what}>
+                {a.what}: {a.from ? <><code>{a.from}</code> becomes </> : "new, "}
+                <code>{a.to}</code>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {waiting.length > 0 && (
+        <>
+          <p>These {waiting.length} would wait for your approval, and do nothing until you give it:</p>
+          <div className="pending-list" tabIndex={0} role="group" aria-label={`${waiting.length} would wait for approval`}>
+            {groupPending(waiting).map((g) => (
+              <div key={g.title}>
+                <h5>{g.title}</h5>
+                <ul>
+                  {g.items.map((c, i) => (
+                    <li key={i}>
+                      {pendingLabel(c)} from {c.source}: <code>{c.runs}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {keys.length > 0 && <p>You would enter the API keys for {keys.join(", ")} under Providers.</p>}
+      <div className="row">
+        <button type="button" className="primary" onClick={onRestore}>
+          Restore
+        </button>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
@@ -36,16 +121,24 @@ export default function Settings({ config, providers, environments, profiles, pr
   // Config backup (SET-005).
   const [backup, setBackup] = useState<string | null>(null);
   const [restored, setRestored] = useState<ConfigRestore | null>(null);
+  const [preview, setPreview] = useState<ConfigPreview | null>(null);
   const backUp = () =>
     EngineService.ExportConfig()
       .then((path) => path && setBackup(path))
       .catch(onError);
-  const restore = () => {
-    if (!confirm("Restore a config backup? Its settings, colors, providers, profiles, environments, token optimizers, rules, MCP servers, hooks and agent presets replace the current ones; the replaced files are kept in the data folder's backups folder. Hooks and agents it brings run nothing until you approve them here.")) return;
-    EngineService.ImportConfig()
-      .then((r) => r && setRestored(r))
+  const chooseBackup = () => {
+    setRestored(null);
+    EngineService.PreviewConfigRestore()
+      .then((p) => setPreview(p))
       .catch(onError);
   };
+  const restore = (p: ConfigPreview) =>
+    EngineService.RestoreConfig(p.fingerprint)
+      .then((r) => {
+        setPreview(null);
+        if (r) setRestored(r);
+      })
+      .catch(onError);
   // ⌘+ and ⌘- change one field; the rest of the form may hold unsaved edits.
   // Approving a command is not an edit either.
   const { ui: { fontSize: savedFontSize, ...savedUi }, commandApprovals: _approvals, ...savedRest } = config;
@@ -87,6 +180,7 @@ export default function Settings({ config, providers, environments, profiles, pr
   return (
     <section className="page">
       <h2>General</h2>
+      <PendingCommands version={[config, restored]} onSaved={onSaved} onError={onError} />
       <form className="card form" onSubmit={save}>
         <h3>Appearance</h3>
         <label>
@@ -338,8 +432,6 @@ export default function Settings({ config, providers, environments, profiles, pr
         </div>
       </form>
 
-      <PendingCommands version={[config, restored]} onSaved={onSaved} onError={onError} />
-
       <div className="card">
         <h3>Backup</h3>
         <p className="muted">
@@ -350,15 +442,21 @@ export default function Settings({ config, providers, environments, profiles, pr
           <button type="button" onClick={backUp}>
             Back up configuration…
           </button>
-          <button type="button" onClick={restore}>
+          <button type="button" onClick={chooseBackup}>
             Restore from a backup…
           </button>
           {backup && <span className="ok">Saved to {backup}</span>}
         </div>
+        {preview && <RestorePreview preview={preview} onRestore={() => restore(preview)} onCancel={() => setPreview(null)} />}
         {restored && (
           <div className="banner" role="status">
             Restored {restored.files?.length ?? 0} files. {restored.backupNote}
-            {restored.needApproval > 0 && <p>Hooks and agents waiting for your approval, listed above, run nothing until you approve them.</p>}
+            {restored.needApproval > 0 && <p>What waits for your approval, listed at the top of this page, does nothing until you approve it.</p>}
+            {(restored.gone ?? []).length > 0 && (
+              <p>
+                These no longer apply, because the backup's files do not have them: {(restored.gone ?? []).join("; ")}.
+              </p>
+            )}
             {(restored.needKeys ?? []).length > 0 && (
               <p>
                 Enter the API keys for {(restored.needKeys ?? []).join(", ")} under{" "}

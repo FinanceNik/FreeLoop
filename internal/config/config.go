@@ -66,8 +66,9 @@ type Config struct {
 	// OptimizerApprovals record the token optimizer files the user approved, by
 	// ID, with a mark only the app can compute (HRN-019).
 	OptimizerApprovals map[string]string `yaml:"optimizerApprovals,omitempty" json:"optimizerApprovals"`
-	// CommandApprovals record the hooks and agent presets from files the user
-	// approved, with marks only the app can compute (SET-005).
+	// CommandApprovals record what the user approved in the app's files, with
+	// marks only the app can compute (SET-005): hooks, agent presets, allow rules,
+	// environments, permissions.allowBypass and a profile's mode.
 	CommandApprovals []string `yaml:"commandApprovals,omitempty" json:"commandApprovals"`
 	// Network holds the local-only switch (NFR-OFF-003).
 	Network Network `yaml:"network,omitempty" json:"network"`
@@ -152,6 +153,27 @@ type Permissions struct {
 	AllowBypass bool `yaml:"allowBypass" json:"allowBypass"`
 }
 
+// BypassFingerprint identifies permissions.allowBypass being on.
+func BypassFingerprint() string {
+	return commandFingerprint("setting", "permissions.allowBypass")
+}
+
+// AddressFingerprint identifies an address a setting sends things to. A file's
+// address gets nothing until the user approved exactly this.
+func AddressFingerprint(setting, address string) string {
+	return commandFingerprint("address", []string{setting, address})
+}
+
+// UpdatesFingerprint identifies updates.check being on.
+func UpdatesFingerprint() string {
+	return commandFingerprint("setting", "updates.check")
+}
+
+// DefaultOptimizerFingerprint identifies defaults.optimizer naming id.
+func DefaultOptimizerFingerprint(id string) string {
+	return commandFingerprint("default optimizer", id)
+}
+
 // UI holds interface settings.
 type UI struct {
 	// Theme is "system", "light" or "dark" (GUI-011).
@@ -222,6 +244,8 @@ type Issue struct {
 	// Unreadable marks a file that could not be parsed at all, as opposed
 	// to one with a setting ignored.
 	Unreadable bool `json:"unreadable,omitempty"`
+	// Approval marks something waiting for the user's approval in Settings.
+	Approval bool `json:"approval,omitempty"`
 }
 
 // Unreadable reports whether any issue says its file could not be parsed.

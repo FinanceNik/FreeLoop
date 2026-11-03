@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -17,13 +20,17 @@ import (
 
 // EngineService exposes the engine to the frontend. It is a thin adapter:
 // each method forwards to the engine and adds nothing, except ChooseFolder,
-// ExportSession, ExportConfig and ImportConfig, which show native dialogs,
+// ExportSession, ExportConfig and PreviewConfigRestore, which show native dialogs,
 // and OpenSkill, OpenFile, OpenHarness and OpenColors, which open a file in the
 // user's text editor.
 type EngineService struct {
 	eng  *engine.Engine
 	app  *application.App
 	desk *desktop
+
+	// restoring is the backup last previewed. The page names only its
+	// fingerprint: the user chose the file, and nothing else can.
+	restoring atomic.Pointer[string]
 }
 
 // SetTags replaces a session's tags (SES-013) and returns them cleaned.
@@ -438,6 +445,12 @@ func (s *EngineService) ApproveCommand(fingerprint string) (config.Config, error
 	return s.eng.ApproveCommand(fingerprint)
 }
 
+// ApproveCommands approves all the Settings page showed, in one go. It is not on
+// the socket either.
+func (s *EngineService) ApproveCommands(fingerprints []string) (config.Config, error) {
+	return s.eng.ApproveCommands(fingerprints)
+}
+
 func (s *EngineService) SetDefaultOptimizer(ctx context.Context, id string) (config.Config, error) {
 	return s.eng.SetDefaultOptimizer(ctx, id)
 }
@@ -692,19 +705,48 @@ func (s *EngineService) ExportConfig(ctx context.Context) (string, error) {
 	return path, s.eng.ExportConfig(ctx, path)
 }
 
-// ImportConfig asks for a config backup and restores it; nil when the user
-// cancels.
-func (s *EngineService) ImportConfig(ctx context.Context) (*engine.ConfigRestore, error) {
-	path, err := s.app.Dialog.OpenFile().
-		SetTitle("Restore Freeloop's configuration").
-		CanChooseFiles(true).
-		CanChooseDirectories(false).
-		AddFilter("Freeloop config backup", "*.json").
-		PromptForSingleSelection()
-	if err != nil || path == "" {
+// PreviewConfigRestore asks for a config backup and says what restoring it would
+// do, changing nothing; nil when the user cancels. In a served build, which has no
+// dialogs, FREELOOP_DEV_BACKUP names the file.
+func (s *EngineService) PreviewConfigRestore(ctx context.Context) (*engine.ConfigPreview, error) {
+	path := ""
+	if servedBuild {
+		path = os.Getenv("FREELOOP_DEV_BACKUP")
+	} else {
+		var err error
+		path, err = s.app.Dialog.OpenFile().
+			SetTitle("Restore Freeloop's configuration").
+			CanChooseFiles(true).
+			CanChooseDirectories(false).
+			AddFilter("Freeloop config backup", "*.json").
+			PromptForSingleSelection()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if path == "" {
+		return nil, nil
+	}
+	preview, err := s.eng.PreviewConfig(ctx, path)
+	if err != nil {
 		return nil, err
 	}
-	res, err := s.eng.ImportConfig(ctx, path)
+	s.restoring.Store(&path)
+	return &preview, nil
+}
+
+// StartWaiting says what a profile's new sessions start without until approved.
+func (s *EngineService) StartWaiting(profileID string) engine.StartWaits {
+	return s.eng.StartWaiting(profileID)
+}
+
+// RestoreConfig restores the backup last previewed, if it is still the same file.
+func (s *EngineService) RestoreConfig(ctx context.Context, fingerprint string) (*engine.ConfigRestore, error) {
+	path := s.restoring.Load()
+	if path == nil {
+		return nil, errors.New("choose a backup first")
+	}
+	res, err := s.eng.RestorePreviewed(ctx, *path, fingerprint)
 	if err != nil {
 		return nil, err
 	}

@@ -126,6 +126,9 @@ export default function App() {
   }, [screen.kind, screenId]);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [issues, setIssues] = useState<Issue[]>([]);
+  // What waits for approval is not a problem, and may be long: Settings lists it.
+  const problems = issues.filter((i) => !i.approval);
+  const waitingApproval = issues.length - problems.length;
   // The last session opened, for the rules page's session scope.
   const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1034,11 +1037,27 @@ export default function App() {
       )}
 
       <main className="main" ref={mainBox} tabIndex={-1}>
-        {issues.length > 0 && (
+        {waitingApproval > 0 && (
+          <div role="status" className="banner warn row">
+            <span>
+              {waitingApproval === 1 ? "One thing" : `${waitingApproval} things`} in the app's files {waitingApproval === 1 ? "waits" : "wait"} for your approval and {waitingApproval === 1 ? "does" : "do"} nothing until then.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setScreen({ kind: "settings" });
+                requestAnimationFrame(() => document.getElementById("pending-approvals")?.scrollIntoView({ block: "start" }));
+              }}
+            >
+              Review
+            </button>
+          </div>
+        )}
+        {problems.length > 0 && (
           <div role="alert" className="banner warn">
             <strong>Configuration problems; using defaults where needed.</strong>
             <ul>
-              {issues.map((i, n) => (
+              {problems.map((i, n) => (
                 <li key={n}>
                   {i.file}
                   {i.line ? `:${i.line}` : ""}

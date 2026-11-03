@@ -67,6 +67,9 @@ type Rule struct {
 	// Scope and Source are filled in by whoever loads the rule.
 	Scope  Scope  `yaml:"-" json:"scope"`
 	Source string `yaml:"-" json:"source"`
+	// Pending marks an allow rule from a file the user has not approved, as the
+	// app lists it (SET-005). The broker never sees one.
+	Pending bool `yaml:"-" json:"pending,omitempty"`
 }
 
 // Validate reports a rule that cannot match anything sensible.

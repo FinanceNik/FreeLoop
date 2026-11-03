@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/FinanceNik/Freeloop/internal/permission"
 )
 
 // Config backup (SET-005): the hand-editable files of the data folder in
@@ -88,6 +91,100 @@ func withoutApprovals(content []byte) ([]byte, error) {
 	return yaml.Marshal(f)
 }
 
+// keepLocalOnly keeps local-only mode on in a restored config.yaml when it is on
+// now (NFR-OFF-003): it blocks connections on this Mac, and a file from elsewhere
+// has no say in that. The user turns it off in Settings. Done before anything is
+// written, so the watcher never sees the switch off.
+func keepLocalOnly(dir string, content []byte) ([]byte, error) {
+	current, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil {
+		return content, nil
+	}
+	if now, _ := parse(current); !now.Network.LocalOnly {
+		return content, nil
+	}
+	next, issues := parse(content)
+	// One that cannot be read leaves the app on the last that could, this one.
+	if next.Network.LocalOnly || Unreadable(issues) {
+		return content, nil
+	}
+	next.Network.LocalOnly = true
+	return yaml.Marshal(next)
+}
+
+// Snapshot is what a folder's config files say, loaded as the app loads them.
+type Snapshot struct {
+	Config       Config
+	Rules        []permission.Rule
+	Environments []Environment
+	Profiles     []Profile
+	Presets      []HarnessPreset
+	Providers    []Provider
+	Optimizers   []Optimizer
+	MCP          []MCPServer
+}
+
+// LoadSnapshot reads a folder's config files. What cannot be read is left out, as
+// the app leaves it out, and the files themselves report it once restored.
+func LoadSnapshot(dir string, tools []string) Snapshot {
+	var s Snapshot
+	s.Config, _, _ = Load(dir)
+	s.Rules, _, _ = LoadRules(dir)
+	s.Environments, _, _ = LoadEnvironments(dir)
+	s.Profiles, _, _ = LoadProfiles(dir, tools)
+	s.Presets, _ = LoadPresets(dir)
+	s.Providers, _, _ = LoadProviders(dir)
+	s.Optimizers, _ = LoadOptimizers(dir)
+	s.MCP, _, _ = LoadMCP(dir)
+	return s
+}
+
+// Kinds of a restore's change to a file.
+const (
+	FileNew      = "new"
+	FileReplaced = "replaced"
+	FileSame     = "same"
+)
+
+// BundleFile is what restoring a backup would do to one file.
+type BundleFile struct {
+	Path   string `json:"path"`
+	Change string `json:"change"`
+}
+
+// PreviewBundle says what ImportBundle would leave in dir, without changing it:
+// the restore runs on a copy of the folder's config files, in a temporary folder.
+func PreviewBundle(dir string, data []byte, tools []string) (Snapshot, []BundleFile, error) {
+	current, err := ExportBundle(dir)
+	if err != nil {
+		return Snapshot{}, nil, err
+	}
+	copied, err := os.MkdirTemp("", "freeloop-restore-*")
+	if err != nil {
+		return Snapshot{}, nil, fmt.Errorf("config: %w", err)
+	}
+	defer os.RemoveAll(copied)
+	if _, err := ImportBundle(copied, current); err != nil {
+		return Snapshot{}, nil, err
+	}
+	written, err := ImportBundle(copied, data)
+	if err != nil {
+		return Snapshot{}, nil, err
+	}
+	files := make([]BundleFile, 0, len(written))
+	for _, rel := range written {
+		f := BundleFile{Path: rel, Change: FileReplaced}
+		old, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+		if errors.Is(err, os.ErrNotExist) {
+			f.Change = FileNew
+		} else if next, nextErr := os.ReadFile(filepath.Join(copied, filepath.FromSlash(rel))); err == nil && nextErr == nil && bytes.Equal(old, next) {
+			f.Change = FileSame
+		}
+		files = append(files, f)
+	}
+	return LoadSnapshot(copied, tools), files, nil
+}
+
 // ImportBundle writes a backup's files into the data folder, after copying
 // the files it replaces to backups/<time>/. Every file is checked first, so
 // a bad backup changes nothing. It returns the paths written.
@@ -117,6 +214,13 @@ func ImportBundle(dir string, data []byte) ([]string, error) {
 				return nil, fmt.Errorf("%s: %w", rel, err)
 			}
 			b.Files[rel] = string(clean)
+		}
+		if rel == FileName {
+			kept, err := keepLocalOnly(dir, []byte(content))
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", rel, err)
+			}
+			b.Files[rel] = string(kept)
 		}
 		names = append(names, rel)
 	}

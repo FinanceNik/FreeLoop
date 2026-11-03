@@ -30,6 +30,16 @@ func craftedBundle(t *testing.T, files map[string]string) string {
 	return path
 }
 
+// approveFiles approves what a test wrote into the config files itself.
+func approveFiles(t *testing.T, e *Engine) {
+	t.Helper()
+	for _, c := range e.PendingCommands() {
+		if _, err := e.ApproveCommand(c.Fingerprint); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

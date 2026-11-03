@@ -157,6 +157,7 @@ func TestScriptsRunInTheContainer(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
 	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "box.yaml"), []byte("name: Box\nkind: docker\nimage: alpine:3.20\n"), 0o600)
 	e.loadEnvironments()
+	approveFiles(t, e)
 
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: repo, ProviderID: DemoProviderID, EnvironmentID: "box", Worktree: true})
 	if err != nil {

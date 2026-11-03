@@ -116,14 +116,16 @@ func describeOptimizer(o config.Optimizer) string {
 // a restored backup, or from anything that can write to the data folder) and
 // would run on every command of every session that has it as its default.
 func (e *Engine) optimizerApproved(o config.Optimizer) bool {
-	if o.Source == "" {
-		return true
-	}
+	return o.Source == "" || e.optimizerMarked(e.Config(), o)
+}
+
+// optimizerMarked reports whether c holds this Mac's mark for the optimizer.
+func (e *Engine) optimizerMarked(c config.Config, o config.Optimizer) bool {
 	mark, err := e.approvalMark(o.Fingerprint())
 	if err != nil {
 		return false
 	}
-	return hmac.Equal([]byte(mark), []byte(e.Config().OptimizerApprovals[o.ID]))
+	return hmac.Equal([]byte(mark), []byte(c.OptimizerApprovals[o.ID]))
 }
 
 // ApproveOptimizer approves an optimizer file as the user saw it, which must
@@ -192,15 +194,18 @@ func (e *Engine) SetDefaultOptimizer(ctx context.Context, id string) (config.Con
 	}
 	c := e.Config()
 	c.Defaults.Optimizer = id
-	return e.SaveSettings(c)
+	return e.saveChoosing(c, config.DefaultOptimizerFingerprint(id))
 }
 
 // chooseOptimizer decides a new session's optimizer: the one carried over, the
-// one asked for, the profile's, then the global default. Only the one asked for
-// is tried here. A default that does not work is the first command's to report,
+// one asked for, the profile's, then the global default, those two once approved.
+// Only the one asked for is tried here. A default that does not work is the first command's to report,
 // and a session still starts.
 func (e *Engine) chooseOptimizer(ctx context.Context, req CreateSessionRequest, prof config.Profile, harnessID string, envCfg config.Environment) (string, error) {
-	id := cmp.Or(req.optimizer, req.Optimizer, prof.Optimizer, e.Config().Defaults.Optimizer)
+	id := cmp.Or(req.optimizer, req.Optimizer)
+	if id == "" {
+		id = e.startOptimizer(prof)
+	}
 	if id == config.OptimizerOff || id == "" {
 		return "", nil
 	}

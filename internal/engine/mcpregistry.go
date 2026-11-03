@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 )
 
@@ -137,6 +138,9 @@ func (e *Engine) SearchMCPRegistry(ctx context.Context, query, cursor string) (R
 	}
 	if !registryAddress(base) {
 		return RegistryPage{}, fmt.Errorf("%q is not an https address", base)
+	}
+	if !e.commandApproved(config.AddressFingerprint("mcp.registryURL", e.Config().MCP.RegistryURL)) {
+		return RegistryPage{}, fmt.Errorf("%s has not been approved; approve it in Settings, or enter it here again", base)
 	}
 	u, err := url.Parse(base + "/v0.1/servers")
 	if err != nil {
@@ -275,7 +279,7 @@ func (e *Engine) SetMCPRegistryAddress(address string) error {
 	}
 	c := e.Config()
 	c.MCP.RegistryURL = address
-	_, err := e.SaveSettings(c)
+	_, err := e.saveChoosing(c, config.AddressFingerprint("mcp.registryURL", address))
 	return err
 }
 

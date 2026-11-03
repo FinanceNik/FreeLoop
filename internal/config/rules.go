@@ -22,6 +22,16 @@ type rulesFile struct {
 	Rules   []permission.Rule `yaml:"rules"`
 }
 
+// RuleFingerprint identifies an allow rule in the file where says, so approving
+// it in one profile does not put it in force for every session. An allow rule
+// from the app's files applies only after the user approved exactly this.
+func RuleFingerprint(where string, r permission.Rule) string {
+	return commandFingerprint("rule", struct {
+		Where, Tool, Command, Path string
+		Literal                    bool
+	}{where, r.Tool, r.Command, r.Path, r.Literal})
+}
+
 // ErrRulesInvalid is returned with the valid rules when rules.yaml has
 // errors, so callers can fail closed and refuse to overwrite the file.
 var ErrRulesInvalid = errors.New("rules.yaml has errors")

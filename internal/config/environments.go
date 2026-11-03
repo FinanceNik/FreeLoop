@@ -51,6 +51,17 @@ type Environment struct {
 	Sandbox *Sandbox `yaml:"sandbox,omitempty" json:"sandbox"`
 }
 
+// Fingerprint identifies what the environment runs and lets commands reach. Its
+// name and disabled tools change neither, and each of its rules has its own.
+func (e Environment) Fingerprint() string {
+	return commandFingerprint("environment", struct {
+		ID, Kind, DefaultMode, Image, Setup, Health string
+		Devcontainer                                bool
+		Env, Secrets                                map[string]string
+		Sandbox                                     *Sandbox
+	}{e.ID, e.Kind, e.DefaultMode, e.Image, e.Setup, e.Health, e.Devcontainer, e.Env, e.Secrets, e.Sandbox})
+}
+
 // Sandbox is how a local environment's commands are confined.
 type Sandbox struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`

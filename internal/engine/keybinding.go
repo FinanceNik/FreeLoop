@@ -154,6 +154,9 @@ func (e *Engine) ConfirmProviderAddress(id string) error {
 	if err != nil {
 		return err
 	}
+	if err := e.markProvider(c); err != nil {
+		return err
+	}
 	if c.APIKey == "" {
 		return nil
 	}

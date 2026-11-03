@@ -19,6 +19,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/platform/darwin"
 	"github.com/FinanceNik/Freeloop/internal/rpc"
+	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
 // EventName is the Wails event every persisted session event is emitted on.
@@ -68,7 +69,7 @@ func main() {
 	configChanges := make(chan engine.ConfigChange, 16)
 	notices := make(chan engine.Notice, 64)
 	eng, err := engine.Open(engine.Options{
-		DataDir: dataDir, Secrets: darwin.Keychain{}, Confiner: darwin.Seatbelt{}, EditorArgv: darwin.EditorArgv, Dev: os.Getenv("FREELOOP_DEV") == "1",
+		DataDir: dataDir, Secrets: secretStore(), Confiner: darwin.Seatbelt{}, EditorArgv: darwin.EditorArgv, Dev: os.Getenv("FREELOOP_DEV") == "1",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: os.Getenv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).
@@ -200,4 +201,14 @@ func main() {
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// secretStore is the Keychain. A served build, for checking the UI on scratch
+// data, can keep what it stores in memory with FREELOOP_DEV_SECRETS=memory, so a
+// scratch folder leaves nothing in the login keychain and asks it nothing.
+func secretStore() secrets.Store {
+	if servedBuild && os.Getenv("FREELOOP_DEV_SECRETS") == "memory" {
+		return secrets.NewMemory()
+	}
+	return darwin.Keychain{}
 }

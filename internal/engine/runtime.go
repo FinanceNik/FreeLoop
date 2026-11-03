@@ -150,7 +150,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if envID == "" {
 		envID = DefaultEnvironmentID
 	}
-	envCfg, err := e.environment(envID)
+	envCfg, err := e.usableEnvironment(envID)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +286,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	var hs harness.Session
 	if p != nil {
 		params.Provider = e.limit(p, sid)
-		if f := prof.Fallback; f != nil {
+		if f := e.fallbackOf(prof); f != nil {
 			if fp, err := e.provider(f.Provider); err == nil {
 				params.Fallback = &harness.Fallback{Provider: e.limit(fp, sid), Model: f.Model}
 			} else {
@@ -552,7 +552,10 @@ func (e *Engine) SetMode(ctx context.Context, sid, mode string) error {
 		return fmt.Errorf("unknown mode %q", mode)
 	}
 	if m == permission.ModeBypass && !e.Config().Permissions.AllowBypass {
-		return errors.New("bypass mode is off; set permissions.allowBypass: true in config.yaml to allow it")
+		return errors.New("bypass mode is off; turn it on in Settings to allow it")
+	}
+	if m == permission.ModeBypass && !e.commandApproved(config.BypassFingerprint()) {
+		return errors.New("bypass mode was turned on in config.yaml and has not been approved; approve it in Settings")
 	}
 	if m == permission.ModeBypass {
 		ses, err := e.store.GetSession(ctx, sid)

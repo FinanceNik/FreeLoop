@@ -28,6 +28,10 @@ type ruleStore struct {
 	// scopedRules returns a session's profile and project rules, and an
 	// error that makes the broker fail closed; called without mu held.
 	scopedRules func(sid string) ([]permission.Rule, error)
+	// approved says whether an allow rule from a file may apply, and approve
+	// records that the user added one (SET-005); called without mu held.
+	approved func(permission.Rule) bool
+	approve  func(permission.Rule) error
 	// broken is set while rules.yaml has errors: the broker fails closed and
 	// the file is not rewritten, so no hand-written rule is lost.
 	broken error
@@ -72,8 +76,29 @@ func (s *ruleStore) reloadLocked(force bool) {
 }
 
 // Rules returns the rules in force for sid: global, then its profile's and
-// its project's, then its own.
+// its project's, then its own. An allow rule from a file the user has not
+// approved is not among them; a deny rule needs no approval.
 func (s *ruleStore) Rules(sid string) ([]permission.Rule, error) {
+	rules, err := s.all(sid)
+	return slices.DeleteFunc(rules, s.pending), err
+}
+
+// pending reports an allow rule from a file waiting for approval. A session's
+// own came from the user answering, and a project's can only deny.
+func (s *ruleStore) pending(r permission.Rule) bool {
+	return r.Effect == permission.Allow && r.Scope != permission.ScopeSession && s.approved != nil && !s.approved(r)
+}
+
+// fileRules returns what rules.yaml says.
+func (s *ruleStore) fileRules() []permission.Rule {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reloadLocked(false)
+	return slices.Clone(s.global)
+}
+
+// all returns the rules for sid whether in force or not.
+func (s *ruleStore) all(sid string) ([]permission.Rule, error) {
 	var scoped []permission.Rule
 	var scopedErr error
 	if sid != "" && s.scopedRules != nil {
@@ -92,6 +117,12 @@ func (s *ruleStore) Rules(sid string) ([]permission.Rule, error) {
 func (s *ruleStore) AddRule(sid string, r permission.Rule) error {
 	if err := r.Validate(); err != nil {
 		return err
+	}
+	// The user asked for this one. Before the file, so it never waits.
+	if r.Scope == permission.ScopeGlobal && r.Effect == permission.Allow && s.approve != nil {
+		if err := s.approve(r); err != nil {
+			return err
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -156,12 +187,15 @@ func (s *ruleStore) restore(sid string, events []event.Event) {
 	s.mu.Unlock()
 }
 
-// ListRules returns the rules in force for a session, global first; with
-// an empty session ID, only the global rules.
+// ListRules returns the rules of a session, global first; with an empty session
+// ID, only the global rules. One waiting for approval says so, and can be deleted.
 func (e *Engine) ListRules(sessionID string) []permission.Rule {
-	rules, _ := e.rules.Rules(sessionID)
+	rules, _ := e.rules.all(sessionID)
 	if rules == nil {
 		rules = []permission.Rule{}
+	}
+	for i := range rules {
+		rules[i].Pending = e.rules.pending(rules[i])
 	}
 	return rules
 }
@@ -172,9 +206,20 @@ func (e *Engine) AddRule(r permission.Rule) error {
 	return e.rules.AddRule("", r)
 }
 
-// DeleteRule removes a global rule from rules.yaml. Session rules last as
+// DeleteRule removes a global rule from rules.yaml, and with it the approval of
+// an allow rule, so a file bringing it back has to ask. Session rules last as
 // long as their session.
 func (e *Engine) DeleteRule(r permission.Rule) error {
+	if err := e.deleteRule(r); err != nil {
+		return err
+	}
+	if r.Effect != permission.Allow {
+		return nil
+	}
+	return e.revokeRule(r)
+}
+
+func (e *Engine) deleteRule(r permission.Rule) error {
 	s := e.rules
 	s.mu.Lock()
 	defer s.mu.Unlock()

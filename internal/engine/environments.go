@@ -88,6 +88,18 @@ func (e *Engine) loadEnvironments() {
 	e.mu.Unlock()
 }
 
+// usableEnvironment returns an environment whose settings may apply.
+func (e *Engine) usableEnvironment(id string) (config.Environment, error) {
+	c, err := e.environment(id)
+	if err != nil {
+		return c, err
+	}
+	if !e.environmentApproved(c) {
+		return c, fmt.Errorf("the environment %s cannot be used: %s has not been approved as it is now; approve it in Settings", c.Name, environmentFile(c.ID))
+	}
+	return c, nil
+}
+
 func (e *Engine) environment(id string) (config.Environment, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -145,6 +157,9 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 	e.mu.Unlock()
 
 	var cur config.Environment
+	// Saving one that waits for approval does not approve it, whatever the form
+	// changed: only the Settings page says what it holds as a whole.
+	approved := true
 	if req.ID == "" {
 		base := strings.Trim(slugChars.ReplaceAllString(strings.ToLower(req.Name), "-"), "-")
 		if base == "" {
@@ -161,6 +176,7 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 			return EnvironmentInfo{}, fmt.Errorf("no environment %q", req.ID)
 		}
 		cur = envs[i]
+		approved = e.environmentApproved(cur)
 	}
 
 	// Rules are edited in the file; the form keeps them.
@@ -221,6 +237,15 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 	}
 	if err := config.SaveEnvironment(e.dataDir, next); err != nil {
 		return EnvironmentInfo{}, err
+	}
+	if approved {
+		mark, err := e.approvalMark(next.Fingerprint())
+		if err == nil {
+			err = e.addApprovals([]string{mark})
+		}
+		if err != nil {
+			return EnvironmentInfo{}, err
+		}
 	}
 	e.loadEnvironments()
 	return envInfo(next), nil

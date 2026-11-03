@@ -72,6 +72,21 @@ type Profile struct {
 	Source string `yaml:"-" json:"source"`
 }
 
+// ModeFingerprint identifies the mode the profile starts sessions in.
+func (p Profile) ModeFingerprint() string {
+	return commandFingerprint("profile mode", []string{p.ID, p.Mode})
+}
+
+// OptimizerFingerprint identifies the token optimizer the profile chooses.
+func (p Profile) OptimizerFingerprint() string {
+	return commandFingerprint("profile optimizer", []string{p.ID, p.Optimizer})
+}
+
+// FallbackFingerprint identifies where the profile's failing calls go.
+func (p Profile) FallbackFingerprint() string {
+	return commandFingerprint("profile fallback", []any{p.ID, p.Fallback})
+}
+
 // ModelRef names a provider's model.
 type ModelRef struct {
 	Provider string `yaml:"provider" json:"provider"`

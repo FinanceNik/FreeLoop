@@ -213,6 +213,7 @@ func Open(opts Options) (*Engine, error) {
 	e.broker = permission.NewBroker(permission.NewPolicy(opts.Home, opts.DataDir), e.emit)
 	e.rules = newRuleStore(opts.DataDir, func(issues []config.Issue) { e.setIssues(issueRules, issues) })
 	e.rules.scopedRules = e.scopedRules
+	e.rules.approved, e.rules.approve = e.ruleApproved, e.approveRule
 	e.broker.SetRules(e.rules, e.rules)
 	e.broker.SetHooks(engineHooks{e})
 	e.loadColors()
@@ -220,7 +221,6 @@ func Open(opts Options) (*Engine, error) {
 	e.loadPresets()
 	e.loadOptimizers()
 	e.loadProfiles()
-	e.adoptExistingCommands()
 	// MCP servers run in a local environment at the user's home: they are
 	// the app's, not one project's.
 	if env, err := e.localEnv(e.home, nil); err == nil {
@@ -233,6 +233,7 @@ func Open(opts Options) (*Engine, error) {
 		e.store.Close()
 		return nil, err
 	}
+	e.adoptExistingCommands()
 	e.rememberStoredSecrets()
 	e.recover(context.Background())
 	if opts.OnNotice != nil {
@@ -307,7 +308,7 @@ func (e *Engine) Config() config.Config {
 // SaveSettings replaces config.yaml (SET-004, GUI-011). Turning bypass mode
 // off also takes any session out of it on its next mode change.
 func (e *Engine) SaveSettings(c config.Config) (config.Config, error) {
-	marks, err := e.writtenMarks(c.Hooks)
+	marks, err := e.writtenMarks(settingsItems(c))
 	if err != nil {
 		return config.Config{}, err
 	}
@@ -331,6 +332,12 @@ func (e *Engine) saveSettings(c config.Config, marks []string) (config.Config, e
 	for _, m := range marks {
 		if !slices.Contains(c.CommandApprovals, m) {
 			c.CommandApprovals = append(c.CommandApprovals, m)
+		}
+	}
+	// Off again, so a file turning one back on has to ask.
+	for fingerprint, on := range map[string]bool{config.BypassFingerprint(): c.Permissions.AllowBypass, config.UpdatesFingerprint(): c.Updates.Check} {
+		if mark, err := e.approvalMark(fingerprint); err == nil && !on {
+			c.CommandApprovals = slices.DeleteFunc(c.CommandApprovals, func(m string) bool { return m == mark })
 		}
 	}
 	if !sameSearch {
@@ -718,7 +725,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if envID == "" {
 		envID = DefaultEnvironmentID
 	}
-	envCfg, err := e.environment(envID)
+	envCfg, err := e.usableEnvironment(envID)
 	if err != nil {
 		return session.Session{}, err
 	}
@@ -735,7 +742,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	}
 	mode := permission.Mode(req.Mode)
 	if mode == "" {
-		mode = permission.Mode(prof.Mode)
+		mode = permission.Mode(e.startMode(prof))
 	}
 	if mode == "" {
 		mode = permission.Mode(envCfg.DefaultMode)

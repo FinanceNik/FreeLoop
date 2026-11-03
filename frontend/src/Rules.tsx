@@ -64,7 +64,7 @@ export default function Rules({ session, version, onError }: Props) {
       </p>
 
       <h3>Global</h3>
-      <p className="muted">Stored in rules.yaml in the app data folder; hand edits are picked up on the next tool call.</p>
+      <p className="muted">Stored in rules.yaml in the app data folder; hand edits are picked up on the next tool call, and an allow rule added there waits for your approval in Settings.</p>
       <RuleList rules={global} onDelete={remove} />
 
       <form className="card form" onSubmit={add}>
@@ -111,6 +111,7 @@ function RuleList({ rules, onDelete }: { rules: Rule[]; onDelete?: (r: Rule) => 
         <li key={i} className="card">
           <div>
             <span className={r.effect === "deny" ? "error-text" : "ok"}>{r.effect}</span> <code>{describe(r)}</code>
+            {r.pending && <span className="muted"> does not apply until you approve it in Settings</span>}
             <div className="muted">{r.source}</div>
           </div>
           {onDelete && (

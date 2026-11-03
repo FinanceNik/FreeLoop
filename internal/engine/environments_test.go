@@ -271,6 +271,7 @@ func TestEnvironmentScopeRules(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
 	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "ci.yaml"), []byte("name: CI\nrules:\n  - effect: deny\n    tool: shell\n    command: git push *\n"), 0o600)
 	e.loadEnvironments()
+	approveFiles(t, e)
 	if err := e.AddRule(permission.Rule{Effect: permission.Allow, Tool: "shell", Command: "git *"}); err != nil {
 		t.Fatal(err)
 	}

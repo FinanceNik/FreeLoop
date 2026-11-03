@@ -164,6 +164,11 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 			return nil, err
 		}
 	}
+	// After the key, whose own message says where to confirm a moved address, which
+	// approves it as well.
+	if why := e.providerBlocked(cfg); why != "" {
+		return nil, errors.New(why)
+	}
 	var p provider.Provider
 	switch provider.Type(cfg.Type) {
 	case provider.TypeAnthropic:
@@ -271,12 +276,24 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 		e.remember(key)
 		cfg.APIKey = ref.String()
 	}
+	// What the user is saving is approved, unless it is what still waits: the form
+	// sends a restored address back unchanged when only a key was entered.
+	var marks []string
+	if item, ok := providerItem(cfg); ok {
+		var err error
+		if marks, err = e.writtenMarks([]PendingCommand{item}); err != nil {
+			return ProviderInfo{}, err
+		}
+	}
 	if i >= 0 {
 		cfgs[i] = cfg
 	} else {
 		cfgs = append(cfgs, cfg)
 	}
 	if err := e.saveConfigs(cfgs); err != nil {
+		return ProviderInfo{}, err
+	}
+	if err := e.addApprovals(marks); err != nil {
 		return ProviderInfo{}, err
 	}
 	if cfg.APIKey != "" {
@@ -316,10 +333,15 @@ func (e *Engine) DeleteProvider(id string) error {
 	e.mu.Lock()
 	delete(e.keyAddresses, id)
 	e.mu.Unlock()
+	item, marked := providerItem(cfgs[i])
 	if err := e.saveConfigs(slices.Delete(cfgs, i, i+1)); err != nil {
 		return err
 	}
 	e.checkKeyAddresses()
+	// A file bringing it back has to ask.
+	if marked {
+		return e.revoke(item.Fingerprint)
+	}
 	return nil
 }
 

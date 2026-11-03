@@ -66,6 +66,7 @@ func (e *Engine) updateInfo() UpdateInfo {
 	e.mu.Lock()
 	enabled, lastErr := e.cfg.Updates.Check, e.updateErr
 	e.mu.Unlock()
+	enabled = enabled && e.commandApproved(config.UpdatesFingerprint())
 	info := UpdateInfo{Enabled: enabled, Current: AppVersion, Latest: st.Latest, URL: st.URL, Checked: st.CheckedAt, Error: lastErr}
 	info.Newer = st.Latest != "" && newerVersion(st.Latest, AppVersion)
 	return info

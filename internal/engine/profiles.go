@@ -77,7 +77,7 @@ func (e *Engine) SaveProfile(p config.Profile) (config.Profile, error) {
 			return config.Profile{}, fmt.Errorf("tools[%d]: unknown tool %q", i, t)
 		}
 	}
-	marks, err := e.writtenMarks(p.Hooks)
+	marks, err := e.writtenMarks(profileItems(p))
 	if err != nil {
 		return config.Profile{}, err
 	}
@@ -161,7 +161,7 @@ func (e *Engine) SaveProfileYAML(id, text string) error {
 	var marks []string
 	if p, issue := config.ParseProfile(id, []byte(text), builtin.ToolNames()); issue == nil {
 		var err error
-		if marks, err = e.writtenMarks(p.Hooks); err != nil {
+		if marks, err = e.writtenMarks(profileItems(p)); err != nil {
 			return err
 		}
 	}

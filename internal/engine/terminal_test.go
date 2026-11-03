@@ -50,6 +50,7 @@ func TestSessionTerminal(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
 	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "local.yaml"), []byte("name: Local\nkind: local\nenv:\n  GREETING: hi-from-env\n"), 0o600)
 	e.loadEnvironments()
+	approveFiles(t, e)
 	withScript(e, "s", scripted.Step{Text: "done"})
 	project := t.TempDir()
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: project, ProviderID: "s", Model: "m"})
@@ -166,6 +167,7 @@ func TestDockerTerminal(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, config.EnvironmentsDir), 0o700)
 	os.WriteFile(filepath.Join(dir, config.EnvironmentsDir, "box.yaml"), []byte("name: Box\nkind: docker\nimage: alpine:3.20\n"), 0o600)
 	e.loadEnvironments()
+	approveFiles(t, e)
 	withScript(e, "s", scripted.Step{Text: "done"})
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProviderID: "s", Model: "m", EnvironmentID: "box"})
 	if err != nil {

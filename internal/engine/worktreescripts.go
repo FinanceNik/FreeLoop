@@ -176,7 +176,7 @@ func (e *Engine) scriptEnv(ses session.Session) map[string]string {
 	if envID == "" {
 		envID = DefaultEnvironmentID
 	}
-	if c, err := e.environment(envID); err == nil {
+	if c, err := e.usableEnvironment(envID); err == nil {
 		if v, err := e.resolveEnv(c); err == nil {
 			vars = v
 		}
@@ -335,7 +335,7 @@ func (e *Engine) scriptHost(ctx context.Context, ses session.Session) (environme
 	if envID == "" {
 		envID = DefaultEnvironmentID
 	}
-	cfg, err := e.environment(envID)
+	cfg, err := e.usableEnvironment(envID)
 	if err != nil {
 		return nil, nil, err
 	}

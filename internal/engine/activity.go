@@ -288,7 +288,7 @@ func coveredByRule(rules []permission.Rule, name string) bool {
 		return false
 	}
 	for _, r := range rules {
-		if r.Effect == permission.Allow && r.Matches(req, "") {
+		if r.Effect == permission.Allow && !r.Pending && r.Matches(req, "") {
 			return true
 		}
 	}

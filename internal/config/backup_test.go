@@ -104,3 +104,36 @@ func TestAProjectProfileCannotWiden(t *testing.T) {
 		t.Errorf("an ordinary profile: %+v", issue)
 	}
 }
+
+// NFR-OFF-003: a restore keeps local-only mode on and the rest of what it brings.
+func TestImportKeepsLocalOnly(t *testing.T) {
+	dir := t.TempDir()
+	c := Default()
+	c.Network.LocalOnly = true
+	if err := Save(dir, c); err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := json.Marshal(Bundle{Format: BundleFormat, Version: 1, Files: map[string]string{FileName: "version: 1\nui:\n  theme: dark\n"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ImportBundle(dir, bundle); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Network.LocalOnly || got.UI.Theme != "dark" {
+		t.Errorf("after the restore: localOnly %v, theme %q", got.Network.LocalOnly, got.UI.Theme)
+	}
+	// Off here, the backup's word stands: it can only tighten.
+	fresh := t.TempDir()
+	bundle, _ = json.Marshal(Bundle{Format: BundleFormat, Version: 1, Files: map[string]string{FileName: "version: 1\nnetwork:\n  localOnly: true\n"}})
+	if _, err := ImportBundle(fresh, bundle); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := Load(fresh); !got.Network.LocalOnly {
+		t.Error("a backup's local-only mode was dropped")
+	}
+}

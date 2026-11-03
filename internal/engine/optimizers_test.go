@@ -466,6 +466,7 @@ func TestOptimizerDefaults(t *testing.T) {
 	write("raw", "name: Raw\noptimizer: off\n")
 	write("gone", "name: Gone\noptimizer: missing\n")
 	e.loadProfiles()
+	approveFiles(t, e)
 	root := t.TempDir()
 	start := func(req CreateSessionRequest) (string, error) {
 		req.ProjectRoot, req.ProviderID = root, DemoProviderID
