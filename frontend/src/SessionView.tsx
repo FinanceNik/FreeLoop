@@ -37,6 +37,7 @@ import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx
 import { usePaletteActions } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
+import { drawOnce, holdsPlace } from "./scrollPlace.ts";
 import { estimate, formatCost, type PriceEntry } from "./cost.ts";
 import { trustStep } from "./trust.ts";
 
@@ -385,11 +386,15 @@ export default function SessionView({ session, events, focus, prices, initialDra
     });
   };
 
-  // Follow the conversation as it grows, unless a search hit is shown.
+  // Follow the conversation as it grows, unless the reader scrolled up or a search
+  // hit is shown.
   const holdBottom = useRef(false);
   useEffect(() => {
     if (!holdBottom.current) bottom.current?.scrollIntoView({ block: "end" });
   }, [view.items.length, view.items[view.items.length - 1]]);
+  const conversation = useRef<HTMLDivElement>(null);
+  const lastTop = useRef(0);
+  useEffect(() => (conversation.current ? drawOnce(conversation.current) : undefined), []);
 
   // Scroll to a search hit once its item is there and mark it for a moment.
   const [focused, setFocused] = useState<string | null>(null);
@@ -889,7 +894,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
         <div className="sr-only" role="status" aria-live="polite">
           {active && announcement}
         </div>
-        <div className="conversation" role="region" aria-label="Conversation">
+        <div
+          ref={conversation}
+          className="conversation"
+          role="region"
+          aria-label="Conversation"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            holdBottom.current = holdsPlace(holdBottom.current, lastTop.current, el.scrollTop, el.scrollHeight - el.scrollTop - el.clientHeight);
+            lastTop.current = el.scrollTop;
+          }}
+        >
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {toolRuns(view.items).map((run) => {
             const one = (item: Item) => (

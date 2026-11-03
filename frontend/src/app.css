@@ -956,7 +956,9 @@ button.ghost[aria-pressed="true"] {
   white-space: normal;
 }
 
-/* Long transcripts: WebKit skips layout and paint of items off screen. */
+/* Long transcripts: WebKit skips layout and paint of items off screen. drawOnce in
+   scrollPlace.ts draws each once, since until then this height is only a guess and
+   scrolling up jumps. */
 .conversation > *:not(:nth-last-child(-n + 3)) {
   content-visibility: auto;
   contain-intrinsic-size: auto 60px;
