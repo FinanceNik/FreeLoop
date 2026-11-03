@@ -375,7 +375,7 @@ After a look at everything built, the one claim worth selling: **every coding ag
 What follows, in order, before anything else in v1:
 
 1. **What the policy held (SEC-014).** *Built 2026-11-03. The `git push` case ran through the real Claude Code adapter (0.99.1) with a real model and a scratch repository whose `.claude/settings.json` allows `Bash(*)`: Freeloop was asked, the denial held and the remote stayed empty. The views are covered by tests and were not checked in the running app.* Make the policy visible: what it stopped, in the session and across sessions. `heldStats` in `frontend/src/activity.ts` and `held` in `frontend/src/transcript.ts` read what the transcript already had, so past sessions count too; a `mode_refused` event replaces the notice for an agent's own switch, so refusals before this build do not count.
-2. **A cost summary to share (GUI-029).** Make the cost view the one people show each other.
+2. **A cost summary to share (GUI-029).** Make the cost view the one people show each other. *Built 2026-11-04: "Share summary" on the usage page, as Markdown tables and a PNG (`frontend/src/costsummary.ts`, `CostSummary.tsx`). The text is unit-tested; the picture has not been looked at in the app.*
 3. The release: the definition of done above, with signing as OQ-009 has it.
 
 Not before those: features that copy a vendor app's. Token optimizers get no more work (OQ-031). What the vision lists as borrowed from vendor apps stays built; nothing more of that kind is added without a reason in this list.

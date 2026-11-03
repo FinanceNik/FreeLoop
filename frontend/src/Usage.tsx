@@ -9,6 +9,8 @@ import UsageChart, { type Series } from "./UsageChart.tsx";
 import { ActivityView, ApprovalsView, EfficiencyView, Tile } from "./UsageInsights.tsx";
 import { basename } from "./paths.ts";
 import Limits from "./Limits.tsx";
+import CostSummaryPanel from "./CostSummary.tsx";
+import { costSummary } from "./costsummary.ts";
 
 // The usage dashboard (GUI-018, PRV-008): tokens and estimated cost over a
 // range, by kind of token, model, agent or project, and the sessions that
@@ -71,6 +73,13 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
   const [report, setReport] = useState<UsageReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [exported, setExported] = useState("");
+  const [sharing, setSharing] = useState(false);
+  const [pricesAsOf, setPricesAsOf] = useState("");
+  useEffect(() => {
+    EngineService.BuiltinPrices()
+      .then((p) => setPricesAsOf(p.asOf))
+      .catch(onError);
+  }, []);
   const [tab, setTab] = useState<TabID>("tokens");
   const [filters, setFilters] = useState(NO_FILTERS);
   const [activity, setActivity] = useState<ActivityReport | null>(null);
@@ -190,7 +199,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
       <h2>Usage</h2>
       <div className="usage-limits">
         <h3>Limits</h3>
-        <Limits showHistory onError={onError} />
+        <Limits onError={onError} />
       </div>
       <div className="usage-recent">
         <div className="pane-usage-head">
@@ -198,7 +207,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
           <span className="spacer" />
           {onShowInPane && <button onClick={onShowInPane}>Show in a pane</button>}
         </div>
-        <LiveUsage onError={onError} />
+        <LiveUsage projects={projects} providers={providers} harnesses={harnesses} onError={onError} />
       </div>
       <div
         className="panel-tabs usage-tabs"
@@ -278,11 +287,29 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
           </label>
           <span className="usage-filters-end">
             {exported && <span className="muted">Saved to {basename(exported)}</span>}
+            <button onClick={() => setSharing(!sharing)} disabled={rows.length === 0} aria-expanded={sharing}>
+              Share summary
+            </button>
             <button onClick={exportCSV} disabled={rows.length === 0}>
               Export CSV…
             </button>
           </span>
         </div>
+      )}
+
+      {sharing && tab === "tokens" && rows.length > 0 && (
+        <CostSummaryPanel
+          summary={costSummary(rows, { agent: keyOf.agent, model: keyOf.model }, {
+            label: RANGES.find((r) => r.days === range)?.label ?? `${range} days`,
+            since,
+            until,
+            pricesAsOf,
+            filtered: Object.values(filters).some(Boolean),
+            cacheReads,
+          })}
+          onClose={() => setSharing(false)}
+          onError={onError}
+        />
       )}
 
       <div id="usage-panel" role="tabpanel" aria-labelledby={`usage-tab-${tab}`}>

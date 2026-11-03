@@ -7,7 +7,7 @@ import { currentLimits, LIMIT_STATE_LABEL, limitSummaries, percentText, resetTex
 // Limits shows how much of an account's limits agents have reported using (GUI-028).
 // No agent or vendor is asked: a report comes back with a model call, and the page says
 // how old it is. Each limit is one number and a reset time, so it is a tile, not a chart.
-export default function Limits({ showHistory, onError }: { showHistory: boolean; onError: (err: unknown) => void }) {
+export default function Limits({ compact = false, onError }: { compact?: boolean; onError: (err: unknown) => void }) {
   const [periods, setPeriods] = useState<LimitPeriodRow[] | null>(null);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -37,15 +37,17 @@ export default function Limits({ showHistory, onError }: { showHistory: boolean;
   const summaries = limitSummaries(periods, now);
   const sources = new Set(current.map((l) => l.source));
   return (
-    <div className="limits">
+    <div className={compact ? "limits limits-compact" : "limits"}>
       <div className="limits-tiles">
         {current.map((l) => (
           <div key={l.key} className={`limit-tile limit-${l.state}`}>
-            <span className="muted">
-              {sources.size > 1 ? `${l.source}: ` : ""}
-              {l.label}
+            <span className="limit-head">
+              <span className="muted">
+                {sources.size > 1 ? `${l.source}: ` : ""}
+                {l.label}
+              </span>
+              <strong>{l.used === null ? "No current figure" : `${percentText(l.used)} used`}</strong>
             </span>
-            <strong>{l.used === null ? "No current figure" : `${percentText(l.used)} used`}</strong>
             {l.used !== null && (
               <div className="limit-meter" role="meter" aria-label={l.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(l.used)}>
                 <div style={{ width: `${Math.min(100, l.used)}%` }} />
@@ -58,7 +60,7 @@ export default function Limits({ showHistory, onError }: { showHistory: boolean;
           </div>
         ))}
       </div>
-      {showHistory && summaries.length > 0 && (
+      {!compact && summaries.length > 0 && (
         <table className="limits-history">
           <caption className="muted">Finished runs of each limit, last 90 days</caption>
           <thead>

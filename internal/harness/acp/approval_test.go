@@ -333,7 +333,7 @@ func TestAgentLimits(t *testing.T) {
 	if got[0].Source != "Claude Code" || len(w) != 2 {
 		t.Fatalf("%+v", got[0])
 	}
-	if w[0].ID != "five_hour" || w[0].Label != "5-hour limit" || w[0].ResetsAt != 1793761200 || w[0].Status != "allowed" || w[0].UsedPercent < 10.9 || w[0].UsedPercent > 11.1 {
+	if w[0].ID != "five_hour" || w[0].Label != "Session limit (5 hours)" || w[0].ResetsAt != 1793761200 || w[0].Status != "allowed" || w[0].UsedPercent < 10.9 || w[0].UsedPercent > 11.1 {
 		t.Errorf("first window: %+v", w[0])
 	}
 	if w[1].ID != "seven_day" || w[1].UsedPercent < 19.9 || w[1].UsedPercent > 20.1 {

@@ -36,6 +36,26 @@ Claude Code's workflow is the inspiration. Freeloop is not built on it. The buil
 | Parallel-session orchestrators | Conductor, Crystal, Vibe Kanban, Claude Squad | One worktree per task, diff review, run scripts | They force a worktree per task, review per workspace only, offer no cross-session approval inbox, and couple to one or two vendors |
 | ACP hosts | Zed agent panel, JetBrains IDEs | Reference ACP clients, registry install flow | Editors first, one session in focus, no environment model |
 
+### What is and is not unique (checked 2026-11-04)
+
+Parallel sessions, worktrees, several agents in one window and your own models are common now: an October 2026 comparison lists eight desktop apps that run agents in parallel, and the ACP site lists many desktop clients. None of that is a reason to choose Freeloop.
+
+What is left is one policy and one bill across agents. Each vendor has its own layers for its own agent:
+
+| Agent | Who can loosen it | What holds above that |
+|---|---|---|
+| Claude Code | `.claude/settings.json` in a repository can allow commands | Managed settings, deployed by IT |
+| Codex CLI | `.codex/config.toml`, once the folder is trusted | `requirements.toml`, for enterprises |
+| Cursor | The project's `sandbox.json` takes priority over the user's when merged | Team and enterprise settings; not looked into |
+| Zed with Codex | Codex's own config stays the source of truth for permissions | Each agent's own |
+| Freeloop | No file an agent or a repository writes can loosen it | The user's broker, for every agent |
+
+Not yet known: how Conductor, Superset and similar orchestrators handle this. The searches found nothing on them, so do not claim they cannot. AG2 and clai show the idea is not unheard of, with an approve-or-deny setting and reports of denials respectively.
+
+**How far the claim goes.** `make verify-agents` gives Gemini CLI, Codex and OpenCode a repository whose own config tells them to stop asking: each still asked, and a denied write did not happen. It runs the real agents on a stand-in model. Claude Code has held a real `git push` with a real model. What this does not show: Goose, which has no pinned build for this Mac yet; shell commands in those three, since the scenario is a file write; or that each agent honoured the config it was given, which comes from their docs. An approved shell command still runs as the user unless the environment is sandboxed, and a broker can only decide what an agent asks about: only a sandbox holds against one that does not ask. Say "nothing runs without your policy", and the hard guarantee only with a sandbox.
+
+Sources: [parallel desktop apps](https://pasqualepillitteri.it/en/news/24114/desktop-app-parallel-ai-coding-agents), [ACP clients](https://agentclientprotocol.com/overview/clients), [Claude Code settings](https://code.claude.com/docs/en/settings), [Codex sandboxing](https://developers.openai.com/codex/concepts/sandboxing.md), [Cursor run modes](https://cursor.com/docs/agent/run-modes), [Codex in Zed](https://codex.danielvaughan.com/2026/05/05/codex-cli-in-zed-parallel-agents-acp-integration-ide-workflows/), [AG2](https://docs.ag2.ai/docs/user-guide/cli_agents/).
+
 ## What to borrow, what to avoid
 
 Borrow:

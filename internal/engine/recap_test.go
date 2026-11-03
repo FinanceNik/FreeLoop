@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -58,5 +59,29 @@ func TestArchiveRemovesSessionData(t *testing.T) {
 	}
 	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the optimizer data is still there: %v", err)
+	}
+}
+
+// GUI-029: the picture must be a PNG, however the call came.
+func TestSaveUsagePicture(t *testing.T) {
+	ctx := context.Background()
+	e := openBinding(t, t.TempDir(), secrets.NewMemory())
+	path := filepath.Join(t.TempDir(), "usage.png")
+	png := "\x89PNG\r\n\x1a\nrest"
+	if err := e.SaveUsagePicture(ctx, path, base64.StdEncoding.EncodeToString([]byte(png))); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != png {
+		t.Errorf("wrote %q", b)
+	}
+	bad := filepath.Join(filepath.Dir(path), "bad")
+	if err := e.SaveUsagePicture(ctx, bad, base64.StdEncoding.EncodeToString([]byte("#!/bin/sh"))); err == nil {
+		t.Error("wrote something that is not a PNG")
+	}
+	if err := e.SaveUsagePicture(ctx, "relative.png", ""); err == nil {
+		t.Error("took a relative path")
+	}
+	if _, err := os.Stat(bad); err == nil {
+		t.Error("the refused file exists")
 	}
 }

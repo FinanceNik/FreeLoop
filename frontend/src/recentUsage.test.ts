@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { recentChart, recentSeries, recentTotals, type RecentBucket } from "./recentUsage.ts";
+import { recentChart, recentSeries, recentTotals, type RecentBucket, bucketsOf, filterRecent, groupedChart, NO_RECENT_FILTERS, recentKeys, recentOptions } from "./recentUsage.ts";
 
 const b = (start: number, over: Partial<RecentBucket> = {}): RecentBucket => ({ start, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0, cost: 0, unpriced: 0, ...over });
 
@@ -24,3 +24,68 @@ test("cost is one series, and totals say what has no price", () => {
   const t = recentTotals([b(1, { input: 5, cacheRead: 10, calls: 1, cost: 1 }), b(2, { input: 1, calls: 2, unpriced: 2 })], false);
   assert.deepEqual(t, { tokens: 6, output: 0, calls: 3, cost: 1, unpriced: 2 });
 });
+
+const row = (start: number, project: string, model: string, input: number, more = {}) => ({
+  start,
+  projectId: project,
+  projectRoot: `/x/${project}`,
+  harnessId: "claude-code",
+  providerId: "",
+  model,
+  input,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  calls: 1,
+  cost: input / 10,
+  unpriced: 0,
+  ...more,
+});
+const keys = recentKeys([{ id: "a", name: "Alpha" }], [{ id: "or", name: "OpenRouter" }], [{ id: "claude-code", name: "Claude Code" }]);
+
+test("rows are named as the usage page names them", () => {
+  assert.equal(keys.project(row(1, "a", "m", 1)), "Alpha");
+  assert.equal(keys.project(row(1, "gone", "m", 1)), "gone");
+  assert.equal(keys.project(row(1, "", "m", 1, { projectRoot: "" })), "No project");
+  assert.equal(keys.agent(row(1, "a", "m", 1)), "Claude Code");
+  assert.equal(keys.agent(row(1, "a", "m", 1, { harnessId: "builtin", providerId: "or" })), "OpenRouter");
+  assert.equal(keys.model(row(1, "a", "", 1)), "Claude Code (model not reported)");
+});
+
+test("filters combine, and the buckets follow them with every step kept", () => {
+  const rows = [row(1, "a", "m1", 10), row(1, "b", "m1", 20), row(2, "a", "m2", 30)];
+  const got = filterRecent(rows, { ...NO_RECENT_FILTERS, project: "Alpha" }, keys);
+  assert.equal(got.length, 2);
+  assert.equal(filterRecent(rows, { project: "Alpha", agent: "", model: "m2" }, keys).length, 1);
+  assert.deepEqual(bucketsOf([1, 2, 3], got).map((b) => b.input), [10, 30, 0]);
+  assert.equal(filterRecent(rows, NO_RECENT_FILTERS, keys).length, 3);
+});
+
+test("a filter's options are sorted and keep what is chosen", () => {
+  const rows = [row(1, "b", "m", 1), row(1, "a", "m", 1)];
+  assert.deepEqual(recentOptions(rows, keys.project), ["Alpha", "b"]);
+  assert.deepEqual(recentOptions(rows, keys.project, "zed"), ["Alpha", "b", "zed"]);
+});
+
+test("groups take one colour each, the largest first, and the rest fold into Other", () => {
+  const rows = ["a", "b", "c", "d", "e", "f", "g"].map((m, i) => row(1, "a", m, 100 - i));
+  const { series, data } = groupedChart([1, 2], rows, rows, keys.model, "tokens", false);
+  assert.deepEqual(series.map((s) => s.label), ["a", "b", "c", "d", "e", "Other (2)"]);
+  assert.equal(data[0].values[5], 95 + 94);
+  assert.equal(data[0].total, 100 + 99 + 98 + 97 + 96 + 95 + 94);
+  assert.equal(data[1].total, 0);
+});
+
+test("a filter does not repaint what it leaves", () => {
+  const all = [row(1, "a", "big", 100), row(1, "a", "small", 1)];
+  const { series } = groupedChart([1], all, [all[1]], keys.model, "tokens", false);
+  assert.deepEqual(series.map((s) => [s.key, s.color]), [["small", "var(--series-2)"]]);
+});
+
+test("cost groups by cost, and cache reads count only when asked", () => {
+  const all = [row(1, "a", "m", 10, { cacheRead: 5 })];
+  assert.equal(groupedChart([1], all, all, keys.model, "cost", false).data[0].total, 1);
+  assert.equal(groupedChart([1], all, all, keys.model, "tokens", false).data[0].total, 10);
+  assert.equal(groupedChart([1], all, all, keys.model, "tokens", true).data[0].total, 15);
+});
+

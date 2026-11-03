@@ -21,15 +21,20 @@ const (
 	recentKeep = 72 * time.Hour
 )
 
-// RecentUsage is one model's use by one session in one bucket.
+// RecentUsage is one model's use from one project and agent in one bucket.
 type RecentUsage struct {
 	Start      time.Time
 	ProviderID string
 	Model      string
-	Input      int64
-	Output     int64
-	CacheRead  int64
-	CacheWrite int64
+	// ProjectID, ProjectRoot and HarnessID say where it was used, for the usage
+	// pane's filters; empty for a session that has since been deleted.
+	ProjectID   string
+	ProjectRoot string
+	HarnessID   string
+	Input       int64
+	Output      int64
+	CacheRead   int64
+	CacheWrite  int64
 	// CacheWrite1h is the part of CacheWrite that lasts an hour.
 	CacheWrite1h int64
 	Calls        int64
@@ -40,8 +45,9 @@ func (s *Store) RecentUsage(ctx context.Context, since time.Time) ([]RecentUsage
 	if err := s.foldRecent(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT bucket, provider_id, model, SUM(input), SUM(output), SUM(cache_read), SUM(cache_write), SUM(cache_write_1h), SUM(calls)
-		FROM usage_recent WHERE bucket >= ? GROUP BY bucket, provider_id, model ORDER BY bucket`, since.Unix())
+	rows, err := s.db.QueryContext(ctx, `SELECT u.bucket, u.provider_id, u.model, COALESCE(p.project_id, ''), COALESCE(p.project_root, ''), COALESCE(p.harness_id, ''), SUM(u.input), SUM(u.output), SUM(u.cache_read), SUM(u.cache_write), SUM(u.cache_write_1h), SUM(u.calls)
+		FROM usage_recent u LEFT JOIN sessions p ON p.id = u.session_id WHERE u.bucket >= ?
+		GROUP BY u.bucket, u.provider_id, u.model, 4, 5, 6 ORDER BY u.bucket`, since.Unix())
 	if err != nil {
 		return nil, fmt.Errorf("store: recent usage: %w", err)
 	}
@@ -50,7 +56,7 @@ func (s *Store) RecentUsage(ctx context.Context, since time.Time) ([]RecentUsage
 	for rows.Next() {
 		var u RecentUsage
 		var bucket int64
-		if err := rows.Scan(&bucket, &u.ProviderID, &u.Model, &u.Input, &u.Output, &u.CacheRead, &u.CacheWrite, &u.CacheWrite1h, &u.Calls); err != nil {
+		if err := rows.Scan(&bucket, &u.ProviderID, &u.Model, &u.ProjectID, &u.ProjectRoot, &u.HarnessID, &u.Input, &u.Output, &u.CacheRead, &u.CacheWrite, &u.CacheWrite1h, &u.Calls); err != nil {
 			return nil, fmt.Errorf("store: recent usage: %w", err)
 		}
 		u.Start = time.Unix(bucket, 0)

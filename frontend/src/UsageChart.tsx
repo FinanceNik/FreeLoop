@@ -20,30 +20,37 @@ interface Props {
   // A shorter label for the axis, when bucketLabel is long.
   axisLabel?: (day: string) => string;
   label: string; // what the chart shows, for screen readers
+  // Take the height of the space it is given, in a pane, rather than its own.
+  fill?: boolean;
 }
 
-const HEIGHT = 220;
+const DEFAULT_HEIGHT = 220;
+const MIN_HEIGHT = 120;
 const PAD = { top: 10, right: 8, bottom: 26, left: 48 };
 const GAP = 2; // the surface gap between stacked segments
 const MAX_BAR = 24;
 
-export default function UsageChart({ data, series, format, bucketLabel, axisLabel = bucketLabel, label }: Props) {
+export default function UsageChart({ data, series, format, bucketLabel, axisLabel = bucketLabel, label, fill = false }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
+  const [height, setHeight] = useState(DEFAULT_HEIGHT);
   const [hover, setHover] = useState<number | null>(null);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(Math.max(280, el.clientWidth)));
+    const ro = new ResizeObserver(() => {
+      setWidth(Math.max(280, el.clientWidth));
+      if (fill) setHeight(Math.max(MIN_HEIGHT, el.clientHeight));
+    });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [fill]);
 
   const max = Math.max(0, ...data.map((d) => d.total));
   const ticks = niceTicks(max);
   const top = ticks[ticks.length - 1] || 1;
   const plotW = width - PAD.left - PAD.right;
-  const plotH = HEIGHT - PAD.top - PAD.bottom;
+  const plotH = height - PAD.top - PAD.bottom;
   const slot = plotW / Math.max(1, data.length);
   const bar = Math.max(2, Math.min(MAX_BAR, slot * 0.68));
   const y = (v: number) => PAD.top + plotH - (v / top) * plotH;
@@ -77,8 +84,8 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
   const tipLeft = hover !== null ? Math.min(Math.max(PAD.left + hover * slot + slot / 2, 90), width - 90) : 0;
 
   return (
-    <div className="usage-chart" ref={box}>
-      <svg width={width} height={HEIGHT} role="group" aria-label={label} onPointerLeave={() => setHover(null)} onKeyDown={onKey}>
+    <div className={fill ? "usage-chart usage-chart-fill" : "usage-chart"} ref={box}>
+      <svg width={width} height={height} role="group" aria-label={label} onPointerLeave={() => setHover(null)} onKeyDown={onKey}>
         {ticks.map((t) => (
           <g key={t}>
             <line className="usage-grid" x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)} />
@@ -98,7 +105,7 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
               return <path key={p.key} d={column(x, p.y + (isTop ? 0 : GAP), bar, h, r)} fill={p.color} />;
             })}
             {(data.length - 1 - i) % every === 0 && (
-              <text className="usage-axis" x={x + bar / 2} y={HEIGHT - 8} textAnchor="middle">
+              <text className="usage-axis" x={x + bar / 2} y={height - 8} textAnchor="middle">
                 {axisLabel(d.day)}
               </text>
             )}

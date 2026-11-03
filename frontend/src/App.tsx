@@ -1308,6 +1308,9 @@ export default function App() {
             unread={unread}
             statusLabel={STATUS_LABEL}
             onTabbed={setTabbedPanes}
+            projects={projects}
+            providers={providers}
+            harnesses={harnesses}
             onActivate={activatePane}
             onPlace={(sid, i) => showWork(ws.placeIn(workRef.current, sid, i))}
             onClose={(i) => showWork(ws.closePane(workRef.current, i))}

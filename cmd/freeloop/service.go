@@ -775,6 +775,20 @@ func (s *EngineService) ExportUsage(ctx context.Context, days int) (string, erro
 	return path, s.eng.ExportUsage(ctx, days, path)
 }
 
+// SaveUsagePicture asks where to save the cost summary's picture (GUI-029), which comes
+// as base64 PNG, and writes it. It returns "" if the user cancels.
+func (s *EngineService) SaveUsagePicture(ctx context.Context, data string) (string, error) {
+	path, err := s.app.Dialog.SaveFile().
+		SetMessage("Save the usage summary").
+		SetFilename("freeloop-usage.png").
+		CanCreateDirectories(true).
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return "", err
+	}
+	return path, s.eng.SaveUsagePicture(ctx, path, data)
+}
+
 // ExportConfig asks where to save a config backup (SET-005) and writes it;
 // it returns the path, or "" when the user cancels.
 func (s *EngineService) ExportConfig(ctx context.Context) (string, error) {

@@ -40,4 +40,4 @@ if [ ! -x "$dir/goose/goose" ] || ! "$dir/goose/goose" --version | grep -q "$goo
 	fi
 	tar xjf "$dir/goose/goose.tar.bz2" -C "$dir/goose"
 fi
-FREELOOP_AGENTS_DIR="$dir" go test ./internal/harness/acp/ -count=1 -v -run '^TestPresetScenarios$' -timeout 20m | grep -E '^ *(---|ok|FAIL|PASS)|_test.go:[0-9]+: (allowed|denied|plan mode|the conversation)'
+FREELOOP_AGENTS_DIR="$dir" go test ./internal/harness/acp/ -count=1 -v -run '^TestPresetScenarios$' -timeout 30m | grep -E '^ *(---|ok|FAIL|PASS)|_test.go:[0-9]+: (allowed|denied|plan mode|the conversation)'

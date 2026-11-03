@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -122,6 +123,32 @@ func (e *Engine) UsageReport(ctx context.Context, days int) (UsageReport, error)
 	return rep, nil
 }
 
+// SaveUsagePicture writes the cost summary's picture (GUI-029) where the user chose. It
+// must be a PNG of a sane size: the page can call this, and model output must not be
+// able to write anything else through it.
+func (e *Engine) SaveUsagePicture(_ context.Context, path, encoded string) error {
+	if !filepath.IsAbs(path) {
+		return errors.New("the picture needs an absolute path")
+	}
+	if len(encoded) > maxUsagePicture {
+		return errors.New("the picture is too large")
+	}
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return fmt.Errorf("the picture: %w", err)
+	}
+	if !bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")) {
+		return errors.New("the picture is not a PNG")
+	}
+	env, err := e.localEnv(filepath.Dir(path), nil)
+	if err != nil {
+		return err
+	}
+	return env.FS().WriteFile(path, data)
+}
+
+const maxUsagePicture = 16 << 20
+
 // ExportUsage writes the last days days of usage as CSV to path, one line
 // per day, session and model, for a spreadsheet.
 func (e *Engine) ExportUsage(ctx context.Context, days int, path string) error {
@@ -179,6 +206,25 @@ type RecentUsageReport struct {
 	Hours       int            `json:"hours"`
 	StepMinutes int            `json:"stepMinutes"`
 	Buckets     []RecentBucket `json:"buckets"`
+	// Rows are the same usage by project, agent and model, for filters and groups.
+	Rows []RecentRow `json:"rows"`
+}
+
+// RecentRow is one step's use by one project, agent and model.
+type RecentRow struct {
+	Start       int64   `json:"start"`
+	ProjectID   string  `json:"projectId"`
+	ProjectRoot string  `json:"projectRoot"`
+	HarnessID   string  `json:"harnessId"`
+	ProviderID  string  `json:"providerId"`
+	Model       string  `json:"model"`
+	Input       int64   `json:"input"`
+	Output      int64   `json:"output"`
+	CacheRead   int64   `json:"cacheRead"`
+	CacheWrite  int64   `json:"cacheWrite"`
+	Calls       int64   `json:"calls"`
+	Cost        float64 `json:"cost"`
+	Unpriced    int64   `json:"unpriced"`
 }
 
 // RecentUsage returns the last hours of usage, up to two days: every 15 minutes
@@ -197,7 +243,7 @@ func (e *Engine) RecentUsage(ctx context.Context, hours int) (RecentUsageReport,
 	if err != nil {
 		return RecentUsageReport{}, err
 	}
-	out := RecentUsageReport{Hours: hours, StepMinutes: int(step / time.Minute), Buckets: make([]RecentBucket, n)}
+	out := RecentUsageReport{Hours: hours, StepMinutes: int(step / time.Minute), Buckets: make([]RecentBucket, n), Rows: []RecentRow{}}
 	for i := range out.Buckets {
 		out.Buckets[i].Start = since.Add(time.Duration(i) * step).UnixMilli()
 	}
@@ -213,11 +259,16 @@ func (e *Engine) RecentUsage(ctx context.Context, hours int) (RecentUsageReport,
 		b.CacheRead += u.CacheRead
 		b.CacheWrite += u.CacheWrite
 		b.Calls += u.Calls
+		row := RecentRow{Start: b.Start, ProjectID: u.ProjectID, ProjectRoot: u.ProjectRoot, HarnessID: u.HarnessID, ProviderID: u.ProviderID, Model: u.Model,
+			Input: u.Input, Output: u.Output, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite, Calls: u.Calls}
 		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
-			b.Cost += p.Cost(u.Input, u.Output, u.CacheRead, u.CacheWrite, u.CacheWrite1h)
+			row.Cost = p.Cost(u.Input, u.Output, u.CacheRead, u.CacheWrite, u.CacheWrite1h)
+			b.Cost += row.Cost
 		} else {
+			row.Unpriced = u.Calls
 			b.Unpriced += u.Calls
 		}
+		out.Rows = append(out.Rows, row)
 	}
 	return out, nil
 }

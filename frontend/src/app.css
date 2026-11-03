@@ -1707,6 +1707,9 @@ button.ghost[aria-pressed="true"] {
 .panes[data-layout="3"],
 .panes[data-layout="4"] {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-app);
 }
 
 .panes[data-layout="3"] > .pane:first-child {
@@ -1731,6 +1734,14 @@ button.ghost[aria-pressed="true"] {
 
 .pane-split {
   container-type: size;
+  /* Each pane a card of its own on the app's darker background. Not clipped, so a
+     menu or tooltip can still reach past its edge. */
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+}
+
+.pane-split > * {
+  border-radius: inherit;
 }
 
 /* A line around the pane the keyboard goes to, drawn over its contents. */
@@ -1738,10 +1749,12 @@ button.ghost[aria-pressed="true"] {
 .pane-drop::after {
   content: "";
   position: absolute;
-  inset: 0;
+  /* Over the pane's own border, whose corners it follows. */
+  inset: -1px;
   z-index: 6;
   pointer-events: none;
-  border: 1px solid var(--focus);
+  border: 2px solid var(--focus);
+  border-radius: 10px;
 }
 
 .pane-drop::after {
@@ -4422,5 +4435,92 @@ table.hooks .hook-command {
 }
 .limits-history thead th {
   color: var(--muted);
+}
+
+/* Limits read as one line and a bar on the usage page's tiles; label and figure share
+   the line, with the state beneath only when there is one. */
+.limit-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+
+/* The usage pane: everything above the chart stays short, and the chart takes what is
+   left, so it is on screen in a pane of any size. A very small pane scrolls. */
+.pane-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 12px;
+}
+.pane-usage-head h2 {
+  margin: 0;
+}
+.limits-compact .limits-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin-bottom: 0;
+}
+.limits-compact .limit-tile {
+  gap: 3px;
+  padding: 6px 10px;
+}
+.limits-compact .limit-tile .muted {
+  font-size: 0.8em;
+}
+.limits-compact .limit-meter {
+  height: 4px;
+}
+.live-usage-compact {
+  flex: 1;
+  gap: 8px;
+  min-height: 300px;
+}
+.live-usage-compact .live-usage-controls {
+  gap: 6px 8px;
+  font-size: 0.8em;
+}
+.live-usage-controls select {
+  max-width: 170px;
+}
+.live-usage-strip {
+  margin: 0;
+  font-size: 0.87em;
+}
+.live-usage-compact .usage-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 170px;
+  margin-top: 0;
+  padding: 8px 10px;
+}
+.live-usage-compact .usage-card-head h3 {
+  font-size: 0.8em;
+}
+.usage-chart-fill {
+  flex: 1;
+  min-height: 120px;
+}
+/* Out of the flow, so its height follows the space and never the other way around. */
+.usage-chart-fill svg {
+  position: absolute;
+  inset: 0;
+}
+
+/* The summary to share (GUI-029). */
+.cost-summary {
+  margin-bottom: 18px;
+}
+.cost-summary-picture {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  height: auto;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 

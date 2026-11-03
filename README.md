@@ -1,6 +1,13 @@
 # Freeloop
 
-An open-source macOS app for running AI coding agents with your own models, switchable harnesses, Agent Skills, MCP servers and custom environments, built for running many sessions across many repositories at once. Apache-2.0.
+**Run any coding agent. Keep your rules and your bill.**
+
+Freeloop is an open-source macOS app that runs Claude Code, Codex, Gemini CLI, OpenCode, Goose or its own agent, with your own models, under one permission policy and one cost view. Apache-2.0.
+
+- **Your rules sit above every agent.** A repository's config can tell an agent to stop asking. In Freeloop it still asks you: a `.claude/settings.json` allowing `Bash(*)` gets a `git push` past Claude Code's own check and not past Freeloop's. An agent that switches itself to a looser mode stays where you put it. Every session shows what your policy stopped. Try it with `scripts/policy-demo.sh`.
+- **One honest bill across agents.** Tokens and estimated cost by agent, model and project, your account's limits, and a summary to share as a table or a picture. Vendors show only their own.
+
+The limits: this decides what an agent asks to do. An approved shell command runs as you unless the environment is sandboxed, and only a sandbox or a container holds against an agent that does not ask. [docs/VISION.md](docs/VISION.md) says what has been tested with which agent, and [docs/SECURITY.md](docs/SECURITY.md) the rest.
 
 Status: early, and not yet released. Most of what v1 lists is built; [docs/ROADMAP.md](docs/ROADMAP.md) says what each milestone covers and what remains. Releases will not be signed or notarized. The specification is in `docs/`.
 

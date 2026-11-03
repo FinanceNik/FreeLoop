@@ -29,11 +29,15 @@ interface Props {
   // How a session's status reads, and whether the panes are tabs just now.
   statusLabel: Record<string, string>;
   onTabbed: (tabbed: boolean) => void;
+  // Names for the usage pane's filters.
+  projects: readonly { id: string; name: string }[];
+  providers: readonly { id: string; name: string }[];
+  harnesses: readonly { id: string; name: string }[];
 }
 
 const MAX_OFFERED = 6;
 
-export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onClose, onNew, onUsagePage, onError, unread, statusLabel, onTabbed }: Props) {
+export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onClose, onNew, onUsagePage, onError, unread, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -134,8 +138,8 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
                       ×
                     </button>
                   </div>
-                  <Limits showHistory={false} onError={onError} />
-                  <LiveUsage onError={onError} />
+                  <Limits compact onError={onError} />
+                  <LiveUsage compact projects={projects} providers={providers} harnesses={harnesses} onError={onError} />
                 </div>
               ) : s ? (
                 renderSession(s, active, split ? () => onClose(i) : undefined)
