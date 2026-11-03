@@ -4345,3 +4345,70 @@ table.hooks .hook-command {
   border-radius: 4px;
 }
 
+/* An account's limits (GUI-028): one number each, so tiles rather than a chart. The
+   words say the state; the colour of the fill only repeats them. */
+.usage-limits {
+  margin-bottom: 24px;
+}
+.limits-empty {
+  margin: 4px 0 8px;
+}
+.limits-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.limit-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.limit-meter {
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--border);
+}
+.limit-meter > div {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--series-1);
+}
+.limit-warning .limit-meter > div,
+.limit-refused .limit-meter > div {
+  background: var(--warn);
+}
+.limit-state {
+  font-weight: 600;
+}
+.limit-warning .limit-state,
+.limit-refused .limit-state {
+  color: var(--warn);
+}
+.limits-history {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.limits-history caption {
+  text-align: left;
+  padding-bottom: 6px;
+}
+.limits-history th,
+.limits-history td {
+  padding: 4px 8px 4px 0;
+  text-align: right;
+  font-weight: normal;
+  border-bottom: 1px solid var(--border);
+}
+.limits-history th:first-child {
+  text-align: left;
+}
+.limits-history thead th {
+  color: var(--muted);
+}
+

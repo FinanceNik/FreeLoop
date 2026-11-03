@@ -74,6 +74,8 @@ type session struct {
 	// request, so the agent's own fs/terminal request for the same thing
 	// does not ask twice.
 	approved approval
+	// lastLimits is the limits last reported, so only a change is recorded.
+	lastLimits string
 	// owedRecap is what the next prompt starts with: the conversation so far, for
 	// an agent that could not load it.
 	owedRecap string

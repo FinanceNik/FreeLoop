@@ -444,6 +444,11 @@ func (s *EngineService) SetModel(ctx context.Context, sessionID, providerID, mod
 	return s.eng.SetModel(ctx, sessionID, providerID, model)
 }
 
+// Limits returns the runs of each account limit agents have reported (GUI-028).
+func (s *EngineService) Limits(ctx context.Context) ([]engine.LimitPeriod, error) {
+	return s.eng.Limits(ctx)
+}
+
 // RecentUsage returns the last hours of usage, for the live graphs (GUI-023).
 func (s *EngineService) RecentUsage(ctx context.Context, hours int) (engine.RecentUsageReport, error) {
 	return s.eng.RecentUsage(ctx, hours)

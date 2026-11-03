@@ -39,7 +39,7 @@ const (
 // deltas come along, and are dropped unread: a handler that took long would overflow
 // the connection's queue.
 func sdkMessageFilter() []map[string]any {
-	return []map[string]any{{"type": "stream_event"}, {"type": "assistant"}, {"type": "result"}}
+	return []map[string]any{{"type": "stream_event"}, {"type": "assistant"}, {"type": "result"}, {"type": "rate_limit_event"}}
 }
 
 type sdkUsage struct {
@@ -84,6 +84,8 @@ type sdkMessage struct {
 		Message sdkModelMessage `json:"message"`
 		Usage   sdkUsage        `json:"usage"`
 	} `json:"event"`
+	// RateLimit is a rate_limit_event's report (limits.go).
+	RateLimit *sdkRateLimit `json:"rate_limit_info"`
 	// ModelUsage is a result's running total for the agent's process, per model.
 	ModelUsage map[string]struct {
 		Input      int64 `json:"inputTokens"`
@@ -134,6 +136,7 @@ func (s *session) HandleExtensionMethod(_ context.Context, method string, params
 	// One that cannot be read is skipped: usage is not worth ending a session for.
 	if json.Unmarshal(params, &p) == nil {
 		s.countCall(p.Message)
+		s.reportLimits(p.Message.RateLimit)
 	}
 	return nil, nil
 }

@@ -31,6 +31,7 @@ const (
 	ConfigOptionUpdate      Type = "config_option_update"
 	SessionInfoUpdate       Type = "session_info_update"
 	UsageUpdate             Type = "usage_update"
+	LimitUpdate             Type = "limit_update"
 	Notice                  Type = "notice"
 	CompactionUpdate        Type = "compaction_update"
 	CompactionSummaryChunk  Type = "compaction_summary_chunk"
@@ -89,6 +90,7 @@ var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
 	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged, SessionImported,
+	LimitUpdate,
 }
 
 // AllTypes returns every known variant.
@@ -211,6 +213,25 @@ type RewindData struct {
 	// Context is false when the harness cannot rewind its context, as for
 	// an external agent.
 	Context bool `json:"context"`
+}
+
+// LimitData is the payload of limit_update: how much of an account's limits is used,
+// as the agent itself reported it (GUI-028).
+type LimitData struct {
+	// Source names the agent.
+	Source  string        `json:"source"`
+	Windows []LimitWindow `json:"windows"`
+}
+
+// LimitWindow is one limit, such as a five-hour or a weekly one.
+type LimitWindow struct {
+	ID          string  `json:"id"`
+	Label       string  `json:"label"`
+	UsedPercent float64 `json:"usedPercent"`
+	// ResetsAt is in Unix seconds.
+	ResetsAt int64 `json:"resetsAt"`
+	// Status is allowed, warning or rejected.
+	Status string `json:"status"`
 }
 
 // NoticeData is the payload of notice: something the user should know

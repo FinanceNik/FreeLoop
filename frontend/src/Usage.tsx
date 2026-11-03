@@ -8,6 +8,7 @@ import LiveUsage from "./LiveUsage.tsx";
 import UsageChart, { type Series } from "./UsageChart.tsx";
 import { ActivityView, ApprovalsView, EfficiencyView, Tile } from "./UsageInsights.tsx";
 import { basename } from "./paths.ts";
+import Limits from "./Limits.tsx";
 
 // The usage dashboard (GUI-018, PRV-008): tokens and estimated cost over a
 // range, by kind of token, model, agent or project, and the sessions that
@@ -187,6 +188,10 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
   return (
     <section className="page usage-page">
       <h2>Usage</h2>
+      <div className="usage-limits">
+        <h3>Limits</h3>
+        <Limits showHistory onError={onError} />
+      </div>
       <div className="usage-recent">
         <div className="pane-usage-head">
           <h3>Recent hours</h3>

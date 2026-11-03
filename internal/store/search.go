@@ -71,16 +71,18 @@ type usage struct {
 
 // batch is what events add to the index.
 type batch struct {
-	rows  []row
-	usage []usage
+	rows   []row
+	usage  []usage
+	limits []limitRow
 }
 
 func (b *batch) add(o batch) {
 	b.rows = append(b.rows, o.rows...)
 	b.usage = append(b.usage, o.usage...)
+	b.limits = append(b.limits, o.limits...)
 }
 
-func (b batch) empty() bool { return len(b.rows) == 0 && len(b.usage) == 0 }
+func (b batch) empty() bool { return len(b.rows) == 0 && len(b.usage) == 0 && len(b.limits) == 0 }
 
 // indexer turns a session's events into rows. Chunks of one kind collect
 // until an event of another type ends the message.
@@ -120,6 +122,10 @@ func (x *indexer) feed(ev event.Event) (batch, int64) {
 	x.seen = ev.Seq
 	var b batch
 	switch ev.Type {
+	case event.LimitUpdate:
+		if ev.Seq > x.copied {
+			b.limits = limitRows(ev)
+		}
 	case event.ModelChanged:
 		var d event.ModelChangedData
 		json.Unmarshal(ev.Data, &d)
@@ -272,6 +278,12 @@ func (s *Store) writeIndex(ctx context.Context, sid string, b batch, done int64,
 			input = input + excluded.input, output = output + excluded.output, cache_read = cache_read + excluded.cache_read,
 			cache_write = cache_write + excluded.cache_write, cache_write_1h = cache_write_1h + excluded.cache_write_1h, calls = calls + excluded.calls`,
 			u.day, sid, u.providerID, u.model, u.input, u.output, u.cacheRead, u.cacheWrite, u.cacheWrite1h, u.calls); err != nil {
+			return err
+		}
+	}
+	for _, l := range b.limits {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO limit_reports (session_id, seq, ts, source, window_id, label, used, resets_at, status)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, sid, l.seq, l.ts, l.source, l.window, l.label, l.used, l.resetsAt, l.status); err != nil {
 			return err
 		}
 	}

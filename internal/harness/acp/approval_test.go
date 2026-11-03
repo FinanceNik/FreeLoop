@@ -306,3 +306,50 @@ func TestAnAgentThatCannotLoadGetsARecap(t *testing.T) {
 		t.Errorf("a second recap = %q", r)
 	}
 }
+
+// GUI-028: an agent's limits, from a report captured from Claude Code on 2026-11-03,
+// whose 0.11 and 0.2 were what /usage printed as 11% and 20%.
+func TestAgentLimits(t *testing.T) {
+	rec := &recorder{}
+	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit}, preset: config.HarnessPreset{Name: "Claude Code", Skills: config.SkillsClaudePlugin}, mode: permission.ModeAsk}
+	params := json.RawMessage(`{"message":{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1793761200,"rateLimitType":"five_hour","overageStatus":"rejected","overageDisabledReason":"org_level_disabled","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.11,"resetsAt":1793761200,"status":"allowed"},"seven_day":{"utilization":0.2,"resetsAt":1794286800,"status":"allowed"}}}}}`)
+	for range 2 {
+		if _, err := s.HandleExtensionMethod(context.Background(), sdkMessageMethod, params); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []event.LimitData
+	for _, e := range rec.events {
+		if e.Type == event.LimitUpdate {
+			var d event.LimitData
+			json.Unmarshal(e.Data, &d)
+			got = append(got, d)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("%d reports recorded for two that were the same", len(got))
+	}
+	w := got[0].Windows
+	if got[0].Source != "Claude Code" || len(w) != 2 {
+		t.Fatalf("%+v", got[0])
+	}
+	if w[0].ID != "five_hour" || w[0].Label != "5-hour limit" || w[0].ResetsAt != 1793761200 || w[0].Status != "allowed" || w[0].UsedPercent < 10.9 || w[0].UsedPercent > 11.1 {
+		t.Errorf("first window: %+v", w[0])
+	}
+	if w[1].ID != "seven_day" || w[1].UsedPercent < 19.9 || w[1].UsedPercent > 20.1 {
+		t.Errorf("second window: %+v", w[1])
+	}
+	// A status, an unnamed window, and what cannot be shown.
+	one := 1.0
+	next := limitWindows(&sdkRateLimit{UnifiedWindows: map[string]sdkLimitWindow{
+		"seven_day_opus": {Utilization: &one, ResetsAt: 5, Status: "rejected"},
+		"no_figure":      {ResetsAt: 5},
+		"no_reset":       {Utilization: &one},
+	}})
+	if len(next) != 1 || next[0].Label != "Seven day opus limit" || next[0].Status != "rejected" || next[0].UsedPercent != 100 {
+		t.Errorf("%+v", next)
+	}
+	// A report with nothing in it does not end a session.
+	s.reportLimits(nil)
+	s.reportLimits(&sdkRateLimit{Status: "allowed"})
+}

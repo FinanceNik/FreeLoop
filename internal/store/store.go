@@ -659,7 +659,10 @@ func migrate(db *sql.DB) error {
 			return err
 		}
 	}
-	return addColumns(db)
+	if err := addColumns(db); err != nil {
+		return err
+	}
+	return addLimitsTable(db)
 }
 
 // DeleteSession removes a session's transcript folder and its database row

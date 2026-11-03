@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
+import Limits from "./Limits.tsx";
 import LiveUsage from "./LiveUsage.tsx";
 import { basename } from "./paths.ts";
 import { tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
@@ -133,6 +134,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
                       ×
                     </button>
                   </div>
+                  <Limits showHistory={false} onError={onError} />
                   <LiveUsage onError={onError} />
                 </div>
               ) : s ? (

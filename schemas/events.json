@@ -47,7 +47,8 @@
         "optimizer_changed",
         "effort_changed",
         "session_rule_changed",
-        "session_imported"
+        "session_imported",
+        "limit_update"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -122,6 +123,10 @@
       "then": { "properties": { "data": { "$ref": "#/$defs/sessionImported" } } }
     },
     {
+      "if": { "properties": { "type": { "const": "limit_update" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/limitUpdate" } } }
+    },
+    {
       "if": { "properties": { "type": { "const": "session_rule_changed" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/sessionRuleChanged" } } }
     }
@@ -148,6 +153,27 @@
       "description": "The effort the session's model calls ask for (PRV-014).",
       "required": ["effort"],
       "properties": { "effort": { "type": "string" } }
+    },
+    "limitUpdate": {
+      "type": "object",
+      "required": ["source", "windows"],
+      "properties": {
+        "source": { "type": "string" },
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "usedPercent", "resetsAt", "status"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "usedPercent": { "type": "number", "minimum": 0, "maximum": 100 },
+              "resetsAt": { "type": "integer" },
+              "status": { "enum": ["allowed", "warning", "rejected"] }
+            }
+          }
+        }
+      }
     },
     "optimizerChanged": {
       "type": "object",

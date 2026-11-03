@@ -160,6 +160,8 @@ dataEnv:                    # optional: variables pointing at files in the sessi
 install: brew install rtk   # optional, one line: typed into a terminal for the user to run
 ```
 
+Account limits (GUI-028) follow the same raw messages as per-call tokens: `rate_limit_event` is in `sdkMessageFilter`, and `internal/harness/acp/limits.go` turns its `unifiedWindows`, whose utilization is a share of one, into a generic `limit_update`, so the frontend knows no vendor. Check that field again when the preset's adapter version changes. An agent on another protocol reports limits by emitting the same event.
+
 The model is told once when an optimizer comes on (`optimizerNote`, through `harness.Prompt.Note`, which the transcript does not show). A built-in optimizer can name `Gain`, the arguments that print its savings as JSON (`parseGain`); a file cannot, so a file's optimizer shows only the count of commands it shortened.
 
 Only a built-in can offer a one-click install, through `Download` in `config.BuiltinOptimizers`: a version and, per architecture, a `.tar.gz` URL and its SHA-256. A file cannot, so no file makes the app fetch anything.
