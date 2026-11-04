@@ -1,10 +1,12 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { visibleCommand } from "./a11y.ts";
 import { tabAfterKey } from "./a11y.ts";
 import { describeRule, RULE_TOOLS } from "./Rules.tsx";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
 import { HELD_BY, optimizerCounts, panelData, type SessionView, type ToolItem } from "./transcript.ts";
 import { HOLD_PLACE } from "./scrollPlace.ts";
+import Splitter from "./Splitter.tsx";
+import { clampPanel, PANEL_MIN, panelMax, setPanelWidth } from "./sizes.ts";
 import DiffPanel from "./DiffPanel.tsx";
 import FilesPanel from "./FilesPanel.tsx";
 // xterm.js is large; it loads when a terminal is first shown.
@@ -57,9 +59,36 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
   const data = panelData(view);
   // Uncommitted files, from the latest git state.
   const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
+  // The panel's width, dragged by its left edge (GUI-032). Each tab has a usual width.
+  const panelBox = useRef<HTMLElement>(null);
+  const [width, setWidth] = useState(PANEL_MIN);
+  useLayoutEffect(() => {
+    if (panelBox.current) setWidth(panelBox.current.offsetWidth);
+  }, [tab]);
+  const available = () => panelBox.current?.parentElement?.clientWidth ?? window.innerWidth;
+  const dragWidth = (px: number) => {
+    const next = clampPanel(px, available());
+    setPanelWidth(next);
+    setWidth(next);
+  };
 
   return (
-    <aside className={tab === "diff" || tab === "files" || tab === "terminal" || tab === "preview" ? "panel panel-wide" : "panel"} aria-label="Session panel">
+    <aside ref={panelBox} className={tab === "diff" || tab === "files" || tab === "terminal" || tab === "preview" ? "panel panel-wide" : "panel"} aria-label="Session panel">
+      <Splitter
+        className="splitter-panel"
+        label="Panel width"
+        value={width}
+        min={PANEL_MIN}
+        max={panelMax(available())}
+        // Dragged or pressed to the right, it gets narrower.
+        step={-16}
+        fromPointer={(x) => (panelBox.current?.getBoundingClientRect().right ?? x) - x}
+        onChange={dragWidth}
+        onReset={() => {
+          setPanelWidth(null);
+          setWidth(panelBox.current?.offsetWidth ?? PANEL_MIN);
+        }}
+      />
       <div className="panel-tabs">
         <div
           className="panel-tablist"

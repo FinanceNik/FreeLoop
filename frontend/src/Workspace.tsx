@@ -4,6 +4,8 @@ import { tabAfterKey } from "./a11y.ts";
 import Limits from "./Limits.tsx";
 import LiveUsage from "./LiveUsage.tsx";
 import { basename } from "./paths.ts";
+import Splitter from "./Splitter.tsx";
+import { clampSplit, rememberSplit, storedSplit } from "./sizes.ts";
 import { stableOrder, tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
 
 // The panes of the main window (GUI-017). The rules are in workspace.ts; this
@@ -45,6 +47,7 @@ const MAX_OFFERED = 6;
 
 export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onSwap, onClose, onNew, onUsagePage, onError, unread, activityOf, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
   const box = useRef<HTMLDivElement>(null);
+  const panesBox = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
     if (!box.current) return;
@@ -60,6 +63,15 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
   const split = work.layout > 1;
   const asTabs = tabbed(work, width);
   useEffect(() => onTabbed(asTabs), [asTabs]);
+  // How much of the width the left column of panes takes (GUI-032).
+  const [storedShare, setShare] = useState<number | null>(storedSplit);
+  const columnsApart = split && !asTabs;
+  const share = clampSplit(storedShare ?? 0.5, width);
+  const dragSplit = (next: number) => {
+    const clamped = clampSplit(next, width);
+    setShare(clamped);
+    rememberSplit(clamped);
+  };
   // A hidden pane still needs to be able to say it wants the user.
   const statusOf = (sid: string | null) => {
     const s = session(sid);
@@ -147,7 +159,32 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
           ))}
         </div>
       )}
-      <div className="panes" data-layout={asTabs ? 1 : work.layout}>
+      <div
+        ref={panesBox}
+        className="panes"
+        data-layout={asTabs ? 1 : work.layout}
+        style={columnsApart ? { gridTemplateColumns: `minmax(0, ${share}fr) minmax(0, ${1 - share}fr)` } : undefined}
+      >
+        {columnsApart && (
+          <Splitter
+            className="splitter-panes"
+            label="Width of the panes"
+            style={{ left: `${share * 100}%` }}
+            value={share * 100}
+            min={clampSplit(0, width) * 100}
+            max={clampSplit(1, width) * 100}
+            step={2}
+            fromPointer={(x) => {
+              const box = panesBox.current?.getBoundingClientRect();
+              return box && box.width > 0 ? ((x - box.left) / box.width) * 100 : share * 100;
+            }}
+            onChange={(percent) => dragSplit(percent / 100)}
+            onReset={() => {
+              setShare(null);
+              rememberSplit(null);
+            }}
+          />
+        )}
         {order.map((key) => {
           const i = keys.indexOf(key);
           const sid = work.panes[i];

@@ -350,6 +350,50 @@ await step("the panel's tabs clear its close button", async () => {
   check("the panel's tabs clear its close button", last.getBoundingClientRect().right <= close.getBoundingClientRect().left + 1 && list.scrollWidth <= list.clientWidth, `the last tab ends at ${Math.round(last.getBoundingClientRect().right)}, the button starts at ${Math.round(close.getBoundingClientRect().left)}`);
 });
 
+await step("the side parts are resizable", async () => {
+  const mouse = (...a) => window.webkit.messageHandlers.mouse.postMessage(a);
+  const centre = (el) => { const b = el.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };
+  const sidebar = document.querySelector(".sidebar");
+  const was = sidebar.getBoundingClientRect().width;
+  let [x, y] = centre(document.querySelector(".splitter-sidebar"));
+  await mouse(x, y, 1, x + 100, y);
+  await sleep(200);
+  check("dragging widens the sidebar", Math.abs(sidebar.getBoundingClientRect().width - was - 100) <= 8, `${Math.round(was)} became ${Math.round(sidebar.getBoundingClientRect().width)} px`);
+  check("the sidebar's width is remembered", Number(localStorage.getItem("freeloop.sidebarWidth")) > was);
+  [x, y] = centre(document.querySelector(".splitter-sidebar"));
+  await mouse(x, y, 1, 20, y);
+  await sleep(200);
+  check("the sidebar stops at its least", Math.round(sidebar.getBoundingClientRect().width) === 180, `${Math.round(sidebar.getBoundingClientRect().width)} px`);
+  [x, y] = centre(document.querySelector(".splitter-sidebar"));
+  await mouse(x, y, 2);
+  await sleep(200);
+  check("a double click puts the sidebar back", Math.round(sidebar.getBoundingClientRect().width) === 264, `${Math.round(sidebar.getBoundingClientRect().width)} px`);
+
+  const panelButton = withText(".session-actions button", "Panel");
+  if (panelButton.getAttribute("aria-pressed") !== "true") panelButton.click();
+  const panel = await until("the panel", () => document.querySelector("aside.panel"));
+  const usual = panel.getBoundingClientRect().width;
+  [x, y] = centre(document.querySelector(".splitter-panel"));
+  await mouse(x, y, 1, x - 120, y);
+  await sleep(200);
+  check("dragging widens the panel", Math.abs(panel.getBoundingClientRect().width - usual - 120) <= 8, `${Math.round(usual)} became ${Math.round(panel.getBoundingClientRect().width)} px`);
+  const talk = activePane().querySelector(".conversation");
+  [x, y] = centre(document.querySelector(".splitter-panel"));
+  await mouse(x, y, 1, 10, y);
+  await sleep(200);
+  check("a wide panel leaves the conversation its room", talk.getBoundingClientRect().width >= 279, `${Math.round(talk.getBoundingClientRect().width)} px`);
+  const line = document.querySelector(".splitter-panel");
+  line.focus();
+  const before = panel.getBoundingClientRect().width;
+  line.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  await sleep(100);
+  check("an arrow key moves a divider", Math.abs(panel.getBoundingClientRect().width - before + 16) <= 1, `${before} became ${panel.getBoundingClientRect().width} px`);
+  [x, y] = centre(document.querySelector(".splitter-panel"));
+  await mouse(x, y, 2);
+  await sleep(200);
+  check("a double click puts the panel back", Math.round(panel.getBoundingClientRect().width) === Math.round(usual), `${Math.round(panel.getBoundingClientRect().width)} against ${Math.round(usual)} px`);
+});
+
 await step("a finished session says so on the board", async () => {
   withText(".footer-links button", "Board").click();
   const card = await until("the board's card", () => withText(".board-card", "Check alpha"));
@@ -377,6 +421,26 @@ await step("panes fit, and the keyboard moves between them", async () => {
   // Inactive panes keep only the input.
   const hidden = getComputedStyle(document.querySelector(".pane-split:not(.pane-active) .composer-actions")).display === "none";
   check("a pane the user is not in hides its controls", hidden);
+  // The panes' divider moves their columns, and a double click puts it back.
+  {
+    const mouse = (...a) => window.webkit.messageHandlers.mouse.postMessage(a);
+    const line = document.querySelector(".splitter-panes");
+    const [left] = all(".pane").sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    const middle = () => { const b = line.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };
+    const was = left.getBoundingClientRect().width;
+    const [x, y] = middle();
+    await mouse(x, y, 1, x + 120, y);
+    await sleep(200);
+    const moved = left.getBoundingClientRect().width;
+    check("dragging the panes' divider moves them", Math.abs(moved - was - 120) <= 12, `${Math.round(was)} became ${Math.round(moved)} px`);
+    const nothingOver = all(".pane").every((p) => all("*", p).every((e) => e.closest(".export-options") || e.getBoundingClientRect().width === 0 || e.getBoundingClientRect().right <= p.getBoundingClientRect().right + 1));
+    check("nothing runs past a resized pane", nothingOver);
+    const [mx, my] = middle();
+    await mouse(mx, my, 2);
+    await sleep(200);
+    check("a double click evens the panes", Math.abs(left.getBoundingClientRect().width - was) <= 2, `${Math.round(left.getBoundingClientRect().width)} against ${Math.round(was)} px`);
+  }
+
   // A long prompt in a short pane scrolls in its box and leaves Send in the pane.
   document.querySelector('.layout-switch button[aria-label="4 panes"]').click();
   await sleep(300);

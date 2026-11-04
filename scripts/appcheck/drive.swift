@@ -12,6 +12,12 @@ final class KeyWindow: NSWindow {
   override var canBecomeKey: Bool { true }
 }
 
+// Takes a click even with the app not active, which it often is not while a check runs in
+// the background: a view in an inactive window drops mouse events without a word.
+final class CheckedWebView: WKWebView {
+  override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 // Real mouse events, for what the page's own synthetic ones cannot do, such as changing a
 // selection: the scenario sends [x, y, clicks], [x, y, 1, toX, toY] for a drag, or
 // [x, y, -1] for a right click.
@@ -19,6 +25,8 @@ final class Mouse: NSObject, WKScriptMessageHandlerWithReply {
   func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
     guard let a = message.body as? [Double], a.count >= 3 else { return replyHandler(nil, "bad mouse message") }
     Task { @MainActor in
+      window.makeKeyAndOrderFront(nil)
+      window.makeFirstResponder(web)
       let point = { (x: Double, y: Double) in NSPoint(x: x, y: web.frame.height - y) }
       func send(_ type: NSEvent.EventType, _ p: NSPoint, _ clicks: Int) async {
         let event = NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: clicks, pressure: 1)!
@@ -86,7 +94,7 @@ let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: 720)
 let mouse = Mouse()
 let configuration = WKWebViewConfiguration()
 configuration.userContentController.addScriptMessageHandler(mouse, contentWorld: .page, name: "mouse")
-let web = WKWebView(frame: window.contentView!.bounds, configuration: configuration)
+let web = CheckedWebView(frame: window.contentView!.bounds, configuration: configuration)
 window.contentView!.addSubview(web)
 window.makeKeyAndOrderFront(nil)
 let ui = UI()

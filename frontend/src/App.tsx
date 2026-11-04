@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { screenName } from "./a11y.ts";
 import { ariaKeys, bindingOf, keyLabel, pressed, setBindings } from "./shortcuts.ts";
 import { Browser, Events, Window } from "@wailsio/runtime";
@@ -52,6 +52,8 @@ import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
 import { ChevronIcon, FilterIcon, Logo } from "./icons.tsx";
 import { clearSelectionOnClick } from "./selection.ts";
+import Splitter from "./Splitter.tsx";
+import { clampSidebar, rememberSidebar, setPanelWidth, SIDEBAR_MIN, sidebarMax, storedPanel, storedSidebar } from "./sizes.ts";
 import ActivityLine from "./ActivityLine.tsx";
 import ContextMenu, { type MenuItem } from "./ContextMenu.tsx";
 import { ask } from "./ask.ts";
@@ -501,6 +503,10 @@ export default function App() {
   }, []);
 
   useEffect(clearSelectionOnClick, []);
+  useEffect(() => {
+    const panel = storedPanel();
+    if (panel !== null) setPanelWidth(panel);
+  }, []);
 
   // ⌃⇧ and the arrows move between panes, as in tmux (SET-006). Caught on the way down,
   // since a terminal in focus keeps its keys, and not while Settings records a key.
@@ -939,6 +945,12 @@ export default function App() {
     refreshSessions();
   };
   // A session row's right-click menu, and renaming in the row.
+  const [sidebarWidth, setSidebarWidth] = useState<number | null>(storedSidebar);
+  const dragSidebar = (px: number) => {
+    const next = clampSidebar(px, window.innerWidth);
+    setSidebarWidth(next);
+    rememberSidebar(next);
+  };
   const [rowMenu, setRowMenu] = useState<{ session: Session; x: number; y: number } | null>(null);
   const [renamingRow, setRenamingRow] = useState<{ id: string; title: string } | null>(null);
   // Escape takes the field away, and losing focus must not then save what was typed.
@@ -1006,7 +1018,7 @@ export default function App() {
 
   return (
     <PaletteContext.Provider value={registry}>
-    <div className={STANDALONE ? "app standalone" : "app"}>
+    <div className={STANDALONE ? "app standalone" : "app"} style={sidebarWidth ? ({ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties) : undefined}>
       <div className="sr-only" role="status" aria-live="polite">
         {heardScreen}
       </div>
@@ -1369,6 +1381,20 @@ export default function App() {
               </div>
             </div>
           </footer>
+          <Splitter
+            className="splitter-sidebar"
+            label="Sidebar width"
+            value={sidebarWidth ?? 264}
+            min={SIDEBAR_MIN}
+            max={sidebarMax(window.innerWidth)}
+            step={16}
+            fromPointer={(x) => x}
+            onChange={dragSidebar}
+            onReset={() => {
+              setSidebarWidth(null);
+              rememberSidebar(null);
+            }}
+          />
         </aside>
       )}
       {rowMenu && <ContextMenu x={rowMenu.x} y={rowMenu.y} label={`Actions for ${rowMenu.session.title}`} items={rowMenuItems(rowMenu.session)} onClose={() => setRowMenu(null)} />}
