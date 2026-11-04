@@ -4,6 +4,7 @@ import { tabAfterKey } from "./a11y.ts";
 import { describeRule, RULE_TOOLS } from "./Rules.tsx";
 import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
 import { HELD_BY, optimizerCounts, panelData, type SessionView, type ToolItem } from "./transcript.ts";
+import { HOLD_PLACE } from "./scrollPlace.ts";
 import DiffPanel from "./DiffPanel.tsx";
 import FilesPanel from "./FilesPanel.tsx";
 // xterm.js is large; it loads when a terminal is first shown.
@@ -47,6 +48,7 @@ export function showTool(toolCallId: string) {
   if (el instanceof HTMLDetailsElement) el.open = true;
   // It may be inside a collapsed run of tool calls.
   for (let up = el.parentElement; up; up = up.parentElement) if (up instanceof HTMLDetailsElement) up.open = true;
+  el.closest(".conversation")?.dispatchEvent(new Event(HOLD_PLACE));
   const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   el.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
 }

@@ -29,7 +29,7 @@ const step = async (name, fn) => {
 };
 // One turn of the demo, approving whatever it asks. Returns what the sidebar said while
 // a request waited.
-const turn = async (title) => {
+const turn = async (title, afterSend = () => {}) => {
   const pane = activePane();
   const ended = () => all(".turn-end", pane).length;
   const before = ended();
@@ -38,6 +38,7 @@ const turn = async (title) => {
   type(box, "go");
   await sleep(50);
   (await until("Send to be enabled", () => { const b = withText(".composer-actions button.primary", "Send", pane); return b && !b.disabled && b; })).click();
+  afterSend();
   let waitingLine = "";
   await until("the turn to end", () => {
     const allow = pane.querySelector(".approval-buttons button.primary");
@@ -51,6 +52,116 @@ const turn = async (title) => {
 };
 
 await until("the session list", () => withText(".session-row", "Check alpha"));
+
+// Opening a long transcript lands on its end and stays there while it settles.
+await step("a long transcript opens at its end", async () => {
+  openSession("Check long");
+  const c = await until("the conversation", () => { const x = document.querySelector(".conversation"); return x && x.scrollHeight > x.clientHeight && x; });
+  const seen = [];
+  for (let i = 0; i < 30; i++) {
+    await sleep(100);
+    seen.push(Math.round(toTheEnd(c)));
+  }
+  check("a long transcript opens at its end", toTheEnd(c) <= 60, `${c.children.length} items, px from the end over 3 s: ${seen.filter((_, i) => i % 5 === 0).join(" ")} ... ${seen.at(-1)}`);
+});
+
+const conversation = () => activePane().querySelector(".conversation");
+const atEnd = async (c) => { c.scrollTop = c.scrollHeight; await sleep(150); };
+const taller = async () => {
+  const last = [...conversation().children].filter((e) => e.getBoundingClientRect().height > 0).at(-1);
+  last.style.paddingBottom = `${(parseInt(last.style.paddingBottom) || 0) + 400}px`;
+  await sleep(200);
+};
+
+await step("content growing with no event is followed", async () => {
+  const c = conversation();
+  await atEnd(c);
+  await taller();
+  check("content growing with no event is followed", toTheEnd(c) <= 60, `${Math.round(toTheEnd(c))} px from the end`);
+});
+
+await step("a wheel twitch that scrolls nothing does not stop the following", async () => {
+  const c = conversation();
+  await atEnd(c);
+  c.dispatchEvent(new WheelEvent("wheel", { deltaY: -0.5, bubbles: true }));
+  await sleep(700);
+  await taller();
+  check("a wheel twitch that scrolls nothing does not stop the following", toTheEnd(c) <= 60, `${Math.round(toTheEnd(c))} px from the end`);
+});
+
+await step("scrolling inside a code block does not stop the following", async () => {
+  const c = conversation();
+  await atEnd(c);
+  const inner = document.createElement("pre");
+  inner.style.cssText = "height:60px;overflow:auto";
+  inner.textContent = "x\n".repeat(50);
+  c.appendChild(inner);
+  await atEnd(c);
+  inner.scrollTop = 200;
+  inner.dispatchEvent(new WheelEvent("wheel", { deltaY: -40, bubbles: true }));
+  inner.scrollTop = 160;
+  await sleep(700);
+  inner.remove();
+  await sleep(100);
+  await atEnd(c);
+  await taller();
+  check("scrolling inside a code block does not stop the following", toTheEnd(c) <= 60, `${Math.round(toTheEnd(c))} px from the end`);
+});
+
+await step("a small nudge near the end keeps following", async () => {
+  const c = conversation();
+  await atEnd(c);
+  c.dispatchEvent(new WheelEvent("wheel", { deltaY: -20, bubbles: true }));
+  c.scrollTop -= 20;
+  await sleep(700);
+  await taller();
+  check("a small nudge near the end keeps following", toTheEnd(c) <= 60, `${Math.round(toTheEnd(c))} px from the end`);
+});
+
+await step("scrolling well up holds through new content, and the end resumes", async () => {
+  const c = conversation();
+  await atEnd(c);
+  c.dispatchEvent(new WheelEvent("wheel", { deltaY: -600, bubbles: true }));
+  c.scrollTop -= 600;
+  await sleep(700);
+  const top = c.scrollTop;
+  await taller();
+  check("scrolling well up holds through new content", Math.abs(c.scrollTop - top) <= 1, `${Math.round(top)} became ${Math.round(c.scrollTop)}`);
+  c.dispatchEvent(new WheelEvent("wheel", { deltaY: 5000, bubbles: true }));
+  c.scrollTop = c.scrollHeight;
+  await sleep(150);
+  await taller();
+  check("back at the end it follows again", toTheEnd(c) <= 60, `${Math.round(toTheEnd(c))} px from the end`);
+});
+
+await step("opening a tool card to read it is not pulled away", async () => {
+  const c = conversation();
+  await atEnd(c);
+  const card = all("details.tool", c).filter((d) => !d.open).at(-1) ?? all("summary", c).at(-1)?.parentElement;
+  if (!card) throw new Error("no card to open");
+  card.querySelector("summary").click();
+  await sleep(200);
+  const top = card.getBoundingClientRect().top;
+  await taller();
+  check("opening a tool card to read it is not pulled away", Math.abs(card.getBoundingClientRect().top - top) <= 1, `moved ${Math.round(card.getBoundingClientRect().top - top)} px`);
+  card.querySelector("summary").click();
+  await atEnd(c);
+});
+
+// While a turn streams, each frame's distance from the end shows any lag.
+await step("a running turn stays at the end, frame by frame", async () => {
+  const c = conversation();
+  await atEnd(c);
+  const seen = [];
+  let on = true;
+  const watch = () => { seen.push(toTheEnd(c)); if (on) requestAnimationFrame(watch); };
+  requestAnimationFrame(watch);
+  await turn("Check long");
+  await sleep(200);
+  on = false;
+  const far = seen.filter((d) => d > 60).length;
+  check("a running turn stays at the end, frame by frame", toTheEnd(c) <= 60 && far <= seen.length * 0.05, `${far} of ${seen.length} frames over 60 px, worst ${Math.round(Math.max(...seen))}, at the end ${Math.round(toTheEnd(c))}`);
+});
 
 await step("a session opens", async () => {
   openSession("Check alpha");
@@ -100,7 +211,7 @@ await step("scrolling up holds the place", async () => {
   const c = activePane().querySelector(".conversation");
   c.dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
   c.scrollTop = Math.max(0, c.scrollTop - 200);
-  await sleep(100);
+  await sleep(600);
   const top = c.scrollTop;
   // A taller message box resizes the conversation, which pulls a following view to the end.
   const box = activePane().querySelector(".composer textarea");
@@ -139,6 +250,13 @@ await step("panes fit, and the keyboard moves between them", async () => {
   // Inactive panes keep only the input.
   const hidden = getComputedStyle(document.querySelector(".pane-split:not(.pane-active) .composer-actions")).display === "none";
   check("a pane the user is not in hides its controls", hidden);
+  // A turn in a pane the user has left goes on being followed.
+  const running = document.querySelector(".pane-active");
+  const other = all(".pane").find((p) => p !== running);
+  await turn(running.querySelector("h2").textContent, () => other.querySelector("textarea").focus());
+  await sleep(300);
+  const c = running.querySelector(".conversation");
+  check("a pane the user left keeps following", toTheEnd(c) <= 60, `${Math.round(toTheEnd(c))} px from the end`);
   document.querySelector('.layout-switch button[aria-label="One pane"]').click();
   await sleep(200);
 });

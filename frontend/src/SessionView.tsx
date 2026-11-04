@@ -38,7 +38,7 @@ import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx
 import { usePaletteActions } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
-import { drawOnce, holdsPlace, readerScrolling, scrollsByKey } from "./scrollPlace.ts";
+import { drawOnce, HOLD_PLACE, holdsPlace, READER_PAUSE, readerScrolling, scrollsByKey, scrollsUpByKey, settledPlace } from "./scrollPlace.ts";
 import { estimate, formatCost, type PriceEntry } from "./cost.ts";
 import { trustStep } from "./trust.ts";
 
@@ -397,33 +397,74 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const holdBottom = useRef(false);
   const conversation = useRef<HTMLDivElement>(null);
   const lastTop = useRef(0);
-  // When the reader last touched the conversation, and whether they still are.
+  // When the reader last touched the conversation and last moved up, and whether they
+  // still are: new content waits while they do.
   const lastInput = useRef(0);
+  const lastUp = useRef(-Infinity);
   const pointerDown = useRef(false);
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toTheEnd = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight;
+  const followEnd = () => {
+    const el = conversation.current;
+    if (!el || holdBottom.current || pointerDown.current || performance.now() - lastUp.current < READER_PAUSE) return;
+    el.scrollTop = el.scrollHeight;
+  };
   const readerInput = () => {
     lastInput.current = performance.now();
   };
-  const followEnd = () => {
-    const el = conversation.current;
-    if (el && !holdBottom.current) el.scrollTop = el.scrollHeight;
+  // The reader moved up, or may have: their input can scroll something else or nothing,
+  // so where the view ends up decides.
+  const readerMovedUp = () => {
+    readerInput();
+    lastUp.current = performance.now();
+    if (settle.current) clearTimeout(settle.current);
+    settle.current = setTimeout(() => {
+      const el = conversation.current;
+      if (!el) return;
+      holdBottom.current = settledPlace(holdBottom.current, toTheEnd(el));
+      followEnd();
+    }, READER_PAUSE);
   };
-  useEffect(followEnd, [view]);
+  // Before the frame is drawn, so the view never shows itself away from the end.
+  useLayoutEffect(followEnd, [view]);
   // The conversation changes size without any event too: the composer grows, a pane
-  // becomes active and shows its controls, a hidden tab comes back.
+  // becomes active and shows its controls, a hidden tab comes back. So do its items: one
+  // has a placeholder height until first drawn, and a picture or a card can grow later.
   useEffect(() => {
     const el = conversation.current;
     if (!el) return;
     const resized = new ResizeObserver(followEnd);
     resized.observe(el);
+    for (const item of el.children) resized.observe(item, { box: "border-box" });
+    const items = new MutationObserver((changes) => {
+      for (const c of changes) {
+        c.addedNodes.forEach((n) => n instanceof Element && resized.observe(n, { box: "border-box" }));
+        c.removedNodes.forEach((n) => n instanceof Element && resized.unobserve(n));
+      }
+    });
+    items.observe(el, { childList: true });
+    const hold = () => {
+      holdBottom.current = true;
+    };
+    el.addEventListener(HOLD_PLACE, hold);
     const released = () => {
       pointerDown.current = false;
     };
+    // WebKit may not report the release of a scroll bar.
+    const moved = (e: PointerEvent) => {
+      if (e.buttons === 0) pointerDown.current = false;
+    };
     window.addEventListener("pointerup", released);
     window.addEventListener("pointercancel", released);
+    window.addEventListener("pointermove", moved);
     return () => {
       resized.disconnect();
+      items.disconnect();
+      el.removeEventListener(HOLD_PLACE, hold);
+      if (settle.current) clearTimeout(settle.current);
       window.removeEventListener("pointerup", released);
       window.removeEventListener("pointercancel", released);
+      window.removeEventListener("pointermove", moved);
     };
   }, []);
   useEffect(() => (conversation.current ? drawOnce(conversation.current) : undefined), []);
@@ -944,19 +985,24 @@ export default function SessionView({ session, events, focus, prices, initialDra
           }}
           onWheel={(e) => {
             readerInput();
-            // At once: output arriving before the scroll event would undo the step.
-            if (e.deltaY < 0 && e.currentTarget.scrollHeight > e.currentTarget.clientHeight) holdBottom.current = true;
+            if (e.deltaY < 0) readerMovedUp();
           }}
           onTouchMove={readerInput}
           onKeyDown={(e) => {
-            if (scrollsByKey(e.key)) readerInput();
+            if (scrollsUpByKey(e.key)) readerMovedUp();
+            else if (scrollsByKey(e.key)) readerInput();
           }}
           onPointerDown={() => {
             pointerDown.current = true;
           }}
-          onPointerMove={(e) => {
-            // WebKit may not report the release of a scroll bar.
-            if (e.buttons === 0) pointerDown.current = false;
+          onClick={(e) => {
+            // A card opened to read stays where it is; closed again near the end, the
+            // following picks up.
+            const card = e.target instanceof Element ? e.target.closest("summary")?.parentElement : null;
+            if (!(card instanceof HTMLDetailsElement)) return;
+            const box = e.currentTarget;
+            if (!card.open) holdBottom.current = true;
+            else requestAnimationFrame(() => (holdBottom.current = settledPlace(holdBottom.current, toTheEnd(box))));
           }}
         >
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}

@@ -1,11 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { heightAbove, holdsPlace, readerScrolling, scrollsByKey } from "./scrollPlace.ts";
+import { heightAbove, holdsPlace, readerScrolling, scrollsByKey, scrollsUpByKey, settledPlace } from "./scrollPlace.ts";
 
 test("the reader scrolling up stops following what arrives", () => {
   assert.equal(holdsPlace(false, 1000, 900, 500, true), true);
-  // Even a small step, still near the end.
-  assert.equal(holdsPlace(false, 1000, 980, 20, true), true);
+  assert.equal(holdsPlace(false, 1000, 900, 61, true), true);
 });
 
 test("back at the end it follows again", () => {
@@ -60,4 +59,23 @@ test("only items wholly above the view count towards how far to scroll", () => {
   ];
   assert.equal(heightAbove(items, 100), 340 + 140);
   assert.equal(heightAbove([], 100), 0);
+});
+
+test("a nudge that stays near the end keeps following", () => {
+  assert.equal(holdsPlace(false, 1000, 980, 20, true), false);
+  assert.equal(holdsPlace(true, 1000, 980, 20, true), false);
+});
+
+test("once the reader's input ends, the place goes by where the view is", () => {
+  // A twitch that moved nothing, or scrolling inside a code block.
+  assert.equal(settledPlace(false, 0), false);
+  assert.equal(settledPlace(true, 10), false);
+  // Well up, it stays held, and it never starts holding by itself.
+  assert.equal(settledPlace(true, 500), true);
+  assert.equal(settledPlace(false, 500), false);
+});
+
+test("only the keys that move up pause the following", () => {
+  assert.equal(scrollsUpByKey("PageUp"), true);
+  assert.equal(scrollsUpByKey("PageDown"), false);
 });

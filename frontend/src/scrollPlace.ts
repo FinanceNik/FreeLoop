@@ -1,16 +1,28 @@
 // Keeping the reader's place in the conversation.
 
+// HOLD_PLACE, sent to the conversation, stops the following: something showed the user a
+// place in it, and the next event must not pull them away.
+export const HOLD_PLACE = "freeloop-hold-place";
+
 // How near the end still counts as being at the end, in pixels.
 const AT_THE_END = 60;
 
 // holdsPlace says whether the conversation stops following what arrives, after a
-// scroll event: yes once the reader scrolls up, and no again back at the end. Only the
-// reader's own input counts (byReader). The view also moves up by itself: cards
+// scroll event: yes once the reader has scrolled up away from the end, and no again back
+// near it. A nudge that stays near the end does not count, since a trackpad twitches.
+// Only the reader's own input counts (byReader). The view also moves up by itself: cards
 // collapsing at the end shorten the conversation and the view lands on the new end,
 // which in a real WebKit view stopped the following for good. New output makes the end
 // further away with no one having moved, and that must not stop it either.
 export function holdsPlace(held: boolean, prevTop: number, top: number, toTheEnd: number, byReader: boolean): boolean {
-  if (byReader && top < prevTop - 1 && toTheEnd > 1) return true;
+  if (toTheEnd <= AT_THE_END) return false;
+  return byReader && top < prevTop - 1 ? true : held;
+}
+
+// settledPlace says whether the place is held once the reader's input has ended, for
+// input that may have moved nothing: wheel events over a code block scroll that block,
+// and a twitch scrolls nothing at all. It goes by where the view actually is.
+export function settledPlace(held: boolean, toTheEnd: number): boolean {
   return toTheEnd <= AT_THE_END ? false : held;
 }
 
@@ -22,6 +34,15 @@ const READER_INPUT_LASTS = 400;
 // readerScrolling says whether a scroll now comes from the reader.
 export function readerScrolling(now: number, lastInput: number, pointerDown: boolean): boolean {
   return pointerDown || now - lastInput <= READER_INPUT_LASTS;
+}
+
+// READER_PAUSE is how long new content leaves the view alone after the reader moved up,
+// so a first small step is not pulled back before the next one arrives.
+export const READER_PAUSE = READER_INPUT_LASTS;
+
+// The keys that move a page up.
+export function scrollsUpByKey(key: string): boolean {
+  return ["ArrowUp", "PageUp", "Home"].includes(key);
 }
 
 // The keys that scroll a page.

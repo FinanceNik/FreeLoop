@@ -50,7 +50,7 @@ let driver = Driver(scenario: scenario)
 web.uiDelegate = ui
 web.navigationDelegate = driver
 web.load(URLRequest(url: url))
-DispatchQueue.main.asyncAfter(deadline: .now() + 120) {
+DispatchQueue.main.asyncAfter(deadline: .now() + 240) {
   print("the scenario took too long")
   exit(2)
 }

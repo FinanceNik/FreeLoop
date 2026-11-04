@@ -50,6 +50,21 @@ for name in alpha beta; do
   "$APP" new "$DATA/projects/$name" -title "Check $name" -provider demo -model scripted >/dev/null
 done
 
+# A long transcript, to open and to follow: turns of the demo, approved from here.
+mkdir -p "$DATA/projects/long"
+git -C "$DATA/projects/long" init -q
+long=$("$APP" new "$DATA/projects/long" -title "Check long" -provider demo -model scripted)
+n=0
+while [ $n -lt "${APPCHECK_TURNS:-25}" ]; do
+  "$APP" prompt "$long" "go" >/dev/null 2>&1 &
+  p=$!
+  while kill -0 "$p" 2>/dev/null; do
+    for r in $("$APP" approvals 2>/dev/null | grep -o 'perm_[0-9_]*'); do "$APP" approve "$r" >/dev/null 2>&1 || true; done
+    sleep 0.05
+  done
+  n=$((n + 1))
+done
+
 status=0
 "$DATA/drive" "http://localhost:$PORT/" "$HERE/appcheck/scenario.js" || status=$?
 
