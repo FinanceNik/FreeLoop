@@ -9,6 +9,11 @@ interface Props {
   sessionId: string;
   mode: string;
   canBypass: boolean;
+  // Whether the agent has an auto mode, and whether it can be used here.
+  offersAuto: boolean;
+  canAuto: boolean;
+  // Whether Settings allows bypass mode.
+  bypassOn: boolean;
   // Changes when a model or effort was chosen, here or anywhere else.
   version: number;
   onMode: (mode: string) => void;
@@ -36,7 +41,7 @@ const OTHER = "\u0000other";
 // The permissions menu's way to the session's rules.
 const RULES = "\u0000rules";
 
-export default function SessionControls({ sessionId, mode, canBypass, version, onMode, onOtherModel, onRules, optimizer, onError }: Props) {
+export default function SessionControls({ sessionId, mode, canBypass, offersAuto, canAuto, bypassOn, version, onMode, onOtherModel, onRules, optimizer, onError }: Props) {
   const [report, setReport] = useState<SessionOptionsReport | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -101,11 +106,15 @@ export default function SessionControls({ sessionId, mode, canBypass, version, o
       <label className="session-control" data-mode={mode} title={hint}>
         <span className="sr-only">Permissions</span>
         <select value={mode} onChange={(e) => (e.target.value === RULES ? onRules() : onMode(e.target.value))}>
-          {MODES.map((m) => (
-            <option key={m.id} value={m.id} disabled={m.id === "bypass" && !canBypass && mode !== "bypass"} title={m.hint}>
-              {m.id === "bypass" && !canBypass && mode !== "bypass" ? `${m.name} (needs a trusted project and Settings)` : m.name}
-            </option>
-          ))}
+          {MODES.filter((m) => m.id !== "auto" || offersAuto || mode === "auto").map((m) => {
+            const blocked = m.id !== mode && ((m.id === "bypass" && !canBypass) || (m.id === "auto" && !canAuto));
+            const need = m.id === "bypass" && !bypassOn ? "turn it on in Settings" : "needs a trusted project";
+            return (
+              <option key={m.id} value={m.id} disabled={blocked} title={m.hint}>
+                {blocked ? `${m.name} (${need})` : m.name}
+              </option>
+            );
+          })}
           <option value={RULES} title="See and change what this session allows and denies without asking">
             Rules…
           </option>

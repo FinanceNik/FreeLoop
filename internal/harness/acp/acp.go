@@ -337,8 +337,10 @@ func modeLooseness(m permission.Mode) int {
 		return 0
 	case permission.ModeAcceptEdits:
 		return 2
-	case permission.ModeBypass:
+	case permission.ModeAuto:
 		return 3
+	case permission.ModeBypass:
+		return 4
 	}
 	return 1
 }
@@ -381,14 +383,14 @@ func (s *session) restoreMode() {
 // agentMode takes a mode the agent reports. The mode decides what the
 // broker lets through, so an agent can tighten it and can never loosen it on
 // its own (SEC-003): only after the user approved its switch_mode request,
-// and never to bypass, which only the user sets and config.yaml must allow.
+// and never to auto or bypass, which only the user sets.
 // A refused change is told back to the agent, which keeps to the app's mode.
 func (s *session) agentMode(m permission.Mode) {
 	s.mu.Lock()
 	cur := s.mode
 	asked := s.approved.kind == permission.KindSwitchMode && time.Now().Before(s.approved.until)
 	loosens := modeLooseness(m) > modeLooseness(cur)
-	refused := loosens && (!asked || m == permission.ModeBypass)
+	refused := loosens && (!asked || m.Unattended())
 	if m == cur || refused {
 		s.mu.Unlock()
 		if refused {

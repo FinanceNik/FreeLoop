@@ -26,13 +26,20 @@ const (
 	ModeAsk         Mode = "ask"
 	ModeAcceptEdits Mode = "accept_edits"
 	ModePlan        Mode = "plan"
-	ModeBypass      Mode = "bypass"
+	// ModeAuto leaves it to the agent's own auto mode. The broker treats what the
+	// agent still asks as in ask mode, and never sees what it does not.
+	ModeAuto   Mode = "auto"
+	ModeBypass Mode = "bypass"
 )
 
 // Modes lists every mode in display order.
-var Modes = []Mode{ModeAsk, ModeAcceptEdits, ModePlan, ModeBypass}
+var Modes = []Mode{ModeAsk, ModeAcceptEdits, ModePlan, ModeAuto, ModeBypass}
 
 func (m Mode) Valid() bool { return slices.Contains(Modes, m) }
+
+// Unattended reports a mode only the user can choose, in a session: a file, a
+// profile, a schedule or a fork never starts in it (SEC-001).
+func (m Mode) Unattended() bool { return m == ModeAuto || m == ModeBypass }
 
 // Kind is ACP's tool kind.
 type Kind string

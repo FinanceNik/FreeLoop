@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ask } from "./ask.ts";
 import { EngineService, type ChangedFile, type Changes, type FileDiff, type Session } from "./api.ts";
 import { diffStats, parseDiff, type DiffRow } from "./diff.ts";
 import { anchor, locate, reviewMessage, type ReviewComment } from "./review.ts";
@@ -107,8 +108,8 @@ export default function DiffPanel({ session, gitKey, agentEdits, onReview, onErr
             ...(f.staged ? [item(`unstage:${f.path}`, `Unstage ${f.path}`, () => act(EngineService.StageFiles(session.id, [f.path], false)))] : []),
             ...(f.staged || f.unstaged
               ? [
-                  item(`discard:${f.path}`, `Discard changes to ${f.path}…`, () => {
-                    if (confirm(`Discard the changes to ${f.path}? This cannot be undone.`)) act(EngineService.DiscardFile(session.id, f.path));
+                  item(`discard:${f.path}`, `Discard changes to ${f.path}…`, async () => {
+                    if ((await ask(`Discard the changes to ${f.path}? This cannot be undone.`))) act(EngineService.DiscardFile(session.id, f.path));
                   }),
                 ]
               : []),
@@ -166,7 +167,7 @@ export default function DiffPanel({ session, gitKey, agentEdits, onReview, onErr
                   act(
                     EngineService.MergeRisks(session.id).then(async (risky) => {
                       const list = risky ?? [];
-                      if (list.length > 0 && !confirm(`This merge brings in files that can run commands on your Mac:\n\n${list.join("\n")}\n\nCheck them in the diff first. Merge anyway?`)) return;
+                      if (list.length > 0 && !(await ask(`This merge brings in files that can run commands on your Mac:\n\n${list.join("\n")}\n\nCheck them in the diff first. Merge anyway?`))) return;
                       const r = await EngineService.MergeWorktree(session.id, list.length > 0);
                       setMerged(r.message);
                       setMerging(false);
@@ -196,8 +197,8 @@ export default function DiffPanel({ session, gitKey, agentEdits, onReview, onErr
               Send review
             </button>
             <button
-              onClick={() => {
-                if (confirm(`Discard ${comments.length === 1 ? "the review comment" : `${comments.length} review comments`}?`)) setComments([]);
+              onClick={async () => {
+                if ((await ask(`Discard ${comments.length === 1 ? "the review comment" : `${comments.length} review comments`}?`))) setComments([]);
               }}
             >
               Discard

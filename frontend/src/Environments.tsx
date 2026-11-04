@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { EngineService, MODES, type EnvironmentInfo } from "./api.ts";
+import { ask } from "./ask.ts";
+import { EngineService, MODES, STARTING_MODES, type EnvironmentInfo } from "./api.ts";
 
 interface Props {
   environments: EnvironmentInfo[];
@@ -136,9 +137,9 @@ export default function Environments({ environments, onChanged, onError }: Props
       .finally(() => setBusy(false));
   };
 
-  const remove = (env: EnvironmentInfo) => {
+  const remove = async (env: EnvironmentInfo) => {
     const what = env.builtin ? `Reset ${env.name}` : `Delete ${env.name}`;
-    if (!confirm(`${what}? Its secrets are removed from the Keychain.`)) return;
+    if (!(await ask(`${what}? Its secrets are removed from the Keychain.`))) return;
     EngineService.DeleteEnvironment(env.id).then(onChanged).catch(onError);
   };
 
@@ -320,7 +321,7 @@ export default function Environments({ environments, onChanged, onError }: Props
             New sessions start in
             <select value={form.defaultMode} onChange={(e) => setForm({ ...form, defaultMode: e.target.value })}>
               <option value="">Ask (default)</option>
-              {MODES.filter((m) => m.id !== "bypass" && m.id !== "ask").map((m) => (
+              {STARTING_MODES.filter((m) => m.id !== "ask").map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>

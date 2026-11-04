@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ask } from "./ask.ts";
 import { EngineService, type CompareRun } from "./api.ts";
 import { compact } from "./analytics.ts";
 import { formatCost } from "./cost.ts";
@@ -28,9 +29,9 @@ export default function Compare({ tag, onOpen, onError }: { tag: string; onOpen:
     const t = setInterval(load, working ? 3000 : 8000);
     return () => clearInterval(t);
   }, [working, tag]);
-  const keep = (r: CompareRun) => {
+  const keep = async (r: CompareRun) => {
     const others = (runs ?? []).filter((x) => x !== r && x.session.status !== "archived").length;
-    if (!confirm(`Keep "${r.session.title}" and archive the ${others === 1 ? "other run" : `${others} other runs`}? Their worktrees are removed; their branches stay.`)) return;
+    if (!(await ask(`Keep "${r.session.title}" and archive the ${others === 1 ? "other run" : `${others} other runs`}? Their worktrees are removed; their branches stay.`))) return;
     setBusy(true);
     EngineService.KeepCompare(tag, r.session.id)
       .then(load)

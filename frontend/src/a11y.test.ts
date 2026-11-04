@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { contrast, pickLabel, quietCommand, screenName, tabAfterKey, toolStatusLabel, visibleCommand } from "./a11y.ts";
 
@@ -99,4 +99,12 @@ test("quietCommand drops a cd into the session's own folder, and nothing else", 
   assert.equal(quietCommand("cd /work/app2 && ls", ["/work/app"]), "cd /work/app2 && ls");
   assert.equal(quietCommand("cd /work/app", roots), "cd /work/app");
   assert.equal(quietCommand("make test", roots), "make test");
+});
+
+test("no code uses the page's confirm, alert or prompt, which the packaged app answers with no", () => {
+  const dir = new URL("./", import.meta.url);
+  for (const name of readdirSync(dir)) {
+    if (!/\.tsx?$/.test(name) || name.endsWith(".test.ts") || name === "ask.ts") continue;
+    assert.doesNotMatch(readFileSync(new URL(name, dir), "utf8"), /(?<![\w."])(confirm|alert|prompt)\(/, name);
+  }
 });

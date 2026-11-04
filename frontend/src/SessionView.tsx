@@ -1,4 +1,5 @@
 import { Browser, Clipboard } from "@wailsio/runtime";
+import { ask as askUser } from "./ask.ts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
@@ -129,6 +130,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const trustHooks = trustLookup ?? [];
   const untrusted = !!project && !project.trusted && !project.missing;
   const canBypass = allowBypass && !!project?.trusted;
+  // Only an agent with such a mode of its own can approve by itself (SEC-001).
+  const offersAuto = !!harness?.modes?.includes("auto");
+  const canAuto = offersAuto && !!project?.trusted;
+  const modeAllowed = (m: string) => (m === "bypass" ? canBypass : m === "auto" ? canAuto : true);
   useEffect(() => {
     setTrustLookup(null);
     if (!untrusted || !project) return;
@@ -136,7 +141,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       .then((s) => setTrustLookup(s.hooks ?? []))
       .catch(() => setTrustLookup(null));
   }, [untrusted, project?.root]);
-  const trustProject = (ask: boolean) => {
+  const trustProject = async (ask: boolean) => {
     if (!project) return;
     const step = trustStep(trustLookup, ask);
     if (step === "lookup") {
@@ -153,7 +158,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       return;
     }
     const list = trustHooks.map((h) => `${h.event}: ${h.command}`).join("\n");
-    if (step === "confirm" && !confirm(`Trusting ${project.name} lets it run these commands (hooks):\n\n${list}`)) return;
+    if (step === "confirm" && !(await askUser(`Trusting ${project.name} lets it run these commands (hooks):\n\n${list}`))) return;
     EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError);
   };
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -190,8 +195,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const otherProfiles = profiles.filter((p) => p.id !== (session.profileId || "default"));
   const archived = session.status === "archived";
   const archive = () => EngineService.ArchiveSession(session.id, !archived).catch(onError);
-  const remove = () => {
-    if (!confirm(`Delete "${session.title}"? Its transcript is removed from disk. This cannot be undone.`)) return;
+  const remove = async () => {
+    if (!(await askUser(`Delete "${session.title}"? Its transcript is removed from disk. This cannot be undone.`))) return;
     EngineService.DeleteSession(session.id).then(onDeleted).catch(onError);
   };
   const view = useMemo(() => buildView(events), [events]);
@@ -281,7 +286,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   }, [slash === null]);
   const commands = useMemo<SlashCommand[]>(
     () => [
-      ...MODE_COMMANDS.filter((c) => c.mode !== "bypass" || canBypass),
+      ...MODE_COMMANDS.filter((c) => modeAllowed(c.mode ?? "")),
       ...view.commands.map((c) => ({ name: c.name, description: c.description })),
       ...(mcp?.prompts ?? []).map((p) => ({
         name: p.command,
@@ -289,7 +294,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         prompt: { server: p.server, name: p.name, arguments: p.arguments ?? [] },
       })),
     ],
-    [view.commands, allowBypass, mcp],
+    [view.commands, canBypass, canAuto, mcp],
   );
   // Resources attached to the next message, and the open prompt form.
   const [attached, setAttached] = useState<ResourceRef[]>([]);
@@ -457,7 +462,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     const text = draft.trim();
     if ((!text && pictures.length === 0 && textFiles.length === 0) || accepting) return;
     const m = modeCommand(text);
-    if (m && (m !== "bypass" || canBypass)) {
+    if (m && modeAllowed(m)) {
       setDraft("");
       setMode(m);
       return;
@@ -668,7 +673,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           keywords: `mcp ${r.description ?? ""}`,
         }),
       ),
-    ...MODES.filter((m) => m.id !== mode && (m.id !== "bypass" || canBypass)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
+    ...MODES.filter((m) => m.id !== mode && modeAllowed(m.id)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
     ...(session.providerId ? [act("model", "Switch model…", () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
     ...[{ id: "", name: "Off" }, ...optimizers]
       .filter((o) => o.id !== session.optimizer)
@@ -685,8 +690,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
       ? [act("trust", "Trust this project", () => trustProject(true), { detail: trustHooks.length ? `${project.root} · runs ${trustHooks.length} hook${trustHooks.length > 1 ? "s" : ""}` : project.root })]
       : []),
     ...rewindable.map((u, n) =>
-      act(`rewind:${u.key}`, n === 0 ? "Rewind to before the last message…" : `Rewind to before “${u.text.slice(0, 60)}”…`, () => {
-        if (confirm("Restore the files to before this message and continue from there?")) rewind(u.checkpointSeq!, u.text);
+      act(`rewind:${u.key}`, n === 0 ? "Rewind to before the last message…" : `Rewind to before “${u.text.slice(0, 60)}”…`, async () => {
+        if ((await askUser("Restore the files to before this message and continue from there?"))) rewind(u.checkpointSeq!, u.text);
       }, { keywords: `undo checkpoint restore ${n === 0 ? u.text.slice(0, 60) : ""}` }),
     ),
     ...(view.items.some((i) => i.kind === "user")
@@ -910,6 +915,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
               )}
             </span>
             <button onClick={() => trustProject(false)}>Trust project</button>
+          </div>
+        )}
+        {mode === "auto" && (
+          <div className="banner warn" role="status">
+            Auto mode: the agent decides by itself which tool calls to run. What it does not ask about never reaches Freeloop.
           </div>
         )}
         {mode === "bypass" && (
@@ -1198,6 +1208,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 sessionId={session.id}
                 mode={mode}
                 canBypass={canBypass}
+                offersAuto={offersAuto}
+                canAuto={canAuto}
+                bypassOn={allowBypass}
                 version={view.items.filter((i) => i.kind === "model").length + view.settings}
                 onMode={setMode}
                 onOtherModel={() => setSwitching({ providerId: session.providerId, model: session.model })}

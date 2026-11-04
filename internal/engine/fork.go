@@ -70,8 +70,8 @@ func (e *Engine) ForkSession(ctx context.Context, sid string, seq int64) (ForkRe
 		EnvironmentID: src.EnvironmentID, BaseCommit: src.BaseCommit, Branch: src.Branch, ProviderID: src.ProviderID,
 		Model: src.Model, Mode: src.Mode, ProfileID: src.ProfileID, Optimizer: src.Optimizer, Effort: src.Effort,
 	}
-	// Like any new session, a fork never starts in bypass (SEC-001).
-	if permission.Mode(ses.Mode) == permission.ModeBypass {
+	// Like any new session, a fork never starts in auto or bypass (SEC-001).
+	if permission.Mode(ses.Mode).Unattended() {
 		ses.Mode = string(permission.ModeAsk)
 	}
 	if src.Worktree != "" {

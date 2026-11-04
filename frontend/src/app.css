@@ -1385,7 +1385,8 @@ button.ghost[aria-pressed="true"] {
 }
 
 /* Anything looser than asking stands out, bypass the most. */
-.session-control[data-mode="accept_edits"] select {
+.session-control[data-mode="accept_edits"] select,
+.session-control[data-mode="auto"] select {
   color: var(--text);
   border-color: var(--border-strong);
 }

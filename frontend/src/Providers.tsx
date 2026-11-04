@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { ask } from "./ask.ts";
 import { keyMoves, plainRemote } from "./addresses.ts";
 import { EngineService, errorText, type HarnessInfo, type ModelInfo, type PresetInfo, type ProviderInfo } from "./api.ts";
 
@@ -58,13 +59,13 @@ export default function Providers({ providers, onChanged, onError, agents, defau
 
   const set = (k: keyof Form) => (e: { target: { value: string } }) => form && setForm({ ...form, [k]: e.target.value });
 
-  const save = (e: FormEvent) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!form) return;
     // The saved key goes along to a new address unless a new one is entered.
     const before = providers.find((p) => p.id === form.id);
     if (before?.hasKey && !form.apiKey && keyMoves(before.baseUrl, form.baseUrl === preset?.baseUrl ? "" : form.baseUrl)) {
-      if (!confirm(`Send the saved API key of ${before.name} to ${form.baseUrl || "the default endpoint"}? Enter a new key instead if it is for another service.`)) return;
+      if (!(await ask(`Send the saved API key of ${before.name} to ${form.baseUrl || "the default endpoint"}? Enter a new key instead if it is for another service.`))) return;
     }
     setBusy(true);
     EngineService.SaveProvider({
@@ -95,8 +96,8 @@ export default function Providers({ providers, onChanged, onError, agents, defau
       .catch((err) => setTests((t) => ({ ...t, [id]: { ok: false, text: errorText(err) } })));
   };
 
-  const remove = (p: ProviderInfo) => {
-    if (!confirm(`Delete ${p.name}? Its API key is removed from the Keychain.`)) return;
+  const remove = async (p: ProviderInfo) => {
+    if (!(await ask(`Delete ${p.name}? Its API key is removed from the Keychain.`))) return;
     EngineService.DeleteProvider(p.id).then(onChanged).catch(onError);
   };
 
@@ -152,8 +153,8 @@ export default function Providers({ providers, onChanged, onError, agents, defau
                     This address was changed outside Freeloop, so the API key is not being sent. If you did not change it, something on this Mac may be trying to get your key.
                   </span>
                   <button
-                    onClick={() => {
-                      if (!confirm(`Send the API key of ${p.name} to ${p.baseUrl || "its default endpoint"}?`)) return;
+                    onClick={async () => {
+                      if (!(await ask(`Send the API key of ${p.name} to ${p.baseUrl || "its default endpoint"}?`))) return;
                       EngineService.ConfirmProviderAddress(p.id).then(onChanged).catch(onError);
                     }}
                   >

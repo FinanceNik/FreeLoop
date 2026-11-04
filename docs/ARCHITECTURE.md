@@ -118,7 +118,7 @@ type SessionParams struct {
 type SessionHandle interface {
     Prompt(ctx, []ContentBlock) (StopReason, error) // end_turn | max_tokens | max_turns | refusal | cancelled
     Cancel(ctx) error
-    SetMode(ctx, ModeID) error                      // ask | accept_edits | plan | bypass, plus harness-defined modes
+    SetMode(ctx, ModeID) error                      // ask | accept_edits | plan | auto | bypass, plus harness-defined modes
     SetConfig(ctx, key string, value any) error     // model, thought level, harness-specific options
     Events() <-chan Event
     Close() error

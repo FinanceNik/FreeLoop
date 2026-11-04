@@ -63,8 +63,8 @@ func (e *Engine) SaveSchedule(s config.Schedule) (config.Schedule, error) {
 	if err := s.Validate(); err != nil {
 		return config.Schedule{}, err
 	}
-	if s.Mode == string(permission.ModeBypass) {
-		return config.Schedule{}, errors.New("a schedule cannot start sessions in bypass mode")
+	if permission.Mode(s.Mode).Unattended() {
+		return config.Schedule{}, fmt.Errorf("a schedule cannot start sessions in %s mode", s.Mode)
 	}
 	e.schedules.Lock()
 	defer e.schedules.Unlock()

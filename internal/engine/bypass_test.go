@@ -73,7 +73,7 @@ func wantAsking(t *testing.T, e *Engine, sid string) {
 	}
 	evs, _ := e.Events(ctx, sid, 0)
 	for _, ev := range evs {
-		if ev.Type == event.Notice && strings.Contains(string(ev.Data), "ypass") {
+		if ev.Type == event.Notice && strings.Contains(string(ev.Data), "this session now asks") {
 			return
 		}
 	}
@@ -152,5 +152,62 @@ func TestBypassThatHoldsIsLeftAlone(t *testing.T) {
 	}
 	if got.Mode != "bypass" {
 		t.Errorf("the session is in %s", got.Mode)
+	}
+}
+
+// SEC-001: auto mode needs an agent that has one and a project the user trusts.
+func TestAutoNeedsAnAgentWithItAndATrustedProject(t *testing.T) {
+	ctx := context.Background()
+	e := openBinding(t, t.TempDir(), secrets.NewMemory())
+	withScript(e, "s", scripted.Step{Text: "hi"})
+	root := t.TempDir()
+	if _, err := e.SetProjectTrust(ctx, root, true); err != nil {
+		t.Fatal(err)
+	}
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProviderID: "s", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The built-in harness has no auto mode, trusted or not.
+	if err := e.SetMode(ctx, ses.ID, "auto"); err == nil || !strings.Contains(err.Error(), "no auto mode") {
+		t.Fatalf("built-in harness: %v", err)
+	}
+	e.mu.Lock()
+	e.presets = append(e.presets, config.HarnessPreset{ID: "agent", Name: "Agent", Modes: map[string]string{"auto": "auto"}}, config.HarnessPreset{ID: "plain", Name: "Plain", Modes: map[string]string{"ask": "default"}})
+	e.mu.Unlock()
+	withAgent := session.Session{HarnessID: "agent", ProjectID: ses.ProjectID, Mode: "auto"}
+	if err := e.unattendedRefusal(withAgent); err != nil {
+		t.Fatalf("an agent with auto in a trusted project: %v", err)
+	}
+	without := withAgent
+	without.HarnessID = "plain"
+	if err := e.unattendedRefusal(without); err == nil {
+		t.Fatal("an agent without auto was allowed it")
+	}
+	if _, err := e.SetProjectTrust(ctx, root, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.unattendedRefusal(withAgent); err == nil || !strings.Contains(err.Error(), "trusted") {
+		t.Fatalf("an untrusted project: %v", err)
+	}
+}
+
+// Taking the trust back ends auto mode the way it ends bypass, and a new session
+// never starts in it.
+func TestRevokingTrustEndsAutoAndNothingStartsInIt(t *testing.T) {
+	ctx := context.Background()
+	e := openBinding(t, t.TempDir(), secrets.NewMemory())
+	ses, root := bypassSession(t, e, false)
+	e.mu.Lock()
+	e.presets = append(e.presets, config.HarnessPreset{ID: "agent", Name: "Agent", Modes: map[string]string{"auto": "auto"}})
+	e.mu.Unlock()
+	e.emit(ses.ID, event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: "auto"})
+	if _, err := e.SetProjectTrust(ctx, root, false); err != nil {
+		t.Fatal(err)
+	}
+	wantAsking(t, e, ses.ID)
+
+	if _, err := e.SaveSchedule(config.Schedule{Name: "n", Prompt: "p", At: "09:00", Mode: "auto"}); err == nil {
+		t.Fatal("a schedule started in auto mode")
 	}
 }

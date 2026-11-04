@@ -97,7 +97,7 @@ func (e Environment) Validate() error {
 		return fmt.Errorf("kind %q must be local or docker", e.Kind)
 	case e.Kind == "docker" && strings.TrimSpace(e.Image) == "" && !e.Devcontainer:
 		return errors.New("a docker environment needs an image, or devcontainer: true")
-	case e.DefaultMode != "" && (!permission.Mode(e.DefaultMode).Valid() || e.DefaultMode == string(permission.ModeBypass)):
+	case e.DefaultMode != "" && (!permission.Mode(e.DefaultMode).Valid() || permission.Mode(e.DefaultMode).Unattended()):
 		return fmt.Errorf("defaultMode %q must be ask, accept_edits or plan", e.DefaultMode)
 	}
 	if e.Sandbox != nil {

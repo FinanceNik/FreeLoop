@@ -24,6 +24,7 @@ export const MODE_COMMANDS: SlashCommand[] = [
   { name: "ask", description: "Ask before edits and commands", mode: "ask" },
   { name: "accept-edits", description: "Allow edits inside the project without asking", mode: "accept_edits" },
   { name: "plan", description: "Read and plan only; no changes", mode: "plan" },
+  { name: "auto", description: "Let the agent decide by itself what to run", mode: "auto" },
   { name: "bypass", description: "Run tool calls without asking", mode: "bypass" },
 ];
 

@@ -21,8 +21,12 @@ export const MODES = [
   { id: "ask", name: "Ask", hint: "Asks before anything that changes files or runs a command, unless a rule decides." },
   { id: "accept_edits", name: "Accept edits", hint: "File edits in the project go ahead; commands still ask." },
   { id: "plan", name: "Plan", hint: "Only reads, and proposes a plan for you to approve." },
-  { id: "bypass", name: "Bypass", hint: "Nothing asks, except protected paths and deny rules." },
+  { id: "auto", name: "Auto", hint: "The agent decides by itself what to run, for agents that have such a mode. What it does not ask about never reaches Freeloop." },
+  { id: "bypass", name: "Bypass (skip permissions)", hint: "Nothing asks, except protected paths and deny rules." },
 ];
+
+// A session never starts in these: the user chooses them in the session (SEC-001).
+export const STARTING_MODES = MODES.filter((m) => m.id !== "bypass" && m.id !== "auto");
 
 export function errorText(err: unknown): string {
   if (err instanceof Error) return err.message;

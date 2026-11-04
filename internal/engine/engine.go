@@ -829,7 +829,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if mode == "" {
 		mode = permission.Mode(envCfg.DefaultMode)
 	}
-	if !mode.Valid() || mode == permission.ModeBypass {
+	if !mode.Valid() || mode.Unattended() {
 		mode = permission.ModeAsk
 	}
 	harnessID, model := builtin.ID, ""

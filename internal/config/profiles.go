@@ -108,7 +108,7 @@ func BuiltinDefaultProfile() Profile {
 
 // ReservedCommands are the app's own slash commands; profiles cannot
 // redefine them.
-var ReservedCommands = []string{"ask", "accept-edits", "plan", "bypass", "mode", "help", "compact"}
+var ReservedCommands = []string{"ask", "accept-edits", "plan", "auto", "bypass", "mode", "help", "compact"}
 
 var (
 	commandName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
@@ -136,7 +136,7 @@ func (p Profile) Validate() error {
 		return fieldErr("name", "a name is required")
 	case p.Harness != "" && !idPattern.MatchString(p.Harness):
 		return fieldErr("harness", "%q must be builtin or the ID of a harness preset", p.Harness)
-	case p.Mode != "" && (!permission.Mode(p.Mode).Valid() || p.Mode == string(permission.ModeBypass)):
+	case p.Mode != "" && (!permission.Mode(p.Mode).Valid() || permission.Mode(p.Mode).Unattended()):
 		return fieldErr("mode", "%q must be ask, accept_edits or plan", p.Mode)
 	case p.Effort != "" && !slices.Contains(efforts, p.Effort):
 		return fieldErr("effort", "%q must be one of %s", p.Effort, strings.Join(efforts, ", "))

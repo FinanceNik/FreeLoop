@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, MODES, type Command, type HarnessInfo, type Issue, type OptimizerStatus, type Profile, type ProviderInfo } from "./api.ts";
+import { ask } from "./ask.ts";
+import { EngineService, STARTING_MODES, type Command, type HarnessInfo, type Issue, type OptimizerStatus, type Profile, type ProviderInfo } from "./api.ts";
 import { OPTIMIZER_OFF } from "./optimizers.ts";
 
 // Profiles (HRN-003): one YAML file each in profiles/. The form covers the
@@ -96,9 +97,9 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
       .finally(() => setBusy(false));
   };
 
-  const remove = (p: Profile) => {
+  const remove = async (p: Profile) => {
     const what = p.id === "default" ? "Reset the default profile to the built-in one" : `Delete ${p.name}`;
-    if (!confirm(`${what}? Sessions using it ${p.id === "default" ? "use the built-in default" : "cannot start until it exists again"}.`)) return;
+    if (!(await ask(`${what}? Sessions using it ${p.id === "default" ? "use the built-in default" : "cannot start until it exists again"}.`))) return;
     EngineService.DeleteProfile(p.id).then(onChanged).catch(onError);
   };
 
@@ -232,7 +233,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
               Permission mode
               <select value={form.mode} onChange={(e) => set("mode", e.target.value)}>
                 <option value="">From the environment</option>
-                {MODES.filter((m) => m.id !== "bypass").map((m) => (
+                {STARTING_MODES.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>

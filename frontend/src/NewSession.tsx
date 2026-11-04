@@ -5,6 +5,7 @@ import {
   EngineService,
   type IssueBrief,
   MODES,
+  STARTING_MODES,
   errorText,
   type EnvironmentInfo,
   type HarnessInfo,
@@ -587,7 +588,7 @@ export default function NewSession({ providers, projects, environments, profiles
             <option value="">
               {waits?.mode ? "Ask, until you approve the file's choice in Settings" : <>{profile?.mode ? "From the profile" : "From the environment"} ({MODES.find((m) => m.id === (profile?.mode || env?.defaultMode || "ask"))?.name})</>}
             </option>
-            {MODES.filter((m) => m.id !== "bypass").map((m) => (
+            {STARTING_MODES.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
               </option>

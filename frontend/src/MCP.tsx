@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { ask } from "./ask.ts";
 import { Browser } from "@wailsio/runtime";
 import { EngineService, type MCPServer, type MCPServerInfo, type RegistryOption, type RegistryServer } from "./api.ts";
 import McpRegistry from "./McpRegistry.tsx";
@@ -364,7 +365,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
               )}
               {s.signedIn && (
                 <button
-                  onClick={() => confirm(`Sign out of ${s.name || s.id}? Its tokens are removed from the Keychain.`) && run(s.id, EngineService.SignOutMCPServer(s.id))}
+                  onClick={async () => (await ask(`Sign out of ${s.name || s.id}? Its tokens are removed from the Keychain.`)) && run(s.id, EngineService.SignOutMCPServer(s.id))}
                 >
                   Sign out
                 </button>
@@ -380,7 +381,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
               <button onClick={() => setForm(toForm(s))}>Edit</button>
               <button
                 className="danger"
-                onClick={() => confirm(`Delete ${s.name || s.id}? Its secrets are removed from the Keychain.`) && run(s.id, EngineService.DeleteMCPServer(s.id))}
+                onClick={async () => (await ask(`Delete ${s.name || s.id}? Its secrets are removed from the Keychain.`)) && run(s.id, EngineService.DeleteMCPServer(s.id))}
               >
                 Delete
               </button>

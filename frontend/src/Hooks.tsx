@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ask } from "./ask.ts";
 import { EngineService, type Config, type Hook, type PendingCommand } from "./api.ts";
 import { approveAllQuestion, EVENTS, groupPending, pendingLabel } from "./pending.ts";
 
@@ -25,8 +26,8 @@ export function PendingCommands({ version, onSaved, onError }: { version: unknow
       .catch(onError);
   // Names what the card shows, so what arrived since keeps waiting. One that
   // changed refuses the lot, and the card then shows what is there now.
-  const approveAll = () => {
-    if (!confirm(approveAllQuestion(list))) return;
+  const approveAll = async () => {
+    if (!(await ask(approveAllQuestion(list)))) return;
     EngineService.ApproveCommands(list.map((c) => c.fingerprint))
       .then((saved) => {
         onSaved(saved);

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ask } from "./ask.ts";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
 import FontEditor from "./FontEditor.tsx";
@@ -164,12 +165,12 @@ export default function Settings({ config, providers, environments, profiles, pr
       .finally(() => setChecking(false));
   };
 
-  const save = (e: FormEvent) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     if (form.permissions.allowBypass && !config.permissions.allowBypass) {
-      const ok = confirm(
+      const ok = (await ask(
         "Allow bypass mode? In bypass mode tool calls run without asking. Protected paths and deny rules still hold, but shell commands can do anything you can. New sessions never start in bypass.",
-      );
+      ));
       if (!ok) return;
     }
     EngineService.SaveSettings(form)

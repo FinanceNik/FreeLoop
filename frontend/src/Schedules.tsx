@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, MODES, type Defaults, type HarnessInfo, type Profile, type ProjectInfo, type ProviderInfo, type Schedule, type ScheduleInfo } from "./api.ts";
+import { ask } from "./ask.ts";
+import { EngineService, STARTING_MODES, type Defaults, type HarnessInfo, type Profile, type ProjectInfo, type ProviderInfo, type Schedule, type ScheduleInfo } from "./api.ts";
 import { describe, REPEATS, WEEKDAYS, when } from "./schedules.ts";
 
 // Schedules lists scheduled and recurring sessions (SES-012) and edits
@@ -77,8 +78,8 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
         refresh();
       });
   };
-  const remove = (s: ScheduleInfo) => {
-    if (!confirm(`Delete the schedule "${s.name}"? The sessions it started stay.`)) return;
+  const remove = async (s: ScheduleInfo) => {
+    if (!(await ask(`Delete the schedule "${s.name}"? The sessions it started stay.`))) return;
     EngineService.DeleteSchedule(s.id).then(refresh).catch(onError);
   };
   const projectName = (root: string) => projects.find((p) => p.root === root)?.name ?? root.split("/").pop() ?? root;
@@ -215,7 +216,7 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
             <label>
               Mode
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
-                {MODES.filter((m) => m.id !== "bypass").map((m) => (
+                {STARTING_MODES.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>

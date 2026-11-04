@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ask } from "./ask.ts";
 import { Events } from "@wailsio/runtime";
 import { EngineService, FILES_DROPPED_EVENT_NAME, type ProjectInfo, type ProviderInfo, type SkillCandidate, type SkillList, type SkillTest } from "./api.ts";
 
@@ -83,8 +84,8 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
       .catch(onError)
       .finally(() => setBusy(false));
   };
-  const remove = (name: string) => {
-    if (!confirm(`Remove ${name} from the skill store? Its folder is deleted.`)) return;
+  const remove = async (name: string) => {
+    if (!(await ask(`Remove ${name} from the skill store? Its folder is deleted.`))) return;
     EngineService.RemoveSkill(name).then(load).catch(onError);
   };
 
@@ -131,8 +132,8 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
         load();
       })
       .catch(onError);
-  const rollBack = (name: string) => {
-    if (!confirm(`Put back the version of ${name} its last install replaced? You can undo this the same way.`)) return;
+  const rollBack = async (name: string) => {
+    if (!(await ask(`Put back the version of ${name} its last install replaced? You can undo this the same way.`))) return;
     EngineService.RollbackSkill(name).then(load).catch(onError);
   };
   const testable = providers.filter((p) => p.hasKey || p.type === "ollama" || p.builtin || p.baseUrl.startsWith("http://localhost"));

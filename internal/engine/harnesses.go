@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -32,6 +33,9 @@ type HarnessInfo struct {
 	// TakesOptimizer is set for an agent a token optimizer can reach, through a
 	// hook (HRN-019); the built-in harness always can.
 	TakesOptimizer bool `json:"takesOptimizer"`
+	// Modes lists the permission modes the agent's preset maps; empty for the
+	// built-in harness, which has every mode but auto.
+	Modes []string `json:"modes,omitempty"`
 	// Missing says why the agent cannot start here, such as its command
 	// not being on the login PATH (Node.js for npx); empty when it can.
 	Missing string `json:"missing,omitempty"`
@@ -70,7 +74,7 @@ func (e *Engine) ListHarnesses() []HarnessInfo {
 		if missing == "" {
 			missing = e.missingCommand(p.Command)
 		}
-		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: missing, Custom: p.Watch != "", TakesOptimizer: e.hookProgram != "" && p.TakesCommandHook()})
+		out = append(out, HarnessInfo{ID: p.ID, Name: p.Name, Kind: "acp", Description: p.Description, Notes: p.Notes, Missing: missing, Modes: slices.Sorted(maps.Keys(p.Modes)), Custom: p.Watch != "", TakesOptimizer: e.hookProgram != "" && p.TakesCommandHook()})
 	}
 	return out
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -142,10 +143,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		}
 		return nil, err
 	}
-	// Whatever dropBypass missed, nothing starts in a bypass that does not hold.
-	if permission.Mode(ses.Mode) == permission.ModeBypass {
-		if why := e.bypassRefusal(ses.ProjectID); why != nil {
-			e.endBypass(sid, why)
+	// Whatever dropBypass missed, nothing starts in a mode that does not hold.
+	if permission.Mode(ses.Mode).Unattended() {
+		if why := e.unattendedRefusal(ses); why != nil {
+			e.endUnattended(sid, permission.Mode(ses.Mode), why)
 			ses.Mode = string(permission.ModeAsk)
 		}
 	}
@@ -620,12 +621,13 @@ func (e *Engine) SetMode(ctx context.Context, sid, mode string) error {
 	if !m.Valid() {
 		return fmt.Errorf("unknown mode %q", mode)
 	}
-	if m == permission.ModeBypass {
+	if m.Unattended() {
 		ses, err := e.store.GetSession(ctx, sid)
 		if err != nil {
 			return err
 		}
-		if err := e.bypassRefusal(ses.ProjectID); err != nil {
+		ses.Mode = mode
+		if err := e.unattendedRefusal(ses); err != nil {
 			return err
 		}
 	}
@@ -642,6 +644,26 @@ func (e *Engine) SetMode(ctx context.Context, sid, mode string) error {
 	}
 	if ses.Mode != mode {
 		e.emit(sid, event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: mode})
+	}
+	return nil
+}
+
+// unattendedRefusal says why a session's auto or bypass mode does not hold. Auto needs
+// an agent with such a mode and a project the user trusts: an agent's own mode acts
+// out of the broker's sight, as bypass does on such an agent (SECURITY.md).
+func (e *Engine) unattendedRefusal(ses session.Session) error {
+	if permission.Mode(ses.Mode) == permission.ModeBypass {
+		return e.bypassRefusal(ses.ProjectID)
+	}
+	e.mu.Lock()
+	i := slices.IndexFunc(e.presets, func(p config.HarnessPreset) bool { return p.ID == ses.HarnessID })
+	offered := i >= 0 && e.presets[i].Modes[string(permission.ModeAuto)] != ""
+	e.mu.Unlock()
+	if !offered {
+		return errors.New("this agent has no auto mode")
+	}
+	if !e.trusted(ses.ProjectID) {
+		return errors.New("auto mode is not available in a project you have not trusted")
 	}
 	return nil
 }
@@ -671,18 +693,22 @@ func (e *Engine) dropBypass(ctx context.Context) {
 		return
 	}
 	for _, ses := range list {
-		if permission.Mode(ses.Mode) != permission.ModeBypass {
+		if !permission.Mode(ses.Mode).Unattended() {
 			continue
 		}
-		if why := e.bypassRefusal(ses.ProjectID); why != nil {
-			e.endBypass(ses.ID, why)
+		if why := e.unattendedRefusal(ses); why != nil {
+			e.endUnattended(ses.ID, permission.Mode(ses.Mode), why)
 		}
 	}
 }
 
-// endBypass puts a session back to asking and says why in its transcript.
-func (e *Engine) endBypass(sid string, why error) {
-	e.emit(sid, event.Notice, event.NoticeData{Message: "Bypass ended, and this session now asks: " + why.Error()})
+// endUnattended puts a session back to asking and says why in its transcript.
+func (e *Engine) endUnattended(sid string, mode permission.Mode, why error) {
+	name := "Bypass"
+	if mode == permission.ModeAuto {
+		name = "Auto mode"
+	}
+	e.emit(sid, event.Notice, event.NoticeData{Message: name + " ended, and this session now asks: " + why.Error()})
 	e.mu.Lock()
 	r, ok := e.runtimes[sid]
 	e.mu.Unlock()
