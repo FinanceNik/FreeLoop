@@ -255,14 +255,14 @@ func main() {
 	}
 }
 
-// secretStore is the Keychain. A served build, for checking the UI on scratch
+// secretStore is one Keychain item holding every secret, so a rebuild asks once. A served build, for checking the UI on scratch
 // data, can keep what it stores in memory with FREELOOP_DEV_SECRETS=memory, so a
 // scratch folder leaves nothing in the login keychain and asks it nothing.
 func secretStore() secrets.Store {
 	if servedBuild && os.Getenv("FREELOOP_DEV_SECRETS") == "memory" {
 		return secrets.NewMemory()
 	}
-	return darwin.Keychain{}
+	return secrets.NewVault(darwin.Keychain{}, "freeloop")
 }
 
 // shutdownLimit is how long quitting waits for sessions to stop. Each stops its
