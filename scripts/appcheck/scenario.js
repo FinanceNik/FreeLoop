@@ -275,6 +275,15 @@ await step("a click clears a selection", async () => {
   await sleep(150);
 });
 
+await step("the panel's tabs clear its close button", async () => {
+  const panel = withText(".session-actions button", "Panel");
+  if (panel.getAttribute("aria-pressed") !== "true") panel.click();
+  const close = await until("the panel", () => document.querySelector(".panel-close"));
+  const last = all(".panel-tablist [role=tab]").at(-1);
+  const list = document.querySelector(".panel-tablist");
+  check("the panel's tabs clear its close button", last.getBoundingClientRect().right <= close.getBoundingClientRect().left + 1 && list.scrollWidth <= list.clientWidth, `the last tab ends at ${Math.round(last.getBoundingClientRect().right)}, the button starts at ${Math.round(close.getBoundingClientRect().left)}`);
+});
+
 await step("a finished session says so on the board", async () => {
   withText(".footer-links button", "Board").click();
   const card = await until("the board's card", () => withText(".board-card", "Check alpha"));

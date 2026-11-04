@@ -102,7 +102,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **GUI-008** · MVP · **Notifications.** macOS notification and dock badge when a session needs attention or finishes while the app is unfocused; per-project mute. *Accept:* a notification click opens the right session.
 - **GUI-009** · MVP · **Settings UI.** Providers, profiles (form for common fields, YAML editor with validation for the rest), skills, MCP servers, environments, general. *Accept:* every MVP setting can be changed without editing files by hand.
 - **GUI-010** · MVP · **First-run onboarding.** Add a provider, test it, optionally import Claude Code skills and MCP servers, add a first project. *Accept:* a fresh install reaches a first agent reply in under 5 minutes with an API key at hand.
-- **GUI-011** · MVP · **Appearance.** Follows system light/dark; adjustable font size. *Accept:* switching system appearance updates the app live.
+- **GUI-011** · MVP · **Appearance.** Follows system light/dark; adjustable font size. The dark theme uses the colors of Catppuccin Mocha, with two adjusted to keep text readable (NFR-A11Y-002). *Accept:* switching system appearance updates the app live.
 - **GUI-012** · v1 · **Integrated terminal.** PTY per session in the session's environment. *Accept:* `ls` in the terminal shows the session's cwd inside a Docker environment.
 - **GUI-013** · v1 · **File tree and viewer.** Read-only browser of the project with open-in-editor. *Accept:* a file changed by the agent is highlighted in the tree.
 - **GUI-014** · v1 · **Command palette and keyboard-first navigation.** *Accept:* every sidebar and panel action is reachable from the palette.
