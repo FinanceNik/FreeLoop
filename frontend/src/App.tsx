@@ -1122,9 +1122,7 @@ export default function App() {
                       </span>
                     ))}
                   {g.project && !g.project.trusted && !g.project.missing && (
-                    <span className="muted untrusted" title="Untrusted: global settings only">
-                      untrusted
-                    </span>
+                    <span className="untrusted" role="img" aria-label="Untrusted: global settings only" title="Untrusted: global settings only" />
                   )}
                   {g.project?.missing && (
                     <>
@@ -1158,9 +1156,8 @@ export default function App() {
                           {s.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>}
                         </span>
                         {s.status !== "idle" && <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
-                        {((s.worktree && s.branch) || (s.tags ?? []).length > 0) && (
+                        {(s.tags ?? []).length > 0 && (
                           <span className="session-meta">
-                            {s.worktree && s.branch && <span className="muted">{s.branch}</span>}
                             {(s.tags ?? []).map((t) => (
                               <span key={t} className="tag">
                                 #{t}
@@ -1234,15 +1231,6 @@ export default function App() {
               Local only
             </button>
           )}
-          {today && (today.models ?? []).some((m) => m.priced) && (
-            <button
-              className="link today"
-              title="Estimated from the price table in Settings; calls to models without a price are left out. Opens the usage dashboard."
-              onClick={() => setScreen({ kind: "usage" })}
-            >
-              {`Today ≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`}
-            </button>
-          )}
           <footer>
             <div className="footer-links">
               {attentionCount === 0 && (
@@ -1270,6 +1258,15 @@ export default function App() {
               >
                 Usage
               </button>
+              {today && (today.models ?? []).some((m) => m.priced) && (
+                <button
+                  className="footer-cost"
+                  title="Today's estimated cost, from the price table in Settings; calls to models without a price are left out. Opens the usage dashboard."
+                  onClick={() => setScreen({ kind: "usage" })}
+                >
+                  {`≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`}
+                </button>
+              )}
             </div>
             <div className="footer-row">
               <button

@@ -381,6 +381,11 @@ fieldset {
   color: var(--text);
 }
 
+.footer-links .footer-cost {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
 .footer-links button[aria-current="page"] {
   background: var(--accent-soft);
   color: var(--link);
@@ -512,8 +517,8 @@ fieldset {
   align-items: flex-start;
   gap: 3px;
   width: 100%;
-  margin-bottom: 1px;
-  padding: 5px 10px;
+  margin-bottom: 3px;
+  padding: 7px 10px;
   text-align: left;
   background: transparent;
   border-color: transparent;
@@ -584,7 +589,7 @@ fieldset {
 }
 
 .project-group {
-  margin-bottom: 12px;
+  margin-bottom: 20px;
 }
 
 .project-name {
@@ -593,13 +598,15 @@ fieldset {
   align-items: center;
   gap: 6px;
   font-size: calc(12rem / 14);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--muted);
-  margin: 8px 10px 2px 4px;
+  margin: 8px 10px 5px 7px;
 }
 
+/* The name lines up with the sessions under it, with the arrow after it. */
 .project-toggle {
   display: inline-flex;
+  flex-direction: row-reverse;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -616,9 +623,17 @@ fieldset {
   color: var(--text);
 }
 
+/* The arrow shows when it can be used, or when the project is closed. */
 .project-toggle svg {
   flex: none;
+  opacity: 0;
   transition: transform 0.1s;
+}
+
+.project-group:hover .project-toggle svg,
+.project-toggle:focus-visible svg,
+.project-toggle[aria-expanded="false"] svg {
+  opacity: 1;
 }
 
 .project-toggle[aria-expanded="true"] svg {
@@ -2279,10 +2294,14 @@ details.choice[open] > summary h3::after {
   margin: 6px 0;
 }
 
+/* A small ring, named by its tooltip; the session itself says more in its banner. */
 .project-name .untrusted {
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--warn);
+  border-radius: 50%;
 }
 
 .banner.row {
