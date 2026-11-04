@@ -53,6 +53,8 @@ import SettingsNav, { Icon } from "./SettingsNav.tsx";
 import { ChevronIcon, FilterIcon, Logo } from "./icons.tsx";
 import { clearSelectionOnClick } from "./selection.ts";
 import ActivityLine from "./ActivityLine.tsx";
+import ContextMenu, { type MenuItem } from "./ContextMenu.tsx";
+import { ask } from "./ask.ts";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { applyFonts, type FontChoice } from "./fonts.ts";
@@ -924,6 +926,51 @@ export default function App() {
     };
   }, []);
 
+  const sessionDeleted = (sid: string) => {
+    if (STANDALONE) {
+      Window.Close().catch(() => {});
+      return;
+    }
+    // Only a session on screen changes what is shown.
+    if (workRef.current.panes.includes(sid)) {
+      if (workRef.current.layout > 1) showWork(ws.forget(workRef.current, (x) => x !== sid));
+      else setScreen({ kind: "none" });
+    }
+    refreshSessions();
+  };
+  // A session row's right-click menu, and renaming in the row.
+  const [rowMenu, setRowMenu] = useState<{ session: Session; x: number; y: number } | null>(null);
+  const [renamingRow, setRenamingRow] = useState<{ id: string; title: string } | null>(null);
+  // Escape takes the field away, and losing focus must not then save what was typed.
+  const renameCancelled = useRef(false);
+  const finishRowRename = () => {
+    if (!renamingRow || renameCancelled.current) return;
+    const { id, title } = renamingRow;
+    setRenamingRow(null);
+    const was = sessions.find((x) => x.id === id)?.title;
+    if (title.trim() && title.trim() !== was) EngineService.RenameSession(id, title.trim()).catch(report);
+  };
+  const rowMenuItems = (s: Session): MenuItem[] => {
+    const archived = s.status === "archived";
+    return [
+      { label: "Rename", run: () => setRenamingRow({ id: s.id, title: s.title }) },
+      { label: "Open beside what is open", run: () => openSession(s.id, undefined, "new") },
+      { label: "Open in a new window", run: () => openWindow(s.id) },
+      { label: archived ? "Unarchive" : "Archive", run: () => EngineService.ArchiveSession(s.id, !archived).catch(report), apart: true },
+      {
+        label: "Delete…",
+        danger: true,
+        apart: true,
+        run: async () => {
+          if (!(await ask(`Delete "${s.title}"? Its transcript is removed from disk. This cannot be undone.`))) return;
+          EngineService.DeleteSession(s.id)
+            .then(() => sessionDeleted(s.id))
+            .catch(report);
+        },
+      },
+    ];
+  };
+
   const sessionView = (s: Session, active = true, onClosePane?: () => void, onPaneDrag?: (e: DragEvent) => void) => (
     <SessionView
       key={s.id}
@@ -953,15 +1000,7 @@ export default function App() {
       active={active}
       onClosePane={onClosePane}
       onPaneDrag={onPaneDrag}
-      onDeleted={() => {
-        if (STANDALONE) {
-          Window.Close().catch(() => {});
-          return;
-        }
-        if (workRef.current.layout > 1) showWork(ws.forget(workRef.current, (sid) => sid !== s.id));
-        else setScreen({ kind: "none" });
-        refreshSessions();
-      }}
+      onDeleted={() => sessionDeleted(s.id)}
     />
   );
 
@@ -1136,8 +1175,42 @@ export default function App() {
                 <ul hidden={isCollapsed(g.key)}>
                   {g.sessions.map((s) => (
                     <li key={s.id}>
+                      {renamingRow?.id === s.id ? (
+                        <form
+                          className="session-rename"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            finishRowRename();
+                          }}
+                        >
+                          <input
+                            autoFocus
+                            aria-label={`New name for ${s.title}`}
+                            value={renamingRow.title}
+                            onFocus={(e) => {
+                              renameCancelled.current = false;
+                              e.currentTarget.select();
+                            }}
+                            onChange={(e) => setRenamingRow({ id: s.id, title: e.target.value })}
+                            onBlur={finishRowRename}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Escape") return;
+                              renameCancelled.current = true;
+                              setRenamingRow(null);
+                            }}
+                          />
+                        </form>
+                      ) : (
                       <button
                         className="session-row"
+                        aria-haspopup="menu"
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          // From the keyboard there is no pointer to open at.
+                          const at = e.currentTarget.getBoundingClientRect();
+                          const keyboard = e.clientX === 0 && e.clientY === 0;
+                          setRowMenu({ session: s, x: keyboard ? at.left + 12 : e.clientX, y: keyboard ? at.bottom : e.clientY });
+                        }}
                         aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
                         aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
                         data-shown={!STANDALONE && screen.kind === "session" && work.panes.includes(s.id) ? "" : undefined}
@@ -1166,6 +1239,7 @@ export default function App() {
                           </span>
                         )}
                       </button>
+                      )}
                       {subagents(s.id).length > 0 && (
                         <ul className="subagents" aria-label={`Subagents of ${s.title}`}>
                           {subagents(s.id).map((c) => (
@@ -1297,6 +1371,7 @@ export default function App() {
           </footer>
         </aside>
       )}
+      {rowMenu && <ContextMenu x={rowMenu.x} y={rowMenu.y} label={`Actions for ${rowMenu.session.title}`} items={rowMenuItems(rowMenu.session)} onClose={() => setRowMenu(null)} />}
 
       <main className="main" ref={mainBox} tabIndex={-1}>
         {waitingApproval > 0 && (

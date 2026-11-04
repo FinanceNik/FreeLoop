@@ -13,7 +13,8 @@ final class KeyWindow: NSWindow {
 }
 
 // Real mouse events, for what the page's own synthetic ones cannot do, such as changing a
-// selection: the scenario sends [x, y, clicks] or [x, y, 1, toX, toY] for a drag.
+// selection: the scenario sends [x, y, clicks], [x, y, 1, toX, toY] for a drag, or
+// [x, y, -1] for a right click.
 final class Mouse: NSObject, WKScriptMessageHandlerWithReply {
   func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
     guard let a = message.body as? [Double], a.count >= 3 else { return replyHandler(nil, "bad mouse message") }
@@ -25,6 +26,11 @@ final class Mouse: NSObject, WKScriptMessageHandlerWithReply {
         try? await Task.sleep(nanoseconds: 40_000_000)
       }
       let from = point(a[0], a[1])
+      if a[2] < 0 {
+        await send(.rightMouseDown, from, 1)
+        await send(.rightMouseUp, from, 1)
+        return replyHandler(true, nil)
+      }
       for click in 1...Int(a[2]) {
         await send(.leftMouseDown, from, click)
         if a.count == 5 {

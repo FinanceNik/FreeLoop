@@ -54,6 +54,72 @@ const turn = async (title, afterSend = () => {}) => {
 await until("the session list", () => withText(".session-row", "Check alpha"));
 check("the sidebar shows the mark", all(".sidebar h1 svg.logo circle").length === 3);
 
+await step("a session's right-click menu", async () => {
+  const mouse = (...a) => window.webkit.messageHandlers.mouse.postMessage(a);
+  const rightClick = async (title) => {
+    const b = withText(".session-row", title).getBoundingClientRect();
+    await mouse(b.left + 40, b.top + b.height / 2, -1);
+    return until("the menu", () => document.querySelector(".context-menu"), 4000);
+  };
+  const item = (text) => withText(".context-menu button", text);
+  const before = location.href;
+  let menu = await rightClick("Check menu");
+  check("a real right click opens the menu", menu && item("Rename") && item("Delete"));
+  check("the menu opens inside the window", menu.getBoundingClientRect().right <= innerWidth && menu.getBoundingClientRect().bottom <= innerHeight);
+  check("it does not open the session", !document.querySelector(".session-header h2") || !document.querySelector(".session-header h2").textContent.includes("Check menu"));
+  menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await until("the menu to close", () => !document.querySelector(".context-menu"), 2000);
+  check("Escape closes the menu", true);
+
+  // Renaming, in the row.
+  await rightClick("Check menu");
+  item("Rename").click();
+  const name = await until("the name field", () => document.querySelector(".session-rename input"));
+  const setName = (v) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, v);
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  setName("Check menu renamed");
+  name.form.requestSubmit();
+  await until("the new name", () => withText(".session-row", "Check menu renamed"), 5000);
+  check("renaming in the row", true);
+
+  await rightClick("Check menu renamed");
+  item("Rename").click();
+  const again = await until("the name field", () => document.querySelector(".session-rename input"));
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(again, "Should not stick");
+  again.dispatchEvent(new Event("input", { bubbles: true }));
+  await sleep(50);
+  again.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await until("the row back", () => !document.querySelector(".session-rename"), 2000);
+  await sleep(500);
+  check("Escape leaves the name as it was", withText(".session-row", "Check menu renamed") && !withText(".session-row", "Should not stick"));
+
+  // Deleting asks first. A served build has no native dialogs, so this answers that call.
+  let answer = "Cancel";
+  let asked = 0;
+  const real = window.fetch;
+  window.fetch = (u, o) => {
+    const text = decodeURIComponent(`${u}${o?.body ?? ""}`);
+    if (text.includes("removed from disk")) {
+      asked++;
+      return Promise.resolve(new Response(JSON.stringify(answer), { status: 200, headers: { "Content-Type": "application/json" } }));
+    }
+    return real(u, o);
+  };
+  await rightClick("Check menu renamed");
+  item("Delete").click();
+  await sleep(600);
+  check("deleting asks first", asked === 1, `asked ${asked} times`);
+  check("declining keeps the session", withText(".session-row", "Check menu renamed"));
+  answer = "OK";
+  await rightClick("Check menu renamed");
+  item("Delete").click();
+  await until("the session to go", () => !withText(".session-row", "Check menu renamed"), 5000);
+  check("deleting removes the session", true);
+  window.fetch = real;
+});
+
 // Opening a long transcript lands on its end and stays there while it settles.
 await step("a long transcript opens at its end", async () => {
   openSession("Check long");

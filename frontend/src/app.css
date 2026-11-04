@@ -4580,3 +4580,47 @@ table.hooks .hook-command {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A menu at the pointer, in the look of the header's. */
+.context-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 190px;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+}
+
+.context-menu button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+  white-space: nowrap;
+}
+
+.context-menu button:hover:not(:disabled),
+.context-menu button:focus-visible {
+  background: var(--surface-2);
+  border-color: transparent;
+}
+
+.context-menu hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 2px;
+}
+
+.session-rename {
+  margin-bottom: 3px;
+}
+
+.session-rename input {
+  width: 100%;
+  box-sizing: border-box;
+}
