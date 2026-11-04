@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chooseLayout, closePane, cycle, focusPane, forget, openIn, placeIn, restore, setLayout, SINGLE, tabbed, type WorkspaceState, USAGE_PANE, isSession } from "./workspace.ts";
+import { chooseLayout, closePane, cycle, focusPane, forget, openIn, placeIn, restore, setLayout, SINGLE, stableOrder, swapPanes, tabbed, type WorkspaceState, USAGE_PANE, isSession } from "./workspace.ts";
 
 const w = (layout: 1 | 2 | 3 | 4, panes: (string | null)[], active = 0): WorkspaceState => ({ layout, panes, active });
 
@@ -77,4 +77,21 @@ test("a pane can hold live usage, which no session list clears (GUI-023)", () =>
   assert.equal(isSession(USAGE_PANE), false);
   assert.equal(isSession(null), false);
   assert.equal(isSession("ses_1"), true);
+});
+
+test("dragging a pane onto another swaps them, and the dragged one stays active", () => {
+  assert.deepEqual(swapPanes(w(2, ["a", "b"], 0), 0, 1), w(2, ["b", "a"], 1));
+  assert.deepEqual(swapPanes(w(4, ["a", "b", "c", "d"], 3), 3, 0), w(4, ["d", "b", "c", "a"], 0));
+  assert.deepEqual(swapPanes(w(3, ["a", null, USAGE_PANE], 2), 2, 1), w(3, ["a", USAGE_PANE, null], 1));
+  // Onto itself, or from a pane that is gone, nothing changes.
+  const same = w(2, ["a", "b"], 0);
+  assert.equal(swapPanes(same, 1, 1), same);
+  assert.equal(swapPanes(same, -1, 1), same);
+  assert.equal(swapPanes(same, 0, 2), same);
+});
+
+test("panes keep the order they appeared in, whatever they show on screen", () => {
+  assert.deepEqual(stableOrder([], ["a", "b"]), ["a", "b"]);
+  assert.deepEqual(stableOrder(["a", "b"], ["b", "a"]), ["a", "b"]);
+  assert.deepEqual(stableOrder(["a", "b", "c"], ["c", "d", "a"]), ["a", "c", "d"]);
 });

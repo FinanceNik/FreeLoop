@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { screenName } from "./a11y.ts";
 import { ariaKeys, bindingOf, keyLabel, pressed, setBindings } from "./shortcuts.ts";
 import { Browser, Events, Window } from "@wailsio/runtime";
@@ -890,7 +890,7 @@ export default function App() {
     };
   }, []);
 
-  const sessionView = (s: Session, active = true, onClosePane?: () => void) => (
+  const sessionView = (s: Session, active = true, onClosePane?: () => void, onPaneDrag?: (e: DragEvent) => void) => (
     <SessionView
       key={s.id}
       session={s}
@@ -918,6 +918,7 @@ export default function App() {
       onOpenWindow={STANDALONE ? undefined : () => openWindow(s.id)}
       active={active}
       onClosePane={onClosePane}
+      onPaneDrag={onPaneDrag}
       onDeleted={() => {
         if (STANDALONE) {
           Window.Close().catch(() => {});
@@ -1313,6 +1314,7 @@ export default function App() {
             harnesses={harnesses}
             onActivate={activatePane}
             onPlace={(sid, i) => showWork(ws.placeIn(workRef.current, sid, i))}
+            onSwap={(from, to) => showWork(ws.swapPanes(workRef.current, from, to))}
             onClose={(i) => showWork(ws.closePane(workRef.current, i))}
             onNew={() => setScreen({ kind: "new" })}
             onUsagePage={() => setScreen({ kind: "usage" })}

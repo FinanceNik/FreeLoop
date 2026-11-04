@@ -1,5 +1,5 @@
 import { Browser, Clipboard } from "@wailsio/runtime";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
 import {
@@ -37,7 +37,7 @@ import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx
 import { usePaletteActions } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
-import { drawOnce, holdsPlace } from "./scrollPlace.ts";
+import { drawOnce, holdsPlace, readerScrolling, scrollsByKey } from "./scrollPlace.ts";
 import { estimate, formatCost, type PriceEntry } from "./cost.ts";
 import { trustStep } from "./trust.ts";
 
@@ -74,6 +74,8 @@ interface Props {
   // panel and speaks to screen readers; and how to close the pane.
   active?: boolean;
   onClosePane?: () => void;
+  // Starts dragging this session's pane by its header, to swap it with another.
+  onPaneDrag?: (e: DragEvent) => void;
 }
 
 const STOP_LABEL: Record<string, string> = {
@@ -99,7 +101,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag }: Props) {
   // Beside other panes the panel starts closed and only the active pane shows
   // it; the remembered choice is for a session alone in the window.
   const split = !!onClosePane;
@@ -225,7 +227,6 @@ export default function SessionView({ session, events, focus, prices, initialDra
   }, [announcement]);
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [queued, setQueued] = useState(0);
-  const bottom = useRef<HTMLDivElement>(null);
   const mode = view.mode ?? session.mode;
   const approvalWaiting = view.items.some((i) => i.kind === "tool" && awaitingDecision(i));
 
@@ -389,11 +390,37 @@ export default function SessionView({ session, events, focus, prices, initialDra
   // Follow the conversation as it grows, unless the reader scrolled up or a search
   // hit is shown.
   const holdBottom = useRef(false);
-  useEffect(() => {
-    if (!holdBottom.current) bottom.current?.scrollIntoView({ block: "end" });
-  }, [view.items.length, view.items[view.items.length - 1]]);
   const conversation = useRef<HTMLDivElement>(null);
   const lastTop = useRef(0);
+  // When the reader last touched the conversation, and whether they still are.
+  const lastInput = useRef(0);
+  const pointerDown = useRef(false);
+  const readerInput = () => {
+    lastInput.current = performance.now();
+  };
+  const followEnd = () => {
+    const el = conversation.current;
+    if (el && !holdBottom.current) el.scrollTop = el.scrollHeight;
+  };
+  useEffect(followEnd, [view]);
+  // The conversation changes size without any event too: the composer grows, a pane
+  // becomes active and shows its controls, a hidden tab comes back.
+  useEffect(() => {
+    const el = conversation.current;
+    if (!el) return;
+    const resized = new ResizeObserver(followEnd);
+    resized.observe(el);
+    const released = () => {
+      pointerDown.current = false;
+    };
+    window.addEventListener("pointerup", released);
+    window.addEventListener("pointercancel", released);
+    return () => {
+      resized.disconnect();
+      window.removeEventListener("pointerup", released);
+      window.removeEventListener("pointercancel", released);
+    };
+  }, []);
   useEffect(() => (conversation.current ? drawOnce(conversation.current) : undefined), []);
 
   // Scroll to a search hit once its item is there and mark it for a moment.
@@ -703,7 +730,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   return (
     <div ref={layoutBox} className="session-layout">
       <section className="session">
-        <header className="session-header">
+        <header className="session-header" draggable={!!onPaneDrag && renaming === null && !tagging} onDragStart={onPaneDrag}>
           <div className="session-heading">
             <div className="session-titleline">
               {renaming === null ? (
@@ -901,8 +928,25 @@ export default function SessionView({ session, events, focus, prices, initialDra
           aria-label="Conversation"
           onScroll={(e) => {
             const el = e.currentTarget;
-            holdBottom.current = holdsPlace(holdBottom.current, lastTop.current, el.scrollTop, el.scrollHeight - el.scrollTop - el.clientHeight);
+            const byReader = readerScrolling(performance.now(), lastInput.current, pointerDown.current);
+            holdBottom.current = holdsPlace(holdBottom.current, lastTop.current, el.scrollTop, el.scrollHeight - el.scrollTop - el.clientHeight, byReader);
             lastTop.current = el.scrollTop;
+          }}
+          onWheel={(e) => {
+            readerInput();
+            // At once: output arriving before the scroll event would undo the step.
+            if (e.deltaY < 0 && e.currentTarget.scrollHeight > e.currentTarget.clientHeight) holdBottom.current = true;
+          }}
+          onTouchMove={readerInput}
+          onKeyDown={(e) => {
+            if (scrollsByKey(e.key)) readerInput();
+          }}
+          onPointerDown={() => {
+            pointerDown.current = true;
+          }}
+          onPointerMove={(e) => {
+            // WebKit may not report the release of a scroll bar.
+            if (e.buttons === 0) pointerDown.current = false;
           }}
         >
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
@@ -931,7 +975,6 @@ export default function SessionView({ session, events, focus, prices, initialDra
           {view.running && (
             <p className="muted working">{view.status === "queued" ? "Waiting for a free slot on the provider…" : "Working…"}</p>
           )}
-          <div ref={bottom} />
         </div>
 
         {promptForm && promptForm.command.prompt && (

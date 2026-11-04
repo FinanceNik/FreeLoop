@@ -86,6 +86,22 @@ export function placeIn(w: WorkspaceState, sid: string, i: number): WorkspaceSta
   return { ...w, panes, active: i };
 }
 
+// swapPanes trades what two panes show, a pane dragged onto another; what was
+// dragged stays active. An empty pane can be swapped with too.
+export function swapPanes(w: WorkspaceState, from: number, to: number): WorkspaceState {
+  if (from === to || from < 0 || to < 0 || from >= w.panes.length || to >= w.panes.length) return w;
+  const panes = [...w.panes];
+  [panes[from], panes[to]] = [panes[to], panes[from]];
+  return { ...w, panes, active: to };
+}
+
+// stableOrder keeps panes in the order they first appeared. A pane's place on
+// screen comes from CSS, so a swap moves no element: moving one would lose its
+// scroll position and reload a preview.
+export function stableOrder(previous: readonly string[], keys: readonly string[]): string[] {
+  return [...previous.filter((k) => keys.includes(k)), ...keys.filter((k) => !previous.includes(k))];
+}
+
 // closePane removes pane i; the last pane stays and is emptied.
 export function closePane(w: WorkspaceState, i: number): WorkspaceState {
   if (i < 0 || i >= w.panes.length) return w;

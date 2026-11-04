@@ -1712,7 +1712,7 @@ button.ghost[aria-pressed="true"] {
   background: var(--bg-app);
 }
 
-.panes[data-layout="3"] > .pane:first-child {
+.panes[data-layout="3"] > .pane[data-position="0"] {
   grid-row: span 2;
 }
 
@@ -1742,6 +1742,13 @@ button.ghost[aria-pressed="true"] {
 
 .pane-split > * {
   border-radius: inherit;
+}
+
+/* A pane moves by its header. */
+.session-header[draggable="true"],
+.session-header[draggable="true"] h2,
+.pane-usage-head[draggable="true"] {
+  cursor: grab;
 }
 
 /* A line around the pane the keyboard goes to, drawn over its contents. */

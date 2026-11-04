@@ -4,12 +4,29 @@
 const AT_THE_END = 60;
 
 // holdsPlace says whether the conversation stops following what arrives, after a
-// scroll event: yes once the reader scrolls up, and no again back at the end. It goes
-// by the direction, because new output makes the end further away with no one having
-// moved, and that must not stop it following.
-export function holdsPlace(held: boolean, prevTop: number, top: number, toTheEnd: number): boolean {
-  if (top < prevTop - 1) return true;
+// scroll event: yes once the reader scrolls up, and no again back at the end. Only the
+// reader's own input counts (byReader). The view also moves up by itself: cards
+// collapsing at the end shorten the conversation and the view lands on the new end,
+// which in a real WebKit view stopped the following for good. New output makes the end
+// further away with no one having moved, and that must not stop it either.
+export function holdsPlace(held: boolean, prevTop: number, top: number, toTheEnd: number, byReader: boolean): boolean {
+  if (byReader && top < prevTop - 1 && toTheEnd > 1) return true;
   return toTheEnd <= AT_THE_END ? false : held;
+}
+
+// How long after the reader's last input a scroll is still theirs, in milliseconds:
+// the keyboard's scrolling is animated. A trackpad's momentum goes on sending wheel
+// events, so it stays the reader's for as long as it moves.
+const READER_INPUT_LASTS = 400;
+
+// readerScrolling says whether a scroll now comes from the reader.
+export function readerScrolling(now: number, lastInput: number, pointerDown: boolean): boolean {
+  return pointerDown || now - lastInput <= READER_INPUT_LASTS;
+}
+
+// The keys that scroll a page.
+export function scrollsByKey(key: string): boolean {
+  return ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(key);
 }
 
 // heightAbove says how much the items that were wholly above the view grew: how far to

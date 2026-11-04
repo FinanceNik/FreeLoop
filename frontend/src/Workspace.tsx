@@ -4,7 +4,7 @@ import { tabAfterKey } from "./a11y.ts";
 import Limits from "./Limits.tsx";
 import LiveUsage from "./LiveUsage.tsx";
 import { basename } from "./paths.ts";
-import { tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
+import { stableOrder, tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
 
 // The panes of the main window (GUI-017). The rules are in workspace.ts; this
 // draws them. Every pane stays mounted, tabbed or not, so a hidden pane keeps
@@ -12,13 +12,17 @@ import { tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
 
 // What a dragged sidebar row carries.
 export const SESSION_DRAG_TYPE = "application/x-freeloop-session";
+// What a pane dragged by its header or tab carries: what it shows.
+const PANE_DRAG_TYPE = "application/x-freeloop-pane";
 
 interface Props {
   work: WorkspaceState;
   sessions: Session[];
-  renderSession: (s: Session, active: boolean, onClose?: () => void) => ReactNode;
+  renderSession: (s: Session, active: boolean, onClose?: () => void, onPaneDrag?: (e: DragEvent) => void) => ReactNode;
   onActivate: (i: number) => void;
   onPlace: (sid: string, i: number) => void;
+  // A pane was dragged onto another.
+  onSwap: (from: number, to: number) => void;
   onClose: (i: number) => void;
   onNew: () => void;
   // Opens the full usage page.
@@ -37,7 +41,7 @@ interface Props {
 
 const MAX_OFFERED = 6;
 
-export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onClose, onNew, onUsagePage, onError, unread, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
+export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onSwap, onClose, onNew, onUsagePage, onError, unread, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -47,6 +51,9 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
     return () => seen.disconnect();
   }, []);
   const [dropOn, setDropOn] = useState<number | null>(null);
+  const keys = work.panes.map((sid, i) => sid ?? `empty-${i}`);
+  const rendered = useRef<string[]>([]);
+  const order = (rendered.current = stableOrder(rendered.current, keys));
 
   const split = work.layout > 1;
   const asTabs = tabbed(work, width);
@@ -67,14 +74,41 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
   // Sessions an empty pane offers: not shown yet, most recent first.
   const offered = sessions.filter((s) => !work.panes.includes(s.id) && s.status !== "archived" && !s.parentId).slice(0, MAX_OFFERED);
 
+  // The pane being dragged: what is dragged can't be read until it is dropped.
+  const draggedPane = useRef<number | null>(null);
+  const startPaneDrag = (e: DragEvent, i: number) => {
+    const from = e.target instanceof Element ? e.target : null;
+    if (from?.closest("button:not(.pane-tab), summary, input, a, .export-options")) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.setData(PANE_DRAG_TYPE, work.panes[i] ?? "");
+    e.dataTransfer.effectAllowed = "move";
+    draggedPane.current = i;
+  };
+  const endPaneDrag = () => {
+    draggedPane.current = null;
+    setDropOn(null);
+  };
+
   const dragOver = (e: DragEvent, i: number) => {
-    if (!e.dataTransfer.types.includes(SESSION_DRAG_TYPE)) return;
+    const types = e.dataTransfer.types;
+    if (!types.includes(SESSION_DRAG_TYPE) && !types.includes(PANE_DRAG_TYPE)) return;
     e.preventDefault();
+    if (draggedPane.current === i) {
+      setDropOn(null);
+      return;
+    }
     e.dataTransfer.dropEffect = "move";
     setDropOn(i);
   };
   const drop = (e: DragEvent, i: number) => {
     setDropOn(null);
+    if (e.dataTransfer.types.includes(PANE_DRAG_TYPE)) {
+      e.preventDefault();
+      onSwap(work.panes.indexOf(e.dataTransfer.getData(PANE_DRAG_TYPE)), i);
+      return;
+    }
     const sid = e.dataTransfer.getData(SESSION_DRAG_TYPE);
     if (!sid) return;
     e.preventDefault();
@@ -92,6 +126,9 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               aria-selected={i === work.active}
               tabIndex={i === work.active ? 0 : -1}
               className={i === work.active ? "pane-tab pane-tab-on" : "pane-tab"}
+              draggable={sid !== null}
+              onDragStart={(e) => startPaneDrag(e, i)}
+              onDragEnd={endPaneDrag}
               onClick={() => onActivate(i)}
               onKeyDown={(e) => {
                 const next = tabAfterKey(e.key, i, work.panes.length);
@@ -108,14 +145,19 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
         </div>
       )}
       <div className="panes" data-layout={asTabs ? 1 : work.layout}>
-        {work.panes.map((sid, i) => {
+        {order.map((key) => {
+          const i = keys.indexOf(key);
+          const sid = work.panes[i];
           const active = i === work.active;
           const s = session(sid);
           const classes = ["pane", active && "pane-active", split && !asTabs && "pane-split", dropOn === i && "pane-drop"];
           return (
             <section
-              key={sid ?? `empty-${i}`}
+              key={key}
               className={classes.filter(Boolean).join(" ")}
+              data-position={i}
+              style={{ order: i }}
+              onDragEnd={endPaneDrag}
               aria-label={split ? `Pane ${i + 1}: ${titleOf(sid)}` : undefined}
               hidden={asTabs && !active}
               onPointerDownCapture={() => onActivate(i)}
@@ -128,7 +170,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
             >
               {sid === USAGE_PANE ? (
                 <div className="pane-usage">
-                  <div className="pane-usage-head">
+                  <div className="pane-usage-head" draggable={split && !asTabs} onDragStart={(e) => startPaneDrag(e, i)}>
                     <h2>Usage</h2>
                     <span className="spacer" />
                     <button className="link" onClick={onUsagePage}>
@@ -142,7 +184,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
                   <LiveUsage compact projects={projects} providers={providers} harnesses={harnesses} onError={onError} />
                 </div>
               ) : s ? (
-                renderSession(s, active, split ? () => onClose(i) : undefined)
+                renderSession(s, active, split ? () => onClose(i) : undefined, split && !asTabs ? (e) => startPaneDrag(e, i) : undefined)
               ) : (
                 <div className="empty pane-empty">
                   <p>{offered.length > 0 ? "Choose a session for this pane" : "Create a session for this pane"}</p>
