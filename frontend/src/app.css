@@ -1324,7 +1324,8 @@ button.ghost[aria-pressed="true"] {
 .composer textarea:focus {
   box-sizing: border-box;
   resize: none;
-  max-height: 40vh;
+  /* Of the pane in a grid; a single pane is no container, so of the window there. */
+  max-height: 40cqh;
   overflow-y: auto;
   background: transparent;
   border: 0;

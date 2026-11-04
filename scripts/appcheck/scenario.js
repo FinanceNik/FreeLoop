@@ -311,6 +311,26 @@ await step("panes fit, and the keyboard moves between them", async () => {
   // Inactive panes keep only the input.
   const hidden = getComputedStyle(document.querySelector(".pane-split:not(.pane-active) .composer-actions")).display === "none";
   check("a pane the user is not in hides its controls", hidden);
+  // A long prompt in a short pane scrolls in its box and leaves Send in the pane.
+  document.querySelector('.layout-switch button[aria-label="4 panes"]').click();
+  await sleep(300);
+  const short = await until("a session in the grid", () => all(".pane").find((p) => p.querySelector(".composer textarea")));
+  const prompt = short.querySelector(".composer textarea");
+  prompt.focus();
+  await sleep(200);
+  type(prompt, "a long line of a prompt\n".repeat(200));
+  await sleep(300);
+  const paneBox = short.getBoundingClientRect();
+  const send = withText(".composer-actions button.primary", "Send", short);
+  const talk = short.querySelector(".conversation");
+  check("a long prompt leaves Send in the pane", send && send.getBoundingClientRect().bottom <= paneBox.bottom, `Send ends at ${Math.round(send?.getBoundingClientRect().bottom)}, the pane at ${Math.round(paneBox.bottom)}`);
+  check("a long prompt leaves room for the conversation", talk.clientHeight >= 60, `${talk.clientHeight} px left`);
+  type(prompt, "");
+  await sleep(200);
+  check("the box shrinks back with the prompt gone", prompt.getBoundingClientRect().height < 80, `${Math.round(prompt.getBoundingClientRect().height)} px`);
+  document.querySelector('.layout-switch button[aria-label="2 panes"]').click();
+  await sleep(300);
+
   // A turn in a pane the user has left goes on being followed.
   const running = document.querySelector(".pane-active");
   const other = all(".pane").find((p) => p !== running);
