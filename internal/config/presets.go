@@ -49,8 +49,25 @@ type HarnessPreset struct {
 	// with no content instead of the protocol's "not found", for an agent that
 	// cannot recognize that error when it reads a file before creating it.
 	MissingFileIsEmpty bool `yaml:"missingFileIsEmpty,omitempty" json:"missingFileIsEmpty"`
+	// SignInCheck warns when the agent's own settings choose a sign-in its vendor's
+	// terms speak against (OQ-018). Only a built-in one has it: a file names no file
+	// for the app to read.
+	SignInCheck *SignInCheck `yaml:"-" json:"-"`
 	// Builtin is set for presets that ship with the app.
 	Builtin bool `yaml:"-" json:"builtin"`
+}
+
+// SignInCheck is a sign-in chosen in an agent's own JSON settings. The app reads the
+// choice and no credentials (HRN-008), and does not change it.
+type SignInCheck struct {
+	// File is the settings file, relative to the home folder.
+	File string
+	// Keys are where the choice can be, each a path of JSON keys.
+	Keys [][]string
+	// Value is the sign-in to warn of.
+	Value string
+	// Warning is told to the user in the session.
+	Warning string
 }
 
 // ClaudeCodePresetID is the preset for Claude Code (HRN-006).
@@ -94,8 +111,15 @@ func BuiltinPresets() []HarnessPreset {
 		Command:     "npx",
 		Args:        []string{"-y", "@google/gemini-cli@0.66.0", "--acp"},
 		Modes:       askingModes("default", "plan"),
-		Notes:       "Needs Node.js and a Gemini API key: add GEMINI_API_KEY as a secret of the session's environment. Sign-in with a personal Google account no longer works for this agent.",
-		HideText:    []string{"[MODE_UPDATE]"},
+		Notes:       "Needs Node.js and a Gemini API key: add GEMINI_API_KEY as a secret of the session's environment. Do not use a Google login with it: individuals' sign-in no longer works, and Google's terms treat third-party access through one as grounds for suspending an account.",
+		SignInCheck: &SignInCheck{
+			File:  filepath.Join(".gemini", "settings.json"),
+			Keys:  [][]string{{"security", "auth", "selectedType"}, {"selectedAuthType"}},
+			Value: "oauth-personal",
+			Warning: "Your Gemini CLI settings choose a Google login, and Gemini CLI uses that here too. Google's terms treat third-party access through such a login as grounds for suspending an account, " +
+				"and they do not say whether another app starting Gemini CLI counts. Choose an API key in Gemini CLI, with GEMINI_API_KEY as a secret of this session's environment.",
+		},
+		HideText: []string{"[MODE_UPDATE]"},
 		// 0.66.0 gets the error as a plain object, so its check for one that
 		// means "not found" fails, and it refuses to create the file.
 		MissingFileIsEmpty: true,
@@ -111,7 +135,7 @@ func BuiltinPresets() []HarnessPreset {
 		// unsafe.
 		Modes:   askingModes("read-only", "read-only"),
 		Env:     map[string]string{"NO_BROWSER": "1", "DEFAULT_AUTH_REQUEST": `{"methodId":"api-key"}`},
-		Notes:   "Needs Node.js. Add CODEX_API_KEY or OPENAI_API_KEY as a secret of the session's environment, or sign in once by running codex login in a terminal; Freeloop never sees or stores the login.",
+		Notes:   "Needs Node.js. Add CODEX_API_KEY or OPENAI_API_KEY as a secret of the session's environment, or sign in once by running codex login in a terminal; Freeloop never sees or stores the login. OpenAI's documents do not say whether another app may start Codex on a ChatGPT plan, and they recommend an API key for automation, so use one for schedules.",
 		Builtin: true,
 	}, {
 		ID:          "goose",

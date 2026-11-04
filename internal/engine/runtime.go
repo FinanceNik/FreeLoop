@@ -326,6 +326,9 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		params.ExternalID = ses.ExternalID
 		params.Recap = func() string { return recapOf(ses, events) }
 		params.KeepTitle = ses.ImportedFrom != ""
+		if why := e.signInWarning(preset); why != "" {
+			e.emit(sid, event.Notice, event.NoticeData{Message: why})
+		}
 		hs, err = acp.Harness{Preset: preset}.NewSession(ctx, params)
 	}
 	if err != nil {
