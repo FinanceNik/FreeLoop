@@ -4532,3 +4532,24 @@ table.hooks .hook-command {
   border-radius: 8px;
 }
 
+/* The General page's Save stays in sight while something waits for it. */
+.settings-save {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex-wrap: wrap;
+  padding-block: 8px;
+  background: var(--surface);
+}
+
+/* What a session is doing (GUI-030): one line, cut short. */
+.session-activity {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  font-size: calc(11rem / 14);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

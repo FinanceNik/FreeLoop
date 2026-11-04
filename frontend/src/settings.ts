@@ -65,3 +65,18 @@ export function textSizeAfter(k: Keys, current: number): number | null {
   if (pressed(k, "textSmaller")) return Math.max(current - 1, MIN_FONT_SIZE);
   return null;
 }
+
+// settingsKey compares two configs as the General page edits them. Approvals are not
+// edits: the engine keeps those itself.
+export function settingsKey<T extends { commandApprovals?: unknown }>(c: T): string {
+  const { commandApprovals: _approvals, ...rest } = c;
+  return JSON.stringify(rest);
+}
+
+// autoSaved is what the General page saves by itself: everything but hooks, prices and
+// the web search settings. Saving a hook approves a command to run, a half-typed
+// address would take its key along, and a price row is unfinished while being typed,
+// so those wait for the Save button.
+export function autoSaved<T extends { hooks?: unknown; prices?: unknown; web?: unknown }>(form: T, saved: T): T {
+  return { ...form, hooks: saved.hooks, prices: saved.prices, web: saved.web };
+}

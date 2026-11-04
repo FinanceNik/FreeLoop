@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
+import { autoSaved, settingsKey } from "./settings.ts";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
 import FontEditor from "./FontEditor.tsx";
@@ -146,7 +147,12 @@ export default function Settings({ config, providers, environments, profiles, pr
   // ⌘+ and ⌘- change one field, and the fonts save themselves; the rest of the
   // form may hold unsaved edits. Approving a command is not an edit either.
   const { ui: { fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont, ...savedUi }, commandApprovals: _approvals, ...savedRest } = config;
-  useEffect(() => setForm(config), [JSON.stringify([savedRest, savedUi])]);
+  // What the page saved itself comes back as a new config, and must not undo what is
+  // being typed elsewhere on the page.
+  const ownSave = useRef("");
+  useEffect(() => {
+    if (ownSave.current !== settingsKey(config)) setForm(config);
+  }, [JSON.stringify([savedRest, savedUi])]);
   useEffect(
     () => setForm((f) => ({ ...f, ui: { ...f.ui, fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont } })),
     [savedFontSize, savedTextFont, savedCodeFont],
@@ -165,14 +171,8 @@ export default function Settings({ config, providers, environments, profiles, pr
       .finally(() => setChecking(false));
   };
 
-  const save = async (e: FormEvent) => {
+  const save = (e: FormEvent) => {
     e.preventDefault();
-    if (form.permissions.allowBypass && !config.permissions.allowBypass) {
-      const ok = (await ask(
-        "Allow bypass mode? In bypass mode tool calls run without asking. Protected paths and deny rules still hold, but shell commands can do anything you can. New sessions never start in bypass.",
-      ));
-      if (!ok) return;
-    }
     EngineService.SaveSettings(form)
       .then((c) => {
         onSaved(c);
@@ -182,13 +182,61 @@ export default function Settings({ config, providers, environments, profiles, pr
       .catch(onError);
   };
 
+  // Changes save themselves, as in a Mac settings window, once the field being typed
+  // in is left. Leaving the page saves too: it used to drop them without a word.
+  const formBox = useRef<HTMLFormElement>(null);
+  const [left, setLeft] = useState(0);
+  const saveByItself = (f: Config, c: Config) => {
+    const next = autoSaved(f, c);
+    if (settingsKey(next) === settingsKey(c)) return null;
+    return EngineService.SaveSettings(next);
+  };
+  const current = useRef({ form, config });
+  current.current = { form, config };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const typing = document.activeElement;
+      if (typing && formBox.current?.contains(typing) && typing.matches('input:not([type="checkbox"]), textarea')) return;
+      saveByItself(form, config)
+        ?.then((c) => {
+          if (!c) return;
+          ownSave.current = settingsKey(c);
+          onSaved(c);
+          // What waits for the Save button stays as typed.
+          setForm((f) => ({ ...c, hooks: f.hooks, prices: f.prices, web: f.web }));
+          setSaved(true);
+          setTimeout(() => setSaved(false), 1500);
+        })
+        .catch(onError);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [form, left]);
+  useEffect(
+    () => () => {
+      saveByItself(current.current.form, current.current.config)
+        ?.then((c) => c && onSaved(c))
+        .catch(onError);
+    },
+    [],
+  );
+  const unsaved = settingsKey(form) !== settingsKey(autoSaved(form, config));
+  const allowBypass = async (on: boolean) => {
+    if (on) {
+      const ok = await ask(
+        "Allow bypass mode? In bypass mode tool calls run without asking. Protected paths and deny rules still hold, but shell commands can do anything you can. New sessions never start in bypass.",
+      );
+      if (!ok) return;
+    }
+    setForm((f) => ({ ...f, permissions: { ...f.permissions, allowBypass: on } }));
+  };
+
   const provider = providers.find((p) => p.id === form.defaults.providerId);
 
   return (
     <section className="page">
       <h2>General</h2>
       <PendingCommands version={[config, restored]} onSaved={onSaved} onError={onError} />
-      <form className="card form" onSubmit={save}>
+      <form ref={formBox} className="card form" onSubmit={save} onBlur={() => setLeft((n) => n + 1)}>
         <h3>Appearance</h3>
         <label>
           Theme
@@ -379,7 +427,7 @@ export default function Settings({ config, providers, environments, profiles, pr
           <input
             type="checkbox"
             checked={form.permissions.allowBypass}
-            onChange={(e) => setForm({ ...form, permissions: { ...form.permissions, allowBypass: e.target.checked } })}
+            onChange={(e) => allowBypass(e.target.checked)}
           />
           Allow bypass mode to be chosen for a session
         </label>
@@ -434,10 +482,20 @@ export default function Settings({ config, providers, environments, profiles, pr
         <h3 id="prices">Prices</h3>
         <PriceTable prices={form.prices ?? []} providers={providers} onChange={(prices) => setForm({ ...form, prices })} />
 
-        <div className="row">
-          <button type="submit" className="primary">
-            Save
-          </button>
+        <div className={unsaved ? "row settings-save" : "row"} role="status">
+          {unsaved ? (
+            <>
+              <span className="muted">Hooks, prices and the search settings wait for Save.</span>
+              <button type="submit" className="primary">
+                Save
+              </button>
+              <button type="button" onClick={() => setForm(config)}>
+                Revert
+              </button>
+            </>
+          ) : (
+            <span className="muted">Changes save themselves.</span>
+          )}
           {saved && <span className="ok">Saved</span>}
         </div>
       </form>

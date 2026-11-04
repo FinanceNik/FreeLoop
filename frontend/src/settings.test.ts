@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, inSettings, isSettingsShortcut, textSizeAfter } from "./settings.ts";
+import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, inSettings, isSettingsShortcut, textSizeAfter, autoSaved, settingsKey } from "./settings.ts";
 
 test("every configuration page is listed once", () => {
   const ids = SETTINGS_GROUPS.flatMap((g) => g.pages.map((p) => p.id));
@@ -38,4 +38,20 @@ test("the text size shortcuts", () => {
   assert.equal(textSizeAfter(keys("=", { metaKey: false }), 14), null);
   assert.equal(textSizeAfter(keys("=", { altKey: true }), 14), null);
   assert.equal(textSizeAfter(keys("-", { ctrlKey: true }), 14), null);
+});
+
+test("the General page saves by itself, but not hooks, prices or the search settings", () => {
+  const saved = { permissions: { allowBypass: false }, hooks: ["old"], prices: [1], web: { searchURL: "a" }, commandApprovals: ["x"] };
+  const form = { ...saved, permissions: { allowBypass: true }, hooks: ["half typed"], prices: [2], web: { searchURL: "https://ha" } };
+  const next = autoSaved(form, saved);
+  assert.equal(next.permissions.allowBypass, true);
+  assert.deepEqual(next.hooks, ["old"]);
+  assert.deepEqual(next.prices, [1]);
+  assert.deepEqual(next.web, { searchURL: "a" });
+});
+
+test("approvals are not an edit of the settings", () => {
+  const a = { permissions: { allowBypass: true }, commandApprovals: ["x"] };
+  assert.equal(settingsKey(a), settingsKey({ ...a, commandApprovals: ["x", "y"] }));
+  assert.notEqual(settingsKey(a), settingsKey({ ...a, permissions: { allowBypass: false } }));
 });
