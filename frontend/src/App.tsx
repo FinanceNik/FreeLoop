@@ -51,6 +51,7 @@ import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
 import { ChevronIcon, FilterIcon } from "./icons.tsx";
+import { clearSelectionOnClick } from "./selection.ts";
 import ActivityLine from "./ActivityLine.tsx";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
 import { applyColors, type ColorSet } from "./colors.ts";
@@ -496,6 +497,8 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(clearSelectionOnClick, []);
 
   // ⌃⇧ and the arrows move between panes, as in tmux (SET-006). Caught on the way down,
   // since a terminal in focus keeps its keys, and not while Settings records a key.

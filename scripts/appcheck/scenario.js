@@ -223,6 +223,57 @@ await step("scrolling up holds the place", async () => {
   type(box, "");
 });
 
+await step("a click clears a selection", async () => {
+  const mouse = (...a) => window.webkit.messageHandlers.mouse.postMessage(a);
+  const selected = () => getSelection().toString().length;
+  const selectAll = async () => {
+    document.activeElement?.blur?.();
+    document.execCommand("selectAll");
+    await sleep(100);
+    if (!selected()) throw new Error("nothing got selected");
+  };
+  const at = (el, x = 0.5, y = 0.5) => {
+    const b = el.getBoundingClientRect();
+    return [b.left + b.width * x, b.top + b.height * y];
+  };
+  const clicked = async (name, el, x, y) => {
+    await selectAll();
+    await mouse(...at(el, x, y), 1);
+    await sleep(150);
+    check(`a click clears a selection: ${name}`, selected() === 0, `${selected()} characters stayed selected`);
+  };
+  const msg = all(".msg-agent", activePane()).at(-1);
+  await clicked("text", msg);
+  await clicked("the conversation's margin", conversation(), 0.01, 0.5);
+  await clicked("the header's title", document.querySelector(".session-header h2"));
+  const nav = document.querySelector(".sidebar nav");
+  await clicked("the sidebar's empty space", nav, 0.5, 0.98);
+  await clicked("the footer's empty space", document.querySelector(".footer-links"), 0.98, 0.5);
+  // A button still does its work, and leaves no selection behind.
+  const panel = withText(".session-actions button", "Panel");
+  const pressed = panel.getAttribute("aria-pressed");
+  await clicked("a button", panel);
+  check("the button still worked", panel.getAttribute("aria-pressed") !== pressed);
+  await selectAll();
+  await mouse(...at(panel), 1);
+  await sleep(200);
+  // What selecting by hand does must keep working.
+  await mouse(...at(msg, 0.1), 2);
+  await sleep(150);
+  check("a double click selects a word", selected() > 0 && selected() < 40, `${selected()} characters`);
+  await mouse(...at(document.querySelector(".session-header h2")), 1);
+  await sleep(150);
+  const b = msg.getBoundingClientRect();
+  await mouse(b.left + 10, b.top + 10, 1, b.left + 120, b.top + 10);
+  await sleep(150);
+  check("dragging selects text, and it stays", selected() > 0, "nothing selected");
+  await mouse(...at(msg, 0.1), 3);
+  await sleep(150);
+  check("a triple click selects a line", selected() > 0, "nothing selected");
+  await mouse(...at(document.querySelector(".session-header h2")), 1);
+  await sleep(150);
+});
+
 await step("a finished session says so on the board", async () => {
   withText(".footer-links button", "Board").click();
   const card = await until("the board's card", () => withText(".board-card", "Check alpha"));

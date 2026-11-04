@@ -6,6 +6,41 @@ import WebKit
 // Like Wails' delegate, this one implements no JavaScript dialogs.
 final class UI: NSObject, WKUIDelegate {}
 
+// Key without the app being active, so real mouse events reach the page and the user's
+// focus stays where it is.
+final class KeyWindow: NSWindow {
+  override var canBecomeKey: Bool { true }
+}
+
+// Real mouse events, for what the page's own synthetic ones cannot do, such as changing a
+// selection: the scenario sends [x, y, clicks] or [x, y, 1, toX, toY] for a drag.
+final class Mouse: NSObject, WKScriptMessageHandlerWithReply {
+  func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
+    guard let a = message.body as? [Double], a.count >= 3 else { return replyHandler(nil, "bad mouse message") }
+    Task { @MainActor in
+      let point = { (x: Double, y: Double) in NSPoint(x: x, y: web.frame.height - y) }
+      func send(_ type: NSEvent.EventType, _ p: NSPoint, _ clicks: Int) async {
+        let event = NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: clicks, pressure: 1)!
+        window.sendEvent(event)
+        try? await Task.sleep(nanoseconds: 40_000_000)
+      }
+      let from = point(a[0], a[1])
+      for click in 1...Int(a[2]) {
+        await send(.leftMouseDown, from, click)
+        if a.count == 5 {
+          let to = point(a[3], a[4])
+          await send(.leftMouseDragged, NSPoint(x: (from.x + to.x) / 2, y: (from.y + to.y) / 2), click)
+          await send(.leftMouseDragged, to, click)
+          await send(.leftMouseUp, to, click)
+        } else {
+          await send(.leftMouseUp, from, click)
+        }
+      }
+      replyHandler(true, nil)
+    }
+  }
+}
+
 final class Driver: NSObject, WKNavigationDelegate {
   let scenario: String
   init(scenario: String) { self.scenario = scenario }
@@ -41,10 +76,13 @@ guard args.count == 3, let url = URL(string: args[1]), let scenario = try? Strin
   exit(2)
 }
 let app = NSApplication.shared
-let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: 720), styleMask: [.borderless], backing: .buffered, defer: false)
-let web = WKWebView(frame: window.contentView!.bounds)
+let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: 720), styleMask: [.borderless], backing: .buffered, defer: false)
+let mouse = Mouse()
+let configuration = WKWebViewConfiguration()
+configuration.userContentController.addScriptMessageHandler(mouse, contentWorld: .page, name: "mouse")
+let web = WKWebView(frame: window.contentView!.bounds, configuration: configuration)
 window.contentView!.addSubview(web)
-window.orderBack(nil)
+window.makeKeyAndOrderFront(nil)
 let ui = UI()
 let driver = Driver(scenario: scenario)
 web.uiDelegate = ui
