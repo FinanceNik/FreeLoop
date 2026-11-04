@@ -51,6 +51,8 @@ import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
 import { ChevronIcon, FilterIcon } from "./icons.tsx";
+import ActivityLine from "./ActivityLine.tsx";
+import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { applyFonts, type FontChoice } from "./fonts.ts";
 import { inSettings, isSettingsShortcut, MAX_FONT_SIZE, textSizeAfter } from "./settings.ts";
@@ -274,7 +276,15 @@ export default function App() {
       .then((list) => setProviders(list ?? []))
       .catch(report);
 
+  // What each session is doing (GUI-030).
+  const [activities, setActivities] = useState<Record<string, Activity>>({});
+  const rootsOf = (s: Session) => [s.projectRoot, s.worktree].filter(Boolean) as string[];
   const ingest = (sid: string, events: readonly TranscriptEvent[]) => {
+    setActivities((all) => {
+      const before = all[sid] ?? NO_ACTIVITY;
+      const after = events.reduce(foldActivity, before);
+      return after === before ? all : { ...all, [sid]: after };
+    });
     const current = transcriptsRef.current[sid] ?? emptyTranscript;
     const { transcript, missingAfter } = apply(current, events);
     if (transcript !== current) {
@@ -1127,7 +1137,7 @@ export default function App() {
                         aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
                         aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
                         data-shown={!STANDALONE && screen.kind === "session" && work.panes.includes(s.id) ? "" : undefined}
-                        title={`${s.branch ? `${s.branch} · ` : ""}⌘-click or drag to open it beside what is open`}
+                        title={[describeActivity(s.status, activities[s.id], rootsOf(s), new Date()), s.branch, "⌘-click or drag to open it beside what is open"].filter(Boolean).join(" · ")}
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData(SESSION_DRAG_TYPE, s.id);
@@ -1141,6 +1151,7 @@ export default function App() {
                           {groupBy === "date" && <RowProject session={s} project={projects.find((p) => p.id === s.projectId)} />}
                           {s.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>}
                         </span>
+                        {s.status !== "idle" && <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
                         {((s.worktree && s.branch) || (s.tags ?? []).length > 0) && (
                           <span className="session-meta">
                             {s.worktree && s.branch && <span className="muted">{s.branch}</span>}
@@ -1327,6 +1338,7 @@ export default function App() {
             work={work}
             sessions={sessions}
             renderSession={sessionView}
+            activityOf={(s) => describeActivity(s.status, activities[s.id], rootsOf(s), new Date())}
             unread={unread}
             statusLabel={STATUS_LABEL}
             onTabbed={setTabbedPanes}
@@ -1461,6 +1473,7 @@ export default function App() {
         )}
         {screen.kind === "board" && (
           <Board
+            activityOf={(s) => <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
             sessions={visible.filter((s) => s.status !== "archived")}
             projectName={(s) => projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)}
             statusLabel={STATUS_LABEL}

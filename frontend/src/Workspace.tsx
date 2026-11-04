@@ -30,6 +30,8 @@ interface Props {
   onError: (err: unknown) => void;
   // Sessions that finished work the user has not seen (SES-022).
   unread: readonly string[];
+  // What a session is doing, for a tab's tooltip (GUI-030).
+  activityOf: (s: Session) => string;
   // How a session's status reads, and whether the panes are tabs just now.
   statusLabel: Record<string, string>;
   onTabbed: (tabbed: boolean) => void;
@@ -41,7 +43,7 @@ interface Props {
 
 const MAX_OFFERED = 6;
 
-export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onSwap, onClose, onNew, onUsagePage, onError, unread, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
+export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onSwap, onClose, onNew, onUsagePage, onError, unread, activityOf, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -126,6 +128,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               aria-selected={i === work.active}
               tabIndex={i === work.active ? 0 : -1}
               className={i === work.active ? "pane-tab pane-tab-on" : "pane-tab"}
+              title={session(sid) ? activityOf(session(sid)!) || undefined : undefined}
               draggable={sid !== null}
               onDragStart={(e) => startPaneDrag(e, i)}
               onDragEnd={endPaneDrag}

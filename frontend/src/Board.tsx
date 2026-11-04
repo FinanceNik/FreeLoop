@@ -12,6 +12,7 @@ export default function Board<T extends Card>({
   statusLabel,
   filtered,
   unread,
+  activityOf,
   renderRequest,
   onOpen,
 }: {
@@ -21,6 +22,8 @@ export default function Board<T extends Card>({
   filtered: boolean;
   // Sessions that finished work the user has not seen (SES-022).
   unread: readonly string[];
+  // What the session is doing (GUI-030).
+  activityOf: (s: T) => ReactNode;
   // The approval a session waits on longest, answered on its card.
   renderRequest: (sid: string) => ReactNode;
   onOpen: (id: string) => void;
@@ -53,6 +56,7 @@ export default function Board<T extends Card>({
                       {projectName(s)}
                       {s.branch ? ` · ${s.branch}` : ""}
                     </span>
+                    {activityOf(s)}
                     <span className="session-meta">
                       <span className={`badge badge-${s.status}`}>{statusLabel[s.status] ?? s.status}</span>
                       <span className="muted">{since(s.updatedAt)}</span>
