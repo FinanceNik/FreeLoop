@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chooseLayout, closePane, cycle, focusPane, forget, openIn, placeIn, restore, setLayout, SINGLE, stableOrder, swapPanes, tabbed, type WorkspaceState, USAGE_PANE, isSession } from "./workspace.ts";
+import { chooseLayout, closePane, cycle, focusPane, forget, movePane, openIn, placeIn, restore, setLayout, SINGLE, stableOrder, swapPanes, tabbed, type WorkspaceState, USAGE_PANE, isSession } from "./workspace.ts";
 
 const w = (layout: 1 | 2 | 3 | 4, panes: (string | null)[], active = 0): WorkspaceState => ({ layout, panes, active });
 
@@ -94,4 +94,32 @@ test("panes keep the order they appeared in, whatever they show on screen", () =
   assert.deepEqual(stableOrder([], ["a", "b"]), ["a", "b"]);
   assert.deepEqual(stableOrder(["a", "b"], ["b", "a"]), ["a", "b"]);
   assert.deepEqual(stableOrder(["a", "b", "c"], ["c", "d", "a"]), ["a", "c", "d"]);
+});
+
+test("moving between panes follows the layout on screen and wraps around", () => {
+  const at = (layout: 1 | 2 | 3 | 4, active: number, d: "left" | "right" | "up" | "down", tabs = false) =>
+    movePane(w(layout, Array.from({ length: layout }, (_, i) => `s${i}`), active), d, tabs).active;
+  // Two side by side.
+  assert.equal(at(2, 0, "right"), 1);
+  assert.equal(at(2, 1, "right"), 0);
+  assert.equal(at(2, 0, "left"), 1);
+  assert.equal(at(2, 0, "up"), 0);
+  assert.equal(at(2, 1, "down"), 1);
+  // One full height on the left, two stacked on the right.
+  assert.equal(at(3, 0, "right"), 1);
+  assert.equal(at(3, 2, "left"), 0);
+  assert.equal(at(3, 1, "down"), 2);
+  assert.equal(at(3, 2, "down"), 1);
+  assert.equal(at(3, 0, "down"), 0);
+  // A grid.
+  assert.equal(at(4, 0, "right"), 1);
+  assert.equal(at(4, 3, "left"), 2);
+  assert.equal(at(4, 1, "down"), 3);
+  assert.equal(at(4, 3, "down"), 1);
+  assert.equal(at(4, 2, "up"), 0);
+  // One pane has nowhere to go, and tabs stand in a row.
+  assert.equal(at(1, 0, "right"), 0);
+  assert.equal(at(4, 3, "right", true), 0);
+  assert.equal(at(4, 0, "left", true), 3);
+  assert.equal(at(4, 1, "down", true), 1);
 });

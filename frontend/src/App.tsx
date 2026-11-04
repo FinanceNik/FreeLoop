@@ -87,6 +87,8 @@ const STATUS_LABEL: Record<string, string> = {
   error: "Error",
 };
 
+const PANE_SHORTCUT = { left: "paneLeft", right: "paneRight", up: "paneUp", down: "paneDown" };
+
 const COLLAPSED_KEY = "freeloop.collapsedProjects";
 const GROUP_BY_KEY = "freeloop.groupBy";
 
@@ -483,6 +485,25 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ⌃⇧ and the arrows move between panes, as in tmux (SET-006). Caught on the way down,
+  // since a terminal in focus keeps its keys, and not while Settings records a key.
+  const tabbedRef = useRef(false);
+  tabbedRef.current = tabbedPanes;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (STANDALONE || workRef.current.layout === 1) return;
+      if (e.target instanceof Element && e.target.closest(".shortcut-listening")) return;
+      const direction = (["left", "right", "up", "down"] as const).find((d) => pressed(e, PANE_SHORTCUT[d]));
+      if (!direction) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showWorkRef.current(ws.movePane(workRef.current, direction, tabbedRef.current));
+      focusActivePane();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
   // ⌘1 to ⌘9 open the sessions listed first, ⌘0 the attention view

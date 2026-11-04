@@ -88,3 +88,17 @@ test("an approval button says what its kind does, whatever the agent named it", 
   assert.equal(optionLabel("reject_once", "Allow"), "Deny");
   assert.equal(optionLabel("other", "Something"), "Something");
 });
+
+test("the pane shortcuts start as ⌃⇧ and the arrows, and can be changed", () => {
+  setBindings({});
+  assert.equal(pressed(k("ArrowLeft", { ctrlKey: true, shiftKey: true }), "paneLeft"), true);
+  assert.equal(pressed(k("ArrowDown", { ctrlKey: true, shiftKey: true }), "paneDown"), true);
+  assert.equal(pressed(k("ArrowLeft", { ctrlKey: true }), "paneLeft"), false);
+  assert.equal(keyLabel(bindingOf("paneRight")), "⌃⇧→");
+  setBindings({ paneLeft: "Ctrl+H" });
+  assert.equal(pressed(k("h", { ctrlKey: true }), "paneLeft"), true);
+  assert.equal(pressed(k("ArrowLeft", { ctrlKey: true, shiftKey: true }), "paneLeft"), false);
+  // A key another one uses is refused.
+  assert.match(bindingProblem("paneUp", "Ctrl+Shift+ArrowDown", {}), /already/);
+  setBindings({});
+});

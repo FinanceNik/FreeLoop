@@ -122,6 +122,25 @@ export function cycle(w: WorkspaceState, step: number): WorkspaceState {
   return { ...w, active: (((w.active + step) % n) + n) % n };
 }
 
+export type Direction = "left" | "right" | "up" | "down";
+
+// Which pane is next in each direction, by pane, as the layouts stand on screen: two
+// side by side, one full height and two stacked, or a grid. It wraps around, as tmux
+// does.
+const NEXT: Record<Exclude<Layout, 1>, Record<Direction, number[]>> = {
+  2: { left: [1, 0], right: [1, 0], up: [0, 1], down: [0, 1] },
+  3: { left: [1, 0, 0], right: [1, 0, 0], up: [0, 2, 1], down: [0, 2, 1] },
+  4: { left: [1, 0, 3, 2], right: [1, 0, 3, 2], up: [2, 3, 0, 1], down: [2, 3, 0, 1] },
+};
+
+// movePane makes the pane in that direction active. Tabs stand in a row, so there
+// only left and right move.
+export function movePane(w: WorkspaceState, direction: Direction, tabs: boolean): WorkspaceState {
+  if (w.layout === 1) return w;
+  if (tabs) return direction === "left" || direction === "right" ? cycle(w, direction === "right" ? 1 : -1) : w;
+  return focusPane(w, NEXT[w.layout][direction][w.active]);
+}
+
 // forget empties the panes of sessions that no longer exist or are
 // archived, after a delete or at launch.
 export function forget(w: WorkspaceState, exists: (sid: string) => boolean): WorkspaceState {
