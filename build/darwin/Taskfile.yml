@@ -18,7 +18,7 @@ tasks:
             ref: .BUILD_FLAGS
           DEV:
             ref: .DEV
-    # Icons are committed under build/darwin; run `wails3 task common:generate:icons` after changing build/appicon.*.
+    # Icons are committed under build/darwin; run scripts/make-icon.sh after changing the mark.
     cmds:
       - wails3 tool prepare-macos-output --dir "{{.BIN_DIR}}"
       - go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}" {{.MAIN_PKG}}
@@ -41,24 +41,12 @@ tasks:
     cmds:
       - task: create:app:bundle
 
-  package:dmg:
-    summary: Packages the application into a `.dmg`
-    deps:
-      - task: package
-    cmds:
-      - >-
-        wails3 tool package --format dmg --name "{{.APP_NAME}}" --out "{{.BIN_DIR}}"
-        --background build/darwin/dmg-background.png
-        --volume-icon build/darwin/icons.icns
-        --file-icon build/darwin/dmg-file-icon.icns
-        --window-width 540 --window-height 380
-
   create:app:bundle:
     summary: Creates an ad-hoc signed `.app` bundle
     cmds:
       - test -n "{{.BIN_DIR}}" && test -n "{{.APP_NAME}}" && rm -rf -- "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
-      - cp build/darwin/icons.icns build/darwin/Assets.car "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
+      - cp build/darwin/icons.icns "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
       - xattr -cr "{{.BIN_DIR}}/{{.APP_NAME}}.app"
@@ -71,7 +59,7 @@ tasks:
       - wails3 tool prepare-macos-output --dir "{{.BIN_DIR}}"
       - test -n "{{.BIN_DIR}}" && test -n "{{.APP_NAME}}" && rm -rf -- "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Resources"
-      - cp build/darwin/icons.icns build/darwin/Assets.car "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Resources"
+      - cp build/darwin/icons.icns "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Resources"
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS"
       - cp build/darwin/Info.dev.plist "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Info.plist"
       - xattr -cr "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"

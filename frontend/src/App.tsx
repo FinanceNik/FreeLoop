@@ -50,7 +50,7 @@ import Workspace, { SESSION_DRAG_TYPE } from "./Workspace.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav, { Icon } from "./SettingsNav.tsx";
-import { ChevronIcon, FilterIcon } from "./icons.tsx";
+import { ChevronIcon, FilterIcon, Logo } from "./icons.tsx";
 import { clearSelectionOnClick } from "./selection.ts";
 import ActivityLine from "./ActivityLine.tsx";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
@@ -979,7 +979,10 @@ export default function App() {
       {!STANDALONE && (
         <aside className="sidebar">
           <header>
-            <h1>Freeloop</h1>
+            <h1>
+              <Logo />
+              Freeloop
+            </h1>
             <button onClick={() => setScreen({ kind: "new" })}>
               New session
             </button>

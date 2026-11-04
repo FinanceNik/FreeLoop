@@ -61,6 +61,17 @@ export function LayoutIcon({ n }: { n: 1 | 2 | 3 | 4 }) {
   );
 }
 
+// The mark, from the author's website: three circles whose colours mix where they meet.
+export function Logo({ size = 18 }: { size?: number }) {
+  return (
+    <svg className="logo" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <circle cx="32" cy="23.38" r="16.5" fill="#6dcade" fillOpacity="0.7" />
+      <circle cx="22.04" cy="40.62" r="16.5" fill="#7da0ee" fillOpacity="0.7" />
+      <circle cx="41.96" cy="40.62" r="16.5" fill="#f3dc80" fillOpacity="0.7" />
+    </svg>
+  );
+}
+
 export function FilterIcon() {
   return (
     <Icon>

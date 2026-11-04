@@ -52,6 +52,7 @@ const turn = async (title, afterSend = () => {}) => {
 };
 
 await until("the session list", () => withText(".session-row", "Check alpha"));
+check("the sidebar shows the mark", all(".sidebar h1 svg.logo circle").length === 3);
 
 // Opening a long transcript lands on its end and stays there while it settles.
 await step("a long transcript opens at its end", async () => {

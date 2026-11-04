@@ -333,6 +333,9 @@ fieldset {
 }
 
 .sidebar h1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: calc(15rem / 14);
   font-weight: 650;
   letter-spacing: -0.01em;
