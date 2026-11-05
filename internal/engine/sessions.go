@@ -170,6 +170,12 @@ func (e *Engine) DeleteSession(ctx context.Context, sid string) error {
 	e.removeSessionData(ses)
 	// Whatever the environment is now (it may have been deleted or changed
 	// kind), a container the session had, and an image built for it, go.
+	if err := e.removeSSHCopy(ctx, ses); err != nil {
+		log.Printf("engine: remove the working copy of deleted session %s: %s", sid, e.redactText(err.Error()))
+	}
+	if err := environment.RemoveCache(e.sshSetAsideDir(sid)); err != nil {
+		log.Printf("engine: remove what deleted session %s set aside: %v", sid, err)
+	}
 	if _, err := environment.FindDocker(); err == nil {
 		if err := environment.RemoveContainer(ctx, containerName(sid)); err != nil {
 			log.Printf("engine: remove the container of deleted session %s: %v", sid, err)

@@ -86,7 +86,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 | Reads outside project root | Prompt, except never-readable locations which are refused |
 | New MCP server | Does not start until confirmed with its full command shown |
 | Project configuration | Not read until the project is trusted |
-| Outbound connections | Providers, MCP servers, harness endpoints and an MCP registry the user configured; update check opt-in (off by default; once a day to GitHub's API, sending nothing about the app); a token optimizer's pinned download from GitHub, only when the user clicks it |
+| Outbound connections | Providers, MCP servers, harness endpoints, SSH environments and an MCP registry the user configured; update check opt-in (off by default; once a day to GitHub's API, sending nothing about the app); a token optimizer's pinned download from GitHub, only when the user clicks it |
 
 ## Limitations the user should know
 
@@ -252,6 +252,36 @@ Found by reading the code and confirmed by tests that failed before the fixes. N
 - A mode change the index failed to record was never repaired, so a session could return to a looser mode. `replaySets` now restores a session's settings from the transcript on catch-up and when a transcript is opened, and `runtimeFor` reconciles before it reads the mode. A status is not replayed.
 - A failed lookup of a project's hooks counted as no hooks, and so did a click before the lookup answered, so trusting skipped the question. Not knowing now looks again, and a failure refuses (`frontend/src/trust.ts`).
 - Stopping an external agent's turn left its approval waiting, because the request's context belongs to the connection. A later Allow still answered the agent. A request now ends with its turn.
+
+## An SSH environment, 2026-11-04
+
+ENV-008 runs a session's commands on another machine. That machine is treated as compromised, with its `sh`, `tar`, `find` and whatever it prints: an approved command can do anything there. What this has to hold is the Mac.
+
+**Connecting.** `/usr/bin/ssh`, never one from a PATH, and options on the command line, which win over `~/.ssh/config`: `StrictHostKeyChecking=yes`, `BatchMode=yes`, no agent or X forwarding, `ClearAllForwardings`, no local command, no tunnel. An unknown or changed host key refuses to connect and the user checks it in a terminal; Freeloop never accepts one, and never reads a key. A host or folder that could be read as an option or by a shell is refused where the environment is read. An environment from a file runs nothing until approved, with the machine in what is approved, and a changed file ends that. Each session has its own connection, in a folder private to the user, or none: never one the user's own config shares. Local-only mode is asked before anything goes, also while a session runs, and a host behind a proxy counts as not local. The broker asks about commands there as it does here.
+
+**What leaves.** Only regular files, read here without following a link. In a repository, what git tracks or would track; a repository git cannot read sends nothing. Not sent, tracked or not: what looks like a secret, what a deny rule on reading covers, and settings of tools and agents. The copy gets a new repository of its own, so the project's history, remotes and credentials stay here. Variables reach a command through its standard input as octal escapes, never on a command line on either side, in a file there, or in the environment of ssh. Whatever else a file holds goes with it: a key in a source file is sent. The form says so, and to use a machine that can be lost.
+
+**What comes back.** No rsync, whose receiver would run here against a hostile sender (OQ-034). A list of names and a tar stream, read as data by `internal/environment/sshsync.go`:
+
+- Only a plain path that was asked for is applied, once. Names with control or invisible characters, `..`, or a component `~` are left there.
+- Only regular files: no link, hard link, device or fifo is made. No file gains an executable bit, and a file executable here is not replaced.
+- A path through a symlink here is refused, and writes pass the Guard, by absolute path.
+- Sizes, counts and time are capped per file, sync and session, with no compression to expand. A machine that keeps sending is cut off.
+- Held back, in any spelling APFS treats as the same and at any depth: `permission.ActedOnLater`, `.git`, `.freeloop`, `.agents`, CI and hook folders, `.gitignore` and `.gitattributes`, `AGENTS.md` and the like, installed code (`.venv`, `node_modules`, `site-packages`), secrets, what a deny rule covers, and a file named `HEAD`, or `config` beside one, which would make a bare repository git obeys.
+- If the project's ignore rules cannot be read, nothing comes back.
+- An edit here wins over what comes back. What is replaced or deleted is set aside first in a private folder of the session's, and a mass delete, in one step or several, is not applied.
+
+**Not covered.** Project files a person runs on purpose still change, a `Makefile`, a test or `package.json` among them: that is what the agent is there for, and the diff shows it. Running them before reading it runs what the other machine wrote. Work there can also be wrong or malicious without touching any listed name. Files changed with their time and status put back on a file system that allows it, by root, are not seen. A machine that goes away leaves its copy, with the project's code, there.
+
+An independent review of this code on 2026-11-04 attacked it with a real sshd, and reproduced these before they were fixed, each with a regression test in `internal/environment/ssh_test.go` or `internal/engine/ssh_test.go`:
+
+- **The home folder through a path.** A path under a folder named `~` passed its check as `root/~/x` and was then read as `$HOME/x`, so `~/.zsh_history` and other files reached the other machine with no question. Paths are now absolute when they reach the file system, and such a name is refused.
+- **Code run here by way of a name.** A file named `:(bogus)` made `git check-ignore` die, and the failure read as "ignored: nothing", so a `.pth` file came back into an ignored `.venv`, with `git status` empty, and ran at the next `python`. A failure now brings nothing back, names reach git as `./` paths, and installed code is held back whatever the rules say.
+- **Secrets through the rules.** Emptying `.gitignore` over there emptied it here, and the next sync sent every ignored file. `.gitignore` no longer comes back. Any git failure also fell back to sending the whole tree; only git saying this is not a repository does now.
+- **What the app already knew.** The list missed `permission.ActedOnLater`, and an executable script could be replaced and stay executable.
+- **Smaller.** A mass delete could be done 25 files at a time. A quadratic loop over a remote list could not be stopped. A stopped command's sync held the session for the whole limit. A linked session folder had its target's mode changed. A variable named `__fl_cmd` replaced the approved command. Deleting a session connected to a machine whose environment file had changed since it was approved.
+
+A second round of that review, against the fixes, did not complete. Each fix has a regression test, and reading the fixes afterwards found two more: a `.git` that git rejects read as "not a repository" and sent the whole tree, and one path through a link here stopped the whole sync. Both are fixed. The fixes have not had an independent attack.
 
 ## Review cadence
 

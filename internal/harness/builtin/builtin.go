@@ -691,6 +691,10 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 	var sb strings.Builder
 	sb.WriteString(basePrompt)
 	fmt.Fprintf(&sb, "\n# Environment\n\n- Project root: %s\n- OS: %s\n- Date: %s\n", s.env.Root(), runtime.GOOS, time.Now().Format("2006-01-02"))
+	// Where commands run, when that is not the project root.
+	if d, ok := s.env.(interface{ Describe() string }); ok {
+		fmt.Fprintf(&sb, "- %s\n", d.Describe())
+	}
 	switch mode {
 	case permission.ModePlan:
 		sb.WriteString("\n# Mode: plan\n\nYou are in plan mode: you can read and search but not change anything. Investigate, then call present_plan with a concrete plan. Once the user approves it you can make changes.\n")

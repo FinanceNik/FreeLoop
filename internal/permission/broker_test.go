@@ -535,3 +535,36 @@ func TestDeniedPathPatterns(t *testing.T) {
 		t.Errorf("a quote reached the profile: %s", read[2])
 	}
 }
+
+// ENV-008: what crosses to or from another machine counts a rule with no path, which a
+// search's Hidden does not, and a rule on a command says nothing about files.
+func TestReadAndWriteDenied(t *testing.T) {
+	cases := []struct {
+		rule        Rule
+		read, write bool
+	}{
+		{Rule{Effect: Deny, Tool: "write_file"}, false, true},
+		{Rule{Effect: Deny, Tool: "read_file"}, true, false},
+		{Rule{Effect: Deny, Tool: "*"}, true, true},
+		{Rule{Effect: Deny, Tool: "*", Path: "a.txt"}, true, true},
+		{Rule{Effect: Deny, Tool: "*", Path: "other.txt"}, false, false},
+		{Rule{Effect: Deny, Tool: "shell", Command: "rm *"}, false, false},
+		{Rule{Effect: Allow, Tool: "*"}, false, false},
+	}
+	root := t.TempDir()
+	for _, c := range cases {
+		b := NewBroker(NewPolicy(root, filepath.Join(root, "data")), func(string, event.Type, any) {})
+		b.SetRules(crossingRules{c.rule}, nil)
+		path := filepath.Join(root, "a.txt")
+		if got := b.ReadDenied("s", root, path); got != c.read {
+			t.Errorf("%+v: ReadDenied = %v", c.rule, got)
+		}
+		if got := b.WriteDenied("s", root, path); got != c.write {
+			t.Errorf("%+v: WriteDenied = %v", c.rule, got)
+		}
+	}
+}
+
+type crossingRules []Rule
+
+func (r crossingRules) Rules(string) ([]Rule, error) { return r, nil }

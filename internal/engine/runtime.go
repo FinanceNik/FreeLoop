@@ -104,6 +104,11 @@ func (r *runtime) stop() {
 		d.Stop(ctx)
 		cancel()
 	}
+	if s, ok := r.env.(*environment.SSH); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		s.Close(ctx)
+		cancel()
+	}
 }
 
 // runtimeFor returns the live session for sid, starting it on first use:
@@ -199,6 +204,15 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		if env, err = e.dockerEnv(ctx, ses, project, envCfg, vars, host, pluginDir); err != nil {
 			return nil, err
 		}
+	} else if isSSH(envCfg) {
+		// An external agent would need its own login and paths over there. It is not
+		// run on this Mac instead, which would be out of what the user chose.
+		if ses.HarnessID != builtin.ID {
+			return nil, fmt.Errorf("the %s environment runs commands on %s, and so far only the built-in agent can work that way", envCfg.Name, envCfg.Host)
+		}
+		if env, err = e.sshEnv(ctx, ses, envCfg, vars, host); err != nil {
+			return nil, err
+		}
 	} else if envCfg.SandboxOn() {
 		sandboxed, closeIt, err := e.sandboxEnv(ctx, ses, envCfg, vars)
 		if err != nil {
@@ -219,6 +233,11 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		e.mu.Unlock()
 		if !ready && !inUse {
 			closeEgress()
+		}
+		if s, ok := env.(*environment.SSH); ok && !ready && !inUse {
+			sctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			s.Close(sctx)
 		}
 		if d, ok := env.(*environment.Docker); ok && !ready && !inUse {
 			sctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -314,8 +333,11 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		if caps, err := e.ModelCapabilities(ctx, ses.ProviderID, ses.Model, false); err == nil {
 			params.ContextWindow = caps.ContextWindow
 		}
-		r.optimizer = &sessionOptimizer{e: e, sid: sid, env: env}
-		params.Optimizer = r.optimizer
+		// A token optimizer's program is on this Mac, and commands are not.
+		if !isSSH(envCfg) {
+			r.optimizer = &sessionOptimizer{e: e, sid: sid, env: env}
+			params.Optimizer = r.optimizer
+		}
 		hs, err = builtin.Harness{}.NewSession(ctx, params)
 	} else {
 		if e.agentTakesOptimizer(ses.HarnessID, envCfg) {

@@ -339,6 +339,11 @@ func (e *Engine) scriptHost(ctx context.Context, ses session.Session) (environme
 	if err != nil {
 		return nil, nil, err
 	}
+	// What a machine elsewhere changed is here now: a script run here on this Mac would
+	// be running what it wrote, with no sandbox.
+	if isSSH(cfg) {
+		return nil, nil, errors.New("this session's commands run on another machine, so its scripts do not run on this Mac")
+	}
 	if cfg.Kind != string(environment.KindDocker) {
 		if e.containerStarted(ctx, ses.ID) {
 			return nil, nil, errors.New("a container has had this worktree and the session's environment is no longer Docker, so this command does not run on this Mac")

@@ -40,6 +40,9 @@ type EnvironmentInfo struct {
 	Health       string `json:"health"`
 	// Sandbox says how a local environment's commands are confined (ENV-009).
 	Sandbox *config.Sandbox `json:"sandbox"`
+	// The machine and folder of an SSH environment (ENV-008).
+	Host      string `json:"host"`
+	RemoteDir string `json:"remoteDir"`
 	// Builtin is an environment every install has; deleting it only resets it.
 	Builtin bool `json:"builtin"`
 	// Missing says why a docker environment cannot run here.
@@ -61,7 +64,7 @@ func envInfo(c config.Environment) EnvironmentInfo {
 		rules = []permission.Rule{}
 	}
 	info := EnvironmentInfo{ID: c.ID, Name: c.Name, Kind: c.Kind, Env: env, SecretNames: names, DisabledTools: tools, DefaultMode: c.DefaultMode, Rules: rules,
-		Image: c.Image, Devcontainer: c.Devcontainer, Setup: c.Setup, Health: c.Health, Sandbox: c.Sandbox,
+		Image: c.Image, Devcontainer: c.Devcontainer, Setup: c.Setup, Health: c.Health, Sandbox: c.Sandbox, Host: c.Host, RemoteDir: c.RemoteDir,
 		Builtin: c.ID == DefaultEnvironmentID || c.ID == SandboxedEnvironmentID}
 	if c.Kind == string(environment.KindDocker) {
 		if _, err := environment.FindDocker(); err != nil {
@@ -135,6 +138,8 @@ type SaveEnvironmentRequest struct {
 	// Docker settings (ENV-005); Kind is local or docker.
 	Kind         string `json:"kind"`
 	Image        string `json:"image"`
+	Host         string `json:"host"`
+	RemoteDir    string `json:"remoteDir"`
 	Devcontainer bool   `json:"devcontainer"`
 	Setup        string `json:"setup"`
 	Health       string `json:"health"`
@@ -187,6 +192,9 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 	next := config.Environment{ID: cur.ID, Name: req.Name, Kind: kind, DefaultMode: req.DefaultMode, Secrets: map[string]string{}, Rules: cur.Rules}
 	if kind == string(environment.KindDocker) {
 		next.Image, next.Devcontainer = strings.TrimSpace(req.Image), req.Devcontainer
+		next.Setup, next.Health = strings.TrimSpace(req.Setup), strings.TrimSpace(req.Health)
+	} else if kind == string(environment.KindSSH) {
+		next.Host, next.RemoteDir = strings.TrimSpace(req.Host), strings.TrimSpace(req.RemoteDir)
 		next.Setup, next.Health = strings.TrimSpace(req.Setup), strings.TrimSpace(req.Health)
 	} else if req.Sandbox != nil && req.Sandbox.Enabled {
 		next.Sandbox = req.Sandbox

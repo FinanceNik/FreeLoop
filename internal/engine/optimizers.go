@@ -229,6 +229,12 @@ func (e *Engine) chooseOptimizer(ctx context.Context, req CreateSessionRequest, 
 		return "", nil
 	}
 	asked := req.optimizer == "" && req.Optimizer != ""
+	if isSSH(envCfg) {
+		if asked {
+			return "", errors.New(remoteReason)
+		}
+		return "", nil
+	}
 	if harnessID != builtin.ID && !e.agentTakesOptimizer(harnessID, envCfg) {
 		if asked {
 			return "", errors.New("this agent cannot use a token optimizer: it runs its commands itself, with no hook to rewrite them")
@@ -289,6 +295,8 @@ func (e *Engine) Optimizers(ctx context.Context, sid string) ([]OptimizerInfo, e
 	for _, o := range e.optimizerList() {
 		info := OptimizerInfo{ID: o.ID, Name: o.Name, Warning: e.ownHookWarning(ses, o)}
 		switch {
+		case e.onOtherMachine(ses):
+			info.Reason = remoteReason
 		case !e.sessionTakesOptimizer(ses):
 			info.Reason = externalAgentReason(o)
 		case !e.optimizerApproved(o):
@@ -356,6 +364,14 @@ func (e *Engine) TypeOptimizerInstall(ctx context.Context, sid, id string) (Term
 		return TerminalInfo{}, err
 	}
 	return info, nil
+}
+
+// remoteReason says why an optimizer does not apply to a session on another machine.
+const remoteReason = "Token optimizers are not available here: this session's commands run on another machine."
+
+func (e *Engine) onOtherMachine(ses session.Session) bool {
+	cfg, err := e.environment(ses.EnvironmentID)
+	return err == nil && isSSH(cfg)
 }
 
 func externalAgentReason(o config.Optimizer) string {
@@ -432,6 +448,9 @@ func (e *Engine) inContainer(ses session.Session) bool {
 // be used. A container that is not running cannot be asked; its first command
 // finds out.
 func (e *Engine) checkForSession(ctx context.Context, ses session.Session, o config.Optimizer) string {
+	if e.onOtherMachine(ses) {
+		return remoteReason
+	}
 	if !e.sessionTakesOptimizer(ses) {
 		return externalAgentReason(o)
 	}

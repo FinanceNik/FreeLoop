@@ -122,7 +122,7 @@ The templates live in `internal/harness/templates` as `.tmpl` files; their tests
 
 ## Adding an environment
 
-**A configuration** of an existing kind is a file `environments/<id>.yaml` (`config.Environment`): `kind` (`local` or `docker`), variables in `env`, `secrets` as `keychain://` references, `disabledTools`, `defaultMode`, environment-scope `rules`, and for Docker `image` or `devcontainer: true`, `setup` and `health`. The Environments page edits the same file.
+**A configuration** of an existing kind is a file `environments/<id>.yaml` (`config.Environment`): `kind` (`local`, `docker` or `ssh`), variables in `env`, `secrets` as `keychain://` references, `disabledTools`, `defaultMode`, environment-scope `rules`, and for Docker `image` or `devcontainer: true`, `setup` and `health`. The Environments page edits the same file.
 
 **A new kind** implements `environment.Environment` (`internal/environment`), and `environment.Spawner` if agents and MCP servers should run in it:
 

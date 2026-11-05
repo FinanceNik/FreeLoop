@@ -37,8 +37,10 @@ var ErrNotFound = store.ErrNotFound
 
 // Options configures Open.
 type Options struct {
-	DataDir string
-	Secrets secrets.Store
+	// SSHConfig replaces ~/.ssh/config, for tests.
+	SSHConfig string
+	DataDir   string
+	Secrets   secrets.Store
 	// HookProgram is this program, for an external agent's hook to call back with
 	// (HRN-019); without it agents cannot use a token optimizer.
 	HookProgram string
@@ -84,6 +86,7 @@ type Engine struct {
 	importMu sync.Mutex
 	// hookProgram is what an agent's hook runs to reach the app (HRN-019).
 	hookProgram string
+	sshConfig   string
 	// storageFailing is set while events cannot be saved, for the sessions in
 	// storageStopped.
 	storageFailing atomic.Bool
@@ -204,6 +207,7 @@ func Open(opts Options) (*Engine, error) {
 	e := &Engine{
 		gh:            "gh",
 		hookProgram:   opts.HookProgram,
+		sshConfig:     opts.SSHConfig,
 		dataDir:       opts.DataDir,
 		home:          opts.Home,
 		dev:           opts.Dev,

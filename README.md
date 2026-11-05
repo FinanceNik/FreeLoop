@@ -20,6 +20,7 @@ Status: early, and not yet released. Most of what v1 lists is built; [docs/ROADM
 - **One permission chokepoint.** Every tool call from every harness is decided by one broker: modes (ask, accept edits, plan, bypass), rules at global, environment, profile, project and session scope where deny always wins, and protected paths that are never touched.
 - **Many sessions.** A sidebar by project, an attention view that answers every waiting approval in one place, notifications and a dock badge, a diff and commit panel per session, and an optional git worktree per session so sessions on one repository never edit the same checkout, merged back from the panel.
 - **Containers.** A Docker environment runs each session's commands and agents in its own container, from an image or the project's devcontainer.json, with only the project folder shared (Docker Desktop, or Colima and the docker CLI).
+- **Another machine.** An SSH environment runs the built-in agent's commands on a machine you choose, in a working copy kept in sync with the project on your Mac. That machine is not trusted: secrets stay here, only regular files come back, and settings your Mac or an agent would act on do not.
 - **Projects you trust.** A project's `AGENTS.md`, `.freeloop/` settings and git status are used only after you trust it; its own settings can tighten permissions, never loosen them.
 
 ## Install

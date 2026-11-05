@@ -263,6 +263,41 @@ func (b *Broker) Request(ctx context.Context, pc Context, req Request) Decision 
 	return d
 }
 
+// WriteDenied reports whether a deny rule refuses writing path, for what a machine
+// elsewhere would change here (ENV-008). A rule with no path covers every path. Rules that
+// cannot be loaded refuse everything.
+func (b *Broker) WriteDenied(sessionID, root, path string) bool {
+	return b.denied(sessionID, root, path, Request{Tool: "write_file", Kind: KindEdit}, Request{Tool: "edit_file", Kind: KindEdit})
+}
+
+// ReadDenied reports whether a deny rule refuses reading path, for what would leave this
+// Mac (ENV-008). Unlike Hidden, which keeps a search useful, a rule with no path counts.
+func (b *Broker) ReadDenied(sessionID, root, path string) bool {
+	return b.denied(sessionID, root, path, Request{Tool: "read_file", Kind: KindRead}, Request{Tool: "grep", Kind: KindSearch}, Request{Tool: "glob", Kind: KindSearch})
+}
+
+func (b *Broker) denied(sessionID, root, path string, reqs ...Request) bool {
+	if b.rules == nil {
+		return false
+	}
+	rules, err := b.rules.Rules(sessionID)
+	if err != nil {
+		return true
+	}
+	for _, r := range rules {
+		if r.Effect != Deny || r.Command != "" {
+			continue
+		}
+		for _, req := range reqs {
+			req.Paths = []string{path}
+			if r.Matches(req, root) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Hidden reports whether a deny rule refuses reading path, for leaving it
 // out of search results: a search names a folder, and a deny rule on a
 // file inside it would otherwise be read through grep. Rules that cannot

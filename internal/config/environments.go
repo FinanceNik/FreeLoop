@@ -13,6 +13,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 )
 
@@ -49,11 +50,23 @@ type Environment struct {
 	Health       string `yaml:"health,omitempty" json:"health"`
 	// Sandbox confines a local environment's commands to the project (ENV-009).
 	Sandbox *Sandbox `yaml:"sandbox,omitempty" json:"sandbox"`
+	// SSH: the machine, as ssh knows it, and the folder there that holds each
+	// session's working copy; Setup and Health run there too (ENV-008).
+	Host      string `yaml:"host,omitempty" json:"host"`
+	RemoteDir string `yaml:"remoteDir,omitempty" json:"remoteDir"`
 }
 
 // Fingerprint identifies what the environment runs and lets commands reach. Its
 // name and disabled tools change neither, and each of its rules has its own.
 func (e Environment) Fingerprint() string {
+	// Which machine and folder is part of what the user approves. Only for this kind, so
+	// that no other environment's approval ends for being stored differently.
+	if e.Kind == "ssh" {
+		return commandFingerprint("environment-ssh", struct {
+			ID, Kind, DefaultMode, Setup, Health, Host, RemoteDir string
+			Env, Secrets                                          map[string]string
+		}{e.ID, e.Kind, e.DefaultMode, e.Setup, e.Health, e.Host, e.RemoteDir, e.Env, e.Secrets})
+	}
 	return commandFingerprint("environment", struct {
 		ID, Kind, DefaultMode, Image, Setup, Health string
 		Devcontainer                                bool
@@ -93,8 +106,12 @@ func (e Environment) Validate() error {
 		return fmt.Errorf("id %q must be lowercase letters, digits and dashes", e.ID)
 	case strings.TrimSpace(e.Name) == "":
 		return errors.New("name is required")
-	case e.Kind != "local" && e.Kind != "docker":
-		return fmt.Errorf("kind %q must be local or docker", e.Kind)
+	case e.Kind != "local" && e.Kind != "docker" && e.Kind != "ssh":
+		return fmt.Errorf("kind %q must be local, docker or ssh", e.Kind)
+	case e.Kind == "ssh" && !environment.ValidSSHHost(e.Host):
+		return fmt.Errorf("host %q must be a name from ~/.ssh/config or [user@]host", e.Host)
+	case e.Kind == "ssh" && e.RemoteDir != "" && !environment.ValidRemoteDir(e.RemoteDir):
+		return fmt.Errorf("remoteDir %q must be a plain path, with no spaces, .. or shell characters", e.RemoteDir)
 	case e.Kind == "docker" && strings.TrimSpace(e.Image) == "" && !e.Devcontainer:
 		return errors.New("a docker environment needs an image, or devcontainer: true")
 	case e.DefaultMode != "" && (!permission.Mode(e.DefaultMode).Valid() || permission.Mode(e.DefaultMode).Unattended()):

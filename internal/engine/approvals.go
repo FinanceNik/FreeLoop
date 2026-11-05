@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/permission"
@@ -348,6 +349,10 @@ func describeEnvironment(c config.Environment) string {
 		}
 	}
 	add("image", c.Image)
+	if c.Kind == string(environment.KindSSH) {
+		parts = append(parts, "copies the project to "+c.Host+" and runs commands there")
+		add("under", c.RemoteDir)
+	}
 	if c.Devcontainer {
 		parts = append(parts, "the project's devcontainer.json")
 	}

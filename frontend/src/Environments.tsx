@@ -31,6 +31,9 @@ interface Form {
   sandboxRead: string; // one path per line
   sandboxWrite: string;
   sandboxHosts: string; // one per line (ENV-010)
+  // Another machine (ENV-008).
+  host: string;
+  remoteDir: string;
 }
 
 function toForm(e?: EnvironmentInfo): Form {
@@ -55,6 +58,8 @@ function toForm(e?: EnvironmentInfo): Form {
     sandboxRead: (e?.sandbox?.read ?? []).join("\n"),
     sandboxWrite: (e?.sandbox?.write ?? []).join("\n"),
     sandboxHosts: (e?.sandbox?.hosts ?? []).join("\n"),
+    host: e?.host ?? "",
+    remoteDir: e?.remoteDir ?? "",
   };
 }
 
@@ -127,6 +132,8 @@ export default function Environments({ environments, onChanged, onError }: Props
       devcontainer: form.devcontainer,
       setup: form.setup,
       health: form.health,
+      host: form.host,
+      remoteDir: form.remoteDir,
       sandbox: form.kind === "local" && form.sandbox ? { enabled: true, network: form.sandboxNetwork, read: lines(form.sandboxRead), write: lines(form.sandboxWrite), hosts: form.sandboxNetwork === "hosts" ? lines(form.sandboxHosts) : [] } : null,
     })
       .then(() => {
@@ -163,6 +170,7 @@ export default function Environments({ environments, onChanged, onError }: Props
                 {(env.secretNames ?? []).length > 0 && ` (${(env.secretNames ?? []).join(", ")})`}
                 {env.sandbox?.enabled && ` · sandboxed${env.sandbox.network === "none" ? ", no network" : env.sandbox.network === "hosts" ? `, ${(env.sandbox.hosts ?? []).length} hosts` : ""}`}
                 {env.kind === "docker" && ` · Docker: ${env.devcontainer ? "the project's devcontainer.json" : env.image}`}
+                {env.kind === "ssh" && ` · SSH: ${env.host}`}
                 {(env.disabledTools ?? []).length > 0 && ` · tools off: ${(env.disabledTools ?? []).join(", ")}`}
                 {(env.rules ?? []).length > 0 &&
                   ` · rules: ${(env.rules ?? []).map((r) => `${r.effect} ${r.tool}${r.command ? `(${r.command})` : r.path ? `(${r.path})` : ""}`).join(", ")} (edit environments/${env.id}.yaml)`}
@@ -244,6 +252,7 @@ export default function Environments({ environments, onChanged, onError }: Props
             <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
               <option value="local">On this Mac, in the project folder</option>
               <option value="docker">In a Docker container per session</option>
+              <option value="ssh">On another machine, over SSH</option>
             </select>
           </label>
           {form.kind === "local" && (
@@ -309,6 +318,36 @@ export default function Environments({ environments, onChanged, onError }: Props
               )}
               <label>
                 Setup command <span className="muted">(once, after the container is created{form.devcontainer ? "; defaults to postCreateCommand" : ""})</span>
+                <input value={form.setup} onChange={(e) => setForm({ ...form, setup: e.target.value })} placeholder="npm ci" />
+              </label>
+              <label>
+                Health check <span className="muted">(before every session start; a failure blocks the session)</span>
+                <input value={form.health} onChange={(e) => setForm({ ...form, health: e.target.value })} placeholder="node --version" />
+              </label>
+            </fieldset>
+          )}
+          {form.kind === "ssh" && (
+            <fieldset>
+              <legend>Machine</legend>
+              <p className="muted">
+                Commands run on that machine, in a working copy kept in sync with the project here. Your files, keys and network on this Mac are out of their reach. Use a machine you can afford to lose, not a server that matters: an agent can do anything on it, and your code and this environment's variables and secrets go there.
+              </p>
+              <p className="muted">
+                Secrets, files a deny rule covers and what the project ignores are not copied. Settings this Mac or an agent would act on, such as <code>.git</code>, <code>.claude</code> and <code>AGENTS.md</code>, do not come back. Other changes do, so read the diff. So far this works with the built-in agent only.
+              </p>
+              <label>
+                Host <span className="muted">(a name from ~/.ssh/config, or user@host)</span>
+                <input value={form.host} required onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder="my-box" autoCapitalize="off" spellCheck={false} />
+              </label>
+              <p className="muted">
+                Run <code>ssh {form.host.trim() || "my-box"}</code> in a terminal once, and check its fingerprint: Freeloop does not accept a host key by itself. It signs in with your keys and ssh agent with no prompt, and never reads them. Your agent is not forwarded.
+              </p>
+              <label>
+                Folder there <span className="muted">(optional; each session gets its own folder inside it. Default ~/.freeloop-sessions)</span>
+                <input value={form.remoteDir} onChange={(e) => setForm({ ...form, remoteDir: e.target.value })} placeholder="~/.freeloop-sessions" autoCapitalize="off" spellCheck={false} />
+              </label>
+              <label>
+                Setup command <span className="muted">(once, after the first copy)</span>
                 <input value={form.setup} onChange={(e) => setForm({ ...form, setup: e.target.value })} placeholder="npm ci" />
               </label>
               <label>

@@ -404,7 +404,8 @@ func (e *Engine) DiscardFile(ctx context.Context, sid, path string) error {
 	return err
 }
 
-// sessionConfined reports a session whose commands run in a sandbox or container,
+// sessionConfined reports a session whose commands run in a sandbox, a container or on
+// another machine,
 // or one the app cannot tell about.
 func (e *Engine) sessionConfined(ctx context.Context, sid string) bool {
 	ses, err := e.store.GetSession(ctx, sid)
@@ -412,7 +413,7 @@ func (e *Engine) sessionConfined(ctx context.Context, sid string) bool {
 		return true
 	}
 	cfg, err := e.environment(ses.EnvironmentID)
-	return err != nil || cfg.SandboxOn() || cfg.Kind == string(environment.KindDocker)
+	return err != nil || cfg.SandboxOn() || cfg.Kind == string(environment.KindDocker) || isSSH(cfg)
 }
 
 // gitChanged records the session's new git state after a panel action.
