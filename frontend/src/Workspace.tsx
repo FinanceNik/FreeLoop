@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
 import Limits from "./Limits.tsx";
 import LiveUsage from "./LiveUsage.tsx";
 import { basename } from "./paths.ts";
 import Splitter from "./Splitter.tsx";
+import SourceMark from "./SourceMark.tsx";
+import { sourceColor, type Source } from "./source.ts";
 import { clampSplit, rememberSplit, storedSplit } from "./sizes.ts";
 import { stableOrder, tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
 
@@ -32,6 +34,8 @@ interface Props {
   onError: (err: unknown) => void;
   // Sessions that finished work the user has not seen (SES-022).
   unread: readonly string[];
+  // What a session runs on: a mark on its tab, a line along its pane (GUI-034).
+  sourceOf: (s: Session) => Source;
   // What a session is doing, for a tab's tooltip (GUI-030).
   activityOf: (s: Session) => string;
   // How a session's status reads, and whether the panes are tabs just now.
@@ -45,7 +49,7 @@ interface Props {
 
 const MAX_OFFERED = 6;
 
-export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onSwap, onClose, onNew, onUsagePage, onError, unread, activityOf, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
+export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onSwap, onClose, onNew, onUsagePage, onError, unread, sourceOf, activityOf, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const panesBox = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -154,7 +158,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               onDragOver={(e) => dragOver(e, i)}
               onDrop={(e) => drop(e, i)}
             >
-              {titleOf(sid)} {statusOf(sid)}
+              {session(sid) && <SourceMark source={sourceOf(session(sid)!)} detail={session(sid)!.model || undefined} />} {titleOf(sid)} {statusOf(sid)}
             </button>
           ))}
         </div>
@@ -196,7 +200,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               key={key}
               className={classes.filter(Boolean).join(" ")}
               data-position={i}
-              style={{ order: i }}
+              style={{ order: i, ...(s ? { "--pane-source": sourceColor(sourceOf(s).slot) } : {}) } as CSSProperties}
               onDragEnd={endPaneDrag}
               aria-label={split ? `Pane ${i + 1}: ${titleOf(sid)}` : undefined}
               hidden={asTabs && !active}

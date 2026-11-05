@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { EngineService, type FileEntry, type FileView, type Session } from "./api.ts";
 import type { FileChange } from "./transcript.ts";
-import { relative } from "./paths.ts";
+import { isMarkdownFile, isPdfFile, relative } from "./paths.ts";
+import { Markdown } from "./Markdown.tsx";
 
 // FilesPanel is the Files tab of the right panel (GUI-013): a read-only
 // tree of the session's folder with the files the agent edited, and those
@@ -59,9 +60,14 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
     }
     setOpen(next);
   };
+  // Markdown opens formatted, whatever the last file was set to.
+  const [source, setSource] = useState(false);
   const show = (rel: string) =>
     EngineService.ViewFile(session.id, rel)
-      .then(setView)
+      .then((v) => {
+        setSource(false);
+        setView(v);
+      })
       .catch(onError);
 
   const tree = (rel: string, depth: number): ReactElement[] =>
@@ -102,12 +108,34 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
           <>
             <div className="row file-view-head">
               <code>{view.path}</code>
-              <button className="link" onClick={() => EngineService.OpenFile(session.id, view.path).catch(onError)}>
-                Open in editor
-              </button>
+              {isPdfFile(view.path) ? (
+                <button className="link" onClick={() => EngineService.OpenPDF(session.id, view.path).catch(onError)}>
+                  Open in Preview
+                </button>
+              ) : (
+                <button className="link" onClick={() => EngineService.OpenFile(session.id, view.path).catch(onError)}>
+                  Open in editor
+                </button>
+              )}
             </div>
-            {view.binary ? (
+            {isMarkdownFile(view.path) && !view.binary && (
+              <div className="file-view-switch" role="group" aria-label="How to show the file">
+                <button type="button" aria-pressed={!source} onClick={() => setSource(false)}>
+                  Formatted
+                </button>
+                <button type="button" aria-pressed={source} onClick={() => setSource(true)}>
+                  Source
+                </button>
+              </div>
+            )}
+            {isPdfFile(view.path) && view.binary ? (
+              <p className="muted">A PDF ({view.size.toLocaleString()} bytes). It cannot be shown here yet; open it in Preview.</p>
+            ) : view.binary ? (
               <p className="muted">A binary file ({view.size.toLocaleString()} bytes).</p>
+            ) : isMarkdownFile(view.path) && !source ? (
+              <div className="file-markdown">
+                <Markdown text={view.text} />
+              </div>
             ) : (
               <pre className="file-text">
                 {view.text.replace(/\n$/, "").split("\n").map((line, i) => (

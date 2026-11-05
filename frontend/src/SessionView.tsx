@@ -31,6 +31,8 @@ import Tags from "./Tags.tsx";
 import { prepareImage, type PreparedImage } from "./imageprep.ts";
 import { addText, isPicture, type TextFile } from "./attach.ts";
 import SessionControls from "./SessionControls.tsx";
+import SourceMark from "./SourceMark.tsx";
+import type { Source } from "./source.ts";
 import { draftOf, extrasOf, forgetDraft, rememberDraft, rememberExtras, storeDraft } from "./drafts.ts";
 import { MAX_IMAGES, room } from "./images.ts";
 import { CheckIcon, CopyIcon, ForkIcon, PaperclipIcon, RewindIcon, StopIcon } from "./icons.tsx";
@@ -78,6 +80,8 @@ interface Props {
   onClosePane?: () => void;
   // Starts dragging this session's pane by its header, to swap it with another.
   onPaneDrag?: (e: DragEvent) => void;
+  // What the session runs on (GUI-034).
+  source: Source;
 }
 
 const STOP_LABEL: Record<string, string> = {
@@ -106,7 +110,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source }: Props) {
   // Beside other panes the panel starts closed and only the active pane shows
   // it; the remembered choice is for a session alone in the window.
   const split = !!onClosePane;
@@ -798,6 +802,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         <header className="session-header" draggable={!!onPaneDrag && renaming === null && !tagging} onDragStart={onPaneDrag}>
           <div className="session-heading">
             <div className="session-titleline">
+              <SourceMark source={source} detail={session.model || undefined} />
               {renaming === null ? (
                 <h2 onDoubleClick={() => setRenaming(session.title)} title={`${headerDetails}\nDouble-click to rename`}>
                   {session.title}
@@ -816,13 +821,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 className="muted session-sub"
                 title={view.git?.repo ? `HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}` : undefined}
               >
+                {source.name}
                 {view.git?.repo && (
                   <>
+                    {" · "}
                     {view.git.branch || "detached"}
                     {session.worktree ? " (own worktree)" : ""}
                     {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : ""}
                   </>
                 )}
+                {/* Last, so the narrowest pane loses it first. */}
+                {session.model && ` · ${session.model}`}
                 {switchingTo && ` · Handing over to ${switchingTo}…`}
               </span>
             </div>

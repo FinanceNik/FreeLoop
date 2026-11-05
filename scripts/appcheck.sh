@@ -50,6 +50,13 @@ for name in alpha beta menu; do
   "$APP" new "$DATA/projects/$name" -title "Check $name" -provider demo -model scripted >/dev/null
 done
 
+# Files for the viewer: Markdown carrying markup that must not run, and a PDF.
+printf '# A heading\n\nSome **bold** text.\n\n<img src=x onerror="window.pwned=1">\n\n[not a link](javascript:window.pwned=1)\n' > "$DATA/projects/alpha/guide.md"
+printf '%%PDF-1.4\0binary\n' > "$DATA/projects/alpha/paper.pdf"
+
+# A session on another source than the demo provider. It never starts its agent here.
+"$APP" new "$DATA/projects/beta" -title "Check agent" -profile claude-code >/dev/null
+
 # A long transcript, to open and to follow: turns of the demo, approved from here.
 mkdir -p "$DATA/projects/long"
 git -C "$DATA/projects/long" init -q

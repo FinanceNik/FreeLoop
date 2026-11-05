@@ -13,6 +13,7 @@ export default function Board<T extends Card>({
   filtered,
   unread,
   activityOf,
+  markOf,
   renderRequest,
   onOpen,
 }: {
@@ -24,6 +25,8 @@ export default function Board<T extends Card>({
   unread: readonly string[];
   // What the session is doing (GUI-030).
   activityOf: (s: T) => ReactNode;
+  // What it runs on (GUI-034).
+  markOf: (s: T) => ReactNode;
   // The approval a session waits on longest, answered on its card.
   renderRequest: (sid: string) => ReactNode;
   onOpen: (id: string) => void;
@@ -49,6 +52,7 @@ export default function Board<T extends Card>({
                 <li key={s.id}>
                   <button className="board-card" onClick={() => onOpen(s.id)}>
                     <span className="board-card-title">
+                      {markOf(s)}
                       {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" />}
                       {s.title}
                     </span>

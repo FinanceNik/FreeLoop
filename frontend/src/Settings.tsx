@@ -3,6 +3,7 @@ import { ask } from "./ask.ts";
 import { autoSaved, settingsKey } from "./settings.ts";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
+import SourceMarks from "./SourceMarks.tsx";
 import FontEditor from "./FontEditor.tsx";
 import type { ColorSet } from "./colors.ts";
 import type { FontChoice } from "./fonts.ts";
@@ -16,6 +17,7 @@ import { EngineService, type Blocked, type ConfigPreview, type ConfigRestore, ty
 interface Props {
   config: Config;
   providers: ProviderInfo[];
+  harnesses: { id: string; name: string }[];
   environments: EnvironmentInfo[];
   profiles: Profile[];
   projects: ProjectInfo[];
@@ -113,7 +115,7 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
   );
 }
 
-export default function Settings({ config, providers, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError }: Props) {
+export default function Settings({ config, providers, harnesses, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
   // Connections local-only mode refused (NFR-OFF-003).
@@ -265,6 +267,15 @@ export default function Settings({ config, providers, environments, profiles, pr
 
         <h3>Colors</h3>
         <ColorEditor colors={colors} onChange={onColors} onError={onError} />
+
+        <h3>Provider marks</h3>
+        <p className="muted">What each session runs on shows as a colour and two letters, in the sidebar and on its pane.</p>
+        <SourceMarks
+          value={form.ui.sourceMarks as Record<string, { slot: number; letters: string }> | null | undefined}
+          providers={providers}
+          harnesses={harnesses}
+          onChange={(sourceMarks) => setForm({ ...form, ui: { ...form.ui, sourceMarks } })}
+        />
 
         <h3>Keyboard shortcuts</h3>
         <ShortcutsEditor value={form.ui.shortcuts ?? {}} onChange={(shortcuts) => setForm({ ...form, ui: { ...form.ui, shortcuts } })} />

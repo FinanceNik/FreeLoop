@@ -165,17 +165,29 @@ func (e *Engine) FileOnHost(ctx context.Context, sid, rel string) (string, error
 	return abs, nil
 }
 
+// OpenPDF shows a PDF of a session's folder in the app that only ever shows them.
+func (e *Engine) OpenPDF(path string) error {
+	if e.pdfArgv == nil {
+		return errors.New("this build cannot open PDF files")
+	}
+	return e.openWith(path, e.pdfArgv)
+}
+
 // OpenInEditor opens a file in the user's text editor, which only ever shows it:
 // an app chosen by the file's type would run a script behind a harmless name.
 func (e *Engine) OpenInEditor(path string) error {
 	if e.editorArgv == nil {
 		return errors.New("this build cannot open files in an editor")
 	}
+	return e.openWith(path, e.editorArgv)
+}
+
+func (e *Engine) openWith(path string, argv func(string) []string) error {
 	env, err := e.localEnv(filepath.Dir(path), nil)
 	if err != nil {
 		return err
 	}
-	res, err := env.Exec(context.Background(), environment.ExecSpec{Argv: e.editorArgv(path), Timeout: 30 * time.Second})
+	res, err := env.Exec(context.Background(), environment.ExecSpec{Argv: argv(path), Timeout: 30 * time.Second})
 	if err != nil {
 		return err
 	}

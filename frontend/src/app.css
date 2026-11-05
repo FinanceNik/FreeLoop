@@ -42,6 +42,18 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-other: #b4b8bf;
+  /* What a session runs on (GUI-034): a colour with its letters, apart from the status
+     colours and the accent. */
+  --source-1: #7c3aed;
+  --source-2: #c2410c;
+  --source-3: #0f766e;
+  --source-4: #be185d;
+  --source-5: #0369a1;
+  --source-6: #9f1239;
+  --source-7: #4338ca;
+  --source-8: #57534e;
+  --source-none: #6b7280;
+  --source-text: #ffffff;
 
   /* Corners by level. */
   --r-xs: 6px;
@@ -94,6 +106,16 @@
     --series-4: #f9e2af;
     --series-5: #f5c2e7;
     --series-other: #6c7086;
+    --source-1: #b78cf5;
+    --source-2: #fab387;
+    --source-3: #94e2d5;
+    --source-4: #f58fc6;
+    --source-5: #89dceb;
+    --source-6: #eba0ac;
+    --source-7: #b4befe;
+    --source-8: #f5e0dc;
+    --source-none: #9399b2;
+    --source-text: #11111b;
   }
 }
 
@@ -129,6 +151,16 @@
   --series-4: #f9e2af;
   --series-5: #f5c2e7;
   --series-other: #6c7086;
+  --source-1: #b78cf5;
+  --source-2: #fab387;
+  --source-3: #94e2d5;
+  --source-4: #f58fc6;
+  --source-5: #89dceb;
+  --source-6: #eba0ac;
+  --source-7: #b4befe;
+  --source-8: #f5e0dc;
+  --source-none: #9399b2;
+  --source-text: #11111b;
 }
 
 :root[data-theme="light"] {
@@ -1361,6 +1393,12 @@ button.ghost[aria-pressed="true"] {
    when they click into it. */
 .pane-split:not(.pane-active) .composer-actions {
   display: none;
+}
+
+/* A short pane keeps room for its conversation. */
+.pane-split .composer textarea,
+.pane-split .composer textarea:focus {
+  max-height: 30cqh;
 }
 
 .pane-split:not(.pane-active) .composer textarea {
@@ -3023,6 +3061,24 @@ table.hooks .hook-command {
 .file-view-head {
   justify-content: space-between;
   margin-bottom: 4px;
+}
+
+.file-view-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.file-view-switch button {
+  padding: 2px 8px;
+  font-size: calc(12rem / 14);
+}
+
+/* Wrapped, unlike source, and with room to read. */
+.file-markdown {
+  max-width: 72ch;
+  padding-right: 8px;
+  overflow-wrap: break-word;
 }
 
 .file-text {
@@ -4811,5 +4867,118 @@ table.hooks .hook-command {
 
 .usage-calendar-table summary {
   cursor: pointer;
+  text-align: center;
+}
+
+/* What a session runs on (GUI-034): a colour and two letters, so it reads without the colour. */
+.source-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding-inline: 2px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  background: var(--source);
+  color: var(--source-text);
+  font-size: calc(9.5rem / 14);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+/* Next to the mark; what else is on the line goes to the far end. */
+.session-line > .session-title {
+  flex: 1;
+}
+
+.session-child > .source-mark {
+  margin-right: 6px;
+}
+
+.session-child {
+  justify-content: flex-start;
+}
+
+.session-child > .badge {
+  margin-left: auto;
+}
+
+.session-titleline {
+  align-items: center;
+}
+
+.board-card-title .source-mark {
+  margin-right: 6px;
+  vertical-align: text-bottom;
+}
+
+.pane-tab .source-mark {
+  vertical-align: text-bottom;
+}
+
+/* Along the top of a pane, so a grid of them reads at once. */
+.pane-split::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 3px;
+  z-index: 5;
+  border-radius: 0 0 2px 2px;
+  background: var(--pane-source, transparent);
+  pointer-events: none;
+}
+
+.source-marks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source-marks li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-marks-name {
+  flex: 1;
+  min-width: 120px;
+}
+
+.source-marks-slots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.source-marks-slot {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: var(--source);
+}
+
+.source-marks-slot:hover:not(:disabled) {
+  background: var(--source);
+  border-color: var(--border-strong);
+}
+
+.source-marks-slot[aria-pressed="true"] {
+  background: var(--source);
+  border-color: var(--text);
+}
+
+.source-marks input {
+  width: 3.5em;
   text-align: center;
 }

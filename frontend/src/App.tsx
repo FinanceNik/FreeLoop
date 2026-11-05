@@ -55,6 +55,8 @@ import { clearSelectionOnClick } from "./selection.ts";
 import Splitter from "./Splitter.tsx";
 import { clampSidebar, rememberSidebar, setPanelWidth, SIDEBAR_MIN, sidebarMax, storedPanel, storedSidebar } from "./sizes.ts";
 import { forgetDraft, pruneDrafts } from "./drafts.ts";
+import SourceMark from "./SourceMark.tsx";
+import { sourceId, sourceIndex, type SourceChoices } from "./source.ts";
 import ActivityLine from "./ActivityLine.tsx";
 import ContextMenu, { type MenuItem } from "./ContextMenu.tsx";
 import { ask } from "./ask.ts";
@@ -986,6 +988,11 @@ export default function App() {
     ];
   };
 
+  // What each session runs on, shown as a mark wherever it is (GUI-034).
+  const sourceOf = useMemo(
+    () => sourceIndex(providers, harnesses, sessions, config?.ui.sourceMarks as SourceChoices),
+    [providers, harnesses, config?.ui.sourceMarks, sessions.map((s) => sourceId(s)).join()],
+  );
   const sessionView = (s: Session, active = true, onClosePane?: () => void, onPaneDrag?: (e: DragEvent) => void) => (
     <SessionView
       key={s.id}
@@ -1015,6 +1022,7 @@ export default function App() {
       active={active}
       onClosePane={onClosePane}
       onPaneDrag={onPaneDrag}
+      source={sourceOf(s)}
       onDeleted={() => sessionDeleted(s.id)}
     />
   );
@@ -1238,6 +1246,7 @@ export default function App() {
                         onClick={(e) => openSession(s.id, undefined, e.metaKey ? "new" : "active")}
                       >
                         <span className="session-line">
+                          <SourceMark source={sourceOf(s)} detail={s.model || undefined} />
                           {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" title="Finished while you were away" />}
                           <span className="session-title">{s.title}</span>
                           {groupBy === "date" && <RowProject session={s} project={projects.find((p) => p.id === s.projectId)} />}
@@ -1264,6 +1273,7 @@ export default function App() {
                                 aria-current={screen.kind === "session" && screen.id === c.id ? "true" : undefined}
                                 onClick={() => openSession(c.id)}
                               >
+                                <SourceMark source={sourceOf(c)} detail={c.model || undefined} />
                                 <span className="session-title">{c.title.replace(/^Subagent: /, "")}</span>
                                 {c.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${c.status}`}>{STATUS_LABEL[c.status] ?? c.status}</span>}
                               </button>
@@ -1445,6 +1455,7 @@ export default function App() {
             work={work}
             sessions={sessions}
             renderSession={sessionView}
+            sourceOf={sourceOf}
             activityOf={(s) => describeActivity(s.status, activities[s.id], rootsOf(s), new Date())}
             unread={unread}
             statusLabel={STATUS_LABEL}
@@ -1527,6 +1538,7 @@ export default function App() {
                 <Settings
                   config={config}
                   providers={providers}
+                  harnesses={harnesses}
                   environments={environments}
                   profiles={profiles}
                   projects={projects}
@@ -1581,6 +1593,7 @@ export default function App() {
         {screen.kind === "board" && (
           <Board
             activityOf={(s) => <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
+            markOf={(s) => <SourceMark source={sourceOf(s)} detail={s.model || undefined} />}
             sessions={visible.filter((s) => s.status !== "archived")}
             projectName={(s) => projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)}
             statusLabel={STATUS_LABEL}

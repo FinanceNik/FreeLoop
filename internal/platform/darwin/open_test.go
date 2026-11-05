@@ -21,3 +21,17 @@ func TestFolderArgvNeverOpensABundle(t *testing.T) {
 		}
 	}
 }
+
+// A file does not choose what opens it: a script named .pdf must not run.
+func TestPDFArgvNamesTheApp(t *testing.T) {
+	got := PDFArgv("/p/run.command.pdf")
+	want := []string{"/usr/bin/open", "-a", "Preview", "/p/run.command.pdf"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v", got)
+		}
+	}
+}

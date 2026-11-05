@@ -11,3 +11,12 @@ export function relative(path: string, root: string): string {
   if (path.startsWith(r)) return path.slice(r.length);
   return path.replace(/^\.\//, "");
 }
+
+// isMarkdownFile says whether the file viewer can show a file formatted (GUI-035).
+export function isMarkdownFile(path: string): boolean {
+  return /\.(md|markdown)$/i.test(path);
+}
+
+export function isPdfFile(path: string): boolean {
+  return /\.pdf$/i.test(path);
+}

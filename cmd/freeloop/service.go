@@ -891,6 +891,15 @@ func (s *EngineService) OpenFile(ctx context.Context, sessionID, rel string) err
 	return s.eng.OpenInEditor(path)
 }
 
+// OpenPDF shows a PDF of the session's folder in Preview (GUI-035).
+func (s *EngineService) OpenPDF(ctx context.Context, sessionID, rel string) error {
+	path, err := s.eng.FileOnHost(ctx, sessionID, rel)
+	if err != nil {
+		return err
+	}
+	return s.eng.OpenPDF(path)
+}
+
 func (s *EngineService) CheckSkillUpdate(ctx context.Context, name string) (engine.SkillCandidate, error) {
 	return s.eng.CheckSkillUpdate(ctx, name)
 }

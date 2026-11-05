@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 
 	"go.yaml.in/yaml/v3"
@@ -188,9 +189,48 @@ type UI struct {
 	// Shortcuts are the user's changes to the app's keyboard shortcuts, by name
 	// (SET-006). A name left out keeps its default.
 	Shortcuts map[string]string `yaml:"shortcuts,omitempty" json:"shortcuts"`
+	// SourceMarks are the user's choices for the mark that shows what a session runs on,
+	// by provider or agent ID (GUI-034). One left out keeps its own.
+	SourceMarks map[string]SourceMark `yaml:"sourceMarks,omitempty" json:"sourceMarks"`
 	// Onboarded is set once the first-run guide was finished or skipped
 	// (GUI-010).
 	Onboarded bool `yaml:"onboarded,omitempty" json:"onboarded"`
+}
+
+// SourceMark is a provider's or agent's mark: a colour slot from 1 to SourceSlots, and
+// one or two letters. Zero and empty mean its own.
+type SourceMark struct {
+	Slot    int    `yaml:"slot,omitempty" json:"slot"`
+	Letters string `yaml:"letters,omitempty" json:"letters"`
+}
+
+// SourceSlots is how many colours marks have (--source-1 and so on in app.css).
+const SourceSlots = 8
+
+var sourceLetters = regexp.MustCompile(`^[\p{L}\p{N}]{1,2}$`)
+
+// CleanSourceMarks keeps what a mark can be; a file can say anything, and these reach the
+// window. A bad part is dropped and reported, and the good part kept.
+func CleanSourceMarks(in map[string]SourceMark) (map[string]SourceMark, []Issue) {
+	if len(in) == 0 {
+		return in, nil
+	}
+	out := map[string]SourceMark{}
+	var issues []Issue
+	for id, m := range in {
+		if m.Slot < 0 || m.Slot > SourceSlots {
+			issues = append(issues, Issue{Field: "ui.sourceMarks." + id + ".slot", Message: fmt.Sprintf("%d is not a colour from 1 to %d", m.Slot, SourceSlots)})
+			m.Slot = 0
+		}
+		if m.Letters != "" && !sourceLetters.MatchString(m.Letters) {
+			issues = append(issues, Issue{Field: "ui.sourceMarks." + id + ".letters", Message: fmt.Sprintf("%q is not one or two letters or digits", m.Letters)})
+			m.Letters = ""
+		}
+		if m != (SourceMark{}) {
+			out[id] = m
+		}
+	}
+	return out, issues
 }
 
 // Default returns the configuration used when config.yaml is missing.
@@ -331,6 +371,9 @@ func parse(b []byte) (Config, []Issue) {
 	if cfg.Version > 1 {
 		return cfg, append(issues, Issue{Message: fmt.Sprintf("version %d was written by a newer version of Freeloop, so this one does not overwrite it", cfg.Version), Unreadable: true})
 	}
+	marks, markIssues := CleanSourceMarks(cfg.UI.SourceMarks)
+	cfg.UI.SourceMarks = marks
+	issues = append(issues, markIssues...)
 	return cfg, append(issues, cfg.Validate()...)
 }
 

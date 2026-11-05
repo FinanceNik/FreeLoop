@@ -49,6 +49,8 @@ type Options struct {
 	Confiner environment.Confiner
 	// EditorArgv is the command that opens a file for editing, never running it.
 	EditorArgv func(path string) []string
+	// PDFArgv is the command that shows a PDF, never running it.
+	PDFArgv func(path string) []string
 	// FolderArgv is the command that shows a folder, never running what is in it.
 	FolderArgv func(path string) []string
 	// Home is the user's home directory, for the protected-path policy.
@@ -114,6 +116,8 @@ type Engine struct {
 	loginGitConfig string
 	// editorArgv is the command that opens a file for editing.
 	editorArgv func(path string) []string
+	// pdfArgv is the command that shows a PDF.
+	pdfArgv    func(path string) []string
 	folderArgv func(path string) []string
 	// modelLists remembers each provider's models for the session's model menu.
 	modelLists map[string]modelList
@@ -215,6 +219,7 @@ func Open(opts Options) (*Engine, error) {
 		secrets:       opts.Secrets,
 		confiner:      opts.Confiner,
 		editorArgv:    opts.EditorArgv,
+		pdfArgv:       opts.PDFArgv,
 		folderArgv:    opts.FolderArgv,
 		modelLists:    map[string]modelList{},
 		cfg:           cfg,
@@ -355,6 +360,8 @@ func (e *Engine) saveSettings(c config.Config, marks []string) (config.Config, e
 		return config.Config{}, fmt.Errorf("%s cannot be read, so it is not overwritten; fix or remove it first", config.FileName)
 	}
 	c.Version = 1
+	// What is being typed in a mark's letters may not be letters yet.
+	c.UI.SourceMarks, _ = config.CleanSourceMarks(c.UI.SourceMarks)
 	e.mu.Lock()
 	sameSearch := e.cfg.Web.SearchURL == c.Web.SearchURL
 	c.CommandApprovals = slices.Clone(e.cfg.CommandApprovals)

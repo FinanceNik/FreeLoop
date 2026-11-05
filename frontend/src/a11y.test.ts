@@ -69,6 +69,7 @@ for (const [name, t] of Object.entries(themes())) {
     check("accent-text", "accent-hover", 4.5);
     for (const bg of ["bg-app", "bg", "surface", "surface-2", "input"]) check("focus", bg, 3);
     check("input-border", "input", 3);
+    for (const slot of ["source-1", "source-2", "source-3", "source-4", "source-5", "source-6", "source-7", "source-8", "source-none"]) check("source-text", slot, 4.5);
     assert.deepEqual(low, []);
   });
 }

@@ -12,6 +12,12 @@ func EditorArgv(path string) []string {
 	return []string{"/usr/bin/open", "-t", path}
 }
 
+// PDFArgv is the command that shows a PDF. Named, for the same reason: Preview only shows
+// a file, whatever it really is, where Launch Services would go by its handler (GUI-035).
+func PDFArgv(path string) []string {
+	return []string{"/usr/bin/open", "-a", "Preview", path}
+}
+
 // FolderArgv is the command that shows a folder in the Finder. Opening a folder
 // named like an app runs that app, -a Finder included, as a test proved; revealing
 // it never does. So a name with an extension is revealed in its parent, and any

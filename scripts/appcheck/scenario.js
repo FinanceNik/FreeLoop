@@ -54,6 +54,64 @@ const turn = async (title, afterSend = () => {}) => {
 await until("the session list", () => withText(".session-row", "Check alpha"));
 check("the sidebar shows the mark", all(".sidebar h1 svg.logo circle").length === 3);
 
+await step("a session shows what it runs on", async () => {
+  const mark = (title) => withText(".session-row", title)?.querySelector(".source-mark");
+  const demo = mark("Check alpha");
+  const agent = mark("Check agent");
+  check("a sidebar row has a mark", demo && agent);
+  const title = withText(".session-row", "Check alpha").querySelector(".session-title");
+  const gap = title.getBoundingClientRect().left - demo.getBoundingClientRect().right;
+  const inner = document.createRange();
+  inner.selectNodeContents(title);
+  check("the title stands next to its mark", gap < 14 && inner.getBoundingClientRect().left - demo.getBoundingClientRect().right < 14, `${Math.round(inner.getBoundingClientRect().left - demo.getBoundingClientRect().right)} px apart`);
+  const startColour = agent && getComputedStyle(agent).backgroundColor;
+  check("a provider has its colour before the list of agents arrives", getComputedStyle(mark("Check agent")).backgroundColor !== getComputedStyle(document.documentElement).getPropertyValue("--source-none"));
+  // The agents take a moment to list, each looked for through the login shell.
+  await until("the agent's name", () => /^Provider: Claude Code/.test(mark("Check agent").getAttribute("aria-label")), 20000);
+  check("the mark names the provider for a screen reader", /^Provider: Scripted demo/.test(demo.getAttribute("aria-label")), demo.getAttribute("aria-label"));
+  check("two providers differ in letters", mark("Check alpha").textContent !== mark("Check agent").textContent, `${mark("Check alpha").textContent} and ${mark("Check agent").textContent}`);
+  check("its colour stays once the list has arrived", getComputedStyle(mark("Check agent")).backgroundColor === startColour, `${startColour} became ${getComputedStyle(mark("Check agent")).backgroundColor}`);
+  check("two providers differ in colour", getComputedStyle(mark("Check alpha")).backgroundColor !== getComputedStyle(mark("Check agent")).backgroundColor, getComputedStyle(mark("Check alpha")).backgroundColor);
+  check("the sessions of one provider match", getComputedStyle(demo).backgroundColor === getComputedStyle(mark("Check long")).backgroundColor);
+
+  openSession("Check alpha");
+  await until("the header", () => document.querySelector(".session-header .source-mark"));
+  check("the top bar has the mark and the name", document.querySelector(".session-header .source-mark").textContent === demo.textContent && document.querySelector(".session-sub").textContent.startsWith("Scripted demo"), document.querySelector(".session-sub").textContent);
+
+  // In a grid: each pane its own line, and nothing past a pane or row.
+  document.querySelector('.layout-switch button[aria-label="2 panes"]').click();
+  (await until("an offer", () => withText(".pane-offer", "Check agent"))).click();
+  await until("two sessions in panes", () => all(".pane .session-header").length === 2);
+  await sleep(200);
+  const lines = all(".pane-split").map((p) => getComputedStyle(p, "::before").backgroundColor);
+  check("each pane has its provider's line", lines.length === 2 && lines[0] !== lines[1] && lines.every((c) => c !== "rgba(0, 0, 0, 0)"), lines.join(" and "));
+  const rowsFit = all(".session-row").every((r) => all("*", r).every((e) => e.getBoundingClientRect().right <= r.getBoundingClientRect().right + 1));
+  check("nothing runs past a row", rowsFit);
+  document.querySelector('.layout-switch button[aria-label="One pane"]').click();
+  await sleep(200);
+
+  // Choosing: at once, for every session on that provider.
+  document.querySelector(".settings-link").click();
+  (await until("the General page", () => withText(".settings-nav button", "General"))).click();
+  const row = await until("the marks", () => all(".source-marks li").find((li) => li.textContent.includes("Claude Code")));
+  const letters = row.querySelector("input");
+  letters.focus();
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(letters, "Zz");
+  letters.dispatchEvent(new Event("input", { bubbles: true }));
+  await sleep(50);
+  const free = all(".source-marks-slot", row).find((b) => b.getAttribute("aria-pressed") !== "true");
+  const chosen = getComputedStyle(free).backgroundColor;
+  free.click();
+  await until("the row's mark", () => row.querySelector(".source-mark").textContent === "Zz", 3000);
+  letters.blur();
+  await sleep(800);
+  document.querySelector(".settings-nav .settings-back").click();
+  await until("the sidebar row", () => mark("Check agent"));
+  await sleep(200);
+  check("chosen letters apply", mark("Check agent").textContent === "Zz", mark("Check agent").textContent);
+  check("a chosen colour applies", getComputedStyle(mark("Check agent")).backgroundColor === chosen, getComputedStyle(mark("Check agent")).backgroundColor);
+});
+
 // A profile on an agent with its own sign-in hides the provider, and says how to get it.
 await step("a provider can be reached from any profile", async () => {
   withText(".sidebar header button", "New session").click();
@@ -292,9 +350,31 @@ await step("a draft stays until sent or deleted", async () => {
   await sleep(100);
   check("emptying the box deletes the draft", !Object.keys(localStorage).some((k) => k.startsWith("freeloop.draft.")));
   type(box(), "this one gets sent");
-  await sleep(600);
-  check("typing stores it again", Object.keys(localStorage).some((k) => k.startsWith("freeloop.draft.")));
+  await until("the draft to be stored", () => Object.keys(localStorage).some((k) => k.startsWith("freeloop.draft.")), 5000);
+  check("typing stores it again", true);
   type(box(), "");
+  await sleep(100);
+});
+
+await step("the file viewer shows Markdown formatted", async () => {
+  const panelButton = withText(".session-actions button", "Panel");
+  if (panelButton.getAttribute("aria-pressed") !== "true") panelButton.click();
+  (await until("the Files tab", () => withText(".panel-tabs [role=tab]", "Files"))).click();
+  (await until("guide.md", () => withText(".file-tree button", "guide.md"))).click();
+  const view = await until("the formatted file", () => document.querySelector(".file-markdown"));
+  check("Markdown shows formatted", view.querySelector("h1, h2, h3") && view.querySelector("strong"), view.innerHTML.slice(0, 80));
+  await sleep(200);
+  check("markup in a file does not run", !view.querySelector("img") && !view.querySelector("[onerror]") && !window.pwned && !view.querySelector('a[href^="javascript"]'), view.innerHTML.slice(0, 200));
+  withText(".file-view-switch button", "Source").click();
+  await until("the source", () => document.querySelector(".file-view .file-text"));
+  check("the source shows the raw text", document.querySelector(".file-text").textContent.includes("# A heading") && !document.querySelector(".file-markdown"));
+  (await until("paper.pdf", () => withText(".file-tree button", "paper.pdf"))).click();
+  await until("the PDF's note", () => document.querySelector(".file-view")?.textContent.includes("A PDF"));
+  check("a PDF offers Preview, and nothing that draws it in the page", withText(".file-view button", "Open in Preview") && !document.querySelector(".file-view embed, .file-view iframe"));
+  (withText(".file-tree button", "guide.md")).click();
+  await until("Markdown again, formatted", () => document.querySelector(".file-markdown"));
+  check("a Markdown file opens formatted again", true);
+  withText(".panel-tabs [role=tab]", "Approvals").click();
   await sleep(100);
 });
 

@@ -305,6 +305,10 @@ What the open "later" list held that follows from the sandbox or needs no accoun
 
 1. **Custom colors (GUI-022).** *Checked in the browser: both directions between the editor and `colors.json`, a bad value, broken JSON, a restart, both appearances and Reset. The color picker's panel and "Open colors.json" need the native window, so they were not tried.* Settings → Appearance changes the app's colors for each appearance, live, and `colors.json` in the data folder holds the same set.
 
+### What a session runs on (built 2026-11-05)
+
+1. **Provider marks (GUI-034).** `frontend/src/source.ts`, `SourceMark.tsx`, `SourceMarks.tsx`, `ui.sourceMarks` in `config.yaml`. *`make check-app` sees them on the sidebar and panes with the demo provider and a stored choice; a colour-blindness simulation of the slots was not run, and the letters are what covers that.*
+
 ### Seeing what sessions do, and checking the running app (built 2026-11-04)
 
 1. **What each session is doing (GUI-030).** A line on sidebar rows of sessions that are not idle, Board cards and pane tabs' tooltips (`frontend/src/sessionActivity.ts`, `ActivityLine.tsx`). *Unit-tested; `make check-app` sees it on the sidebar and the Board with the demo provider. A real agent has not been watched. A session not touched since the app opened has no line.*

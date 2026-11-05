@@ -1,4 +1,5 @@
 import { compact, OTHER, type Day, type Metric } from "./analytics.ts";
+import { sourceName } from "./source.ts";
 
 // Recent usage (GUI-023) as the usage chart takes it. The engine sends every
 // step, empty ones too, so the time axis stays even.
@@ -88,10 +89,7 @@ type Named = { id: string; name: string };
 
 // recentKeys names what a row belongs to, the way the usage page does.
 export function recentKeys(projects: readonly Named[], providers: readonly Named[], harnesses: readonly Named[]): RecentKeys {
-  const agent = (r: RecentRow) =>
-    r.harnessId && r.harnessId !== "builtin"
-      ? (harnesses.find((h) => h.id === r.harnessId)?.name ?? r.harnessId)
-      : (providers.find((p) => p.id === r.providerId)?.name ?? (r.providerId || "Unknown provider"));
+  const agent = (r: RecentRow) => sourceName(r, providers, harnesses);
   return {
     project: (r) => projects.find((p) => p.id === r.projectId)?.name ?? (r.projectRoot.split("/").pop() || "No project"),
     agent,
