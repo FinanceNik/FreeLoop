@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import UsageOverview from "./UsageOverview.tsx";
 import { tabAfterKey } from "./a11y.ts";
 import type { ActivityRow as FoldedRow, EffRow } from "./activity.ts";
 import { EngineService, type ActivityReport, type HarnessInfo, type ProjectInfo, type ProviderInfo, type UsageReport, type UsageRow } from "./api.ts";
@@ -197,6 +198,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
   return (
     <section className="page usage-page">
       <h2>Usage</h2>
+      <UsageOverview cacheReads={cacheReads} onError={onError} />
       <div className="usage-limits">
         <h3>Limits</h3>
         <Limits onError={onError} />

@@ -367,6 +367,7 @@ fieldset {
 
 .footer-links {
   display: flex;
+  align-items: center;
   gap: 2px;
 }
 
@@ -385,7 +386,10 @@ fieldset {
 }
 
 .footer-links .footer-cost {
+  flex: none;
   margin-left: auto;
+  padding-inline: 4px;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
@@ -4692,4 +4696,118 @@ table.hooks .hook-command {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* The usage overview (GUI-033): a year's totals and one square per day. */
+.usage-overview {
+  margin-bottom: 20px;
+}
+
+.usage-overview h3 {
+  margin: 0 0 10px;
+}
+
+.usage-overview-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.usage-overview-tiles > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.usage-overview-tiles strong {
+  font-size: calc(18rem / 14);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-overview-tiles span {
+  overflow: hidden;
+  font-size: calc(12rem / 14);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-calendar-scroll {
+  overflow-x: auto;
+  padding: 2px;
+}
+
+.usage-calendar {
+  display: grid;
+  grid-template-columns: 2rem repeat(53, 12px);
+  grid-auto-rows: 12px;
+  gap: 2px;
+  width: max-content;
+  margin-inline: auto;
+}
+
+.usage-calendar-month {
+  overflow: visible;
+  font-size: calc(10.5rem / 14);
+  line-height: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.usage-calendar-weekday {
+  font-size: calc(10.5rem / 14);
+  line-height: 12px;
+  color: var(--muted);
+}
+
+.usage-calendar-day {
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.usage-calendar-day:hover,
+.usage-calendar-day:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+.usage-calendar-readout {
+  min-height: 1.4em;
+  margin: 8px 0 6px;
+  font-size: calc(12rem / 14);
+  text-align: center;
+}
+
+.usage-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  font-size: calc(12rem / 14);
+  color: var(--muted);
+}
+
+.usage-calendar-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.usage-calendar-model i {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.usage-calendar-table {
+  margin-top: 10px;
+  font-size: calc(12rem / 14);
+}
+
+.usage-calendar-table summary {
+  cursor: pointer;
+  text-align: center;
 }

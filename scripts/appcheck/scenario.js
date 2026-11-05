@@ -368,6 +368,28 @@ await step("the panel's tabs clear its close button", async () => {
   check("the panel's tabs clear its close button", last.getBoundingClientRect().right <= close.getBoundingClientRect().left + 1 && list.scrollWidth <= list.clientWidth, `the last tab ends at ${Math.round(last.getBoundingClientRect().right)}, the button starts at ${Math.round(close.getBoundingClientRect().left)}`);
 });
 
+await step("the year at a glance", async () => {
+  withText(".footer-links button", "Usage").click();
+  const box = await until("the overview", () => document.querySelector(".usage-overview"), 8000);
+  const cells = await until("the calendar", () => { const c = all(".usage-calendar-day", box); return c.length > 300 && c; }, 8000);
+  check("the calendar has a square per day", cells.length >= 365 && cells.length <= 371, `${cells.length} squares`);
+  check("the overview shows five figures", all(".usage-overview-tiles strong", box).length === 5);
+  const used = cells.filter((c) => !c.getAttribute("aria-label").endsWith("no use"));
+  check("the turns above show as today's use", used.length >= 1 && all(".usage-calendar-model", box).length >= 1, `${used.length} days with use, ${all(".usage-calendar-model", box).length} models`);
+  check("a used day has its colour", used.length === 0 || getComputedStyle(used[0]).backgroundColor !== getComputedStyle(cells.find((c) => c.getAttribute("aria-label").endsWith("no use"))).backgroundColor);
+  const first = box.querySelector('.usage-calendar-day[tabindex="0"]');
+  check("the newest day is the one in the Tab order", first === cells.filter((c) => c.dataset.day.startsWith(`${Math.max(...cells.map((x) => parseInt(x.dataset.day)))}-`)).at(-1));
+  first.focus();
+  const before = document.activeElement;
+  document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  await sleep(100);
+  check("the arrow keys walk the days", document.activeElement !== before && document.activeElement.classList.contains("usage-calendar-day"));
+  check("pointing says what a day holds", box.querySelector(".usage-calendar-readout").textContent.includes(":"), box.querySelector(".usage-calendar-readout").textContent);
+  check("the calendar fits the page", box.getBoundingClientRect().right <= document.querySelector(".usage-page").getBoundingClientRect().right + 1);
+  openSession("Check alpha");
+  await until("the conversation", () => document.querySelector(".conversation"));
+});
+
 await step("the side parts are resizable", async () => {
   const mouse = (...a) => window.webkit.messageHandlers.mouse.postMessage(a);
   const centre = (el) => { const b = el.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };
