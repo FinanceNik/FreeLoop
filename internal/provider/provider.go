@@ -67,7 +67,9 @@ type ModelCaps struct {
 	// Images reports that the model reads images in user messages.
 	Images        bool `json:"images"`
 	ContextWindow int  `json:"contextWindow"`
-	MaxOutput     int  `json:"maxOutput"`
+	// ContextLimitSet says ContextWindow is the user's own, not a detected one.
+	ContextLimitSet bool `json:"contextLimitSet"`
+	MaxOutput       int  `json:"maxOutput"`
 }
 
 // Role of a message.

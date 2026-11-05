@@ -21,6 +21,13 @@ cat > "$FREELOOP_HOME/config.yaml" <<'YAML'
 ui:
   onboarded: true
 YAML
+cat > "$FREELOOP_HOME/providers.yaml" <<'YAML'
+version: 1
+providers:
+  - id: stand-in
+    name: Stand-in
+    type: scripted
+YAML
 
 pid=
 cleanup() {
@@ -47,7 +54,10 @@ for name in alpha beta menu full; do
   mkdir -p "$DATA/projects/$name"
   git -C "$DATA/projects/$name" init -q
   git -C "$DATA/projects/$name" -c user.name=check -c user.email=check@example.com commit -q --allow-empty -m start
-  "$APP" new "$DATA/projects/$name" -title "Check $name" -provider demo -model scripted >/dev/null
+  # "Check full" sets a model's limit, which needs a provider in the file.
+  provider=demo
+  [ "$name" != full ] || provider=stand-in
+  "$APP" new "$DATA/projects/$name" -title "Check $name" -provider "$provider" -model scripted >/dev/null
 done
 
 # Files for the viewer: Markdown carrying markup that must not run, and a PDF.

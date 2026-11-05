@@ -633,6 +633,11 @@ func (s *EngineService) SetToolsOverride(providerID, model string, tools *bool) 
 	return s.eng.SetToolsOverride(providerID, model, tools)
 }
 
+// SetContextLimit records a model's context limit, 0 to go back to what is detected.
+func (s *EngineService) SetContextLimit(ctx context.Context, providerID, model string, limit int) error {
+	return s.eng.SetContextLimit(ctx, providerID, model, limit)
+}
+
 func (s *EngineService) SetModelFlags(providerID, model string, favorite, hidden bool) error {
 	return s.eng.SetModelFlags(providerID, model, favorite, hidden)
 }

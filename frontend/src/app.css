@@ -2608,6 +2608,22 @@ details.choice[open] > summary h3::after {
 }
 
 /* Context meter and compaction (HRN-013, GUI-036) */
+.context-limit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.context-limit input {
+  width: 12em;
+  max-width: 100%;
+}
+
+.context-limit-row {
+  display: block;
+}
+
 .context-meter {
   flex: none;
   font-size: 0.8rem;

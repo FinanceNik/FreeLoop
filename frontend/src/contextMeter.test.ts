@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { contextHigh, contextLabel, contextResent, contextTitle, shortTokens } from "./contextMeter.ts";
+import { contextHigh, contextLabel, contextResent, contextTitle, parseLimit, shortTokens } from "./contextMeter.ts";
 
 test("the meter says a share with a window and a size without one", () => {
   assert.equal(contextLabel({ tokens: 62_000, window: 100_000 }), "62 %");
@@ -50,4 +50,20 @@ test("an ordinary call, a first message or a compaction is no resend", () => {
   assert.equal(contextResent(965_779, 82_516, 82_514), false);
   // Too small to matter.
   assert.equal(contextResent(20_000, 21_000, 21_000), false);
+});
+
+test("a limit can be typed as people write it", () => {
+  assert.equal(parseLimit("200k"), 200_000);
+  assert.equal(parseLimit("1M"), 1_000_000);
+  assert.equal(parseLimit("1.5m"), 1_500_000);
+  assert.equal(parseLimit("1,000,000"), 1_000_000);
+  assert.equal(parseLimit(" 128000 "), 128_000);
+  assert.equal(parseLimit(""), 0);
+  assert.equal(parseLimit("lots"), null);
+  assert.equal(parseLimit("-5"), null);
+});
+
+test("with no limit, the tooltip says where to set one", () => {
+  assert.match(contextTitle({ tokens: 1000, window: 0 }), /Context limit/);
+  assert.doesNotMatch(contextTitle({ tokens: 1000, window: 2000 }), /Context limit/);
 });

@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/provider"
 )
 
 func TestMentionPaths(t *testing.T) {
@@ -61,6 +63,60 @@ func TestEmbedMentions(t *testing.T) {
 	}
 	if !reflect.DeepEqual(files, []string{"a.go", "big.txt", "bin.dat", "docs/my notes.md"}) {
 		t.Errorf("ProjectFiles = %q", files)
+	}
+}
+
+func TestContextLimit(t *testing.T) {
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	p, err := e.SaveProvider(SaveProviderRequest{Name: "Work", Type: "openai_compat", Preset: "custom", BaseURL: "http://127.0.0.1:1/v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	limitOf := func() provider.ModelCaps {
+		t.Helper()
+		caps, err := e.ModelCapabilities(ctx, p.ID, "gpt", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return caps
+	}
+	if c := limitOf(); c.ContextWindow != 0 || c.ContextLimitSet {
+		t.Fatalf("before any limit: %+v", c)
+	}
+	for _, bad := range []int{-1, 999, 100_000_001} {
+		if err := e.SetContextLimit(ctx, p.ID, "gpt", bad); err == nil {
+			t.Errorf("limit %d was accepted", bad)
+		}
+	}
+	if err := e.SetContextLimit(ctx, p.ID, "gpt", 200_000); err != nil {
+		t.Fatal(err)
+	}
+	if c := limitOf(); c.ContextWindow != 200_000 || !c.ContextLimitSet {
+		t.Errorf("after a limit: %+v", c)
+	}
+	// It is in the file, for the next start.
+	cfgs, _, err := config.LoadProviders(e.dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfgs[0].Models["gpt"].ContextWindow; got != 200_000 {
+		t.Errorf("stored limit %d", got)
+	}
+	if c, err := e.ModelCapabilities(ctx, p.ID, "other", false); err != nil || c.ContextWindow != 0 {
+		t.Errorf("another model took the limit: %+v, %v", c, err)
+	}
+	// Clearing it leaves nothing stored.
+	if err := e.SetContextLimit(ctx, p.ID, "gpt", 0); err != nil {
+		t.Fatal(err)
+	}
+	if c := limitOf(); c.ContextWindow != 0 || c.ContextLimitSet {
+		t.Errorf("after clearing: %+v", c)
+	}
+	cfgs, _, _ = config.LoadProviders(e.dataDir)
+	if _, ok := cfgs[0].Models["gpt"]; ok {
+		t.Error("a cleared limit left an entry")
 	}
 }
 

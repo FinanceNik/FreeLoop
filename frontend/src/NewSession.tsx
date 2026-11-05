@@ -1,3 +1,4 @@
+import ContextLimit from "./ContextLimit.tsx";
 import { useEffect, useState, type FormEvent } from "react";
 import WorktreeScripts from "./WorktreeScripts.tsx";
 import IssuePicker from "./IssuePicker.tsx";
@@ -541,6 +542,12 @@ export default function NewSession({ providers, projects, environments, profiles
             </span>
           )}
         </div>
+        {providerId && chosen && capsState === "idle" && caps && (
+          <label className="context-limit-row">
+            Context limit <span className="muted">(optional, in tokens)</span>
+            <ContextLimit providerId={providerId} model={chosen} onChanged={() => loadCaps(false)} onError={onError} />
+          </label>
+        )}
           </>
         )}
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/provider/anthropic"
 	"github.com/FinanceNik/Freeloop/internal/provider/gemini"
@@ -409,6 +410,9 @@ func (e *Engine) ModelCapabilities(ctx context.Context, providerID, model string
 	if s, ok := p.cfg.Models[model]; ok && s.Tools != nil {
 		caps.Source, caps.Tools = provider.CapsOverride, *s.Tools
 	}
+	if s, ok := p.cfg.Models[model]; ok && s.ContextWindow > 0 {
+		caps.ContextWindow, caps.ContextLimitSet = s.ContextWindow, true
+	}
 	return caps, nil
 }
 
@@ -431,6 +435,52 @@ func (e *Engine) saveProbe(providerID, model string, tools bool) {
 // nil removes the override (PRV-005).
 func (e *Engine) SetToolsOverride(providerID, model string, tools *bool) error {
 	return e.updateModel(providerID, model, func(s *config.ModelSettings) { s.Tools = tools })
+}
+
+// The context limits a user can set: below this a session could not hold one large
+// message, and above it the figure is a typing error.
+const (
+	minContextLimit = 1_000
+	maxContextLimit = 100_000_000
+)
+
+// SetContextLimit records a model's context limit, 0 to go back to what is detected
+// (GUI-036). Sessions running on the model use it from their next call.
+func (e *Engine) SetContextLimit(ctx context.Context, providerID, model string, limit int) error {
+	if limit != 0 && (limit < minContextLimit || limit > maxContextLimit) {
+		return fmt.Errorf("a context limit is between %d and %d tokens", minContextLimit, maxContextLimit)
+	}
+	if err := e.updateModel(providerID, model, func(s *config.ModelSettings) { s.ContextWindow = limit }); err != nil {
+		return err
+	}
+	p, err := e.provider(providerID)
+	if err != nil {
+		return err
+	}
+	// An endpoint that cannot be reached just now does not undo what was saved: with no
+	// limit of the user's, sessions keep the one they have.
+	window := limit
+	if window == 0 {
+		caps, err := e.ModelCapabilities(ctx, providerID, model, false)
+		if err != nil {
+			return nil
+		}
+		window = caps.ContextWindow
+	}
+	e.mu.Lock()
+	running := make(map[string]harness.ModelSetter)
+	for sid, r := range e.runtimes {
+		if ms, ok := r.hs.(harness.ModelSetter); ok {
+			running[sid] = ms
+		}
+	}
+	e.mu.Unlock()
+	for sid, ms := range running {
+		if ses, err := e.store.GetSession(ctx, sid); err == nil && ses.ProviderID == providerID && ses.Model == model {
+			ms.SetModel(e.limit(p, sid), model, window)
+		}
+	}
+	return nil
 }
 
 // SetModelFlags marks a model as a favorite or hidden; a model is not both

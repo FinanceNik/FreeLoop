@@ -146,6 +146,34 @@ await step("a pane shows how full its context is", async () => {
   check("Compact compacts", withText(".compaction summary", "Context compacted", activePane()));
   check("Compact goes once the context has room", !compactButton());
   check("the sidebar's figure goes with it", !rowMeter("Check full"));
+  // A limit the user sets reaches a running session's next call, and can be taken back.
+  const panelToggle = withText(".session-actions button", "Panel", activePane());
+  const panelWasOpen = panelToggle.getAttribute("aria-pressed") === "true";
+  if (!panelWasOpen) panelToggle.click();
+  (await until("the Info tab", () => withText(".panel-tabs [role=tab]", "Info"))).click();
+  const field = await until("the limit's field", () => document.querySelector("aside.panel .context-limit input"));
+  // In the Mac's own number format.
+  const detected = `${(100000).toLocaleString()} (detected)`;
+  check("a detected limit shows as such", field.placeholder === detected, field.placeholder);
+  const setLimit = async (value) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    (await until("Save", () => withText("aside.panel .context-limit button", "Save"))).click();
+    await until("the limit to save", () => !withText("aside.panel .context-limit button", "Save"));
+  };
+  await setLimit("1k");
+  check("a limit is kept as typed", field.value === "1000", field.value);
+  const again = activePane().querySelector(".composer textarea");
+  again.focus();
+  type(again, "[no steps] again");
+  await sleep(100);
+  (await until("Send", () => { const b = withText(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
+  await until("the share of the new limit", () => /^\d+ %$/.test(meter()?.textContent ?? "") && parseInt(meter().textContent) >= 5, 15000);
+  check("a running session takes a new limit", true);
+  await setLimit("");
+  check("clearing a limit goes back to what is detected", field.placeholder === detected, field.placeholder);
+  withText(".panel-tabs [role=tab]", "Approvals").click();
+  if (!panelWasOpen) panelToggle.click();
 });
 
 await step("a provider can be reached from any profile", async () => {

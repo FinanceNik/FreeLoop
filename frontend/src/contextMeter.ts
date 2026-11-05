@@ -40,11 +40,21 @@ export function contextHigh(c: ContextSize | null | undefined): boolean {
 
 export function contextTitle(c: ContextSize): string {
   const size = c.window > 0 ? `${c.tokens.toLocaleString()} of ${c.window.toLocaleString()} tokens` : `${c.tokens.toLocaleString()} tokens`;
-  return `Context: ${size}. Every message sends this again, so a fuller context uses your limits faster.`;
+  const what = `Context: ${size}. Every message sends this again, so a fuller context uses your limits faster.`;
+  return c.window > 0 ? what : `${what} This model's limit is not known, so nothing warns or compacts by itself: set it under Context limit, on the Info tab of the right panel.`;
 }
 
 // contextResent says a call wrote nearly all of a large context to the cache although
 // the context had not changed much: the cache no longer held it.
 export function contextResent(before: number, context: number, written: number): boolean {
   return context >= RESEND_MIN_TOKENS && written >= RESEND_MIN_WRITTEN * context && before * RESEND_SAME_SIZE >= context && before <= RESEND_SAME_SIZE * context;
+}
+
+// parseLimit reads what was typed as a context limit: 0 for nothing, null when it is no
+// number. 200k, 1m, 1,000,000 and 200000 all work.
+export function parseLimit(text: string): number | null {
+  const m = /^(\d+(?:\.\d+)?)\s*([km]?)$/i.exec(text.replace(/[,\s_]/g, ""));
+  if (text.trim() === "") return 0;
+  if (!m) return null;
+  return Math.round(Number(m[1]) * { "": 1, k: 1000, m: 1_000_000 }[m[2].toLowerCase() as "" | "k" | "m"]);
 }

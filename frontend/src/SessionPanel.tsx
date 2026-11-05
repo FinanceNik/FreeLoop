@@ -1,3 +1,4 @@
+import ContextLimit from "./ContextLimit.tsx";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { visibleCommand } from "./a11y.ts";
 import { tabAfterKey } from "./a11y.ts";
@@ -384,6 +385,9 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
             view.context.window > 0 ? `${Math.round((100 * view.context.tokens) / view.context.window)} % of ${Math.round(view.context.window / 1000)}k` : `${Math.round(view.context.tokens / 1000)}k tokens`,
           ],
         ] as [string, ReactNode][])
+      : []),
+    ...(session.providerId && session.model
+      ? ([["Context limit", <ContextLimit key={`${session.providerId}/${session.model}`} providerId={session.providerId} model={session.model} onError={onError} />]] as [string, ReactNode][])
       : []),
     ["Estimated cost", costLabel],
     ["Held by your policy", view.held.length === 0 ? "Nothing so far" : `${view.held.length} ${view.held.length === 1 ? "thing" : "things"}`],

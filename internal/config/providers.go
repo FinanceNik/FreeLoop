@@ -42,6 +42,9 @@ type ModelSettings struct {
 	// Favorite models are listed first; hidden ones only on request.
 	Favorite bool `yaml:"favorite,omitempty" json:"favorite,omitempty"`
 	Hidden   bool `yaml:"hidden,omitempty" json:"hidden,omitempty"`
+	// ContextWindow is the model's context limit in tokens, for a model nothing
+	// reports it for; it wins over what is detected (GUI-036).
+	ContextWindow int `yaml:"contextWindow,omitempty" json:"contextWindow,omitempty"`
 }
 
 // AddressFingerprint identifies what a provider sends and where to: address says
@@ -54,7 +57,9 @@ func (p Provider) AddressFingerprint(address string) string {
 }
 
 // IsZero reports whether s holds no choice, so it need not be stored.
-func (s ModelSettings) IsZero() bool { return s.Tools == nil && !s.Favorite && !s.Hidden }
+func (s ModelSettings) IsZero() bool {
+	return s.Tools == nil && !s.Favorite && !s.Hidden && s.ContextWindow == 0
+}
 
 type providersFile struct {
 	Version   int        `yaml:"version"`
