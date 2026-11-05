@@ -9,6 +9,10 @@ on:
   pull_request:
   # Run from the Actions page, for a commit pushed with [skip ci].
   workflow_dispatch:
+  # The real agents, weekly: their versions are pinned, but what the claim rests on
+  # should be rechecked without waiting for a change here (HRN-007).
+  schedule:
+    - cron: "17 5 * * 1"
 
 permissions:
   contents: read
@@ -36,15 +40,28 @@ jobs:
         run: make verify-deps
 
       - name: Engine and frontend tests
+        if: github.event_name != 'schedule'
         run: make test
 
       - name: Build app
+        if: github.event_name != 'schedule'
         run: make build
 
       - name: Lint
+        if: github.event_name != 'schedule'
         run: |
           go vet ./cmd/...
           make lint
+
+      # The real interface in a real WebKit view, on scratch data (GUI-030).
+      - name: The app works in WebKit
+        if: github.event_name != 'schedule'
+        run: make check-app
+
+      # Each preset's real agent on a stand-in model, a hostile repository included.
+      - name: Real agents hold the policy
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        run: make verify-agents
 
       # Two clean builds are slow, so only for what becomes a release.
       - name: A tag builds reproducibly

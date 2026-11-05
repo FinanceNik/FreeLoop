@@ -390,6 +390,16 @@ What follows, in order, before anything else in v1:
 3. **An SSH environment (ENV-008).** *Built 2026-11-04, at the user's choice and ahead of the release, for its boundary: an agent's commands on a machine that is not this Mac.* The project stays here and a session has a working copy there (OQ-034). Run with a real sshd and a real session of the built-in agent. Real networks, Linux machines and the form in the running app are not checked. `internal/environment/ssh.go`, `sshsync.go`, `internal/engine/ssh.go`. External agents over SSH, a terminal there and Run scripts there are not in yet: an external agent is refused, not run here instead.
 4. The release: the definition of done above, with signing as OQ-009 has it.
 
+**Plan to 0.1.0 (2026-11-05).** Goals: the claims true for every agent (G1), proven by `make verify-agents` in CI weekly (G2), visible to a new user within five minutes (G3), every agent's usage priced when its model is known (G4), the definition of done above met (G5), no code commit skipping CI (G6). In order:
+
+- *Phase 0, baseline.* CI runs `make check-app` and, weekly, `make verify-agents` (built 2026-11-05). Goose is pinned by the user with `TRUST_NEW_AGENT=1 make verify-agents`; until then its scenarios are skipped, loudly.
+- *Phase 1, the policy true for Claude Code.* SEC-015 and SEC-016 built 2026-11-05: repository hooks off in untrusted projects, "always" kept by the app, bypass and accept edits applied by the broker. Next: one list of sensitive project files (SEC-005), the trust prompt naming the agent config it found (SEC-006), a restore reading only the app's own Keychain item, drafts in the data folder, the hostile PDF against the packaged app, the docs following.
+- *Phase 2, proven and shown.* Every agent's scenarios with shell, mode switch and usage cases; one "Your policy" page with every scope and what each agent decides itself; "Would this be allowed?" in the app and as `freeloop check`; the demo inside the app; the trust prompt naming what a repository tried; holds where people look.
+- *Phase 3, the bill for every agent.* External agents priced by the chosen or reported model; what each agent reports, said wherever usage is shown; budgets and limit alerts; the held count in the summary.
+- *Phase 4, the release.* The MVP checklist, the user's real runs, ten busy sessions measured, commands reaped after a crash, a release workflow on tag, the notification permission shown in the app, two weeks of daily use.
+
+**Feature freeze until 0.1.0 (2026-11-05).** Of 26 commits after the direction was set, 18 were interface features outside it. Until the release, only bug fixes, security fixes and the plan below go in: the claims made true for every agent, proven by `make verify-agents`, shown in the app, the bill covering every agent, then the release. Code changes run CI: no `[skip ci]` on a commit that changes code.
+
 Not before those: features that copy a vendor app's. Token optimizers get no more work (OQ-031). What the vision lists as borrowed from vendor apps stays built; nothing more of that kind is added without a reason in this list.
 
 ## Later (unscheduled)

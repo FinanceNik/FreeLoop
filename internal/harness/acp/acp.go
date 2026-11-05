@@ -695,7 +695,26 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 	})
 	pick := func(kinds ...sdk.PermissionOptionKind) (sdk.RequestPermissionResponse, error) {
 		if d.OptionID != "" {
-			return sdk.RequestPermissionResponse{Outcome: sdk.NewRequestPermissionOutcomeSelected(sdk.PermissionOptionId(d.OptionID))}, nil
+			chosen := sdk.PermissionOptionId(d.OptionID)
+			// "Always" is the app's rule, which the broker has saved. Told "always", the
+			// agent saves one of its own, Claude Code in the project's .claude/, where it
+			// holds outside the app and outlives the app's rule (SEC-016). So it is told
+			// "once" whenever it offers that.
+			for _, o := range r.Options {
+				if o.OptionId != chosen {
+					continue
+				}
+				once := map[sdk.PermissionOptionKind]sdk.PermissionOptionKind{
+					sdk.PermissionOptionKindAllowAlways:  sdk.PermissionOptionKindAllowOnce,
+					sdk.PermissionOptionKindRejectAlways: sdk.PermissionOptionKindRejectOnce,
+				}[o.Kind]
+				for _, alt := range r.Options {
+					if once != "" && alt.Kind == once {
+						chosen = alt.OptionId
+					}
+				}
+			}
+			return sdk.RequestPermissionResponse{Outcome: sdk.NewRequestPermissionOutcomeSelected(chosen)}, nil
 		}
 		for _, k := range kinds {
 			for _, o := range r.Options {
@@ -989,11 +1008,21 @@ func (s *session) sessionMeta() map[string]any {
 		return nil
 	}
 	claude := map[string]any{"emitRawSDKMessages": sdkMessageFilter()}
+	// Claude Code's own bypass is never offered: the app's bypass is the broker's,
+	// which keeps protected paths, and an agent cannot choose it (SEC-001).
+	options := map[string]any{"allowDangerouslySkipPermissions": false}
 	if s.preset.Skills == config.SkillsClaudePlugin && s.p.SkillPlugin != "" {
-		claude["options"] = map[string]any{
-			"plugins": []map[string]any{{"type": "local", "path": s.p.SkillPlugin, "skipMcpDiscovery": true}},
-		}
+		options["plugins"] = []map[string]any{{"type": "local", "path": s.p.SkillPlugin, "skipMcpDiscovery": true}}
 	}
+	// In a project the user has not trusted, nothing of the repository's runs, as for
+	// its AGENTS.md and .freeloop/ (SEC-006, SEC-015). Claude Code runs a folder's hooks
+	// itself, before a tool and before the first prompt, so no permission request ever
+	// reaches the broker. Settings given here outrank the folder's, and this one is in
+	// force before any hook. The user's own hooks are off there too, with this app's.
+	if s.p.Trusted == nil || !s.p.Trusted() {
+		options["settings"] = map[string]any{"disableAllHooks": true}
+	}
+	claude["options"] = options
 	return map[string]any{"claudeCode": claude}
 }
 

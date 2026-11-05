@@ -17,6 +17,7 @@ npm_agent() { # folder, package
 	mkdir -p "$dir/$1"
 	(cd "$dir/$1" && npm install --silent --no-audit --no-fund --ignore-scripts "$spec")
 }
+npm_agent claude @agentclientprotocol/claude-agent-acp
 npm_agent gemini @google/gemini-cli
 npm_agent codex @agentclientprotocol/codex-acp
 npm_agent opencode opencode-ai
@@ -32,12 +33,17 @@ if [ ! -x "$dir/goose/goose" ] || ! "$dir/goose/goose" --version | grep -q "$goo
 		if [ -z "$pinned" ] && [ -n "${TRUST_NEW_AGENT:-}" ]; then
 			echo "$entry $sum" >> scripts/agents.sha256
 			echo "pinned $entry $sum; commit scripts/agents.sha256"
+		elif [ -z "$pinned" ]; then
+			# Not pinned for this Mac yet: Goose is left out, and the test says so,
+			# rather than running a program nobody has checked.
+			echo "goose $goose_version is not pinned for $(uname -m): its scenarios are skipped; see scripts/verify-agents.sh" >&2
+			rm -f "$dir/goose/goose.tar.bz2"
 		else
-			echo "goose $goose_version has checksum $sum, expected ${pinned:-none pinned}; see scripts/verify-agents.sh" >&2
+			echo "goose $goose_version has checksum $sum, expected $pinned; see scripts/verify-agents.sh" >&2
 			rm -f "$dir/goose/goose.tar.bz2"
 			exit 1
 		fi
 	fi
-	tar xjf "$dir/goose/goose.tar.bz2" -C "$dir/goose"
+	[ ! -f "$dir/goose/goose.tar.bz2" ] || tar xjf "$dir/goose/goose.tar.bz2" -C "$dir/goose"
 fi
-FREELOOP_AGENTS_DIR="$dir" go test ./internal/harness/acp/ -count=1 -v -run '^TestPresetScenarios$' -timeout 30m | grep -E '^ *(---|ok|FAIL|PASS)|_test.go:[0-9]+: (allowed|denied|plan mode|the conversation)'
+FREELOOP_AGENTS_DIR="$dir" go test ./internal/harness/acp/ -count=1 -v -run '^(TestPresetScenarios|TestClaudeCodeHoldsAgainstAHostileRepository)$' -timeout 30m | grep -E '^ *(---|ok|FAIL|PASS)|_test.go:[0-9]+: (allowed|denied|plan mode|the conversation)'

@@ -284,6 +284,16 @@ An independent review of this code on 2026-11-04 attacked it with a real sshd, a
 
 A second round of that review, against the fixes, did not complete. Each fix has a regression test, and reading the fixes afterwards found two more: a `.git` that git rejects read as "not a repository" and sent the whole tree, and one path through a link here stopped the whole sync. Both are fixed. The fixes have not had an independent attack.
 
+## Review, 2026-11-05: what a repository could make Claude Code do
+
+Claude Code runs its tools in its own process, so the app decides only what it asks about. A test against the real agent (`TestClaudeCodeHoldsAgainstAHostileRepository`, through `make verify-agents`) gave it a stand-in model that runs `git push` to a bare remote, with the policy refusing, and a control case where it is allowed and gets through. Found and fixed, each with a case that failed first:
+
+- **A repository's hooks ran.** A `SessionStart` or `PreToolUse` hook in `.claude/settings.json` ran a command as the user with nothing asked, in a project not trusted. In one not trusted, Claude Code now starts with all hooks off (`disableAllHooks` in the settings the app passes, which outrank the folder's), the user's own and the app's optimizer hook too. In a trusted project its hooks run, as its `.freeloop/` ones do.
+- **"Allow always" wrote into the project.** The app passed the agent its "always" option, and Claude Code saved the rule in `.claude/settings.local.json`, where it holds outside the app. The app now keeps the rule and answers "once" (SEC-016).
+- **Bypass wrote a git hook.** The app's bypass and accept-edits used Claude Code's own modes, in which it approves for itself: in bypass it wrote `.git/hooks/post-checkout`. Both now use its asking mode and the broker applies them, protected paths included, and Claude Code's own bypass is refused (`allowDangerouslySkipPermissions: false`).
+
+Held before the fixes too: allow rules for `Bash`, `Bash(git push:*)` and `Bash(*)`, a default bypass mode and local settings all left the push to the user. Still open: auto mode is the agent's own, as OQ-032 chose, so the app's deny rules do not reach what it approves there; the case tried, a git hook, held because Claude Code refused it itself.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

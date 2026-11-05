@@ -100,10 +100,13 @@ func BuiltinPresets() []HarnessPreset {
 		Description: "Use your Claude subscription or Anthropic account. Freeloop starts Claude Code, which signs in by itself.",
 		Command:     "npx",
 		Args:        []string{"-y", "@agentclientprotocol/claude-agent-acp@0.99.1"},
-		Modes:       map[string]string{"ask": "default", "accept_edits": "acceptEdits", "plan": "plan", "auto": "auto", "bypass": "bypassPermissions"},
-		Notes:       "Needs Node.js. Sign in once by running claude in a terminal; Freeloop never sees or stores the login.",
-		Skills:      SkillsClaudePlugin,
-		Builtin:     true,
+		// Accept edits and bypass are the broker's to apply: in Claude Code's own
+		// acceptEdits and bypassPermissions it approves for itself, and wrote into .git/
+		// in bypass (SEC-005, SEC-015). Auto stays the agent's, as OQ-032 chose.
+		Modes:   map[string]string{"ask": "default", "accept_edits": "default", "plan": "plan", "auto": "auto", "bypass": "default"},
+		Notes:   "Needs Node.js. Sign in once by running claude in a terminal; Freeloop never sees or stores the login.",
+		Skills:  SkillsClaudePlugin,
+		Builtin: true,
 	}, {
 		ID:          "gemini-cli",
 		Name:        "Gemini CLI",
