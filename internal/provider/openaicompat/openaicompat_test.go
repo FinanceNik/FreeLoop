@@ -291,3 +291,85 @@ func TestImagesInRequests(t *testing.T) {
 		}
 	}
 }
+
+// A custom endpoint such as LiteLLM reports usage in the stream only when asked; without
+// asking, every call counted as no tokens.
+func TestACustomEndpointIsAskedForUsage(t *testing.T) {
+	var asked bool
+	srv := server(t, []string{
+		`{"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}]}`,
+		`{"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":60}}}`,
+	}, func(body map[string]any, _ *http.Request) { asked = body["stream_options"] != nil })
+	defer srv.Close()
+	done := collectDone(t, New(Options{Preset: "custom", BaseURL: srv.URL + "/v1"}))
+	if !asked {
+		t.Error("usage not requested")
+	}
+	if done.Usage.InputTokens != 40 || done.Usage.CacheReadTokens != 60 || done.Usage.OutputTokens != 20 {
+		t.Errorf("usage = %+v", done.Usage)
+	}
+}
+
+func collectDone(t *testing.T, p *Provider) provider.Event {
+	t.Helper()
+	ch, err := p.Stream(context.Background(), provider.ChatRequest{Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var done provider.Event
+	for ev := range ch {
+		if ev.Type == provider.EventDone {
+			done = ev
+		}
+	}
+	return done
+}
+
+// refusing answers 400 to a request with stream_options, as a strict server does.
+func refusing(t *testing.T, requests *[]bool, always bool) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		asked := body["stream_options"] != nil
+		*requests = append(*requests, asked)
+		if asked || always {
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"error":{"message":"extra fields not permitted"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: %s\n\n", `{"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}]}`)
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+}
+
+// What worked before asking must go on working, and be asked only once.
+func TestAServerThatRefusesTheOptionStillWorks(t *testing.T) {
+	var requests []bool
+	srv := refusing(t, &requests, false)
+	defer srv.Close()
+	p := New(Options{Preset: "custom", BaseURL: srv.URL + "/v1"})
+	collectDone(t, p)
+	if len(requests) != 2 || !requests[0] || requests[1] {
+		t.Fatalf("first call's requests = %v", requests)
+	}
+	collectDone(t, p)
+	if len(requests) != 3 || requests[2] {
+		t.Fatalf("after the second call = %v", requests)
+	}
+}
+
+// A request bad for another reason says so, and does not turn the option off for good.
+func TestARealErrorIsStillAnError(t *testing.T) {
+	var requests []bool
+	srv := refusing(t, &requests, true)
+	defer srv.Close()
+	p := New(Options{Preset: "custom", BaseURL: srv.URL + "/v1"})
+	if _, err := p.Stream(context.Background(), provider.ChatRequest{Model: "m"}); err == nil {
+		t.Fatal("no error")
+	}
+	if p.noStreamUsage.Load() {
+		t.Error("gave up asking for usage over an error that was not about it")
+	}
+}

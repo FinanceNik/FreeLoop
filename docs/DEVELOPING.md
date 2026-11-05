@@ -43,7 +43,7 @@ While the app runs, the same binary is a command line for it (EXT-004): `Freeloo
 
 ## Adding a provider
 
-**An OpenAI-compatible endpoint** needs no new code beyond a preset: add a `Preset` to `openaicompat.Presets` (`internal/provider/openaicompat`) with its base URL, whether it needs a key, whether it is local, any fixed headers, `StreamUsage` when it honours `stream_options.include_usage`, `ToolsKnown` when its models are known to call tools, and a `Note` for setup the user must do (a server flag, for example). Cover anything unusual in `openaicompat_test.go` against an `httptest` server.
+**An OpenAI-compatible endpoint** needs no new code beyond a preset: add a `Preset` to `openaicompat.Presets` (`internal/provider/openaicompat`) with its base URL, whether it needs a key, whether it is local, any fixed headers, `StreamUsage` to ask for `stream_options.include_usage` (a server refusing it with 400 or 422 is asked again without, and then not asked again), `ToolsKnown` when its models are known to call tools, and a `Note` for setup the user must do (a server flag, for example). Cover anything unusual in `openaicompat_test.go` against an `httptest` server.
 
 **A new adapter** implements `provider.Provider` (`internal/provider/provider.go`):
 

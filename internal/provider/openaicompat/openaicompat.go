@@ -60,7 +60,9 @@ var Presets = []Preset{
 		Note: "Start vLLM with --enable-auto-tool-choice and a --tool-call-parser."},
 	{ID: "ollama-v1", Name: "Ollama (OpenAI-compatible)", BaseURL: "http://localhost:11434/v1", Local: true,
 		Note: "The native Ollama provider is usually the better choice."},
-	{ID: "custom", Name: "Custom OpenAI-compatible", Local: true},
+	// Asked for usage too: without it every call counts as no tokens. A server that
+	// refuses the option is asked again without it (Stream).
+	{ID: "custom", Name: "Custom OpenAI-compatible", Local: true, StreamUsage: true},
 }
 
 // PresetByID returns the preset with id, or the custom preset.
@@ -91,6 +93,8 @@ type Provider struct {
 	headers map[string]string
 	client  *http.Client
 	calls   atomic.Int64 // for synthesized tool-call IDs
+	// noStreamUsage is set once the server has refused stream_options.
+	noStreamUsage atomic.Bool
 }
 
 // New returns a provider for opts. The preset's base URL and headers apply
@@ -378,7 +382,8 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 		"messages": toWire(req.System, req.Messages),
 		"stream":   true,
 	}
-	if p.preset.StreamUsage {
+	asksUsage := p.preset.StreamUsage && !p.noStreamUsage.Load()
+	if asksUsage {
 		body["stream_options"] = map[string]any{"include_usage": true}
 	}
 	if req.MaxTokens > 0 {
@@ -401,6 +406,16 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 		body["tools"] = tools
 	}
 	resp, err := p.do(ctx, http.MethodPost, "/chat/completions", body)
+	// Usage is worth one more question, not a session: a server may refuse an option it
+	// does not know, and need not name it. If it then takes the request, it was the option.
+	var refused *provider.HTTPError
+	if asksUsage && errors.As(err, &refused) && (refused.Status == http.StatusBadRequest || refused.Status == http.StatusUnprocessableEntity) {
+		delete(body, "stream_options")
+		if again, retryErr := p.do(ctx, http.MethodPost, "/chat/completions", body); retryErr == nil {
+			p.noStreamUsage.Store(true)
+			resp, err = again, nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
