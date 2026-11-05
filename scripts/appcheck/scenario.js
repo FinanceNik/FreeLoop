@@ -54,6 +54,24 @@ const turn = async (title, afterSend = () => {}) => {
 await until("the session list", () => withText(".session-row", "Check alpha"));
 check("the sidebar shows the mark", all(".sidebar h1 svg.logo circle").length === 3);
 
+// A profile on an agent with its own sign-in hides the provider, and says how to get it.
+await step("a provider can be reached from any profile", async () => {
+  withText(".sidebar header button", "New session").click();
+  const profile = await until("the new-session form", () => withText("label", "Profile")?.querySelector("select"));
+  const external = [...profile.options].find((o) => o.value === "claude-code");
+  if (!external) throw new Error("no Claude Code profile to start from");
+  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(profile, external.value);
+  profile.dispatchEvent(new Event("change", { bubbles: true }));
+  await sleep(200);
+  const provider = () => [...document.querySelectorAll("label")].find((l) => l.firstChild?.textContent?.trim() === "Provider")?.querySelector("select");
+  check("an agent's own profile hides the provider", !provider());
+  const offer = await until("the offer", () => withText(".provider-offer button", "Use a provider"), 3000);
+  offer.click();
+  await until("the provider field", provider, 3000);
+  check("the offer brings the provider field", [...provider().options].some((o) => o.textContent.includes("Scripted demo")));
+  check("the offer goes once used", !document.querySelector(".provider-offer"));
+});
+
 await step("a session's right-click menu", async () => {
   const mouse = (...a) => window.webkit.messageHandlers.mouse.postMessage(a);
   const rightClick = async (title) => {

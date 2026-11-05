@@ -176,6 +176,8 @@ export default function NewSession({ providers, projects, environments, profiles
   }, [profileId, JSON.stringify(defaults)]);
   const harness = harnesses.find((h) => h.id === (profile?.harness || "builtin"));
   const usesProvider = !harness || harness.usesProvider;
+  // The first profile that runs on a provider, to offer from one that does not.
+  const builtinProfile = [...profiles, ...projectProfiles].find((p) => harnesses.find((h) => h.id === (p.harness || "builtin"))?.usesProvider);
   const env = environments.find((e) => e.id === (environmentId || "local"));
 
   // Favorites and hidden models (PRV-003).
@@ -418,6 +420,16 @@ export default function NewSession({ providers, projects, environments, profiles
         {harness && !harness.usesProvider && (
           <p className="muted harness-note">
             {harness.name} brings its own model access and sign-in; Freeloop passes it no credentials.{harness.notes ? ` ${harness.notes}` : ""}
+          </p>
+        )}
+        {harness && !harness.usesProvider && builtinProfile && providers.length > 0 && (
+          <p className="harness-note provider-offer">
+            <span className="muted">
+              {harness.name} cannot use {providers.length === 1 ? providers[0].name : "your providers"}. To choose a provider and model, run the session on {builtinProfile.name}.
+            </span>{" "}
+            <button type="button" onClick={() => pickProfile(builtinProfile.id)}>
+              Use a provider
+            </button>
           </p>
         )}
         {usesProvider && providers.length === 0 && (

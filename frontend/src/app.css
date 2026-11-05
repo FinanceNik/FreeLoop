@@ -4685,3 +4685,11 @@ table.hooks .hook-command {
   cursor: col-resize !important;
   user-select: none !important;
 }
+
+.provider-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
