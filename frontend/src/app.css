@@ -967,10 +967,6 @@ fieldset {
   color: var(--text);
 }
 
-.session-actions .context-meter {
-  margin-right: 6px;
-}
-
 .export-group {
   padding: 2px 10px;
   font-size: calc(11rem / 14);
@@ -2611,9 +2607,13 @@ details.choice[open] > summary h3::after {
   flex-wrap: wrap;
 }
 
-/* Context meter and compaction (HRN-013) */
+/* Context meter and compaction (HRN-013, GUI-036) */
 .context-meter {
-  font-size: 0.9em;
+  flex: none;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .context-high {

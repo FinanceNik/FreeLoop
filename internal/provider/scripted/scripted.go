@@ -19,6 +19,10 @@ type Call struct {
 	Input any
 }
 
+// NoSteps starts a prompt that gets a plain answer and no tool calls, so a check can
+// leave a session with a large context and no further call to compact it.
+const NoSteps = "[no steps]"
+
 // Step is one scripted model response.
 type Step struct {
 	Text  string
@@ -88,6 +92,10 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 	if i < len(p.steps) {
 		step = p.steps[i]
 	}
+	if asksNoSteps(req.Messages) {
+		step = Step{Text: "Noted."}
+	}
+	input := inputTokens(req.Messages)
 	turn := len(p.Requests())
 
 	ch := make(chan provider.Event, 64)
@@ -134,9 +142,30 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 			return
 		}
 		send(provider.Event{Type: provider.EventDone, Message: &msg, StopReason: stop,
-			Usage: provider.Usage{InputTokens: 100, OutputTokens: int64(len(step.Text)/4 + 10)}})
+			Usage: provider.Usage{InputTokens: input, OutputTokens: int64(len(step.Text)/4 + 10)}})
 	}()
 	return ch, nil
+}
+
+// asksNoSteps reports whether the latest message starts with NoSteps.
+func asksNoSteps(msgs []provider.Message) bool {
+	if len(msgs) == 0 {
+		return false
+	}
+	last := msgs[len(msgs)-1]
+	return last.Role == provider.RoleUser && len(last.Parts) > 0 && strings.HasPrefix(last.Parts[0].Text, NoSteps)
+}
+
+// inputTokens is a small fixed count, or the size of what was sent once that is larger,
+// so a long conversation fills the context as a real one does.
+func inputTokens(msgs []provider.Message) int64 {
+	var chars int
+	for _, m := range msgs {
+		for _, part := range m.Parts {
+			chars += len(part.Text)
+		}
+	}
+	return max(100, int64(chars/4))
 }
 
 // Demo is the development demo: look around, write a file (which asks for

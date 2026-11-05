@@ -16,16 +16,18 @@ export interface Activity {
   finishedAt: string | null;
   stopReason: string | null;
   changed: number;
+  // How full the context is, for a row in the sidebar (GUI-036).
+  context: { tokens: number; window: number } | null;
 }
 
-export const NO_ACTIVITY: Activity = { seq: 0, doing: "", turnStart: null, tools: {}, waiting: [], finishedAt: null, stopReason: null, changed: 0 };
+export const NO_ACTIVITY: Activity = { seq: 0, doing: "", turnStart: null, tools: {}, waiting: [], finishedAt: null, stopReason: null, changed: 0, context: null };
 
 type ActivityEvent = { seq: number; ts: string; type: string; data?: unknown };
 
 // foldActivity takes one event. Replayed events are older than what it has seen.
 export function foldActivity(a: Activity, ev: ActivityEvent): Activity {
   if (ev.seq <= a.seq) return a;
-  const d = (ev.data ?? {}) as { toolCallId?: string; title?: string; tool?: string; requestId?: string; command?: string; stopReason?: string; dirty?: number };
+  const d = (ev.data ?? {}) as { contextTokens?: number; contextWindow?: number; afterTokens?: number; status?: string; toolCallId?: string; title?: string; tool?: string; requestId?: string; command?: string; stopReason?: string; dirty?: number };
   const next = { ...a, seq: ev.seq };
   switch (ev.type) {
     case "turn_started":
@@ -49,6 +51,10 @@ export function foldActivity(a: Activity, ev: ActivityEvent): Activity {
       return { ...next, doing: "", waiting: [], finishedAt: ev.ts, stopReason: d.stopReason ?? "" };
     case "git_state":
       return { ...next, changed: d.dirty ?? 0 };
+    case "usage_update":
+      return d.contextTokens ? { ...next, context: { tokens: d.contextTokens, window: d.contextWindow ?? a.context?.window ?? 0 } } : next;
+    case "compaction_update":
+      return d.status === "completed" && a.context ? { ...next, context: { ...a.context, tokens: d.afterTokens ?? 0 } } : next;
     default:
       return next;
   }

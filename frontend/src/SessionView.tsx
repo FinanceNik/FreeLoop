@@ -32,6 +32,7 @@ import { prepareImage, type PreparedImage } from "./imageprep.ts";
 import { addText, isPicture, type TextFile } from "./attach.ts";
 import SessionControls from "./SessionControls.tsx";
 import SourceMark from "./SourceMark.tsx";
+import { contextHigh, contextLabel, contextTitle, shortTokens } from "./contextMeter.ts";
 import type { Source } from "./source.ts";
 import { draftOf, extrasOf, forgetDraft, rememberDraft, rememberExtras, storeDraft } from "./drafts.ts";
 import { MAX_IMAGES, room } from "./images.ts";
@@ -557,6 +558,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
       .finally(() => setAccepting(false));
   };
 
+  const compactNow = () => {
+    holdBottom.current = false;
+    setAccepting(true);
+    EngineService.Prompt(session.id, "/compact")
+      .catch(onError)
+      .finally(() => setAccepting(false));
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;
     if (slash !== null && slashMatches.length > 0) {
@@ -803,6 +812,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
           <div className="session-heading">
             <div className="session-titleline">
               <SourceMark source={source} detail={session.model || undefined} />
+              {view.context && contextLabel(view.context) && (
+                <span className={contextHigh(view.context) ? "context-meter context-high" : "context-meter"} title={contextTitle(view.context)}>
+                  {contextLabel(view.context)}
+                </span>
+              )}
               {renaming === null ? (
                 <h2 onDoubleClick={() => setRenaming(session.title)} title={`${headerDetails}\nDouble-click to rename`}>
                   {session.title}
@@ -854,10 +868,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 ))}
           </div>
           <div className="session-actions">
-            {view.context && view.context.window > 0 && view.context.tokens >= 0.8 * view.context.window && (
-              <span className="context-meter context-high" title="Context of the latest model call; the session compacts at 80 % of the model's window, or on /compact">
-                context {Math.round((100 * view.context.tokens) / view.context.window)} %
-              </span>
+            {contextHigh(view.context) && view.commands.some((c) => c.name === "compact") && (
+              <button className="ghost" disabled={view.running || accepting} onClick={compactNow} title="Summarise the conversation so far, so each message sends less">
+                Compact
+              </button>
             )}
             {exported && (
               <span className="ok" role="status" title={exported}>
@@ -1491,6 +1505,12 @@ function ItemBody({
           </summary>
           {item.generated ? <Markdown text={item.summary} /> : <pre>{item.summary}</pre>}
         </details>
+      );
+    case "cache_resend":
+      return (
+        <p className="turn-end" title="Writing to the cache costs more than reading from it, and the whole context goes through it again">
+          The model's cache no longer held this conversation, so {shortTokens(item.tokens)} tokens were written to it again. This usually follows a pause of a few minutes or a change of model.
+        </p>
       );
     case "compaction":
       return (

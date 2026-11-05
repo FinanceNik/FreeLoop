@@ -1,3 +1,4 @@
+import { contextResent } from "./contextMeter.ts";
 import type { ModelCall } from "./cost.ts";
 
 // A session's transcript in the UI is a pure function of its events. Replay
@@ -141,6 +142,7 @@ type ItemKinds =
   | { kind: "mode"; key: string; rev: number; mode: string }
   | { kind: "model"; key: string; rev: number; model: string; providerId: string }
   | { kind: "notice"; key: string; rev: number; message: string; warn: boolean; optimizer?: string }
+  | { kind: "cache_resend"; key: string; rev: number; tokens: number }
   | { kind: "compaction"; key: string; rev: number; reason: string; before: number; after: number; summary: string }
   | { kind: "handoff"; key: string; rev: number; fromTitle: string; summary: string; generated: boolean }
   | { kind: "pull_request"; key: string; rev: number; url: string; title: string; base: string; head: string; draft: boolean }
@@ -242,6 +244,8 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   const resets: number[] = [];
   let contextTokens = 0;
   let contextWindow = 0;
+  // The context the latest model call sent, to see one sending it all again (GUI-036).
+  let lastCallContext = 0;
   // Model calls, all and since the last turn ended, and the model a call
   // that does not name its own was made with ("" until a switch: the
   // session's).
@@ -408,15 +412,24 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           cacheWrite1hTokens: d.cacheWrite1hTokens ?? 0,
           adjustment: d.adjustment === true,
         };
-        calls.push(c);
-        turnCalls.push(c);
-        usage.inputTokens += c.inputTokens;
-        usage.outputTokens += c.outputTokens;
-        usage.cacheReadTokens += c.cacheReadTokens;
-        usage.cacheWriteTokens += c.cacheWriteTokens;
+        // An agent's report of its context spends nothing and is no call.
+        const spent = c.inputTokens + c.outputTokens + c.cacheReadTokens + c.cacheWriteTokens > 0;
+        if (spent) {
+          calls.push(c);
+          turnCalls.push(c);
+          usage.inputTokens += c.inputTokens;
+          usage.outputTokens += c.outputTokens;
+          usage.cacheReadTokens += c.cacheReadTokens;
+          usage.cacheWriteTokens += c.cacheWriteTokens;
+        }
         if (d.contextTokens) {
+          if (spent) {
+            if (contextResent(lastCallContext, d.contextTokens, c.cacheWriteTokens)) items.push({ kind: "cache_resend", key, rev, tokens: c.cacheWriteTokens });
+            lastCallContext = d.contextTokens;
+          }
           contextTokens = d.contextTokens;
-          contextWindow = d.contextWindow ?? 0;
+          // A call may come before the agent has said what its window is.
+          contextWindow = d.contextWindow ?? contextWindow;
         }
         break;
       }
@@ -453,6 +466,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         if (d.status === "completed") {
           items.push({ kind: "compaction", key, rev, reason: d.reason ?? "", before: d.contextTokens ?? 0, after: d.afterTokens ?? 0, summary: d.summary ?? "" });
           if (contextTokens > 0) contextTokens = d.afterTokens ?? 0;
+          lastCallContext = 0;
         }
         break;
       case "notice":

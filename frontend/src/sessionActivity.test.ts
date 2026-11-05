@@ -57,3 +57,13 @@ test("how long something has been going reads shortly", () => {
   assert.equal(elapsed(at(26), now), "4m");
   assert.equal(elapsed(new Date(2026, 10, 4, 8, 10).toISOString(), now), "2h 20m");
 });
+
+test("the sidebar's context follows usage and compaction", () => {
+  const a = run([
+    ["usage_update", { inputTokens: 5, contextTokens: 85, contextWindow: 100 }],
+    ["usage_update", { inputTokens: 1 }],
+  ]);
+  assert.deepEqual(a.context, { tokens: 85, window: 100 });
+  const after = foldActivity(a, { seq: a.seq + 1, ts: at(9), type: "compaction_update", data: { status: "completed", afterTokens: 10 } });
+  assert.deepEqual(after.context, { tokens: 10, window: 100 });
+});

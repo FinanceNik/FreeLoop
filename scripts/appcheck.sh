@@ -43,7 +43,7 @@ until "$APP" sessions >/dev/null 2>&1; do
   sleep 0.2
 done
 
-for name in alpha beta menu; do
+for name in alpha beta menu full; do
   mkdir -p "$DATA/projects/$name"
   git -C "$DATA/projects/$name" init -q
   git -C "$DATA/projects/$name" -c user.name=check -c user.email=check@example.com commit -q --allow-empty -m start

@@ -117,6 +117,10 @@ type callLedger struct {
 	reported bool
 	// recorded is what was recorded per model.
 	recorded map[string]callTokens
+	// window is the context's size as the agent last gave it, and used how full it
+	// said it was (GUI-036).
+	window int
+	used   int64
 }
 
 // HandleExtensionMethod implements sdk.ExtensionMethodHandler.
@@ -148,6 +152,8 @@ func (s *session) countCall(m sdkMessage) {
 		return
 	}
 	var done *event.UsageData
+	// A subagent's call has a context of its own, which says nothing of this session's.
+	main := true
 	s.mu.Lock()
 	c := &s.calls
 	switch {
@@ -165,9 +171,26 @@ func (s *session) countCall(m sdkMessage) {
 		}
 	case m.Type == "assistant" && m.Message.Model != syntheticModel && c.remember(m.Message.ID):
 		done = startCall(m.Message)
+		main = m.Parent == nil
 	}
 	s.mu.Unlock()
-	s.reportCall(done)
+	s.reportCall(done, main)
+}
+
+// noteContext takes the agent's report of its context (ACP's usage_update), which has
+// no tokens of a call in it. A report that changes nothing is not worth an event: an
+// agent may send one after every message.
+func (s *session) noteContext(m map[string]any) {
+	used, _ := m["used"].(float64)
+	size, _ := m["size"].(float64)
+	s.mu.Lock()
+	c := &s.calls
+	same := c.used == int64(used) && c.window == int(size)
+	c.used, c.window = int64(used), int(size)
+	s.mu.Unlock()
+	if used > 0 && !same {
+		s.p.Emit(event.UsageUpdate, event.UsageData{ContextTokens: int64(used), ContextWindow: int(size)})
+	}
 }
 
 // reconcile adds what a result counts and the calls did not show.
@@ -216,13 +239,18 @@ func startCall(m sdkModelMessage) *event.UsageData {
 }
 
 // reportCall records a finished call. A call with no tokens never reached the model.
-func (s *session) reportCall(d *event.UsageData) {
+func (s *session) reportCall(d *event.UsageData, main bool) {
 	if d == nil || d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens == 0 {
 		return
 	}
 	s.mu.Lock()
 	s.calls.reported = true
 	s.calls.add(d.Model, callTokens{d.InputTokens, d.OutputTokens, d.CacheReadTokens, d.CacheWriteTokens, d.CacheWrite1hTokens})
+	if main {
+		// What a call reads is the whole context it sent: new, cached or written to the cache.
+		d.ContextTokens = d.InputTokens + d.CacheReadTokens + d.CacheWriteTokens
+		d.ContextWindow = s.calls.window
+	}
 	s.mu.Unlock()
 	s.p.Emit(event.UsageUpdate, *d)
 }
@@ -235,7 +263,7 @@ func (s *session) endCalls() bool {
 	open := s.calls.open
 	s.calls.open = nil
 	s.mu.Unlock()
-	s.reportCall(open)
+	s.reportCall(open, true)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.calls.reported

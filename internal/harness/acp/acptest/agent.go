@@ -97,6 +97,12 @@ func (a *agent) sendCalls(ctx context.Context, sid sdk.SessionId) {
 		stream(map[string]any{"type": "message_start", "message": message("m2", usage(5, 1, 200, 0))}),
 	} {
 		a.conn.NotifyExtension(ctx, "_claude/sdkMessage", map[string]any{"sessionId": sid, "message": m})
+		if m["type"] == "result" {
+			// The context's size, twice: the same report again is not news.
+			for range 2 {
+				a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: sid, Update: sdk.SessionUpdate{UsageUpdate: &sdk.SessionUsageUpdate{Used: 150, Size: 1000}}})
+			}
+		}
 	}
 }
 

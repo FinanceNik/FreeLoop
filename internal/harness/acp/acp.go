@@ -535,7 +535,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 // SessionUpdate records an update as the event of the same name: Freeloop's
 // schema is a superset of ACP's (OQ-012). Context usage, which has another
 // shape than the usage_update the app records, and variants newer than the
-// schema are left out.
+// schema are left out, and the context usage goes to the meter (GUI-036).
 func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) error {
 	s.mu.Lock()
 	loading, replay := s.loading, s.replay
@@ -582,6 +582,7 @@ func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) er
 			s.mu.Unlock()
 		}
 	case t == event.UsageUpdate:
+		s.noteContext(m)
 		return nil
 	case t == event.UserMessageChunk:
 		// The agent's own words must not show as the user's. A replay while

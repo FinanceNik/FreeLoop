@@ -144,8 +144,33 @@ test("buildView keeps the latest advertised commands", () => {
   );
 });
 
+const typed = (seq: number, type: string, data: unknown): TranscriptEvent => ({ ...ev(seq, data), type });
+
+test("buildView keeps an agent's context report out of the calls, and its window for later calls", () => {
+  const v = buildView([
+    typed(1, "usage_update", { inputTokens: 5, cacheReadTokens: 100, contextTokens: 105, model: "m" }),
+    typed(2, "usage_update", { contextTokens: 150, contextWindow: 1000 }),
+    typed(3, "usage_update", { inputTokens: 5, cacheReadTokens: 200, contextTokens: 205, model: "m" }),
+  ]);
+  assert.equal(v.calls.length, 2);
+  assert.equal(v.usage.inputTokens, 10);
+  assert.deepEqual(v.context, { tokens: 205, window: 1000 });
+});
+
+test("buildView says when a call sent the whole context again", () => {
+  const notes = (events: ReturnType<typeof typed>[]) => buildView(events).items.filter((i) => i.kind === "cache_resend");
+  const call = (seq: number, read: number, write: number) => typed(seq, "usage_update", { inputTokens: 2, cacheReadTokens: read, cacheWriteTokens: write, contextTokens: 2 + read + write, model: "m" });
+  const seen = notes([call(1, 0, 90_000), call(2, 90_000, 500), call(3, 0, 91_000)]);
+  assert.equal(seen.length, 1);
+  assert.ok(seen[0].kind === "cache_resend" && seen[0].tokens === 91_000);
+  // A compaction replaces the context, so what follows it is no resend.
+  const compaction = typed(2, "compaction_update", { status: "completed", reason: "auto", contextTokens: 90_000, afterTokens: 80_000, summary: "s" });
+  assert.equal(notes([call(1, 90_000, 500), compaction, call(3, 0, 89_000)]).length, 0);
+  // Old transcripts have no context figures, and their totals may be of whole turns.
+  assert.equal(notes([typed(1, "usage_update", { inputTokens: 2, cacheWriteTokens: 90_000 }), typed(2, "usage_update", { inputTokens: 2, cacheWriteTokens: 91_000 })]).length, 0);
+});
+
 test("buildView tracks the context and records compactions", () => {
-  const typed = (seq: number, type: string, data: unknown): TranscriptEvent => ({ ...ev(seq, data), type });
   const v = buildView([
     typed(1, "usage_update", { inputTokens: 10, outputTokens: 1, contextTokens: 850, contextWindow: 1000 }),
     typed(2, "compaction_update", { status: "started", reason: "auto", contextTokens: 850 }),
@@ -157,7 +182,6 @@ test("buildView tracks the context and records compactions", () => {
 });
 
 test("buildView ties checkpoints to user messages and dims rewound turns", () => {
-  const typed = (seq: number, type: string, data: unknown): TranscriptEvent => ({ ...ev(seq, data), type });
   const text = (t: string) => ({ content: { type: "text", text: t } });
   const v = buildView([
     typed(1, "checkpoint", { commit: "a", historyLen: 0 }),

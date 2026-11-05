@@ -168,9 +168,10 @@ func TestUsagePerModelCall(t *testing.T) {
 	rec.mu.Unlock()
 	want := []event.UsageData{
 		{InputTokens: 3, OutputTokens: 4, CacheWriteTokens: 20, CacheWrite1hTokens: 20, Model: "test-model"},
-		{InputTokens: 2, OutputTokens: 192, CacheReadTokens: 100, CacheWriteTokens: 50, CacheWrite1hTokens: 50, Model: "test-model"},
+		{InputTokens: 2, OutputTokens: 192, CacheReadTokens: 100, CacheWriteTokens: 50, CacheWrite1hTokens: 50, ContextTokens: 152, Model: "test-model"},
 		{InputTokens: 1000, OutputTokens: 80, CacheWriteTokens: 30, Model: "test-model", Adjustment: true},
-		{InputTokens: 5, OutputTokens: 1, CacheReadTokens: 200, Model: "test-model"},
+		{ContextTokens: 150, ContextWindow: 1000},
+		{InputTokens: 5, OutputTokens: 1, CacheReadTokens: 200, ContextTokens: 205, ContextWindow: 1000, Model: "test-model"},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("usage events = %+v, want %+v", got, want)

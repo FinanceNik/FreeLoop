@@ -113,6 +113,41 @@ await step("a session shows what it runs on", async () => {
 });
 
 // A profile on an agent with its own sign-in hides the provider, and says how to get it.
+await step("a pane shows how full its context is", async () => {
+  const meter = () => activePane().querySelector(".session-titleline .context-meter");
+  const rowMeter = (title) => withText(".session-row", title)?.querySelector(".context-meter");
+  const compactButton = () => withText(".session-actions button", "Compact", activePane());
+  const open = async (title) => {
+    openSession(title);
+    await until(`${title} to open`, () => activePane().querySelector(".session-titleline h2")?.textContent === title);
+  };
+  await open("Check long");
+  const low = await until("the meter", meter);
+  check("a session's context shows on its pane", /^(<1|\d+) %$/.test(low.textContent) && !low.classList.contains("context-high"), low.textContent);
+  check("the meter explains itself", /tokens/.test(low.title), low.title);
+  check("an ordinary context offers no Compact", !compactButton());
+  await open("Check agent");
+  await sleep(300);
+  check("no figure, no meter", !meter(), meter()?.textContent);
+  // The real engine, with a prompt that fills the demo's window and a call that stays last.
+  await open("Check full");
+  const box = await until("the message box", () => activePane().querySelector(".composer textarea"));
+  box.focus();
+  type(box, `[no steps] ${"the quick brown fox jumps over a lazy dog\n".repeat(8100)}`);
+  await sleep(100);
+  (await until("Send", () => { const b = withText(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
+  await until("the meter to rise", () => meter()?.classList.contains("context-high"), 30000);
+  check("a full context stands out", /^8\d %$/.test(meter().textContent), meter().textContent);
+  check("a full context shows in the sidebar", rowMeter("Check full")?.classList.contains("context-high"), rowMeter("Check full")?.textContent);
+  check("a quiet context stays out of the sidebar", !rowMeter("Check long"));
+  const compact = await until("Compact to be enabled", () => { const b = compactButton(); return b && !b.disabled && b; }, 30000);
+  compact.click();
+  await until("the context to fall", () => meter() && !meter().classList.contains("context-high"), 30000);
+  check("Compact compacts", withText(".compaction summary", "Context compacted", activePane()));
+  check("Compact goes once the context has room", !compactButton());
+  check("the sidebar's figure goes with it", !rowMeter("Check full"));
+});
+
 await step("a provider can be reached from any profile", async () => {
   withText(".sidebar header button", "New session").click();
   const profile = await until("the new-session form", () => withText("label", "Profile")?.querySelector("select"));
