@@ -91,6 +91,10 @@ func diffContent(path, oldText, newText string) map[string]any {
 }
 
 func schema(required []string, props map[string]any) map[string]any {
+	// Never null: Azure and OpenAI refuse the whole request over it, where Anthropic lets it pass.
+	if required == nil {
+		required = []string{}
+	}
 	return map[string]any{"type": "object", "properties": props, "required": required}
 }
 
