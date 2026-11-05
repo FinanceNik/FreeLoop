@@ -3063,6 +3063,26 @@ table.hooks .hook-command {
   margin-bottom: 4px;
 }
 
+/* A PDF takes the height, and most of the width from the tree. */
+.files-panel:has(.file-pdf) {
+  grid-template-columns: minmax(100px, 1fr) 3fr;
+}
+
+.file-view:has(.file-pdf) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-pdf {
+  flex: 1;
+  min-height: 240px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
 .file-view-switch {
   display: inline-flex;
   gap: 2px;

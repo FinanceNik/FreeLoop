@@ -3,6 +3,7 @@ import { EngineService, type FileEntry, type FileView, type Session } from "./ap
 import type { FileChange } from "./transcript.ts";
 import { isMarkdownFile, isPdfFile, relative } from "./paths.ts";
 import { Markdown } from "./Markdown.tsx";
+import PdfView from "./PdfView.tsx";
 
 // FilesPanel is the Files tab of the right panel (GUI-013): a read-only
 // tree of the session's folder with the files the agent edited, and those
@@ -128,8 +129,8 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
                 </button>
               </div>
             )}
-            {isPdfFile(view.path) && view.binary ? (
-              <p className="muted">A PDF ({view.size.toLocaleString()} bytes). It cannot be shown here yet; open it in Preview.</p>
+            {isPdfFile(view.path) ? (
+              <PdfView sessionId={session.id} path={view.path} />
             ) : view.binary ? (
               <p className="muted">A binary file ({view.size.toLocaleString()} bytes).</p>
             ) : isMarkdownFile(view.path) && !source ? (
@@ -148,7 +149,7 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
                 ))}
               </pre>
             )}
-            {view.truncated && <p className="muted">Only the first 512 KB are shown.</p>}
+            {view.truncated && !isPdfFile(view.path) && <p className="muted">Only the first 512 KB are shown.</p>}
           </>
         )}
       </div>

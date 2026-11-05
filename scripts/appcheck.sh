@@ -52,7 +52,21 @@ done
 
 # Files for the viewer: Markdown carrying markup that must not run, and a PDF.
 printf '# A heading\n\nSome **bold** text.\n\n<img src=x onerror="window.pwned=1">\n\n[not a link](javascript:window.pwned=1)\n' > "$DATA/projects/alpha/guide.md"
-printf '%%PDF-1.4\0binary\n' > "$DATA/projects/alpha/paper.pdf"
+# A hostile PDF: script on opening, and a link over the whole page. To the app's own address,
+# since the app's policy lets localhost into a frame for the preview, so only the viewer's
+# stops this one, and since it really loads, so a click that got through would show.
+cat > "$DATA/projects/alpha/paper.pdf" <<PDF
+%PDF-1.5
+1 0 obj<</Type/Catalog/Pages 2 0 R/OpenAction<</S/JavaScript/JS(app.alert('ran'); app.launchURL('https://example.com/from-js');)>>>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 400 300]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>/Annots[<</Type/Annot/Subtype/Link/Rect[0 0 400 300]/Border[0 0 0]/A<</S/URI/URI(http://localhost:$PORT/)>>>>]>>endobj
+4 0 obj<</Length 40>>stream
+BT /F1 20 Tf 20 150 Td (HOSTILE PDF) Tj ET
+endstream endobj
+5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
+trailer<</Root 1 0 R>>
+PDF
+printf '<html><script>window.top.pwned=1</script>' > "$DATA/projects/alpha/fake.pdf"
 
 # A session on another source than the demo provider. It never starts its agent here.
 "$APP" new "$DATA/projects/beta" -title "Check agent" -profile claude-code >/dev/null

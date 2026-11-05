@@ -877,6 +877,11 @@ func (s *EngineService) ListFolder(ctx context.Context, sessionID, rel string) (
 	return s.eng.ListFolder(ctx, sessionID, rel)
 }
 
+// ViewPDF returns a PDF of the session's folder for the viewer (GUI-035).
+func (s *EngineService) ViewPDF(ctx context.Context, sessionID, rel string) (engine.PDFFile, error) {
+	return s.eng.ViewPDF(ctx, sessionID, rel)
+}
+
 func (s *EngineService) ViewFile(ctx context.Context, sessionID, rel string) (engine.FileView, error) {
 	return s.eng.ViewFile(ctx, sessionID, rel)
 }

@@ -41,6 +41,47 @@ type FileView struct {
 	Truncated bool   `json:"truncated"`
 }
 
+// maxPDFBytes is the largest PDF the viewer takes. It goes to the page whole.
+const maxPDFBytes = 32 << 20
+
+// PDFFile is a PDF's bytes for the viewer (GUI-035); they travel as base64.
+type PDFFile struct {
+	Path string `json:"path"`
+	Data []byte `json:"data"`
+}
+
+// ViewPDF reads a PDF of a session's folder for the viewer, through the same environment
+// as any file. Only a file that says it is one: the page hands these bytes to WebKit.
+func (e *Engine) ViewPDF(ctx context.Context, sid, rel string) (PDFFile, error) {
+	rel, err := cleanRel(rel)
+	if err != nil || rel == "" {
+		return PDFFile{}, errors.New("choose a file")
+	}
+	env, err := e.sessionEnv(ctx, sid)
+	if err != nil {
+		return PDFFile{}, err
+	}
+	abs := env.Resolve(rel)
+	fi, err := env.FS().Stat(abs)
+	if err != nil {
+		return PDFFile{}, err
+	}
+	if fi.IsDir {
+		return PDFFile{}, errors.New("that is a folder")
+	}
+	if fi.Size > maxPDFBytes {
+		return PDFFile{}, fmt.Errorf("this PDF is %d MB, and only up to %d MB is shown here; open it in Preview", fi.Size>>20, maxPDFBytes>>20)
+	}
+	b, err := env.FS().ReadFile(abs)
+	if err != nil {
+		return PDFFile{}, err
+	}
+	if !bytes.HasPrefix(b, []byte("%PDF-")) {
+		return PDFFile{}, errors.New("this file is named as a PDF but is not one")
+	}
+	return PDFFile{Path: rel, Data: b}, nil
+}
+
 // sessionEnv is the environment a session's files are read through: its
 // runtime's, or a local one on its folder.
 func (e *Engine) sessionEnv(ctx context.Context, sid string) (environment.Environment, error) {

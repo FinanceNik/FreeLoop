@@ -71,6 +71,7 @@ Out of scope: an attacker with root or kernel access, physical access to an unlo
 - **One chokepoint.** Every side effect from any harness passes through the permission broker (SEC-003). Nothing is auto-approved on timeout.
 - **Policy below the protocol.** Path and execution policy is enforced in the environment layer, so neither a tool, a skill, nor an external agent's protocol request can route around it.
 - **Deny wins.** A deny rule at any scope beats an allow at any scope. Project-level configuration can tighten but never loosen.
+- **A repository's PDF stays in its frame.** WebKit draws it only unsandboxed, so a Content Security Policy on the viewer frame stops its links; `make check-app` clicks a hostile one (OQ-035). A bug in Apple's PDF parser would still run in the web process of the app's page.
 - **Secrets never touch disk.** A draft stored for a restart is redacted first, so only a secret the app knows is caught, as in a transcript (SES-023). Keychain references in config, all in one Keychain item (OQ-033) that no reference can name; values resolved at spawn; child processes receive only configured variables (SEC-008).
 - **Untrusted by default.** Projects, tool output, model output and MCP content are untrusted until a human says otherwise, and content stays untrusted after the project is trusted.
 - **Readable state.** Transcripts are the audit log (SEC-007): every change traces to a call and a decision with its actor.

@@ -12,7 +12,9 @@ const CSP = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "connect-src 'self' ws://localhost:* ws://127.0.0.1:* wails:",
-  "frame-src http://localhost:* http://127.0.0.1:* http://[::1]:* https://localhost:* https://127.0.0.1:*",
+  // The app preview, on this Mac. blob: is a PDF's frame, which the viewer's own stricter
+  // policy holds to that one file (frontend/src/pdfview.ts, OQ-035).
+  "frame-src blob: http://localhost:* http://127.0.0.1:* http://[::1]:* https://localhost:* https://127.0.0.1:*",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",

@@ -60,3 +60,50 @@ func TestFileTree(t *testing.T) {
 		t.Errorf("FileOnHost = %s, %v", p, err)
 	}
 }
+
+func TestViewPDF(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	root := t.TempDir()
+	pdf := []byte("%PDF-1.4\n\x00\xffbody")
+	os.WriteFile(filepath.Join(root, "real.pdf"), pdf, 0o644)
+	os.WriteFile(filepath.Join(root, "fake.pdf"), []byte("<html><script>alert(1)</script>"), 0o644)
+	os.WriteFile(filepath.Join(root, "empty.pdf"), nil, 0o644)
+	os.Mkdir(filepath.Join(root, "folder.pdf"), 0o755)
+	big, err := os.Create(filepath.Join(root, "big.pdf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	big.WriteString("%PDF-")
+	big.Truncate(maxPDFBytes + 1)
+	big.Close()
+	outside := filepath.Join(t.TempDir(), "secret.pdf")
+	os.WriteFile(outside, pdf, 0o644)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProviderID: DemoProviderID, Model: "scripted"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.ViewPDF(ctx, ses.ID, "real.pdf")
+	if err != nil || string(got.Data) != string(pdf) || got.Path != "real.pdf" {
+		t.Errorf("real.pdf: %+v, %v", got, err)
+	}
+	for rel, want := range map[string]string{
+		"fake.pdf":   "not one",
+		"empty.pdf":  "not one",
+		"folder.pdf": "folder",
+		"big.pdf":    "Preview",
+		"":           "choose a file",
+	} {
+		if _, err := e.ViewPDF(ctx, ses.ID, rel); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: %v, want %q", rel, err, want)
+		}
+	}
+	rel, err := filepath.Rel(root, outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.ViewPDF(ctx, ses.ID, rel); err == nil {
+		t.Error("a PDF outside the session's folder was read")
+	}
+}

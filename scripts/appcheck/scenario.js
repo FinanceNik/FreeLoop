@@ -369,8 +369,34 @@ await step("the file viewer shows Markdown formatted", async () => {
   await until("the source", () => document.querySelector(".file-view .file-text"));
   check("the source shows the raw text", document.querySelector(".file-text").textContent.includes("# A heading") && !document.querySelector(".file-markdown"));
   (await until("paper.pdf", () => withText(".file-tree button", "paper.pdf"))).click();
-  await until("the PDF's note", () => document.querySelector(".file-view")?.textContent.includes("A PDF"));
-  check("a PDF offers Preview, and nothing that draws it in the page", withText(".file-view button", "Open in Preview") && !document.querySelector(".file-view embed, .file-view iframe"));
+  // The viewer holds what a PDF can do: see pdfview.ts.
+  const outer = await until("the PDF's viewer", () => document.querySelector("iframe.file-pdf"));
+  const inner = await until("the PDF's frame", () => {
+    const f = outer.contentDocument?.getElementById("pdf");
+    return f?.src?.startsWith("blob:") && f;
+  });
+  await until("the PDF to open", () => inner.contentDocument?.contentType === "application/pdf", 8000);
+  check("a PDF opens in the viewer", true);
+  check("the viewer carries its policy", outer.contentDocument.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content.includes("frame-src blob:"));
+  check("the fallback to Preview stays", withText(".file-view button", "Open in Preview"));
+  const before = location.href;
+  const box = inner.getBoundingClientRect();
+  const at = outer.getBoundingClientRect();
+  await sleep(800);
+  await window.webkit.messageHandlers.mouse.postMessage([at.left + box.left + box.width / 2, at.top + box.top + box.height / 2, 1]);
+  await sleep(1500);
+  check("a click on a PDF's link leaves the app where it is", location.href === before && !!document.querySelector(".sidebar"), location.href);
+  let stayed;
+  try {
+    stayed = outer.contentDocument.getElementById("pdf").contentWindow.location.href;
+  } catch {
+    stayed = "gone to another origin";
+  }
+  check("a click on a PDF's link leaves the PDF where it is", stayed.startsWith("blob:"), stayed);
+  check("a script in a PDF did not run", !window.pwned);
+  withText(".file-tree button", "fake.pdf").click();
+  await until("the refusal", () => document.querySelector(".file-view")?.textContent.includes("not one"), 5000);
+  check("a file only named as a PDF is refused", !document.querySelector("iframe.file-pdf") && !window.pwned);
   (withText(".file-tree button", "guide.md")).click();
   await until("Markdown again, formatted", () => document.querySelector(".file-markdown"));
   check("a Markdown file opens formatted again", true);
