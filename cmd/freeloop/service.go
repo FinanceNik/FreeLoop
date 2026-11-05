@@ -176,6 +176,10 @@ func (s *EngineService) OpenSessionWindow(ctx context.Context, sessionID string)
 	return s.desk.openWindow(ses.ID, ses.Title)
 }
 
+// RedactText removes what the app knows to be secret, before the page stores a draft
+// (SES-023).
+func (s *EngineService) RedactText(text string) string { return s.eng.Redact(text) }
+
 func (s *EngineService) ListSessions(ctx context.Context) ([]session.Session, error) {
 	return s.eng.ListSessions(ctx)
 }

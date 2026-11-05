@@ -31,6 +31,7 @@ import Tags from "./Tags.tsx";
 import { prepareImage, type PreparedImage } from "./imageprep.ts";
 import { addText, isPicture, type TextFile } from "./attach.ts";
 import SessionControls from "./SessionControls.tsx";
+import { draftOf, extrasOf, forgetDraft, rememberDraft, rememberExtras, storeDraft } from "./drafts.ts";
 import { MAX_IMAGES, room } from "./images.ts";
 import { CheckIcon, CopyIcon, ForkIcon, PaperclipIcon, RewindIcon, StopIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
@@ -91,6 +92,9 @@ const STOP_LABEL: Record<string, string> = {
 // The right panel's open state is a per-viewer convenience; storage may be
 // unavailable, so every access is guarded. Without a stored choice the panel
 // starts open only where it fits beside the conversation.
+type KeptPicture = PreparedImage & { id: number };
+type ComposerExtras = { attached: ResourceRef[]; pictures: KeptPicture[]; textFiles: TextFile[] };
+
 const PANEL_KEY = "freeloop.panelOpen";
 function panelOpenInitially(): boolean {
   let stored: string | null = null;
@@ -230,7 +234,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
     const t = setTimeout(() => setAnnouncement(""), 4000);
     return () => clearTimeout(t);
   }, [announcement]);
-  const [draft, setDraft] = useState(initialDraft ?? "");
+  // Kept until sent or deleted, wherever the user goes meanwhile (SES-023).
+  const [draft, setDraft] = useState(() => initialDraft ?? draftOf(session.id));
+  const typed = useRef(draft);
+  typed.current = draft;
+  useEffect(() => {
+    rememberDraft(session.id, draft);
+    const later = setTimeout(() => storeDraft(session.id, draft, EngineService.RedactText), 400);
+    return () => clearTimeout(later);
+  }, [draft]);
+  // Leaving before the pause is over still writes it.
+  useEffect(() => () => void storeDraft(session.id, typed.current, EngineService.RedactText), []);
   const [queued, setQueued] = useState(0);
   const mode = view.mode ?? session.mode;
   const approvalWaiting = view.items.some((i) => i.kind === "tool" && awaitingDecision(i));
@@ -297,9 +311,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
     [view.commands, canBypass, canAuto, mcp],
   );
   // Resources attached to the next message, and the open prompt form.
-  const [attached, setAttached] = useState<ResourceRef[]>([]);
+  const keptExtras = extrasOf<ComposerExtras>(session.id);
+  const [attached, setAttached] = useState<ResourceRef[]>(keptExtras?.attached ?? []);
   // Pictures for the next message (SES-015), already scaled down.
-  const [pictures, setPictures] = useState<(PreparedImage & { id: number })[]>([]);
+  const [pictures, setPictures] = useState<KeptPicture[]>(keptExtras?.pictures ?? []);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const addPictures = (files: File[]) => {
@@ -317,7 +332,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
       return list.filter((p) => p.id !== id);
     });
   // Text files for the next message (SES-019).
-  const [textFiles, setTextFiles] = useState<TextFile[]>([]);
+  const [textFiles, setTextFiles] = useState<TextFile[]>(keptExtras?.textFiles ?? []);
+  useEffect(() => rememberExtras(session.id, { attached, pictures, textFiles } satisfies ComposerExtras), [attached, pictures, textFiles]);
   const addFiles = (files: File[]) => {
     addPictures(files.filter((f) => isPicture(f.type)));
     for (const f of files.filter((f) => !isPicture(f.type))) {
@@ -341,6 +357,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     EngineService.RunMCPPrompt(session.id, c.prompt.server, c.prompt.name, values)
       .then((r) => {
         setPromptForm(null);
+        forgetDraft(session.id);
         setDraft("");
         if (r.queued) setQueued((n) => n + 1);
       })
@@ -523,6 +540,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
     setAccepting(true);
     (sending.length > 0 || images.length > 0 || textFiles.length > 0 ? EngineService.PromptWith(session.id, { text, resources: sending, images, files: textFiles }) : EngineService.Prompt(session.id, text))
       .then((r) => {
+        // Here as well: the view may be gone by the time the engine has taken it.
+        forgetDraft(session.id);
         setDraft("");
         setAttached([]);
         setTextFiles([]);

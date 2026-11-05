@@ -254,6 +254,37 @@ await step("a session opens", async () => {
   check("a session opens", true);
 });
 
+await step("a draft stays until sent or deleted", async () => {
+  const box = () => activePane().querySelector(".composer textarea");
+  type(box(), "a draft to keep");
+  await sleep(100);
+  document.querySelector(".settings-link").click();
+  await until("Settings", () => document.querySelector(".settings-nav"));
+  check("the composer is gone in Settings", !document.querySelector(".composer textarea"));
+  await sleep(600);
+  document.querySelector(".settings-nav .settings-back").click();
+  await until("the session again", () => activePane().querySelector(".composer textarea"));
+  check("a draft survives going to Settings", box().value === "a draft to keep", `it reads "${box().value}"`);
+  const sid = Object.keys(localStorage).find((k) => k.startsWith("freeloop.draft."));
+  check("the draft is stored for a restart", sid && localStorage.getItem(sid) === "a draft to keep", sid);
+  openSession("Check beta");
+  await until("the other session", () => document.querySelector(".session-header h2")?.textContent.includes("Check beta"));
+  await sleep(200);
+  check("a draft belongs to its session", box().value === "", `it reads "${box().value}"`);
+  openSession("Check alpha");
+  await until("the session again", () => document.querySelector(".session-header h2")?.textContent.includes("Check alpha"));
+  await sleep(200);
+  check("it is there on coming back", box().value === "a draft to keep", `it reads "${box().value}"`);
+  type(box(), "");
+  await sleep(100);
+  check("emptying the box deletes the draft", !Object.keys(localStorage).some((k) => k.startsWith("freeloop.draft.")));
+  type(box(), "this one gets sent");
+  await sleep(600);
+  check("typing stores it again", Object.keys(localStorage).some((k) => k.startsWith("freeloop.draft.")));
+  type(box(), "");
+  await sleep(100);
+});
+
 await step("a turn runs to its end, with approvals", async () => {
   const line = await turn("Check alpha");
   check("a turn runs to its end, with approvals", true);
@@ -263,6 +294,7 @@ await step("a turn runs to its end, with approvals", async () => {
 await step("the view follows a running agent", async () => {
   // Enough to overflow, and cards collapse along the way.
   await turn("Check alpha");
+  check("sending deletes the draft", activePane().querySelector(".composer textarea").value === "" && !Object.keys(localStorage).some((k) => k.startsWith("freeloop.draft.")));
   await turn("Check alpha");
   await turn("Check alpha");
   await sleep(300);
