@@ -1265,7 +1265,7 @@ export default function App() {
                                 onClick={() => openSession(c.id)}
                               >
                                 <span className="session-title">{c.title.replace(/^Subagent: /, "")}</span>
-                                <span className={`badge badge-${c.status}`}>{STATUS_LABEL[c.status] ?? c.status}</span>
+                                {c.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${c.status}`}>{STATUS_LABEL[c.status] ?? c.status}</span>}
                               </button>
                             </li>
                           ))}

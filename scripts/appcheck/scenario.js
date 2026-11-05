@@ -254,6 +254,19 @@ await step("a session opens", async () => {
   check("a session opens", true);
 });
 
+// No demo session has subagents, so this goes by the rule, which a broader one has hidden.
+await step("subagents are indented under their parent", async () => {
+  const list = document.createElement("ul");
+  list.className = "subagents";
+  const row = document.querySelector(".session-row").closest("li");
+  row.appendChild(list);
+  const style = getComputedStyle(list);
+  check("subagents are indented under their parent", parseInt(style.marginLeft) + parseInt(style.paddingLeft) >= 20, `${style.marginLeft} and ${style.paddingLeft}`);
+  list.remove();
+  const outline = getComputedStyle(document.querySelector(".session-row")).borderTopWidth;
+  check("a chat has an outline", outline === "1px", outline);
+});
+
 await step("a draft stays until sent or deleted", async () => {
   const box = () => activePane().querySelector(".composer textarea");
   type(box(), "a draft to keep");

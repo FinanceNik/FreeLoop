@@ -524,22 +524,23 @@ fieldset {
   align-items: flex-start;
   gap: 3px;
   width: 100%;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   padding: 7px 10px;
   text-align: left;
   background: transparent;
-  border-color: transparent;
+  /* A thin outline tells one chat from the next. */
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
 }
 
 .session-row:hover:not(:disabled) {
   background: var(--surface);
-  border-color: transparent;
+  border-color: var(--border-strong);
 }
 
 .session-row[aria-current="true"] {
   background: var(--accent-soft);
-  border-color: transparent;
+  border-color: var(--border-strong);
 }
 
 .session-row[aria-current="true"] .session-title {
@@ -3041,11 +3042,12 @@ table.hooks .hook-command {
 }
 
 /* Subagents under their parent (HRN-014) */
-.subagents {
+/* Under the chat that started them, further in, on a line back to it. */
+.sidebar .subagents {
   list-style: none;
-  margin: 0 0 4px 14px;
-  padding: 0 0 0 6px;
-  border-left: 1px solid var(--border);
+  margin: 0 0 8px 12px;
+  padding: 0 0 0 14px;
+  border-left: 1px solid var(--border-strong);
 }
 
 .session-child {
