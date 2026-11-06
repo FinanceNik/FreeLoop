@@ -183,6 +183,9 @@ export interface SessionView {
   setup: string | null;
   // The agent's latest to-do list, from any harness (HRN-017).
   plan: PlanEntry[];
+  // Whether the to-do list changed in the latest turn: one finished in an earlier turn
+  // is not shown again when the next one starts.
+  planThisTurn: boolean;
   // What the user's policy stopped (SEC-014).
   held: Held[];
   // Why the session is not getting on, and where it could continue (HRN-020); null once
@@ -265,6 +268,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   let turnCalls: ModelCall[] = [];
   let setup: string | null = null;
   let plan: PlanEntry[] = [];
+  let planThisTurn = false;
   let current = { providerId: "", model: "" };
 
   const last = () => items[items.length - 1];
@@ -310,6 +314,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         items.push({ kind: "pull_request", key, rev, url: d.url ?? "", title: d.title ?? "", base: d.base ?? "", head: d.head ?? "", draft: !!d.draft });
         break;
       case "plan":
+        planThisTurn = true;
         plan = Array.isArray(d.entries) ? d.entries.filter((x: PlanEntry) => typeof x?.content === "string").map((x: PlanEntry) => ({ content: x.content, status: String(x.status ?? "pending") })) : [];
         break;
       case "worktree_setup": {
@@ -408,6 +413,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "turn_started":
         running = true;
         stuck = null;
+        planThisTurn = false;
         break;
       case "stuck":
         stuck = { reason: d.reason ?? "", detail: d.detail ?? "", profileId: d.profileId, profileName: d.profileName, auto: !!d.auto };
@@ -543,7 +549,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
     const tool = toolCallId ? tools.get(toolCallId) : undefined;
     return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || "A request" };
   });
-  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan, settings, held, stuck };
+  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan, planThisTurn, settings, held, stuck };
 }
 
 function replaceTool(

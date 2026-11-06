@@ -438,3 +438,15 @@ test("a stuck session says why and where it could go on, until a turn starts or 
   assert.ok(v.items.some((i) => i.kind === "notice" && i.message === 'Continued in "Next" on Fallback.'));
 });
 
+test("a to-do list finished in an earlier turn does not come back with the next one (HRN-017)", () => {
+  const plan = (seq: number, status: string) => at(seq, "plan", { entries: [{ content: "a", status }, { content: "b", status }] });
+  // Finished two turns ago: a new turn does not show it.
+  let v = buildView([at(1, "turn_started", {}), plan(2, "completed"), at(3, "turn_ended", { stopReason: "end_turn" }), at(4, "turn_started", {})]);
+  assert.equal(v.planThisTurn, false);
+  // Updated in the turn that runs: it shows, finished or not.
+  v = buildView([at(1, "turn_started", {}), plan(2, "completed")]);
+  assert.equal(v.planThisTurn, true);
+  v = buildView([at(1, "turn_started", {}), plan(2, "pending"), at(3, "turn_ended", { stopReason: "end_turn" }), at(4, "turn_started", {})]);
+  assert.equal(v.planThisTurn, false);
+});
+

@@ -1155,7 +1155,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             addFiles([...e.dataTransfer.files]);
           }}
         >
-          {view.plan.length > 0 && <TodoList entries={view.plan} running={view.running} />}
+          {view.plan.length > 0 && <TodoList entries={view.plan} running={view.running} thisTurn={view.planThisTurn} />}
           {attaching !== null && (
             <div className="mention-picker attach-picker" role="dialog" aria-label="Attach a resource">
               <input
@@ -1658,11 +1658,11 @@ function SetupCard({ sid, item, onError }: { sid: string; item: Extract<Item, { 
 
 // TodoList is the agent's latest to-do list (HRN-017), from the built-in
 // harness or any external agent's plan. It folds to one line once the turn
-// is over.
-function TodoList({ entries, running }: { entries: { content: string; status: string }[]; running: boolean }) {
+// is over. A finished list shows only during the turn that finished it.
+function TodoList({ entries, running, thisTurn }: { entries: { content: string; status: string }[]; running: boolean; thisTurn: boolean }) {
   const done = entries.filter((e) => e.status === "completed").length;
   const current = entries.find((e) => e.status === "in_progress");
-  if (!running && done === entries.length) return null;
+  if (done === entries.length && (!running || !thisTurn)) return null;
   return (
     <details className="todo-list" open={running}>
       <summary>
