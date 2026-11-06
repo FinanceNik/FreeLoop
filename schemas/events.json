@@ -49,7 +49,9 @@
         "session_rule_changed",
         "session_imported",
         "limit_update",
-        "mode_refused"
+        "mode_refused",
+        "stuck",
+        "handed_off"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -128,6 +130,14 @@
       "then": { "properties": { "data": { "$ref": "#/$defs/limitUpdate" } } }
     },
     {
+      "if": { "properties": { "type": { "const": "stuck" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/stuck" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "handed_off" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/handedOff" } } }
+    },
+    {
       "if": { "properties": { "type": { "const": "mode_refused" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/modeRefused" } } }
     },
@@ -166,6 +176,29 @@
       "properties": {
         "from": { "type": "string" },
         "to": { "type": "string" }
+      }
+    },
+    "stuck": {
+      "type": "object",
+      "description": "A session that is not getting on, and where it could continue (HRN-020).",
+      "required": ["reason", "detail"],
+      "properties": {
+        "reason": { "enum": ["limit", "max_turns", "tool_failures", "rewinds", "errors"] },
+        "detail": { "type": "string" },
+        "profileId": { "type": "string" },
+        "profileName": { "type": "string" },
+        "auto": { "type": "boolean" }
+      }
+    },
+    "handedOff": {
+      "type": "object",
+      "description": "The session continued in another (HRN-020).",
+      "required": ["toSessionId", "toTitle", "profileName"],
+      "properties": {
+        "toSessionId": { "type": "string" },
+        "toTitle": { "type": "string" },
+        "profileName": { "type": "string" },
+        "reason": { "type": "string" }
       }
     },
     "limitUpdate": {

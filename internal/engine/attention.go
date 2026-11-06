@@ -20,6 +20,8 @@ type AttentionItem struct {
 	Requests []permission.Request `json:"requests"`
 	// Error is the last error message when the session is in error.
 	Error string `json:"error,omitempty"`
+	// Stuck says why the session is not getting on and where it could continue (HRN-020).
+	Stuck *event.StuckData `json:"stuck,omitempty"`
 }
 
 // Attention lists every session that needs the user, across projects,
@@ -46,10 +48,11 @@ func (e *Engine) Attention(ctx context.Context) ([]AttentionItem, error) {
 	out := []AttentionItem{}
 	for _, ses := range list {
 		reqs := pending[ses.ID]
-		if len(reqs) == 0 && ses.Status != session.StatusError && ses.Status != session.StatusWaitingInput {
+		stuck := e.stuckOn(ses.ID)
+		if len(reqs) == 0 && stuck == nil && ses.Status != session.StatusError && ses.Status != session.StatusWaitingInput {
 			continue
 		}
-		it := AttentionItem{Session: ses, ProjectName: names[ses.ProjectID], Requests: reqs}
+		it := AttentionItem{Session: ses, ProjectName: names[ses.ProjectID], Requests: reqs, Stuck: stuck}
 		if it.Requests == nil {
 			it.Requests = []permission.Request{}
 		}

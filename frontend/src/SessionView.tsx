@@ -201,6 +201,15 @@ export default function SessionView({ session, events, focus, prices, initialDra
       .finally(() => setSwitchingTo(null));
   };
   const otherProfiles = profiles.filter((p) => p.id !== (session.profileId || "default"));
+  // A stuck session continues on another profile in one step (HRN-020): the old turn
+  // stops, what it waited on ends, and the new session's box holds the last request.
+  const handOff = (profileId: string) => {
+    setSwitchingTo(profiles.find((p) => p.id === profileId)?.name ?? profileId);
+    EngineService.HandOff(session.id, profileId, view.stuck?.reason ?? "")
+      .then((r) => onForked(r.session.id, r.continue))
+      .catch(onError)
+      .finally(() => setSwitchingTo(null));
+  };
   const archived = session.status === "archived";
   const archive = () => EngineService.ArchiveSession(session.id, !archived).catch(onError);
   const remove = async () => {
@@ -1004,7 +1013,30 @@ export default function SessionView({ session, events, focus, prices, initialDra
             Auto mode: the agent decides by itself which tool calls to run. What it does not ask about never reaches Freeloop.
           </div>
         )}
-        {mode === "bypass" && (
+{view.stuck && !archived && (
+          <div className="banner warn row stuck-banner" role="status">
+            <span>
+              Not getting on: {view.stuck.detail}.
+              {view.stuck.auto && view.stuck.profileName ? ` It continues on ${view.stuck.profileName} when this turn ends.` : ""}
+            </span>
+            {view.stuck.profileId && !view.stuck.auto && (
+              <button className="primary" disabled={!!switchingTo} onClick={() => handOff(view.stuck!.profileId!)}>
+                Continue on {view.stuck.profileName}
+              </button>
+            )}
+            {otherProfiles.length > 0 && (
+              <select aria-label="Continue on another profile" value="" disabled={!!switchingTo} onChange={(e) => e.target.value && handOff(e.target.value)}>
+                <option value="">{view.stuck.profileId ? "Another profile…" : "Continue on a profile…"}</option>
+                {otherProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+                {mode === "bypass" && (
           <div className="banner error" role="status">
             Bypass mode: tool calls run without asking. Protected paths are still refused.
           </div>

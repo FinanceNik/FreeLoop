@@ -22,6 +22,7 @@ function blank(): Profile {
     id: "",
     name: "",
     description: "",
+    onLimit: "",
     harness: "builtin",
     provider: "",
     model: "",
@@ -382,6 +383,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
         A profile sets the model, tools, prompt, rules and slash commands a session runs with. Each is a YAML file in <code>profiles/</code> of the app's
         data folder; edits to the files apply to new sessions, and their rules at once.
       </p>
+      <FallbackCard profiles={profiles} harnesses={harnesses} onError={onError} />
       <div className="card">
         <h3>Your own agent</h3>
         <p className="muted">
@@ -502,3 +504,50 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
     </section>
   );
 }
+
+// FallbackCard sets, per agent, the profile a stuck session is offered to continue on
+// (HRN-020). A profile's own onLimit continues without asking; this only offers.
+function FallbackCard({ profiles, harnesses, onError }: { profiles: Profile[]; harnesses: HarnessInfo[]; onError: (err: unknown) => void }) {
+  const [fallbacks, setFallbacks] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    EngineService.Config()
+      .then((c) => setFallbacks(Object.fromEntries(Object.entries(c.fallbacks ?? {}).filter((e): e is [string, string] => !!e[1]))))
+      .catch(onError);
+  }, []);
+  if (fallbacks === null) return null;
+  const save = (agent: string, profileId: string) => {
+    const next = { ...fallbacks, [agent]: profileId };
+    if (!profileId) delete next[agent];
+    setFallbacks(next);
+    EngineService.Config()
+      .then((c) => EngineService.SaveSettings({ ...c, fallbacks: next }))
+      .catch(onError);
+  };
+  return (
+    <div className="card">
+      <h3>When a session is stuck</h3>
+      <p className="muted">
+        A session that reaches its account limit or its turn limit, or keeps failing, offers to continue on the profile chosen here for its agent. To
+        continue without asking when a limit is reached, set <code>onLimit</code> in a profile.
+      </p>
+      <dl className="panel-info">
+        {harnesses.map((h) => (
+          <div key={h.id}>
+            <dt>{h.name}</dt>
+            <dd>
+              <select aria-label={`Continue a stuck ${h.name} session on`} value={fallbacks[h.id] ?? ""} onChange={(e) => save(h.id, e.target.value)}>
+                <option value="">Ask which profile</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+

@@ -67,6 +67,9 @@ type Profile struct {
 	// none whatever the global default is (HRN-019); the global default when
 	// empty.
 	Optimizer string `yaml:"optimizer,omitempty" json:"optimizer"`
+	// OnLimit is a profile to continue on, without asking, when the session's account
+	// limit is reached (HRN-020). Every tool call there still asks as usual.
+	OnLimit string `yaml:"onLimit,omitempty" json:"onLimit"`
 	// Source is the file the profile came from; empty for the built-in
 	// default.
 	Source string `yaml:"-" json:"source"`

@@ -185,6 +185,17 @@ export interface SessionView {
   plan: PlanEntry[];
   // What the user's policy stopped (SEC-014).
   held: Held[];
+  // Why the session is not getting on, and where it could continue (HRN-020); null once
+  // a turn starts again or it continued elsewhere.
+  stuck: Stuck | null;
+}
+
+export interface Stuck {
+  reason: string;
+  detail: string;
+  profileId?: string;
+  profileName?: string;
+  auto?: boolean;
 }
 
 // Held is one thing the user's policy stopped (SEC-014): a request denied by the
@@ -234,6 +245,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   let settings = 0;
   let status: string | null = null;
   let running = false;
+  let stuck: Stuck | null = null;
   let git: GitState | null = null;
   let commands: AvailableCommand[] = [];
   // The latest checkpoint not yet tied to a user message, and the ranges
@@ -395,6 +407,15 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "turn_started":
         running = true;
+        stuck = null;
+        break;
+      case "stuck":
+        stuck = { reason: d.reason ?? "", detail: d.detail ?? "", profileId: d.profileId, profileName: d.profileName, auto: !!d.auto };
+        items.push({ kind: "notice", key, rev, message: `Not getting on: ${d.detail ?? d.reason}.`, warn: true });
+        break;
+      case "handed_off":
+        stuck = null;
+        items.push({ kind: "notice", key, rev, message: `Continued in "${d.toTitle ?? ""}" on ${d.profileName ?? "another profile"}.`, warn: false });
         break;
       case "turn_ended":
         running = false;
@@ -522,7 +543,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
     const tool = toolCallId ? tools.get(toolCallId) : undefined;
     return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || "A request" };
   });
-  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan, settings, held };
+  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan, settings, held, stuck };
 }
 
 function replaceTool(

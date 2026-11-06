@@ -521,6 +521,22 @@ func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, ans
 	return nil
 }
 
+// CancelSession ends every request a session is waiting on, as a cancelled turn would:
+// for a session that continued elsewhere, whose questions nobody will answer (HRN-020).
+func (b *Broker) CancelSession(sid, reason string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, p := range b.pending {
+		if p.req.SessionID != sid {
+			continue
+		}
+		select {
+		case p.answer <- Decision{Outcome: Cancelled, Actor: ActorUser, Reason: reason}:
+		default:
+		}
+	}
+}
+
 // Pending returns the requests waiting for the user, oldest first.
 func (b *Broker) Pending() []Request {
 	b.mu.Lock()

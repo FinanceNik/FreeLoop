@@ -84,6 +84,8 @@ type ConfigChange struct {
 
 // Engine is safe for concurrent use.
 type Engine struct {
+	// stuck follows each session for HRN-020.
+	stuck stuckWatch
 	// importMu lets one session import at a time (SES-020).
 	importMu sync.Mutex
 	// hookProgram is what an agent's hook runs to reach the app (HRN-019).
@@ -237,7 +239,7 @@ func Open(opts Options) (*Engine, error) {
 			e.gh = opts.GH
 		}
 	}
-	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: e.bus.publish, Redact: e.redact})
+	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: func(ev event.Event) { e.bus.publish(ev); e.observe(ev) }, Redact: e.redact})
 	if err != nil {
 		return nil, err
 	}

@@ -62,6 +62,9 @@ type Config struct {
 	Skills Skills `yaml:"skills,omitempty" json:"skills"`
 	// Prices estimate what sessions cost (PRV-008).
 	Prices []Price `yaml:"prices,omitempty" json:"prices"`
+	// Fallbacks name, per agent (a harness ID, "builtin" for the built-in one), the
+	// profile a stuck session is offered to continue on (HRN-020).
+	Fallbacks map[string]string `yaml:"fallbacks,omitempty" json:"fallbacks"`
 	// Hooks run for every session (EXT-005).
 	Hooks []Hook `yaml:"hooks,omitempty" json:"hooks"`
 	// OptimizerApprovals record the token optimizer files the user approved, by

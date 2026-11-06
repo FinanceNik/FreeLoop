@@ -16,11 +16,13 @@ import { basename } from "./paths.ts";
 interface Props {
   items: AttentionItem[];
   onOpen: (sessionId: string) => void;
+  // A session continued elsewhere (HRN-020), with the text for its box.
+  onContinued?: (sessionId: string, text: string) => void;
   onChanged: () => void;
   onError: (err: unknown) => void;
 }
 
-export default function Attention({ items, onOpen, onChanged, onError }: Props) {
+export default function Attention({ items, onOpen, onContinued, onChanged, onError }: Props) {
   const waiting = items.reduce((n, it) => n + (it.requests?.length ?? 0), 0);
   const asking = items.filter((it) => (it.requests?.length ?? 0) > 0).length;
   const failed = items.filter((it) => it.session.status === "error").length;
@@ -65,6 +67,23 @@ export default function Attention({ items, onOpen, onChanged, onError }: Props) 
           {(it.requests ?? []).map((r) => (
             <RequestView key={r.requestId} req={r} current={r.requestId === current} onError={onError} />
           ))}
+          {it.stuck && (
+            <div className="attention-error">
+              <p className="error-text">Not getting on: {it.stuck.detail}.</p>
+              {it.stuck.profileId && !it.stuck.auto && (
+                <button
+                  onClick={() =>
+                    EngineService.HandOff(it.session.id, it.stuck!.profileId!, it.stuck!.reason)
+                      .then((r) => (onContinued ? onContinued(r.session.id, r.continue) : onOpen(r.session.id)))
+                      .catch(onError)
+                  }
+                >
+                  Continue on {it.stuck.profileName}
+                </button>
+              )}
+              {it.stuck.auto && <span className="muted">It continues on {it.stuck.profileName} when the turn ends.</span>}
+            </div>
+          )}
           {it.session.status === "error" && (
             <div className="attention-error">
               <p className="error-text">{it.error || "The last turn failed."}</p>

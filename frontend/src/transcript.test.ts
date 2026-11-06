@@ -425,3 +425,16 @@ test("buildView lists what the policy held, named from the tool call's final tit
 test("buildView holds nothing in a session that was never stopped", () => {
   assert.deepEqual(buildView([at(1, "turn_started", {})]).held, []);
 });
+
+test("a stuck session says why and where it could go on, until a turn starts or it continues elsewhere", () => {
+  const stuck = { reason: "tool_failures", detail: "shell failed 3 times in a row", profileId: "fb", profileName: "Fallback" };
+  let v = buildView([at(1, "turn_started", {}), at(2, "stuck", stuck)]);
+  assert.equal(v.stuck?.profileName, "Fallback");
+  assert.ok(v.items.some((i) => i.kind === "notice" && i.message.includes("shell failed 3 times")));
+  v = buildView([at(1, "turn_started", {}), at(2, "stuck", stuck), at(3, "turn_started", {})]);
+  assert.equal(v.stuck, null);
+  v = buildView([at(1, "stuck", stuck), at(2, "handed_off", { toSessionId: "s2", toTitle: "Next", profileName: "Fallback" })]);
+  assert.equal(v.stuck, null);
+  assert.ok(v.items.some((i) => i.kind === "notice" && i.message === 'Continued in "Next" on Fallback.'));
+});
+

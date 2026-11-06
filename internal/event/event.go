@@ -32,6 +32,8 @@ const (
 	SessionInfoUpdate       Type = "session_info_update"
 	UsageUpdate             Type = "usage_update"
 	LimitUpdate             Type = "limit_update"
+	Stuck                   Type = "stuck"
+	HandedOff               Type = "handed_off"
 	ModeRefused             Type = "mode_refused"
 	Notice                  Type = "notice"
 	CompactionUpdate        Type = "compaction_update"
@@ -91,7 +93,7 @@ var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
 	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged, SessionImported,
-	LimitUpdate, ModeRefused,
+	LimitUpdate, ModeRefused, Stuck, HandedOff,
 }
 
 // AllTypes returns every known variant.
@@ -221,6 +223,28 @@ type RewindData struct {
 type ModeRefusedData struct {
 	From string `json:"from"`
 	To   string `json:"to"`
+}
+
+// StuckData is the payload of stuck: a session that is not getting on, why, and where
+// it could continue (HRN-020).
+type StuckData struct {
+	// Reason is limit, max_turns, tool_failures, rewinds or errors.
+	Reason string `json:"reason"`
+	Detail string `json:"detail"`
+	// ProfileID and ProfileName are the profile suggested; empty for none.
+	ProfileID   string `json:"profileId,omitempty"`
+	ProfileName string `json:"profileName,omitempty"`
+	// Auto says the profile's onLimit will continue there when the turn ends.
+	Auto bool `json:"auto,omitempty"`
+}
+
+// HandedOffData is the payload of handed_off: the session continued in another,
+// the other end of a handoff (HRN-020).
+type HandedOffData struct {
+	ToSessionID string `json:"toSessionId"`
+	ToTitle     string `json:"toTitle"`
+	ProfileName string `json:"profileName"`
+	Reason      string `json:"reason,omitempty"`
 }
 
 // LimitData is the payload of limit_update: how much of an account's limits is used,

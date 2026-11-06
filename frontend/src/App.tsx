@@ -1612,7 +1612,19 @@ export default function App() {
             onOpen={(id) => openSession(id)}
           />
         )}
-        {screen.kind === "attention" && <Attention items={attention} onOpen={openSession} onChanged={refreshAttention} onError={report} />}
+        {screen.kind === "attention" && (
+          <Attention
+            items={attention}
+            onOpen={openSession}
+            onContinued={(sid, text) => {
+              setForkDraft({ sid, text });
+              refreshSessions();
+              openSession(sid);
+            }}
+            onChanged={refreshAttention}
+            onError={report}
+          />
+        )}
         {STANDALONE && screen.kind === "session" && !selected && sessionsLoaded && <div className="empty">This session no longer exists.</div>}
         {!STANDALONE && screen.kind === "none" && (
           <div className="empty">

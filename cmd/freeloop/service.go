@@ -539,6 +539,11 @@ func (s *EngineService) OptimizerSavings(ctx context.Context, sessionID string) 
 	return s.eng.CheckOptimizerSavings(ctx, sessionID)
 }
 
+// HandOff continues a session on another profile in one step (HRN-020).
+func (s *EngineService) HandOff(ctx context.Context, sessionID, profileID, reason string) (engine.HandOffResult, error) {
+	return s.eng.HandOff(ctx, sessionID, profileID, reason, false)
+}
+
 func (s *EngineService) SetOptimizer(ctx context.Context, sessionID, optimizerID string) error {
 	return s.eng.SetOptimizer(ctx, sessionID, optimizerID)
 }
