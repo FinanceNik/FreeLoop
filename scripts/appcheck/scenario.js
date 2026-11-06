@@ -81,7 +81,9 @@ await step("a session shows what it runs on", async () => {
   check("two providers differ in letters", mark("Check alpha").textContent !== mark("Check agent").textContent, `${mark("Check alpha").textContent} and ${mark("Check agent").textContent}`);
   check("its colour stays once the list has arrived", getComputedStyle(mark("Check agent")).backgroundColor === startColour, `${startColour} became ${getComputedStyle(mark("Check agent")).backgroundColor}`);
   check("two providers differ in colour", getComputedStyle(mark("Check alpha")).backgroundColor !== getComputedStyle(mark("Check agent")).backgroundColor, getComputedStyle(mark("Check alpha")).backgroundColor);
-  check("the sessions of one provider match", getComputedStyle(demo).backgroundColor === getComputedStyle(mark("Check long")).backgroundColor);
+  // The providers' list comes on its own; the colours settle once it has.
+  const same = await until("one provider's colour", () => getComputedStyle(demo).backgroundColor === getComputedStyle(mark("Check long")).backgroundColor, 5000).catch(() => false);
+  check("the sessions of one provider match", same, `${getComputedStyle(demo).backgroundColor} and ${getComputedStyle(mark("Check long")).backgroundColor}`);
 
   openSession("Check alpha");
   await until("the header", () => document.querySelector(".session-header .source-mark"));
@@ -170,6 +172,8 @@ await step("a pane shows how full its context is", async () => {
   const field = await until("the limit's field", () => document.querySelector("aside.panel .context-limit input"));
   // In the Mac's own number format.
   const detected = `${(100000).toLocaleString()} (detected)`;
+  // The model's limit is looked up when the tab opens.
+  await until("the detected limit", () => field.placeholder === detected, 8000).catch(() => {});
   check("a detected limit shows as such", field.placeholder === detected, field.placeholder);
   const setLimit = async (value) => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(field, value);

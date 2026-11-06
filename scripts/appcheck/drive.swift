@@ -89,7 +89,8 @@ final class Driver: NSObject, WKNavigationDelegate {
         for line in lines {
           let ok = line["ok"] as? Bool ?? false
           failed = failed || !ok
-          print("\(ok ? "ok  " : "FAIL")  \(line["name"] ?? "")\(ok ? "" : ": \(line["detail"] ?? "")")")
+          let detail = line["detail"] as? String ?? ""
+          print("\(ok ? "ok  " : "FAIL")  \(line["name"] ?? "")\(ok && (detail.isEmpty || !(line["name"] as? String ?? "").hasPrefix("DIAGNOSIS")) ? "" : ": \(detail)")")
         }
         exit(lines.isEmpty ? 2 : failed ? 1 : 0)
       } catch {
