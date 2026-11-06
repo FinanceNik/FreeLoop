@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
-import Limits from "./Limits.tsx";
-import LiveUsage from "./LiveUsage.tsx";
-import { CloseIcon, ExpandIcon } from "./icons.tsx";
 import { basename } from "./paths.ts";
 import Splitter from "./Splitter.tsx";
 import SourceMark from "./SourceMark.tsx";
+import UsagePane from "./UsagePane.tsx";
 import { sourceColor, type Source } from "./source.ts";
 import { clampSplit, rememberSplit, storedSplit } from "./sizes.ts";
 import { stableOrder, tabbed, USAGE_PANE, type WorkspaceState } from "./workspace.ts";
@@ -214,20 +212,16 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               onDrop={(e) => drop(e, i)}
             >
               {sid === USAGE_PANE ? (
-                <div className="pane-usage">
-                  <div className="pane-usage-head" draggable={split && !asTabs} onDragStart={(e) => startPaneDrag(e, i)}>
-                    <h2>Usage</h2>
-                    <span className="spacer" />
-                    <button className="icon-button" aria-label="Full usage page" title="Full usage page" onClick={onUsagePage}>
-                      <ExpandIcon />
-                    </button>
-                    <button className="icon-button" onClick={() => onClose(i)} aria-label="Close this pane" title="Close this pane">
-                      <CloseIcon />
-                    </button>
-                  </div>
-                  <Limits compact onError={onError} />
-                  <LiveUsage compact projects={projects} providers={providers} harnesses={harnesses} onError={onError} />
-                </div>
+                <UsagePane
+                  draggable={split && !asTabs}
+                  onDragStart={(e) => startPaneDrag(e, i)}
+                  onUsagePage={onUsagePage}
+                  onClose={() => onClose(i)}
+                  projects={projects}
+                  providers={providers}
+                  harnesses={harnesses}
+                  onError={onError}
+                />
               ) : s ? (
                 renderSession(s, active, split ? () => onClose(i) : undefined, split && !asTabs ? (e) => startPaneDrag(e, i) : undefined)
               ) : (

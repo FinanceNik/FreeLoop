@@ -5081,3 +5081,74 @@ table.hooks .hook-command {
   width: 13px;
   height: 13px;
 }
+
+/* The usage pane's views (GUI-038): arrows either side of the view's name. */
+.usage-views {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.usage-views h2 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.usage-view-previous svg {
+  transform: scaleX(-1);
+}
+.usage-view-count {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.pane-usage-head {
+  flex-wrap: wrap;
+}
+.pane-range {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+.pane-range > .segmented {
+  align-self: flex-start;
+}
+.pane-range .usage-figures {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin-bottom: 0;
+}
+.pane-range .usage-legend {
+  margin: 0;
+}
+.pane-shares h3 {
+  margin: 4px 0 6px;
+  font-size: 0.85rem;
+}
+.pane-shares ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.pane-shares li {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(40px, 2fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.pane-share-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pane-share-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.usage-overview-compact .usage-overview-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+

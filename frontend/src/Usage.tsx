@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import UsageOverview from "./UsageOverview.tsx";
+import TokenFigures from "./TokenFigures.tsx";
 import { tabAfterKey } from "./a11y.ts";
 import type { ActivityRow as FoldedRow, EffRow } from "./activity.ts";
 import { EngineService, type ActivityReport, type HarnessInfo, type ProjectInfo, type ProviderInfo, type UsageReport, type UsageRow } from "./api.ts";
-import { byType, change, compact, daily, dailyByType, days, groupBy, OTHER, perCall, TOKEN_TYPES, topKeys, totals, value, weekStart, weeks, withoutCacheReads, type Metric } from "./analytics.ts";
+import { byType, change, compact, daily, dailyByType, days, groupBy, OTHER, TOKEN_TYPES, topKeys, totals, value, weekStart, weeks, withoutCacheReads, type Metric } from "./analytics.ts";
 import { formatCost } from "./cost.ts";
 import LiveUsage from "./LiveUsage.tsx";
 import UsageChart, { type Series } from "./UsageChart.tsx";
-import { ActivityView, ApprovalsView, EfficiencyView, Tile } from "./UsageInsights.tsx";
+import { ActivityView, ApprovalsView, EfficiencyView } from "./UsageInsights.tsx";
 import { basename } from "./paths.ts";
 import Limits from "./Limits.tsx";
 import CostSummaryPanel from "./CostSummary.tsx";
@@ -330,26 +331,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
             )}
             {rows.length > 0 && (
               <>
-                <div className="usage-figures">
-                  <div className="usage-hero">
-                    <span className="muted">{m === "cost" ? "Estimated cost" : "Tokens"}</span>
-                    <strong>{m === "cost" ? formatCost(now.cost) : compact(value(now, "tokens"))}</strong>
-                    <span className="muted">
-                      {delta === null ? "Nothing to compare with in the period before" : `${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta * 100))}% on the ${RANGES.find((r) => r.days === range)?.label} before`}
-                    </span>
-                    {m === "tokens" && now.cacheRead > 0 && (
-                      <span className="muted">
-                        {compact(now.input + now.output + now.cacheWrite)} without cache reads
-                      </span>
-                    )}
-                  </div>
-                  <Tile label="Input" value={compact(now.input)} />
-                  <Tile label="Output" value={compact(now.output)} />
-                  {cacheReads && <Tile label="From the prompt cache" value={`${Math.round(now.cacheShare * 100)}%`} note={`${compact(now.cacheRead)} tokens read`} />}
-                  <Tile label="Per model call" value={compact(perCall(now))} note={`${compact(now.calls ? now.output / now.calls : 0)} of them output`} />
-                  <Tile label="Per session" value={compact(now.sessions ? value(now, "tokens") / now.sessions : 0)} note={`${compact(now.calls)} calls in ${now.sessions} ${now.sessions === 1 ? "session" : "sessions"}`} />
-                  {m === "tokens" && priced && <Tile label="Estimated cost" value={formatCost(now.cost)} />}
-                </div>
+                <TokenFigures now={now} delta={delta} before={RANGES.find((r) => r.days === range)?.label ?? ""} metric={m} priced={priced} cacheReads={cacheReads} />
                 {now.unpricedTokens > 0 && (
                   <p className="muted usage-note">
                     {compact(now.unpricedTokens)} tokens are on models without a price and count as no cost.{" "}

@@ -14,7 +14,9 @@ const STEP = [32, 48, 64, 80, 100];
 
 const dateLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString("en", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
 
-export default function UsageOverview({ cacheReads, onError }: { cacheReads: boolean; onError: (err: unknown) => void }) {
+// compact is for the usage pane (GUI-038): its header names the view, the grid opens on
+// today, and the days as a table stay on the usage page.
+export default function UsageOverview({ cacheReads, compact: inPane = false, onError }: { cacheReads: boolean; compact?: boolean; onError: (err: unknown) => void }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [today, setToday] = useState("");
   const [turns, setTurns] = useState<ActivityRow[]>([]);
@@ -75,6 +77,20 @@ export default function UsageOverview({ cacheReads, onError }: { cacheReads: boo
       : `${dateLabel(d.day)}: no use`;
 
   const grid = useRef<HTMLDivElement>(null);
+  // Today is at the right end: in a narrow pane, start there, and stay there while the
+  // grid and the pane settle their sizes. Scrolling by hand changes neither.
+  useEffect(() => {
+    const box = grid.current;
+    if (!inPane || !box) return;
+    const toToday = () => {
+      box.scrollLeft = box.scrollWidth;
+    };
+    toToday();
+    const sizes = new ResizeObserver(toToday);
+    sizes.observe(box);
+    if (box.firstElementChild) sizes.observe(box.firstElementChild);
+    return () => sizes.disconnect();
+  }, [inPane, weeks.length]);
   const [cursor, setCursor] = useState<{ w: number; d: number } | null>(null);
   const [pointed, setPointed] = useState<CalendarDay | null>(null);
   // The newest days are what a narrow window should open on.
@@ -106,8 +122,8 @@ export default function UsageOverview({ cacheReads, onError }: { cacheReads: boo
   const streak = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
 
   return (
-    <div className="usage-overview">
-      <h3>Last 12 months</h3>
+    <div className={inPane ? "usage-overview usage-overview-compact" : "usage-overview"}>
+      {!inPane && <h3>Last 12 months</h3>}
       <div className="usage-overview-tiles">
         <div>
           <strong>{compact(overview.total)}</strong>
@@ -185,7 +201,7 @@ export default function UsageOverview({ cacheReads, onError }: { cacheReads: boo
           </span>
         )}
       </div>
-      {activeDays.length > 0 && (
+      {!inPane && activeDays.length > 0 && (
         <details className="usage-calendar-table">
           <summary className="muted">The days as a table</summary>
           <table className="usage">

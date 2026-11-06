@@ -765,6 +765,62 @@ await step("panes fit, and the keyboard moves between them", async () => {
   await sleep(200);
 });
 
+await step("the usage pane cycles through its views", async () => {
+  document.querySelector('.layout-switch button[aria-label="4 panes"]').click();
+  await sleep(300);
+  let usage = document.querySelector(".pane-usage");
+  if (!usage) {
+    (await until("an empty pane's Show usage", () => withText(".pane-empty button", "Show usage"))).click();
+    usage = await until("the usage pane", () => document.querySelector(".pane-usage"));
+  }
+  const name = () => usage.querySelector(".usage-view-name")?.textContent;
+  const arrow = (which) => usage.querySelector(`button[aria-label^="${which} view"]`);
+  const names = ["Recent hours", "Last 12 months", "Tokens", "By model"];
+  const seen = [name()];
+  for (let i = 0; i < names.length; i++) {
+    arrow("Next").click();
+    await sleep(150);
+    seen.push(name());
+  }
+  const start = names.indexOf(seen[0]);
+  check("the arrows reach every view and come round", start >= 0 && seen.every((s, i) => s === names[(start + i) % names.length]), seen.join(" > "));
+  arrow("Previous").click();
+  await sleep(150);
+  check("the left arrow goes back", name() === names[(start + names.length - 1) % names.length], name());
+  const to = async (label) => {
+    for (let i = 0; i < names.length && name() !== label; i++) {
+      arrow("Next").click();
+      await sleep(150);
+    }
+  };
+  await to("Last 12 months");
+  const scroller = await until("the year grid", () => usage.querySelector(".usage-calendar-scroll"));
+  await until("the days", () => scroller.querySelector(".usage-calendar-day"));
+  await sleep(200);
+  check("the year opens on today", scroller.scrollWidth <= scroller.clientWidth || scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 2, `${scroller.scrollLeft} of ${scroller.scrollWidth - scroller.clientWidth}`);
+  check("the year stays in its pane", scroller.getBoundingClientRect().right <= usage.getBoundingClientRect().right + 1);
+  check("the pane leaves the days as a table to the page", !usage.querySelector(".usage-calendar-table"));
+  await to("Tokens");
+  const paneTotal = (await until("the pane's tokens", () => usage.querySelector(".usage-hero strong")))?.textContent;
+  check("the tokens view has its figures", /\d/.test(paneTotal) && usage.querySelectorAll(".usage-tile").length >= 3, paneTotal);
+  await to("By model");
+  await until("the models", () => usage.querySelector(".pane-shares li"));
+  check("the models view lists models and providers", usage.querySelectorAll(".pane-shares").length === 2);
+  // The keys, from the header.
+  arrow("Next").focus();
+  arrow("Next").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  await sleep(150);
+  check("the left key goes back a view", name() === "Tokens", name());
+  // The same figures as the usage page over the same 30 days.
+  usage.querySelector('button[aria-label="Full usage page"]').click();
+  const pageTotal = (await until("the usage page's tokens", () => document.querySelector(".usage-page .usage-hero strong"), 20000))?.textContent;
+  check("the pane and the usage page agree", paneTotal === pageTotal, `${paneTotal} and ${pageTotal}`);
+  openSession("Check alpha");
+  await until("the workspace", () => document.querySelector(".pane"));
+  document.querySelector('.layout-switch button[aria-label="One pane"]')?.click();
+  await sleep(200);
+});
+
 await step("the bypass setting", async () => {
   document.querySelector(".settings-link").click();
   (await until("the General page", () => withText(".settings-nav button", "General"))).click();
