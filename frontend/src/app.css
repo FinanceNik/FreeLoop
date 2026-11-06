@@ -5295,3 +5295,27 @@ table.hooks .hook-command {
   margin-left: 4px;
 }
 
+
+/* The policy page's check (SEC-018). */
+.warn-text {
+  color: var(--warn);
+}
+
+.policy-check h3 {
+  margin: 0;
+}
+
+.policy-check .row input {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.policy-verdict p {
+  margin: 4px 0;
+}
+
+.policy-paths {
+  columns: 2;
+  margin: 4px 0;
+  font-size: calc(12rem / 14);
+}

@@ -14,6 +14,8 @@ import (
 type Policy struct {
 	neverRead  []string
 	neverWrite []string
+	// shown is neverRead as written, one spelling each, for the policy page.
+	shown []string
 }
 
 // NewPolicy builds the fixed rules for a user's home directory and the
@@ -53,7 +55,7 @@ func NewPolicy(home, appDataDir string) *Policy {
 		filepath.Join(lib, "Application Support", "Firefox"),
 		appDataDir,
 	}
-	p := &Policy{}
+	p := &Policy{shown: neverRead}
 	for _, d := range neverRead {
 		p.neverRead = append(p.neverRead, canonical(d)...)
 	}
@@ -64,6 +66,9 @@ func NewPolicy(home, appDataDir string) *Policy {
 // NeverRead lists the locations nothing may read, in all their spellings, for a
 // sandbox to hold too (ENV-009).
 func (p *Policy) NeverRead() []string { return slices.Clone(p.neverRead) }
+
+// Protected lists the locations nothing may read or write, one spelling each (SEC-018).
+func (p *Policy) Protected() []string { return slices.Clone(p.shown) }
 
 // canonical returns the spellings of p that checks must cover.
 func canonical(p string) []string { return environment.Spellings(p) }

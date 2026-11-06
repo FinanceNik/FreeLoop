@@ -53,8 +53,18 @@ type HarnessPreset struct {
 	// terms speak against (OQ-018). Only a built-in one has it: a file names no file
 	// for the app to read.
 	SignInCheck *SignInCheck `yaml:"-" json:"-"`
+	// DecidesItself says what the agent approves by itself, out of the broker's reach,
+	// for the policy page and the check (SEC-018). Plain words; a note with a mode
+	// applies in that mode only.
+	DecidesItself []AgentNote `yaml:"decidesItself,omitempty" json:"decidesItself"`
 	// Builtin is set for presets that ship with the app.
 	Builtin bool `yaml:"-" json:"builtin"`
+}
+
+// AgentNote is one thing an agent decides by itself.
+type AgentNote struct {
+	Mode string `yaml:"mode,omitempty" json:"mode"`
+	Text string `yaml:"text" json:"text"`
 }
 
 // SignInCheck is a sign-in chosen in an agent's own JSON settings. The app reads the
@@ -103,9 +113,13 @@ func BuiltinPresets() []HarnessPreset {
 		// Accept edits and bypass are the broker's to apply: in Claude Code's own
 		// acceptEdits and bypassPermissions it approves for itself, and wrote into .git/
 		// in bypass (SEC-005, SEC-015). Auto stays the agent's, as OQ-032 chose.
-		Modes:   map[string]string{"ask": "default", "accept_edits": "default", "plan": "plan", "auto": "auto", "bypass": "default"},
-		Notes:   "Needs Node.js. Sign in once by running claude in a terminal; Freeloop never sees or stores the login.",
-		Skills:  SkillsClaudePlugin,
+		Modes:  map[string]string{"ask": "default", "accept_edits": "default", "plan": "plan", "auto": "auto", "bypass": "default"},
+		Notes:  "Needs Node.js. Sign in once by running claude in a terminal; Freeloop never sees or stores the login.",
+		Skills: SkillsClaudePlugin,
+		DecidesItself: []AgentNote{{
+			Mode: "auto",
+			Text: "In auto mode Claude Code approves its own tool calls: what it does not ask about never reaches Freeloop, and your deny rules do not apply to it.",
+		}},
 		Builtin: true,
 	}, {
 		ID:          "gemini-cli",

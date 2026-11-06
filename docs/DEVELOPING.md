@@ -39,7 +39,7 @@ Rules the lint enforces (`internal/archtest`): no `os/exec` or file I/O in the e
 
 ## The command line
 
-While the app runs, the same binary is a command line for it (EXT-004): `Freeloop.app/Contents/MacOS/Freeloop help` lists the commands (link it as `freeloop` on your PATH). `freeloop new ~/code/app -provider work -model claude-x` starts a session and prints its ID, `freeloop prompt <id> "fix the failing test"` streams the reply, `freeloop approvals` / `freeloop approve <request>` answer what waits, and `freeloop optimizer <id> rtk` switches a session's token optimizer. Scripts can speak the JSON-RPC directly; `internal/rpc` has the methods.
+While the app runs, the same binary is a command line for it (EXT-004): `Freeloop.app/Contents/MacOS/Freeloop help` lists the commands (link it as `freeloop` on your PATH). `freeloop new ~/code/app -provider work -model claude-x` starts a session and prints its ID, `freeloop prompt <id> "fix the failing test"` streams the reply, `freeloop approvals` / `freeloop approve <request>` answer what waits, and `freeloop optimizer <id> rtk` switches a session's token optimizer. `freeloop check -project . shell git push origin main` says whether a call would be allowed, asked about or denied, and by which rule (SEC-018); it exits 0, 2 or 3 for those and 1 on an error, so a script or CI can assert a rule holds. Scripts can speak the JSON-RPC directly; `internal/rpc` has the methods.
 
 ## Adding a provider
 
@@ -74,6 +74,9 @@ notes: Sign in once with `my-agent login` in a terminal.
 skills: claude-plugin             # optional: an agent on the Claude Agent SDK: it takes the session's skills as a Claude Code plugin (SKL-008) and reports tokens per model call (PRV-008)
 hideText: ["[DEBUG]"]             # optional: starts of agent messages meant for machines, left out of the conversation
 missingFileIsEmpty: true          # optional: for an agent that cannot recognize ACP's "not found" when reading a file it will create
+decidesItself:                    # optional: what the agent approves by itself, for the Policy page and freeloop check (SEC-018)
+  - mode: auto                    # optional: only in this mode
+    text: In auto mode it approves its own tool calls, which never reach Freeloop.
 ```
 
 Read the agent's real mode IDs from its `session/new` reply, not its docs, and choose the mode in which it **asks**, for `accept_edits` and `bypass` too if need be: the broker applies the session's real mode to what it asks, while a mode that approves by itself acts out of the app's sight. `plan` must be a mode that cannot write; with none, leave it out, and the app refuses to use the agent for reviews.

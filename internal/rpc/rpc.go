@@ -278,6 +278,16 @@ func (s *Server) call(ctx context.Context, method string, raw json.RawMessage) (
 		}
 		made, err := e.RewriteForAgent(ctx, p.ID, p.Command)
 		return map[string]string{"command": made}, err
+	case "policy.check", "policy.overview":
+		// What the broker would do with a call, and what decides it (SEC-018).
+		var p engine.PolicyQuery
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		if method == "policy.check" {
+			return e.CheckPolicy(ctx, p)
+		}
+		return e.PolicyOverview(ctx, p)
 	case "approvals.list":
 		return e.PendingPermissions(), nil
 	case "approvals.decide":

@@ -828,7 +828,7 @@ export default function App() {
       page("optimizers", "Token optimizers", () => setScreen({ kind: "optimizers" }), { keywords: "rtk tokens compress output default" }),
       page("schedules", "Schedules", () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
       page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
-      page("rules", "Permission rules", () => setScreen({ kind: "rules" }), { keywords: "allow deny" }),
+      page("rules", "Policy", () => setScreen({ kind: "rules" }), { keywords: "permission rules allow deny would this be allowed check" }),
       page("settings", "Settings", () => setScreen({ kind: "settings" }), { keywords: "preferences theme notifications prices" }),
       page("usage-pane", "Show usage in a pane", () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new")), { keywords: "live tokens cost graph 12 24 hours side by side" }),
       page("usage", "Usage", () => setScreen({ kind: "usage" }), { keywords: "cost tokens analytics dashboard spend", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
@@ -1569,7 +1569,7 @@ export default function App() {
               {screen.kind === "schedules" && (
                 <Schedules projects={projects} profiles={profiles} providers={providers} harnesses={harnesses} defaults={config?.defaults} onOpenSession={(id) => openSession(id)} onError={report} />
               )}
-              {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} version={configVersion} onError={report} />}
+              {screen.kind === "rules" && <Rules session={sessions.find((s) => s.id === lastSessionId) ?? null} projects={projects} version={configVersion} onError={report} />}
               {screen.kind === "mcp" && <MCP configVersion={configVersion} onImport={() => setScreen({ kind: "import" })} onError={report} />}
               {screen.kind === "import" && (
                 <section className="page">

@@ -60,6 +60,9 @@ const (
 func (k Kind) writes() bool { return k == KindEdit || k == KindDelete || k == KindMove }
 func (k Kind) reads() bool  { return k == KindRead || k == KindSearch }
 
+// Files reports a kind of call that names the files it reads or changes.
+func (k Kind) Files() bool { return k.reads() || k.writes() }
+
 // Option is one answer the user can give, shaped like ACP's PermissionOption.
 type Option struct {
 	ID   string `json:"optionId"`
@@ -330,6 +333,17 @@ func (b *Broker) Hidden(sessionID, root, path string) bool {
 // evaluate applies the path policy and the mode. It returns false when the
 // user has to decide.
 func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
+	var rules []Rule
+	var rulesErr error
+	if b.rules != nil {
+		rules, rulesErr = b.rules.Rules(req.SessionID)
+	}
+	return b.decide(pc, req, rules, rulesErr)
+}
+
+// decide is evaluate over rules already gathered: the one place a call is judged,
+// for a real request and for Explain alike (SEC-018).
+func (b *Broker) decide(pc Context, req Request, rules []Rule, rulesErr error) (Decision, bool) {
 	deny := func(a Actor, why string) (Decision, bool) {
 		return Decision{Outcome: Denied, Actor: a, Reason: why}, true
 	}
@@ -337,11 +351,6 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		return Decision{Outcome: Allowed, Actor: a, Reason: why}, true
 	}
 
-	var rules []Rule
-	var rulesErr error
-	if b.rules != nil {
-		rules, rulesErr = b.rules.Rules(req.SessionID)
-	}
 	match := func(effect Effect) *Rule {
 		for i := range rules {
 			if rules[i].Effect == effect && rules[i].Matches(req, pc.Root) {

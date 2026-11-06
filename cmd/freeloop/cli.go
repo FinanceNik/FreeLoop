@@ -1,7 +1,9 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -23,7 +25,7 @@ import (
 // API: what it starts shows in the app at once, and approvals stay with
 // the app's permission broker.
 
-var commands = []string{"sessions", "new", "import", "prompt", "events", "approvals", "approve", "deny", "optimizer", "help"}
+var commands = []string{"sessions", "new", "import", "prompt", "events", "approvals", "approve", "deny", "optimizer", "check", "help"}
 
 func isCommand(arg string) bool { return slices.Contains(commands, arg) }
 
@@ -39,6 +41,10 @@ const usage = `freeloop <command> [arguments]
   approve <request> [option]     allow a request (allow_once unless an option is given)
   deny <request>                 deny a request
   optimizer <session> [id|off]   list a session's token optimizers, or switch to one
+  check [-session id | -project folder] [-profile p] [-environment e] [-mode m] [-json] <tool> <command|path>
+                                 say whether a call would be allowed, asked about or denied, and why;
+                                 tool is shell, edit, read, search, fetch or a tool's name. Exits 0 when
+                                 allowed, 2 when you would be asked, 3 when denied, 1 on an error
 
 The app must be running; the command line talks to it.
 `
@@ -54,6 +60,14 @@ func runCLI(sock string, args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	defer c.Close()
+	if args[0] == "check" {
+		code, err := check(c, args[1:], plainWriter{out})
+		if err != nil {
+			fmt.Fprintln(plainWriter{errOut}, err)
+			return 1
+		}
+		return code
+	}
 	if err := command(c, args, plainWriter{out}); err != nil {
 		fmt.Fprintln(plainWriter{errOut}, err)
 		return 1
@@ -247,6 +261,82 @@ func command(c *rpc.Client, args []string, out io.Writer) error {
 		return c.Call("approvals.decide", map[string]any{"requestId": args[1], "optionId": option}, nil)
 	}
 	return fmt.Errorf("unknown command %q; see freeloop help", args[0])
+}
+
+// check runs freeloop check and returns its exit code (SEC-018): 0 allowed, 2 asked,
+// 3 denied, so a script can tell them from an error.
+func check(c *rpc.Client, args []string, out io.Writer) (int, error) {
+	fs := flag.NewFlagSet("check", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	sid := fs.String("session", "", "a session's ID")
+	project := fs.String("project", "", "a project folder (the current folder when neither is given)")
+	profile := fs.String("profile", "", "the profile a new session would have")
+	environmentID := fs.String("environment", "", "the environment a new session would have")
+	mode := fs.String("mode", "", "ask, accept_edits, plan, auto or bypass")
+	asJSON := fs.Bool("json", false, "print the verdict as JSON")
+	const how = "usage: freeloop check [-session id | -project folder] [-profile p] [-mode m] [-json] <tool> <command|path>"
+	if err := fs.Parse(args); err != nil {
+		return 0, fmt.Errorf("%v\n%s", err, how)
+	}
+	rest := fs.Args()
+	if len(rest) < 2 {
+		return 0, errors.New(how)
+	}
+	q := engine.PolicyQuery{SessionID: *sid, ProfileID: *profile, EnvironmentID: *environmentID, Mode: *mode, Tool: rest[0]}
+	if q.SessionID == "" {
+		root, err := filepath.Abs(cmp.Or(*project, "."))
+		if err != nil {
+			return 0, err
+		}
+		q.ProjectRoot = root
+	}
+	what := strings.Join(rest[1:], " ")
+	switch strings.ToLower(rest[0]) {
+	case "shell", "bash":
+		q.Command = what
+	default:
+		q.Path = what
+	}
+	var v engine.PolicyCheck
+	if err := c.Call("policy.check", q, &v); err != nil {
+		return 0, err
+	}
+	if *asJSON {
+		b, _ := json.MarshalIndent(v, "", "  ")
+		fmt.Fprintln(out, string(b))
+	} else {
+		fmt.Fprintln(out, checkText(v))
+	}
+	switch v.Outcome {
+	case string(permission.Allowed):
+		return 0, nil
+	case string(permission.Denied):
+		return 3, nil
+	}
+	return 2, nil
+}
+
+// checkText is a verdict in a few lines.
+func checkText(v engine.PolicyCheck) string {
+	head := map[string]string{"allowed": "Allowed", "denied": "Denied", permission.Ask: "Asks you"}[v.Outcome]
+	lines := []string{fmt.Sprintf("%s: %s", cmp.Or(head, v.Outcome), v.Reason)}
+	if v.Rule != nil {
+		lines = append(lines, fmt.Sprintf("  rule: %s (%s, %s)", v.Rule, v.Rule.Scope, cmp.Or(v.Rule.Source, "no file")))
+	}
+	for _, r := range v.Overruled {
+		lines = append(lines, fmt.Sprintf("  overruled: %s (%s)", r, r.Scope))
+	}
+	for _, r := range v.Pending {
+		lines = append(lines, fmt.Sprintf("  waits for your approval: %s (%s)", r, r.Source))
+	}
+	if len(v.Hooks) > 0 {
+		lines = append(lines, fmt.Sprintf("  %d hook(s) would still run and could deny it", len(v.Hooks)))
+	}
+	for _, a := range v.Agent {
+		lines = append(lines, "  note: "+a)
+	}
+	lines = append(lines, fmt.Sprintf("  in %s mode, %s, harness %s", v.Mode, v.Root, v.Harness))
+	return strings.Join(lines, "\n")
 }
 
 // defaultOption is the once-only answer of a request: an external agent names

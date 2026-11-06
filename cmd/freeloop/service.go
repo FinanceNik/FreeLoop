@@ -671,6 +671,16 @@ func (s *EngineService) ProjectFiles(ctx context.Context, sessionID string) ([]s
 	return s.eng.ProjectFiles(ctx, sessionID)
 }
 
+// CheckPolicy says what the broker would do with a call, and why (SEC-018).
+func (s *EngineService) CheckPolicy(ctx context.Context, q engine.PolicyQuery) (engine.PolicyCheck, error) {
+	return s.eng.CheckPolicy(ctx, q)
+}
+
+// PolicyOverview lists what decides a call in a session or a project (SEC-018).
+func (s *EngineService) PolicyOverview(ctx context.Context, q engine.PolicyQuery) (engine.PolicyOverview, error) {
+	return s.eng.PolicyOverview(ctx, q)
+}
+
 func (s *EngineService) ListRules(sessionID string) []permission.Rule {
 	return s.eng.ListRules(sessionID)
 }

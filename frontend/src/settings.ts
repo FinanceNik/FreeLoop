@@ -25,7 +25,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: "skills", label: "Skills", icon: "skills" },
       { id: "mcp", label: "MCP servers", icon: "mcp" },
       { id: "optimizers", label: "Token optimizers", icon: "optimizers" },
-      { id: "rules", label: "Permission rules", icon: "rules" },
+      { id: "rules", label: "Policy", icon: "rules" },
     ],
   },
   {

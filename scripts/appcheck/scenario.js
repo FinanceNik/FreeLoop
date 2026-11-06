@@ -706,6 +706,42 @@ await step("the More menu closes like a menu", async () => {
   check("Escape closes the More menu", !menu.open);
 });
 
+await step("the policy page says what a call would meet", async () => {
+  // SEC-018: the broker's own judgment of a call not made, with the rule that decided.
+  const set = (el, value) => {
+    const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
+    el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
+  };
+  document.querySelector(".settings-link").click();
+  (await until("the Policy page", () => withText(".settings-nav button", "Policy"))).click();
+  const form = await until("the check", () => document.querySelector(".policy-check"));
+  set(document.querySelector("select[aria-label=Effect]"), "deny");
+  set(document.querySelector("select[aria-label=Tool]"), "shell");
+  await sleep(50);
+  set(document.querySelector("input[aria-label=Command]"), "git push *");
+  await sleep(50);
+  withText("button", "Add rule").click();
+  await until("the rule", () => withText(".provider-list li", "git push *"));
+  const ask = async (what) => {
+    set(form.querySelector("select[aria-label=Action]"), "shell");
+    await sleep(50);
+    set(form.querySelector("input[aria-label='Command to check']"), what);
+    await sleep(50);
+    form.querySelector("button[type=submit]").click();
+    return until(`the verdict on ${what}`, () => { const v = form.querySelector(".policy-verdict"); return v && v.textContent.includes(what.split(" ")[0] === "git" ? "git push" : "asked") && v; }, 8000);
+  };
+  const denied = await ask("git push origin main");
+  check("a deny rule shows as what decides", denied.textContent.startsWith("Denied.") && denied.textContent.includes("shell: git push *"), denied.textContent.slice(0, 160));
+  const asked = await ask("make deploy");
+  check("a call no rule decides asks", asked.textContent.startsWith("You would be asked."), asked.textContent.slice(0, 160));
+  check("the page shows what else decides", !!withText("h3", "What else decides") && !!withText("summary", "Protected paths"));
+  withText(".provider-list li", "git push *").querySelector("button.danger").click();
+  await until("the rule gone", () => !withText(".provider-list li", "git push *"));
+  document.querySelector(".settings-nav .settings-back").click();
+  await until("the conversation", () => document.querySelector(".conversation"));
+});
+
 await step("every control has a name", async () => {
   // GUI-041: a control drawn as an icon alone is named in aria-label and explained in a tooltip.
   const unnamed = [];

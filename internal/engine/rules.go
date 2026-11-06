@@ -114,6 +114,18 @@ func (s *ruleStore) all(sid string) ([]permission.Rule, error) {
 	return append(out, s.session[sid]...), scopedErr
 }
 
+// withGlobal returns the global rules followed by scoped, for a project with no
+// session yet, with the error that makes the broker fail closed (SEC-018).
+func (s *ruleStore) withGlobal(scoped []permission.Rule, scopedErr error) ([]permission.Rule, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reloadLocked(false)
+	if s.broken != nil {
+		scopedErr = s.broken
+	}
+	return append(slices.Clone(s.global), scoped...), scopedErr
+}
+
 func (s *ruleStore) AddRule(sid string, r permission.Rule) error {
 	if err := r.Validate(); err != nil {
 		return err

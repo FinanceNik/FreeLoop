@@ -13,7 +13,7 @@ const SCREEN_NAMES: Record<string, string> = {
   optimizers: "Token optimizers",
   profiles: "Profiles",
   providers: "Providers",
-  rules: "Permission rules",
+  rules: "Policy",
   schedules: "Schedules",
   settings: "Settings",
   skills: "Skills",
