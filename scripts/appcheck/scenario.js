@@ -565,6 +565,14 @@ await step("a click clears a selection", async () => {
     check(`a click clears a selection: ${name}`, selected() === 0, `${selected()} characters stayed selected; ${seen.join(" ")}`);
   };
   const msg = all(".msg-agent", activePane()).at(-1);
+  // DIAGNOSIS (CI, macOS 15): where the message and the view are before the click.
+  {
+    const c = conversation();
+    const r = msg.getBoundingClientRect();
+    const [x, y] = at(msg);
+    results.push({ name: "DIAGNOSIS before the text click", ok: true, detail: `window ${innerWidth}x${innerHeight}; conversation top ${Math.round(c.scrollTop)} of ${c.scrollHeight}, shows ${c.clientHeight}; message ${Math.round(r.top)}..${Math.round(r.bottom)}, click at ${Math.round(x)},${Math.round(y)}; ${all(".msg-agent", activePane()).length} agent messages` });
+    await window.webkit.messageHandlers.snap?.postMessage("before the text click");
+  }
   await clicked("text", msg);
   await clicked("the conversation's margin", conversation(), 0.01, 0.5);
   await clicked("the header's title", document.querySelector(".session-header h2"));
@@ -1003,7 +1011,13 @@ await step("the usage pane cycles through its views", async () => {
   // An empty box's height leaves out its placeholder, so one in a pane the user is not in
   // is short and on one line (GUI-042).
   const idle = await until("a pane not in use", () => document.querySelector(".pane-split:not(.pane-active) .composer textarea"));
-  check("a pane not in use shows its placeholder whole", idle.value !== "" || (idle.placeholder.length <= 20 && getComputedStyle(idle, "::placeholder").whiteSpace === "nowrap"), `"${idle.placeholder}"`);
+  // Measured in the box's own font, since WebKit does not report a placeholder's style.
+  const font = getComputedStyle(idle);
+  const pen = document.createElement("canvas").getContext("2d");
+  pen.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+  const room = idle.clientWidth - parseFloat(font.paddingLeft) - parseFloat(font.paddingRight);
+  const needs = pen.measureText(idle.placeholder).width;
+  check("a pane not in use shows its placeholder whole", idle.value !== "" || needs <= room, `"${idle.placeholder}" needs ${Math.round(needs)} px of ${Math.round(room)}`);
   let usage = document.querySelector(".pane-usage");
   if (!usage) {
     (await until("an empty pane's Show usage", () => withText(".pane-empty button", "Show usage"))).click();
