@@ -17,10 +17,13 @@ import (
 // The version the app reports is the one every build file gives it. A release that
 // bumps one and not the others would tell its users to update forever.
 func TestAppVersionMatchesTheBuild(t *testing.T) {
+	// macOS takes only numbers in a bundle's versions, so a pre-release's bundle gives
+	// the release it comes before: 0.1.0 for 0.1.0-beta.1.
+	bundleVersion, _, _ := strings.Cut(AppVersion, "-")
 	for file, want := range map[string]string{
 		"../../build/config.yml":            `version: "` + AppVersion + `"`,
-		"../../build/darwin/Info.plist":     `<string>` + AppVersion + `</string>`,
-		"../../build/darwin/Info.dev.plist": `<string>` + AppVersion + `</string>`,
+		"../../build/darwin/Info.plist":     `<string>` + bundleVersion + `</string>`,
+		"../../build/darwin/Info.dev.plist": `<string>` + bundleVersion + `</string>`,
 		"../../frontend/package.json":       `"version": "` + AppVersion + `"`,
 	} {
 		b, err := os.ReadFile(file)
@@ -34,8 +37,8 @@ func TestAppVersionMatchesTheBuild(t *testing.T) {
 	// CFBundleVersion and CFBundleShortVersionString, in both.
 	for _, file := range []string{"../../build/darwin/Info.plist", "../../build/darwin/Info.dev.plist"} {
 		b, _ := os.ReadFile(file)
-		if n := strings.Count(string(b), `<string>`+AppVersion+`</string>`); n != 2 {
-			t.Errorf("%s gives version %s %d times", file, AppVersion, n)
+		if n := strings.Count(string(b), `<string>`+bundleVersion+`</string>`); n != 2 {
+			t.Errorf("%s gives version %s %d times", file, bundleVersion, n)
 		}
 	}
 }
@@ -44,7 +47,10 @@ func TestVersionOrder(t *testing.T) {
 	for _, c := range []struct {
 		a, b  string
 		newer bool
-	}{{"0.1.0", "0.0.1", true}, {"0.0.1", "0.0.1", false}, {"0.0.10", "0.0.9", true}, {"1.0.0", "0.99.99", true}, {"0.0.1", "0.1.0", false}, {"1.0", "0.0.1", false}, {"x.y.z", "0.0.1", false}} {
+	}{{"0.1.0", "0.0.1", true}, {"0.0.1", "0.0.1", false}, {"0.0.10", "0.0.9", true}, {"1.0.0", "0.99.99", true}, {"0.0.1", "0.1.0", false}, {"1.0", "0.0.1", false}, {"x.y.z", "0.0.1", false},
+		// Someone on a pre-release hears of its release, and of nothing that is itself one.
+		{"0.1.0", "0.1.0-beta.1", true}, {"0.1.0-beta.2", "0.1.0-beta.1", false}, {"0.2.0-rc.1", "0.1.0", false},
+		{"0.1.0", "0.1.0", false}, {"0.0.9", "0.1.0-beta.1", false}, {"0.1.1", "0.1.0-beta.1", true}, {"0.1.0-", "0.0.1", false}} {
 		if got := newerVersion(c.a, c.b); got != c.newer {
 			t.Errorf("newerVersion(%s, %s) = %v", c.a, c.b, got)
 		}

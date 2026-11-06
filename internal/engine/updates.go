@@ -24,7 +24,7 @@ import (
 // copy of the app, and a failure is silent (NFR-OFF-002).
 
 // AppVersion is this build's version; build/config.yml says the same.
-const AppVersion = "0.0.1"
+const AppVersion = "0.1.0-beta.1"
 
 // latestReleaseURL is the GitHub API for the project's latest release.
 const latestReleaseURL = "https://api.github.com/repos/FinanceNik/Freeloop/releases/latest"
@@ -135,7 +135,7 @@ func fetchLatestRelease(ctx context.Context, url string) (version, page string, 
 		return "", "", fmt.Errorf("read the release: %w", err)
 	}
 	v := strings.TrimPrefix(rel.TagName, "v")
-	if _, ok := parseVersion(v); !ok || rel.Draft || rel.Prerelease {
+	if _, _, ok := parseVersion(v); !ok || rel.Draft || rel.Prerelease {
 		return "", "", fmt.Errorf("the latest release %q is not a version", rel.TagName)
 	}
 	// Only a page on GitHub opens from the app.
@@ -145,29 +145,35 @@ func fetchLatestRelease(ctx context.Context, url string) (version, page string, 
 	return v, rel.HTMLURL, nil
 }
 
-// parseVersion reads major.minor.patch. A pre-release such as 0.1.0-rc1 reads as
-// no version: nobody on a release should be told about one.
-func parseVersion(v string) ([3]int, bool) {
+// parseVersion reads major.minor.patch, and says whether a pre-release such as
+// 0.1.0-beta.1 follows it.
+func parseVersion(v string) ([3]int, bool, bool) {
 	var out [3]int
-	parts := strings.Split(strings.TrimPrefix(v, "v"), ".")
+	v, pre, isPre := strings.Cut(strings.TrimPrefix(v, "v"), "-")
+	if isPre && pre == "" {
+		return out, false, false
+	}
+	parts := strings.Split(v, ".")
 	if len(parts) != 3 {
-		return out, false
+		return out, false, false
 	}
 	for i, p := range parts {
 		n, err := strconv.Atoi(p)
 		if err != nil || n < 0 {
-			return out, false
+			return out, false, false
 		}
 		out[i] = n
 	}
-	return out, true
+	return out, isPre, true
 }
 
-// newerVersion reports whether a is a later version than b.
+// newerVersion reports whether release a is later than b. A pre-release is never
+// offered, since nobody on a release should be told about one; but someone on a
+// pre-release is told about its release, which comes after it (0.1.0-beta.1 < 0.1.0).
 func newerVersion(a, b string) bool {
-	va, ok1 := parseVersion(a)
-	vb, ok2 := parseVersion(b)
-	if !ok1 || !ok2 {
+	va, aPre, ok1 := parseVersion(a)
+	vb, bPre, ok2 := parseVersion(b)
+	if !ok1 || !ok2 || aPre {
 		return false
 	}
 	for i := range va {
@@ -175,7 +181,7 @@ func newerVersion(a, b string) bool {
 			return va[i] > vb[i]
 		}
 	}
-	return false
+	return bPre
 }
 
 // onceReset runs f once until Reset.

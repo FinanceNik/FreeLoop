@@ -7,8 +7,14 @@ on:
       - "docs/**"
       - "*.md"
   pull_request:
-  # Run from the Actions page, for a commit pushed with [skip ci].
+  # Run from the Actions page, for a commit pushed with [skip ci]. With dry_run, the
+  # release job builds what a release would hold and keeps it as an artifact.
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build the release files without making a release"
+        type: boolean
+        default: false
   # The real agents, weekly: their versions are pinned, but what the claim rests on
   # should be rechecked without waiting for a change here (HRN-007).
   schedule:
@@ -76,3 +82,60 @@ jobs:
       - name: A tag builds reproducibly
         if: startsWith(github.ref, 'refs/tags/')
         run: make verify-repro
+
+  # A tag v<version> makes a draft pre-release from what this commit builds, once every
+  # check above has passed. Nothing is published until someone reads the draft and
+  # presses Publish. A dry run from the Actions page builds the same files and keeps them
+  # as an artifact instead.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install wails3
+        run: make tools
+
+      # A tag that is not the app's own version would ship a build that names another.
+      - name: The tag is the app's version
+        run: |
+          version=$(sed -n 's/^const AppVersion = "\(.*\)"$/\1/p' internal/engine/updates.go)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "the tag $GITHUB_REF_NAME is not v$version, the version in internal/engine/updates.go" >&2
+            exit 1
+          fi
+          test -f "docs/release-notes/$version.md" || { echo "docs/release-notes/$version.md is missing" >&2; exit 1; }
+
+      - name: Build the release files
+        run: make frontend/node_modules release
+
+      - name: Keep the files of a dry run
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-${{ env.VERSION }}
+          path: bin/release
+          retention-days: 7
+
+      - name: Make a draft pre-release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --prerelease --verify-tag \
+            --title "Freeloop $VERSION" --notes-file "docs/release-notes/$VERSION.md" --generate-notes \
+            bin/release/*

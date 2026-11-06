@@ -25,7 +25,19 @@ Status: early, and not yet released. Most of what v1 lists is built; [docs/ROADM
 
 ## Install
 
-Build from source on macOS 14 or later. You need Go, Node.js with npm and the Xcode command line tools.
+### Download a release
+
+Releases are on the repository's Releases page; during the private beta, you see them once you have been added to the repository. Download `Freeloop.dmg` and `SHA256SUMS`, and check the DMG before opening it:
+
+```sh
+shasum -a 256 -c SHA256SUMS --ignore-missing
+```
+
+Open the DMG and drag Freeloop to Applications. Releases are not signed or notarized, so macOS blocks a downloaded one the first time: try to open it, then choose Open Anyway in System Settings, under Privacy & Security. The Keychain asks again after each update, because the signature changes with every build. Needs macOS 14 or later.
+
+### Build from source
+
+On macOS 14 or later. You need Go, Node.js with npm and the Xcode command line tools.
 
 ```sh
 make tools     # once: install the pinned wails3 CLI
@@ -33,7 +45,7 @@ make package   # build bin/Freeloop.app, ad-hoc signed
 make dmg       # optional: bin/Freeloop.dmg with the app and a link to Applications
 ```
 
-Move `bin/Freeloop.app` to Applications, or open the DMG and drag it there. A build you made yourself opens normally. Releases are not signed or notarized, so macOS blocks a downloaded one the first time: try to open it, then choose Open Anyway in System Settings, under Privacy & Security. Check it against the release's `SHA256SUMS` first.
+Move `bin/Freeloop.app` to Applications, or open the DMG and drag it there. A build you made yourself opens normally.
 
 ## First run
 

@@ -9,7 +9,7 @@ info:
   description: "Run AI coding agents with your own models, harnesses, skills and environments"
   copyright: "Copyright 2026 The Freeloop Authors. Apache-2.0."
   comments: ""
-  version: "0.0.1"
+  version: "0.1.0-beta.1"
 
 dev_mode:
   root_path: .

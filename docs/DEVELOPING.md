@@ -89,6 +89,17 @@ The agent runs in the session's environment, its file and terminal requests go t
 
 ## Making a release
 
+A release comes from a tag, made by CI (the `release` job in `.github/workflows/ci.yml`):
+
+1. **Set the version** in `internal/engine/updates.go` (`AppVersion`), `build/config.yml`, `frontend/package.json` and its lockfile, and the two `Info.plist` files, which take only numbers: `0.1.0` for `0.1.0-beta.1`. `TestAppVersionMatchesTheBuild` fails on any you miss.
+2. **Write `docs/release-notes/<version>.md`**: what it is, how to open an unsigned download, what is missing. The job refuses a tag without one.
+3. **Push and wait for CI to pass** (`gh run watch`).
+4. **Dry run.** On the Actions page, run CI with *dry run* checked, or `gh workflow run CI -f dry_run=true`. The release job builds every file of a release and keeps them as an artifact; download it and check `shasum -a 256 -c SHA256SUMS` and the version in the app.
+5. **Tag and push the tag**: `git tag v<version> && git push origin v<version>`. CI runs every check, the real agents and the reproducibility check, then makes a **draft** pre-release with the files and the notes. The tag must be `v` plus `AppVersion`.
+6. **Read the draft** on the Releases page and publish it.
+
+What it builds:
+
 `make release` writes `bin/release`: the DMG, its bill of materials (`Freeloop.sbom.cdx.json`, CycloneDX 1.6), the tools it was built with (`BUILDINFO.txt`), and checksums (`SHA256SUMS`, and `APP-FILES.sha256` for every file in the bundle).
 
 `make verify-repro REF=<tag>` builds a commit twice from clean clones and compares every file; CI does this for tags. To check a release yourself, check out its tag and install what `BUILDINFO.txt` names: the same Go (`go.mod`'s toolchain fetches it), Node and Xcode command line tools, since the linker and the SDK shape the binary. Then run `make package` and compare `bin/Freeloop.app` with `APP-FILES.sha256`.
