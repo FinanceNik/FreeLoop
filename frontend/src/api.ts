@@ -22,7 +22,8 @@ export const MODES = [
   { id: "accept_edits", name: "Accept edits", hint: "File edits in the project go ahead; commands still ask." },
   { id: "plan", name: "Plan", hint: "Only reads, and proposes a plan for you to approve." },
   { id: "auto", name: "Auto", hint: "The agent decides by itself what to run, for agents that have such a mode. What it does not ask about never reaches Freeloop." },
-  { id: "bypass", name: "Bypass (skip permissions)", hint: "Nothing asks, except protected paths and deny rules." },
+  // Short, as the other modes, so it fits the composer's control; what it means is in the hint.
+  { id: "bypass", name: "Bypass", hint: "Skips permission prompts: nothing asks, except protected paths and deny rules." },
 ];
 
 // A session never starts in these: the user chooses them in the session (SEC-001).
