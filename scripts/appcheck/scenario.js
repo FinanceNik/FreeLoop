@@ -104,7 +104,7 @@ await step("a session shows what it runs on", async () => {
 
   // Choosing: at once, for every session on that provider.
   document.querySelector(".settings-link").click();
-  (await until("the General page", () => withText(".settings-nav button", "General"))).click();
+  (await until("the Appearance page", () => withText(".settings-nav button", "Appearance"))).click();
   const row = await until("the marks", () => all(".source-marks li").find((li) => li.textContent.includes("Claude Code")));
   const letters = row.querySelector("input");
   letters.focus();
@@ -706,6 +706,28 @@ await step("the More menu closes like a menu", async () => {
   check("Escape closes the More menu", !menu.open);
 });
 
+await step("the app's settings are seven short pages", async () => {
+  // Each page holds its own sections, and the settings open on the page last shown.
+  document.querySelector(".settings-link").click();
+  await until("Settings", () => document.querySelector(".settings-nav"));
+  const where = { Appearance: "Theme and text size", Keyboard: "", Sessions: "Notifications", Costs: "Budgets", Permissions: "Bypass mode", Network: "Web search", Data: "Backup" };
+  const only = ["Theme and text size", "Notifications", "Budgets", "Bypass mode", "Web search", "Backup"];
+  for (const [page, section] of Object.entries(where)) {
+    withText(".settings-nav button", page).click();
+    const h2 = await until(`the ${page} page`, () => { const h = document.querySelector(".settings-page h2"); return h?.textContent === page && h; });
+    const here = all(".settings-page h3").map((h) => h.textContent);
+    check(`${page} holds its own sections`, (!section || here.includes(section)) && only.filter((x) => x !== section).every((x) => !here.includes(x)), here.join(", "));
+    check(`${page} is not a long page`, document.querySelector(".settings-page").scrollHeight < 2600, `${document.querySelector(".settings-page").scrollHeight} px`);
+  }
+  document.querySelector(".settings-nav .settings-back").click();
+  await sleep(100);
+  document.querySelector(".settings-link").click();
+  const back = await until("the page last shown", () => document.querySelector(".settings-page h2"));
+  check("the settings open on the page last shown", back.textContent === "Data", back.textContent);
+  document.querySelector(".settings-nav .settings-back").click();
+  await sleep(100);
+});
+
 await step("a budget shows on the usage page", async () => {
   // PRV-017: set beside the prices, shown with what this period spent.
   const setInput = (el, value) => {
@@ -714,7 +736,7 @@ await step("a budget shows on the usage page", async () => {
   };
   const general = async () => {
     document.querySelector(".settings-link").click();
-    (await until("the General page", () => withText(".settings-nav button", "General"))).click();
+    (await until("the Costs page", () => withText(".settings-nav button", "Costs"))).click();
   };
   const save = async () => {
     (await until("Save", () => document.querySelector(".settings-save button.primary"))).click();
@@ -1053,7 +1075,7 @@ await step("the usage pane cycles through its views", async () => {
 
 await step("the bypass setting", async () => {
   document.querySelector(".settings-link").click();
-  (await until("the General page", () => withText(".settings-nav button", "General"))).click();
+  (await until("the Permissions page", () => withText(".settings-nav button", "Permissions"))).click();
   const box = () => withText("label", "Allow bypass")?.querySelector("input");
   await until("the setting", box);
   // A served build has no native dialogs, so this answers that one call.
@@ -1077,7 +1099,7 @@ await step("the bypass setting", async () => {
   await sleep(800);
   withText(".settings-nav button", "Providers").click();
   await sleep(300);
-  withText(".settings-nav button", "General").click();
+  withText(".settings-nav button", "Permissions").click();
   await until("the setting", box);
   check("the setting survives leaving the page", box().checked);
   window.fetch = real;

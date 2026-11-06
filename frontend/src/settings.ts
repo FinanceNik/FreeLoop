@@ -4,7 +4,10 @@ import { pressed, type Keys } from "./shortcuts.ts";
 // entry. The pages share a column listing them, like a macOS settings
 // window; the sidebar keeps its room for sessions.
 
-export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "optimizers" | "rules" | "environments" | "schedules" | "settings";
+// The app's own settings, once one long General page, are pages of their own.
+export type GeneralPage = "appearance" | "keyboard" | "sessions" | "costs" | "permissions" | "network" | "data";
+
+export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "optimizers" | "rules" | "environments" | "schedules" | GeneralPage;
 
 export interface SettingsGroup {
   title: string;
@@ -37,9 +40,28 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     title: "App",
-    pages: [{ id: "settings", label: "General", icon: "general" }],
+    pages: [
+      { id: "appearance", label: "Appearance", icon: "appearance" },
+      { id: "keyboard", label: "Keyboard", icon: "keyboard" },
+      { id: "sessions", label: "Sessions", icon: "sessions" },
+      { id: "costs", label: "Costs", icon: "costs" },
+      { id: "permissions", label: "Permissions", icon: "permissions" },
+      { id: "network", label: "Network", icon: "network" },
+      { id: "data", label: "Data", icon: "data" },
+    ],
   },
 ];
+
+export const GENERAL_PAGES = SETTINGS_GROUPS.at(-1)!.pages.map((p) => p.id) as GeneralPage[];
+
+export function isGeneral(kind: string): kind is GeneralPage {
+  return (GENERAL_PAGES as string[]).includes(kind);
+}
+
+// The page the settings open on: the last one shown, or the first.
+export function settingsStart(last: string | null): SettingsPage {
+  return last && AREA.has(last) && last !== "import" ? (last as SettingsPage) : "appearance";
+}
 
 // The import page opens from Settings and MCP, so it belongs to the area
 // without an entry of its own.

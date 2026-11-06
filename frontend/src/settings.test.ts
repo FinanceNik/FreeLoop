@@ -1,16 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, inSettings, isSettingsShortcut, textSizeAfter, autoSaved, settingsKey } from "./settings.ts";
+import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, inSettings, isGeneral, settingsStart, isSettingsShortcut, textSizeAfter, autoSaved, settingsKey } from "./settings.ts";
 
 test("every configuration page is listed once", () => {
   const ids = SETTINGS_GROUPS.flatMap((g) => g.pages.map((p) => p.id));
-  assert.deepEqual([...ids].sort(), ["environments", "mcp", "optimizers", "profiles", "providers", "rules", "schedules", "settings", "skills"]);
+  assert.deepEqual([...ids].sort(), ["appearance", "costs", "data", "environments", "keyboard", "mcp", "network", "optimizers", "permissions", "profiles", "providers", "rules", "schedules", "sessions", "skills"]);
   assert.equal(new Set(ids).size, ids.length);
 });
 
 test("the settings area covers its pages and the import page", () => {
   assert.equal(inSettings("providers"), true);
-  assert.equal(inSettings("settings"), true);
+  assert.equal(inSettings("costs"), true);
+  assert.equal(inSettings("settings"), false);
   assert.equal(inSettings("import"), true);
   assert.equal(inSettings("session"), false);
   assert.equal(inSettings("attention"), false);
@@ -55,4 +56,14 @@ test("approvals are not an edit of the settings", () => {
   const a = { permissions: { allowBypass: true }, commandApprovals: ["x"] };
   assert.equal(settingsKey(a), settingsKey({ ...a, commandApprovals: ["x", "y"] }));
   assert.notEqual(settingsKey(a), settingsKey({ ...a, permissions: { allowBypass: false } }));
+});
+
+test("the settings open on the page last shown, or Appearance", () => {
+  assert.equal(settingsStart(null), "appearance");
+  assert.equal(settingsStart("costs"), "costs");
+  assert.equal(settingsStart("rules"), "rules");
+  assert.equal(settingsStart("import"), "appearance");
+  assert.equal(settingsStart("session"), "appearance");
+  assert.equal(isGeneral("network"), true);
+  assert.equal(isGeneral("rules"), false);
 });

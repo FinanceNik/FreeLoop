@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ask } from "./ask.ts";
-import { autoSaved, settingsKey } from "./settings.ts";
+import { autoSaved, settingsKey, SETTINGS_GROUPS, type GeneralPage } from "./settings.ts";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
 import SourceMarks from "./SourceMarks.tsx";
@@ -16,6 +16,9 @@ import { groupPending, pendingLabel } from "./pending.ts";
 import { EngineService, type Blocked, type ConfigPreview, type ConfigRestore, type Config, type UpdateInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
+  // Which of the app's pages to show; one form holds them all, so moving between
+  // them keeps what waits for Save.
+  page: GeneralPage;
   config: Config;
   providers: ProviderInfo[];
   harnesses: { id: string; name: string }[];
@@ -116,7 +119,7 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
   );
 }
 
-export default function Settings({ config, providers, harnesses, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError }: Props) {
+export default function Settings({ page, config, providers, harnesses, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError }: Props) {
   const [form, setForm] = useState<Config>(config);
   const [saved, setSaved] = useState(false);
   // Connections local-only mode refused (NFR-OFF-003).
@@ -206,7 +209,7 @@ export default function Settings({ config, providers, harnesses, environments, p
           ownSave.current = settingsKey(c);
           onSaved(c);
           // What waits for the Save button stays as typed.
-          setForm((f) => ({ ...c, hooks: f.hooks, prices: f.prices, web: f.web }));
+          setForm((f) => ({ ...c, hooks: f.hooks, prices: f.prices, budgets: f.budgets, web: f.web }));
           setSaved(true);
           setTimeout(() => setSaved(false), 1500);
         })
@@ -223,6 +226,16 @@ export default function Settings({ config, providers, harnesses, environments, p
     [],
   );
   const unsaved = settingsKey(form) !== settingsKey(autoSaved(form, config));
+  // What waits for Save, by name, wherever it is.
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  const waitingNames = [
+    !same(form.hooks, config.hooks) && "Hooks",
+    !same(form.prices, config.prices) && "Prices",
+    !same(form.budgets, config.budgets) && "Budgets",
+    !same(form.web, config.web) && "Web search",
+  ].filter((x): x is string => !!x);
+  const waitingCount = waitingNames.length;
+  const waiting = waitingNames.join(", ").replace(/, ([^,]*)$/, " and $1") || "Nothing";
   const allowBypass = async (on: boolean) => {
     if (on) {
       const ok = await ask(
@@ -235,12 +248,36 @@ export default function Settings({ config, providers, harnesses, environments, p
 
   const provider = providers.find((p) => p.id === form.defaults.providerId);
 
+  const title = SETTINGS_GROUPS.flatMap((g) => g.pages).find((p) => p.id === page)?.label ?? "Settings";
+  const pageForm = (inner: ReactNode) => (
+    <form ref={formBox} className="card form" onSubmit={save} onBlur={() => setLeft((n) => n + 1)}>
+      {inner}
+      <div className={unsaved ? "row settings-save" : "row"} role="status">
+        {unsaved ? (
+          <>
+            <span className="muted">{waiting} {waitingCount === 1 ? "waits" : "wait"} for Save.</span>
+            <button type="submit" className="primary">
+              Save
+            </button>
+            <button type="button" onClick={() => setForm(config)}>
+              Revert
+            </button>
+          </>
+        ) : (
+          <span className="muted">Changes save themselves.</span>
+        )}
+        {saved && <span className="ok">Saved</span>}
+      </div>
+    </form>
+  );
+
   return (
-    <section className="page">
-      <h2>General</h2>
-      <PendingCommands version={[config, restored]} onSaved={onSaved} onError={onError} />
-      <form ref={formBox} className="card form" onSubmit={save} onBlur={() => setLeft((n) => n + 1)}>
-        <h3>Appearance</h3>
+    <section className="page settings-page">
+      <h2>{title}</h2>
+      {page === "appearance" &&
+        pageForm(
+          <>
+        <h3>Theme and text size</h3>
         <label>
           Theme
           <select value={form.ui.theme} onChange={(e) => setForm({ ...form, ui: { ...form.ui, theme: e.target.value } })}>
@@ -278,10 +315,19 @@ export default function Settings({ config, providers, harnesses, environments, p
           onChange={(sourceMarks) => setForm({ ...form, ui: { ...form.ui, sourceMarks } })}
         />
 
-        <h3>Keyboard shortcuts</h3>
+          </>,
+        )}
+      {page === "keyboard" &&
+        pageForm(
+          <>
         <ShortcutsEditor value={form.ui.shortcuts ?? {}} onChange={(shortcuts) => setForm({ ...form, ui: { ...form.ui, shortcuts } })} />
         <p className="muted">⌘1 to ⌘9 open the sessions listed first, and ⌘↩, ⌘⇧↩ and ⌘⇧⌫ answer an approval from anywhere; those stay as they are.</p>
 
+          </>,
+        )}
+      {page === "sessions" &&
+        pageForm(
+          <>
         <h3>Defaults for new sessions</h3>
         <label>
           Provider
@@ -338,7 +384,98 @@ export default function Settings({ config, providers, harnesses, environments, p
           </select>
         </label>
 
-        <h3>Network</h3>
+        <h3>Notifications</h3>
+        <p className="muted">Shown while Freeloop is in the background; clicking one opens its session.</p>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={form.notifications.enabled}
+            onChange={(e) => setForm({ ...form, notifications: { ...form.notifications, enabled: e.target.checked } })}
+          />
+          When a session needs an approval or fails
+        </label>
+        <label className="row">
+          <input
+            type="checkbox"
+            disabled={!form.notifications.enabled}
+            checked={form.notifications.finished}
+            onChange={(e) => setForm({ ...form, notifications: { ...form.notifications, finished: e.target.checked } })}
+          />
+          Also when a session finishes a turn
+        </label>
+        {projects.length > 0 && (
+          <fieldset>
+            <legend>Projects <span className="muted">(saved at once)</span></legend>
+            {projects.map((p) => (
+              <label key={p.id} className="row">
+                <input
+                  type="checkbox"
+                  checked={!p.muted}
+                  onChange={(e) =>
+                    EngineService.SetProjectMuted(p.id, !e.target.checked)
+                      .then(onProjectsChanged)
+                      .catch(onError)
+                  }
+                />
+                {p.name} <span className="muted">{p.muted ? "muted" : ""}</span>
+              </label>
+            ))}
+          </fieldset>
+        )}
+
+          </>,
+        )}
+      {page === "costs" && (
+        <>
+          {pageForm(
+            <>
+        <h3 id="prices">Prices</h3>
+        <PriceTable prices={form.prices ?? []} providers={providers} onChange={(prices) => setForm({ ...form, prices })} />
+
+        <h3 id="budgets">Budgets</h3>
+        <BudgetTable budgets={form.budgets ?? []} profiles={profiles} onChange={(budgets) => setForm({ ...form, budgets })} />
+
+            </>,
+          )}
+      <div className="card">
+        <h3>Usage and estimated cost</h3>
+        <UsageTable
+          version={config}
+          onError={onError}
+          onPrice={(providerId, model) => {
+            setForm({ ...form, prices: [...(form.prices ?? []), { providerId, model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0 }] });
+            requestAnimationFrame(() => document.getElementById("prices")?.scrollIntoView({ block: "start" }));
+          }}
+        />
+      </div>
+        </>
+      )}
+      {page === "permissions" && (
+        <>
+          <PendingCommands version={[config, restored]} onSaved={onSaved} onError={onError} />
+          {pageForm(
+            <>
+        <h3>Bypass mode</h3>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={form.permissions.allowBypass}
+            onChange={(e) => allowBypass(e.target.checked)}
+          />
+          Allow bypass mode to be chosen for a session
+        </label>
+
+        <h3>Hooks</h3>
+        <HookTable hooks={form.hooks ?? []} onChange={(hooks) => setForm({ ...form, hooks })} />
+
+            </>,
+          )}
+        </>
+      )}
+      {page === "network" &&
+        pageForm(
+          <>
+        <h3>Local only</h3>
         <label className="row">
           <input
             type="checkbox"
@@ -434,95 +571,20 @@ export default function Settings({ config, providers, harnesses, environments, p
           {update?.error && <span className="muted">{update.error}</span>}
         </div>
 
-        <h3>Permissions</h3>
-        <label className="row">
-          <input
-            type="checkbox"
-            checked={form.permissions.allowBypass}
-            onChange={(e) => allowBypass(e.target.checked)}
-          />
-          Allow bypass mode to be chosen for a session
-        </label>
-
-        <h3>Claude Code</h3>
-        <p className="muted">
-          Copy sessions, MCP servers, permission rules and skills from Claude Code. <button type="button" className="link" onClick={onImport}>Import from Claude Code…</button>
-        </p>
-
-        <h3>Notifications</h3>
-        <p className="muted">Shown while Freeloop is in the background; clicking one opens its session.</p>
-        <label className="row">
-          <input
-            type="checkbox"
-            checked={form.notifications.enabled}
-            onChange={(e) => setForm({ ...form, notifications: { ...form.notifications, enabled: e.target.checked } })}
-          />
-          When a session needs an approval or fails
-        </label>
-        <label className="row">
-          <input
-            type="checkbox"
-            disabled={!form.notifications.enabled}
-            checked={form.notifications.finished}
-            onChange={(e) => setForm({ ...form, notifications: { ...form.notifications, finished: e.target.checked } })}
-          />
-          Also when a session finishes a turn
-        </label>
-        {projects.length > 0 && (
-          <fieldset>
-            <legend>Projects <span className="muted">(saved at once)</span></legend>
-            {projects.map((p) => (
-              <label key={p.id} className="row">
-                <input
-                  type="checkbox"
-                  checked={!p.muted}
-                  onChange={(e) =>
-                    EngineService.SetProjectMuted(p.id, !e.target.checked)
-                      .then(onProjectsChanged)
-                      .catch(onError)
-                  }
-                />
-                {p.name} <span className="muted">{p.muted ? "muted" : ""}</span>
-              </label>
-            ))}
-          </fieldset>
+          </>,
         )}
-
-        <h3>Hooks</h3>
-        <HookTable hooks={form.hooks ?? []} onChange={(hooks) => setForm({ ...form, hooks })} />
-
-        <h3 id="prices">Prices</h3>
-        <PriceTable prices={form.prices ?? []} providers={providers} onChange={(prices) => setForm({ ...form, prices })} />
-
-        <h3 id="budgets">Budgets</h3>
-        <BudgetTable budgets={form.budgets ?? []} profiles={profiles} onChange={(budgets) => setForm({ ...form, budgets })} />
-
-        <div className={unsaved ? "row settings-save" : "row"} role="status">
-          {unsaved ? (
-            <>
-              <span className="muted">Hooks, prices, budgets and the search settings wait for Save.</span>
-              <button type="submit" className="primary">
-                Save
-              </button>
-              <button type="button" onClick={() => setForm(config)}>
-                Revert
-              </button>
-            </>
-          ) : (
-            <span className="muted">Changes save themselves.</span>
-          )}
-          {saved && <span className="ok">Saved</span>}
-        </div>
-      </form>
-
+      {page === "data" && (
+        <>
       <div className="card">
-        <h3>Logs</h3>
-        <p className="muted">What went wrong, for a bug report. Logs stay on this Mac, with the secrets the app knows about removed. Read them before sharing them.</p>
-        <button type="button" onClick={() => EngineService.ShowLogs().catch(onError)}>
-          Show logs in Finder
-        </button>
-      </div>
+        <h3>Import from Claude Code</h3>
+        <p className="muted">Copy sessions, MCP servers, permission rules and skills from Claude Code. Nothing is written back to it.</p>
+        <div className="row">
+          <button type="button" onClick={onImport}>
+            Import from Claude Code…
+          </button>
+        </div>
 
+      </div>
       <div className="card">
         <h3>Backup</h3>
         <p className="muted">
@@ -562,16 +624,15 @@ export default function Settings({ config, providers, harnesses, environments, p
       </div>
 
       <div className="card">
-        <h3>Usage and estimated cost</h3>
-        <UsageTable
-          version={config}
-          onError={onError}
-          onPrice={(providerId, model) => {
-            setForm({ ...form, prices: [...(form.prices ?? []), { providerId, model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0 }] });
-            document.getElementById("prices")?.scrollIntoView({ block: "start" });
-          }}
-        />
+        <h3>Logs</h3>
+        <p className="muted">What went wrong, for a bug report. Logs stay on this Mac, with the secrets the app knows about removed. Read them before sharing them.</p>
+        <button type="button" onClick={() => EngineService.ShowLogs().catch(onError)}>
+          Show logs in Finder
+        </button>
       </div>
+
+        </>
+      )}
     </section>
   );
 }

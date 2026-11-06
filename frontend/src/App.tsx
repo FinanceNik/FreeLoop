@@ -66,7 +66,7 @@ import { ask } from "./ask.ts";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { applyFonts, type FontChoice } from "./fonts.ts";
-import { inSettings, isSettingsShortcut, MAX_FONT_SIZE, textSizeAfter } from "./settings.ts";
+import { inSettings, isGeneral, isSettingsShortcut, MAX_FONT_SIZE, settingsStart, textSizeAfter, type GeneralPage } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
 import SessionImport from "./SessionImport.tsx";
 import { basename } from "./paths.ts";
@@ -79,7 +79,7 @@ type Screen =
   | { kind: "providers" }
   | { kind: "rules" }
   | { kind: "environments" }
-  | { kind: "settings" }
+  | { kind: GeneralPage }
   | { kind: "attention" }
   | { kind: "board" }
   | { kind: "queue" }
@@ -566,11 +566,15 @@ export default function App() {
   // outside it.
   const outside = useRef<Screen>({ kind: "none" });
   if (!inSettings(screen.kind)) outside.current = screen;
+  // The settings open where they were left (the page, not what was typed on it).
+  const lastSettings = useRef<string | null>(null);
+  if (inSettings(screen.kind) && screen.kind !== "import") lastSettings.current = screen.kind;
+  const settingsScreen = () => ({ kind: settingsStart(lastSettings.current) }) as Screen;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (STANDALONE || !isSettingsShortcut(e)) return;
       e.preventDefault();
-      setScreen((s) => (inSettings(s.kind) ? s : { kind: "settings" }));
+      setScreen((s) => (inSettings(s.kind) ? s : settingsScreen()));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -836,12 +840,18 @@ export default function App() {
       page("schedules", "Schedules", () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
       page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
       page("rules", "Policy", () => setScreen({ kind: "rules" }), { keywords: "permission rules allow deny would this be allowed check" }),
-      page("settings", "Settings", () => setScreen({ kind: "settings" }), { keywords: "preferences theme notifications prices" }),
+      page("settings", "Settings", () => setScreen(settingsScreen()), { keywords: "preferences" }),
+      page("appearance", "Appearance", () => setScreen({ kind: "appearance" }), { keywords: "theme dark light font size colors provider marks" }),
+      page("keyboard", "Keyboard shortcuts", () => setScreen({ kind: "keyboard" }), { keywords: "keys bindings" }),
+      page("sessions", "Session defaults and notifications", () => setScreen({ kind: "sessions" }), { keywords: "default provider model environment profile notify mute" }),
+      page("costs", "Prices and budgets", () => setScreen({ kind: "costs" }), { keywords: "costs price budget spending limit" }),
+      page("permissions", "Permissions", () => setScreen({ kind: "permissions" }), { keywords: "bypass hooks approve approvals waiting" }),
+      page("network", "Network", () => setScreen({ kind: "network" }), { keywords: "local only offline web search updates" }),
       page("usage-pane", "Show usage in a pane", () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new")), { keywords: "live tokens cost graph 12 24 hours side by side" }),
       page("usage", "Usage", () => setScreen({ kind: "usage" }), { keywords: "cost tokens analytics dashboard spend", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
       page("import", "Import from Claude Code", () => setScreen({ kind: "import" })),
       page("import-sessions", "Import sessions", () => setScreen({ kind: "import" }), { keywords: "claude code agent transcript history resume" }),
-      page("backup", "Back up or restore the configuration", () => setScreen({ kind: "settings" }), { keywords: "export import settings providers profiles" }),
+      page("backup", "Back up or restore the configuration", () => setScreen({ kind: "data" }), { keywords: "export import settings providers profiles logs data" }),
       page("guide", "Setup guide", () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
       {
         id: "app:find",
@@ -1343,7 +1353,7 @@ export default function App() {
           </button>
         )}
         {config?.network?.localOnly && (
-            <button className="link today" title="The app connects to nothing but this Mac; change it in Settings" onClick={() => setScreen({ kind: "settings" })}>
+            <button className="link today" title="The app connects to nothing but this Mac; change it in Settings" onClick={() => setScreen({ kind: "network" })}>
               Local only
             </button>
           )}
@@ -1398,7 +1408,7 @@ export default function App() {
                 aria-current={inSettings(screen.kind) ? "page" : undefined}
                 aria-keyshortcuts={ariaKeys(bindingOf("settings"))}
                 title={bindingOf("settings") ? `Settings (${keyLabel(bindingOf("settings"))})` : "Settings"}
-                onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen({ kind: "settings" }))}
+                onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen(settingsScreen()))}
               >
                 <Icon name="general" />
               </button>
@@ -1445,7 +1455,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setScreen({ kind: "settings" });
+                setScreen({ kind: "permissions" });
                 requestAnimationFrame(() => document.getElementById("pending-approvals")?.scrollIntoView({ block: "start" }));
               }}
             >
@@ -1537,7 +1547,7 @@ export default function App() {
         )}
         {inSettings(screen.kind) && (
           <div className="settings-area">
-            <SettingsNav current={screen.kind} onOpen={(kind) => setScreen({ kind })} onBack={leaveSettings} />
+            <SettingsNav current={screen.kind} onOpen={(kind) => setScreen({ kind } as Screen)} onBack={leaveSettings} counts={{ permissions: waitingApproval }} />
             <div className="settings-content">
               {screen.kind === "providers" && (
                 <Providers
@@ -1558,8 +1568,9 @@ export default function App() {
                   }}
                 />
               )}
-              {screen.kind === "settings" && config && (
+              {isGeneral(screen.kind) && config && (
                 <Settings
+                  page={screen.kind}
                   config={config}
                   providers={providers}
                   harnesses={harnesses}
@@ -1612,7 +1623,10 @@ export default function App() {
         )}
         {screen.kind === "compare" && <Compare key={screen.tag} tag={screen.tag} onOpen={(id) => openSession(id)} onError={report} />}
         {screen.kind === "usage" && (
-          <Usage onShowInPane={STANDALONE ? undefined : () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new"))} projects={projects} providers={providers} harnesses={harnesses} onOpenSession={(id) => openSession(id)} onOpenPrices={() => setScreen({ kind: "settings" })} onError={report} />
+          <Usage onShowInPane={STANDALONE ? undefined : () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new"))} projects={projects} providers={providers} harnesses={harnesses} onOpenSession={(id) => openSession(id)} onOpenPrices={() => {
+            setScreen({ kind: "costs" });
+            requestAnimationFrame(() => document.getElementById("prices")?.scrollIntoView({ block: "start" }));
+          }} onError={report} />
         )}
         {screen.kind === "queue" && <Queue projects={projects} profiles={profiles} onOpen={openSession} onError={report} />}
         {screen.kind === "board" && (
