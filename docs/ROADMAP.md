@@ -413,6 +413,23 @@ Three features that make the second claim, one honest bill across agents, answer
 
 Open for the user: whether a finished task is a merged change or archived with a commit (the plan) or an explicit "Mark done"; how often `gh` is asked about a pull request (the plan: every 30 minutes, 30 days back); the recommendation's thresholds (3 sessions, 30% cheaper, merge rate within 10 points).
 
+## After 0.1.0: more work started, and none of it stranded (planned 2026-11-06)
+
+For someone running many sessions, the waste is in the gaps: an agent idle while tasks wait, and a session that hit its limit or got stuck and sits there. Both build on what exists.
+
+1. **A queue of tasks (SES-025).** About 5 days.
+   - Engine: `internal/engine/queue.go`, a `queue.yaml` beside `schedules.yaml`, run by the schedule loop (`scheduleLoop`, every 30 seconds). It starts a task with `CreateSession` and `Prompt` when there is room: the queue's limit, the provider's slots (`limit.go`), the agent's limits (`Engine.Limits`, paused until `resetsAt`) and budgets once GUI-038 exists.
+   - Interface: a Queue page with the board's columns (waiting, running, done), "Add to queue" in the new-session form, several issues at once from the issue picker, and the queue's limit in Settings.
+   - Tests: a fake clock and the scripted provider for start order, slots, a limit pausing and resuming, approvals keeping a slot, and a paused queue. A `make check-app` step adds three tasks and sees two start.
+2. **Hand off when stuck or out of allowance (HRN-020).** About 4 days.
+   - Engine: `internal/engine/stuck.go` watches a running session's events: a rejected `limit_update`, the turn limit, the same tool failing three times, two rewinds in a turn, errors after retries. It emits a `stuck` event with the reason and a suggested profile. `SwitchProfile` (`handoff.go`) gains: ending the old session's open approvals, a link both ways, and the old session's last request carried into the new one.
+   - Interface: one banner in the session and an entry in the attention view, "<reason>: continue on <profile>?". A per-agent fallback profile in Settings, and `onLimit` in a profile for doing it without asking.
+   - Tests: each trigger from recorded events, the handoff's links and carried request, and `onLimit`. A `make check-app` step with a scripted provider that keeps failing one tool.
+
+Order: the handoff first, since it needs no new data and a reached limit is today's commonest dead end; then the queue, which uses the handoff for a task that hits its limit.
+
+Open for the user: the queue's default limit of 3 sessions at once; whether a queued task gets its own worktree by default (the plan: yes, so tasks in one repository do not edit the same files); whether `onLimit` may continue without asking (the plan: only if the profile says so).
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
