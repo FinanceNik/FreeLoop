@@ -557,26 +557,18 @@ await step("a click clears a selection", async () => {
   };
   const clicked = async (name, el, x, y) => {
     await selectAll();
-    // DIAGNOSIS (CI, macOS 15): what WebKit sends, and the selection at each step.
-    const seen = [];
-    const log = (e) => seen.push(`${e.type}(d${e.detail},${e.target?.className?.toString?.().slice(0, 20) ?? e.target?.nodeName}):${selected()}`);
-    const kinds = ["mousedown", "mouseup", "click", "selectstart", "selectionchange"];
-    for (const k of kinds) document.addEventListener(k, log, true);
-    await mouse(...at(el, x, y), 1);
-    requestAnimationFrame(() => seen.push(`frame:${selected()}`));
+    const [px, py] = at(el, x, y);
+    // A point outside the window reaches nothing, and the check would say nothing true.
+    if (px < 0 || py < 0 || px > innerWidth || py > innerHeight) throw new Error(`${name} is out of sight, at ${Math.round(px)},${Math.round(py)}`);
+    await mouse(px, py, 1);
     await sleep(150);
-    for (const k of kinds) document.removeEventListener(k, log, true);
-    check(`a click clears a selection: ${name}`, selected() === 0, `${selected()} characters stayed selected; ${seen.join(" ")}`);
+    check(`a click clears a selection: ${name}`, selected() === 0, `${selected()} characters stayed selected`);
   };
   const msg = all(".msg-agent", activePane()).at(-1);
-  // DIAGNOSIS (CI, macOS 15): where the message and the view are before the click.
-  {
-    const c = conversation();
-    const r = msg.getBoundingClientRect();
-    const [x, y] = at(msg);
-    results.push({ name: "DIAGNOSIS before the text click", ok: true, detail: `window ${innerWidth}x${innerHeight}; conversation top ${Math.round(c.scrollTop)} of ${c.scrollHeight}, shows ${c.clientHeight}; message ${Math.round(r.top)}..${Math.round(r.bottom)}, click at ${Math.round(x)},${Math.round(y)}; ${all(".msg-agent", activePane()).length} agent messages` });
-    await window.webkit.messageHandlers.snap?.postMessage("before the text click");
-  }
+  // On a machine that never shows the window (CI), messages out of sight keep their
+  // placeholder heights, so the last one need not be where the view ends: bring it in.
+  msg.scrollIntoView({ block: "center" });
+  await sleep(200);
   await clicked("text", msg);
   await clicked("the conversation's margin", conversation(), 0.01, 0.5);
   await clicked("the header's title", document.querySelector(".session-header h2"));
