@@ -689,6 +689,23 @@ await step("a finished session says so on the board", async () => {
   await until("the conversation", () => document.querySelector(".conversation"));
 });
 
+await step("the More menu closes like a menu", async () => {
+  const mouse = (...a) => window.webkit.messageHandlers.mouse.postMessage(a);
+  const at = (el) => { const b = el.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };
+  const menu = activePane().querySelector(".export-menu");
+  await mouse(...at(menu.querySelector("summary")), 1);
+  await until("the menu to open", () => menu.open, 4000);
+  const away = activePane().querySelector(".conversation");
+  const b = away.getBoundingClientRect();
+  await mouse(b.left + b.width / 2, b.top + 40, 1);
+  check("a click elsewhere closes the More menu", await until("the menu to close", () => !menu.open, 4000).catch(() => false));
+  await mouse(...at(menu.querySelector("summary")), 1);
+  await until("the menu to open", () => menu.open, 4000);
+  menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await sleep(50);
+  check("Escape closes the More menu", !menu.open);
+});
+
 await step("every control has a name", async () => {
   // GUI-041: a control drawn as an icon alone is named in aria-label and explained in a tooltip.
   const unnamed = [];
