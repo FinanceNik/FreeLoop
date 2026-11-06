@@ -1,6 +1,10 @@
 // The body of an async function run in the page; it returns one result per step.
 const results = [];
-const check = (name, ok, detail = "") => results.push({ name, ok: !!ok, detail: String(detail) });
+const check = (name, ok, detail = "") => {
+  results.push({ name, ok: !!ok, detail: String(detail) });
+  // A picture of what failed, for a run no one watched (scripts/appcheck/drive.swift).
+  if (!ok) window.webkit.messageHandlers.snap?.postMessage(name)?.catch(() => {});
+};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (what, fn, ms = 15000) => {
   const end = Date.now() + ms;
@@ -549,9 +553,16 @@ await step("a click clears a selection", async () => {
   };
   const clicked = async (name, el, x, y) => {
     await selectAll();
+    // DIAGNOSIS (CI, macOS 15): what WebKit sends, and the selection at each step.
+    const seen = [];
+    const log = (e) => seen.push(`${e.type}(d${e.detail},${e.target?.className?.toString?.().slice(0, 20) ?? e.target?.nodeName}):${selected()}`);
+    const kinds = ["mousedown", "mouseup", "click", "selectstart", "selectionchange"];
+    for (const k of kinds) document.addEventListener(k, log, true);
     await mouse(...at(el, x, y), 1);
+    requestAnimationFrame(() => seen.push(`frame:${selected()}`));
     await sleep(150);
-    check(`a click clears a selection: ${name}`, selected() === 0, `${selected()} characters stayed selected`);
+    for (const k of kinds) document.removeEventListener(k, log, true);
+    check(`a click clears a selection: ${name}`, selected() === 0, `${selected()} characters stayed selected; ${seen.join(" ")}`);
   };
   const msg = all(".msg-agent", activePane()).at(-1);
   await clicked("text", msg);

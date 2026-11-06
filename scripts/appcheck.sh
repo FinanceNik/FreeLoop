@@ -30,8 +30,15 @@ providers:
 YAML
 
 pid=
+# What a run leaves to read afterwards: the app's log, the scenario's lines and a picture
+# of each failed check. CI uploads it when the check fails.
+OUT=${APPCHECK_OUT:-$ROOT/bin/appcheck}
+rm -rf "$OUT"
+mkdir -p "$OUT/shots"
+export APPCHECK_SHOTS="$OUT/shots"
 cleanup() {
   [ -z "$pid" ] || kill "$pid" 2>/dev/null || true
+  cp "$DATA/app.log" "$OUT/app.log" 2>/dev/null || true
   rm -rf "$DATA"
 }
 trap cleanup EXIT INT TERM
@@ -100,7 +107,8 @@ while [ $n -lt "${APPCHECK_TURNS:-25}" ]; do
 done
 
 status=0
-"$DATA/drive" "http://localhost:$PORT/" "$HERE/appcheck/scenario.js" || status=$?
+"$DATA/drive" "http://localhost:$PORT/" "$HERE/appcheck/scenario.js" > "$OUT/results.txt" || status=$?
+cat "$OUT/results.txt"
 
 # What the page says it saved has to be in the file.
 if ! grep -q 'allowBypass: true' "$FREELOOP_HOME/config.yaml"; then

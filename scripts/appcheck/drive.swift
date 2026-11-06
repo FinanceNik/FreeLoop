@@ -55,6 +55,27 @@ final class Mouse: NSObject, WKScriptMessageHandlerWithReply {
   }
 }
 
+// A picture of the window, for a check that failed: on a machine no one watches, such as
+// CI, it shows what the page looked like. The scenario sends a name; the picture goes to
+// $APPCHECK_SHOTS, numbered, when that is set.
+final class Snap: NSObject, WKScriptMessageHandlerWithReply {
+  var count = 0
+  func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
+    guard let dir = ProcessInfo.processInfo.environment["APPCHECK_SHOTS"], !dir.isEmpty else { return replyHandler(false, nil) }
+    let name = String((message.body as? String ?? "check").map { $0.isLetter || $0.isNumber ? $0 : "-" }.prefix(60))
+    count += 1
+    let file = URL(fileURLWithPath: dir).appendingPathComponent(String(format: "%02d-%@.png", count, name))
+    Task { @MainActor in
+      web.takeSnapshot(with: nil) { image, _ in
+        if let tiff = image?.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {
+          try? png.write(to: file)
+        }
+        replyHandler(true, nil)
+      }
+    }
+  }
+}
+
 final class Driver: NSObject, WKNavigationDelegate {
   let scenario: String
   init(scenario: String) { self.scenario = scenario }
@@ -94,6 +115,8 @@ let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: 720)
 let mouse = Mouse()
 let configuration = WKWebViewConfiguration()
 configuration.userContentController.addScriptMessageHandler(mouse, contentWorld: .page, name: "mouse")
+let snap = Snap()
+configuration.userContentController.addScriptMessageHandler(snap, contentWorld: .page, name: "snap")
 let web = CheckedWebView(frame: window.contentView!.bounds, configuration: configuration)
 window.contentView!.addSubview(web)
 window.makeKeyAndOrderFront(nil)
