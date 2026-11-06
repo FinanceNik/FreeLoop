@@ -402,6 +402,17 @@ What follows, in order, before anything else in v1:
 
 Not before those: features that copy a vendor app's. Token optimizers get no more work (OQ-031). What the vision lists as borrowed from vendor apps stays built; nothing more of that kind is added without a reason in this list.
 
+## After 0.1.0: the bill measured by what it bought (planned 2026-11-06)
+
+Three features that make the second claim, one honest bill across agents, answer the question a user actually has: what did this work cost, and could it have cost less. They wait for the release and for every agent's usage to be priced (release plan, phase 3), or they mostly cover Claude Code.
+
+1. **Outcomes recorded (SES-024).** `commit`, `merged`, `pull_request_state` and `compare_kept` events, folded into activity, with a one-time count of past sessions. About 4 days.
+2. **Cost per outcome (GUI-039).** `frontend/src/outcomes.ts` and a card on the Efficiency tab; cost per merged change in the shared summary. About 3 days.
+3. **Subscription value (PRV-016).** `subscriptions` in `config.yaml`, edited beside the prices; `frontend/src/subscriptions.ts` and a card beside the limits. Independent of the other two, and the one that could come earlier. About 3 days.
+4. **A cheaper model for similar work (GUI-040).** `frontend/src/recommend.ts` and a card on the Efficiency tab, after 1 and 2 and a few weeks of outcomes. About 4 days.
+
+Open for the user: whether a finished task is a merged change or archived with a commit (the plan) or an explicit "Mark done"; how often `gh` is asked about a pull request (the plan: every 30 minutes, 30 days back); the recommendation's thresholds (3 sessions, 30% cheaper, merge rate within 10 points).
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
