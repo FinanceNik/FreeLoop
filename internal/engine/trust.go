@@ -2,8 +2,11 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +46,11 @@ type ProjectSettings struct {
 	// Worktree is the project's .freeloop/worktree.yaml (SES-016), shown
 	// whether or not the project is trusted, like Hooks.
 	Worktree config.WorktreeScripts `json:"worktree"`
-	Issues   []config.Issue         `json:"issues"`
+	// AgentConfig is what the repository brings for the agents themselves, shown
+	// like Hooks: an agent reads it, and once the project is trusted Claude Code runs
+	// the hooks in it (SEC-006, SEC-015).
+	AgentConfig []AgentConfigFile `json:"agentConfig"`
+	Issues      []config.Issue    `json:"issues"`
 }
 
 type projectConfig struct {
@@ -136,7 +143,7 @@ func readProjectConfig(e *Engine, p session.Project) projectConfig {
 // project at root, for the new-session form. A folder that is not a project
 // yet is untrusted.
 func (e *Engine) ProjectSettings(ctx context.Context, root string) (ProjectSettings, error) {
-	empty := ProjectSettings{Profiles: []config.Profile{}, Rules: []permission.Rule{}, Hooks: []config.Hook{}, Issues: []config.Issue{}}
+	empty := ProjectSettings{AgentConfig: []AgentConfigFile{}, Profiles: []config.Profile{}, Rules: []permission.Rule{}, Hooks: []config.Hook{}, Issues: []config.Issue{}}
 	if root == "" || !environment.IsDir(root) {
 		return empty, nil
 	}
@@ -146,12 +153,68 @@ func (e *Engine) ProjectSettings(ctx context.Context, root string) (ProjectSetti
 		// what trusting would run.
 		empty.Hooks = e.previewHooks(environment.Canonical(root))
 		empty.Worktree, _ = e.repoScripts(environment.Canonical(root))
+		empty.AgentConfig = e.agentConfig(environment.Canonical(root))
 		return empty, nil
 	}
 	s := e.projectConfig(p).ProjectSettings
 	s.Hooks = e.previewHooks(p.Root)
 	s.Worktree, _ = e.repoScripts(p.Root)
+	s.AgentConfig = e.agentConfig(p.Root)
 	return s, nil
+}
+
+// AgentConfigFile is one file a repository brings for an agent, with what matters in
+// it for the user deciding whether to trust the project.
+type AgentConfigFile struct {
+	Path string `json:"path"`
+	// Hooks are the events whose commands Claude Code runs, once trusted, without
+	// asking anyone.
+	Hooks []string `json:"hooks,omitempty"`
+	// Allows says the file lets the agent run commands without asking it. The app's
+	// policy still decides; this says the repository tried.
+	Allows bool `json:"allows,omitempty"`
+}
+
+// agentConfigFiles are the files agents read from a project.
+var agentConfigFiles = []string{".claude/settings.json", ".claude/settings.local.json", ".mcp.json", ".codex/config.toml", ".gemini/settings.json", "opencode.json"}
+
+// agentConfig reads what a repository brings for the agents. Reading shows it; only
+// trust lets an agent use it.
+func (e *Engine) agentConfig(root string) []AgentConfigFile {
+	out := []AgentConfigFile{}
+	env, err := e.localEnv(root, nil)
+	if err != nil {
+		return out
+	}
+	for _, name := range agentConfigFiles {
+		b, err := env.FS().ReadFile(name)
+		if err != nil {
+			continue
+		}
+		f := AgentConfigFile{Path: name}
+		var claude struct {
+			Hooks       map[string]json.RawMessage `json:"hooks"`
+			Permissions struct {
+				Allow       []string `json:"allow"`
+				DefaultMode string   `json:"defaultMode"`
+			} `json:"permissions"`
+		}
+		if strings.HasPrefix(name, ".claude/") && json.Unmarshal(b, &claude) == nil {
+			f.Hooks = slices.Sorted(maps.Keys(claude.Hooks))
+			f.Allows = len(claude.Permissions.Allow) > 0 || claude.Permissions.DefaultMode == "bypassPermissions" || claude.Permissions.DefaultMode == "acceptEdits"
+		}
+		text := string(b)
+		switch name {
+		case ".codex/config.toml":
+			f.Allows = strings.Contains(text, `approval_policy = "never"`) || strings.Contains(text, "danger-full-access")
+		case ".gemini/settings.json":
+			f.Allows = strings.Contains(text, "yolo") || strings.Contains(text, `"autoAccept": true`) || strings.Contains(text, `"autoAccept":true`)
+		case "opencode.json":
+			f.Allows = strings.Contains(text, `"allow"`)
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // previewHooks lists the hooks a project's .freeloop/ defines, in

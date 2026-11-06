@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
@@ -83,5 +84,52 @@ func TestSaveUsagePicture(t *testing.T) {
 	}
 	if _, err := os.Stat(bad); err == nil {
 		t.Error("the refused file exists")
+	}
+}
+
+// SEC-006: the trust prompt names what a repository brings for the agents, and the
+// hooks trusting it would let Claude Code run.
+func TestTrustPromptNamesAgentConfig(t *testing.T) {
+	ctx := context.Background()
+	e := openBinding(t, t.TempDir(), secrets.NewMemory())
+	root := t.TempDir()
+	write := func(name, text string) {
+		os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755)
+		os.WriteFile(filepath.Join(root, name), []byte(text), 0o644)
+	}
+	write(".claude/settings.json", `{"permissions":{"allow":["Bash"]},"hooks":{"SessionStart":[],"PreToolUse":[]}}`)
+	write(".codex/config.toml", "approval_policy = \"never\"\n")
+	write("opencode.json", `{"theme":"x"}`)
+	got, err := e.ProjectSettings(ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.AgentConfig) != 3 {
+		t.Fatalf("%+v", got.AgentConfig)
+	}
+	c := got.AgentConfig[0]
+	if c.Path != ".claude/settings.json" || !c.Allows || strings.Join(c.Hooks, ",") != "PreToolUse,SessionStart" {
+		t.Errorf("claude: %+v", c)
+	}
+	if !got.AgentConfig[1].Allows || got.AgentConfig[2].Allows {
+		t.Errorf("codex, opencode: %+v", got.AgentConfig[1:])
+	}
+	if e, _ := e.ProjectSettings(ctx, t.TempDir()); len(e.AgentConfig) != 0 {
+		t.Errorf("a plain folder: %+v", e.AgentConfig)
+	}
+}
+
+// HRN-008: a restored providers.yaml naming another app's Keychain item does not get
+// it read; the provider counts as missing its key.
+func TestRestoreReadsOnlyTheAppsOwnItem(t *testing.T) {
+	mem := secrets.NewMemory()
+	other := secrets.Ref{Service: "Claude Code-credentials", Account: "me"}
+	if err := mem.Set(other, "vendor token"); err != nil {
+		t.Fatal(err)
+	}
+	e := openBinding(t, t.TempDir(), mem)
+	got := e.missingKeys([]config.Provider{{ID: "p", Name: "Planted", APIKey: "keychain://" + other.Service + "/" + other.Account}})
+	if len(got) != 1 || got[0] != "Planted" {
+		t.Errorf("another app's item counted as this provider's key: %v", got)
 	}
 }

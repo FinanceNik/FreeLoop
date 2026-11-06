@@ -173,6 +173,23 @@ func heldPath(rel string) bool {
 	return inAny(parts, settingDirs, settingFiles) || inAny(parts, heldDirs, heldFiles)
 }
 
+// SyncHeldNames lists the names of files and folders the sync keeps from crossing,
+// one way or both, for the permission policy to be checked against (SEC-005).
+func SyncHeldNames() []string {
+	var out []string
+	for _, set := range []map[string]bool{settingDirs, settingFiles, heldDirs, heldFiles} {
+		for name := range set {
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// SecretPath reports a path, relative to the project, that holds secrets by its name:
+// what the sync never sends, and the broker asks about before it is read.
+func SecretPath(rel string) bool { return secretPath(rel) }
+
 // secretPath reports a path that never leaves this Mac, tracked or not, and does not
 // come back either.
 func secretPath(rel string) bool {

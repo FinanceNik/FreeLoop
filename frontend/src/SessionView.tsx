@@ -11,7 +11,6 @@ import {
   type HarnessInfo,
   type ProjectInfo,
   type ProviderInfo,
-  type Hook,
   type Profile,
   type ResourceRef,
   type Session,
@@ -44,7 +43,7 @@ import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
 import { drawOnce, HOLD_PLACE, holdsPlace, READER_PAUSE, readerScrolling, scrollsByKey, scrollsUpByKey, settledPlace } from "./scrollPlace.ts";
 import { estimate, formatCost, type PriceEntry } from "./cost.ts";
-import { trustStep } from "./trust.ts";
+import { trustLines, trustStep } from "./trust.ts";
 
 interface Props {
   session: Session;
@@ -135,7 +134,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const [panelTab, setPanelTab] = useState<PanelTab>("approvals");
   // The commands an untrusted project's hooks would run, shown before the
   // user trusts it (EXT-005).
-  const [trustLookup, setTrustLookup] = useState<Hook[] | null>(null);
+  const [trustLookup, setTrustLookup] = useState<string[] | null>(null);
   const trustHooks = trustLookup ?? [];
   const untrusted = !!project && !project.trusted && !project.missing;
   const canBypass = allowBypass && !!project?.trusted;
@@ -147,7 +146,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     setTrustLookup(null);
     if (!untrusted || !project) return;
     EngineService.ProjectSettings(project.root)
-      .then((s) => setTrustLookup(s.hooks ?? []))
+      .then((s) => setTrustLookup(trustLines(s)))
       .catch(() => setTrustLookup(null));
   }, [untrusted, project?.root]);
   const trustProject = async (ask: boolean) => {
@@ -158,7 +157,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       // read the answer before choosing.
       EngineService.ProjectSettings(project.root)
         .then((s) => {
-          const hooks = s.hooks ?? [];
+          const hooks = trustLines(s);
           setTrustLookup(hooks);
           if (hooks.length > 0) return onError(`Check what ${project.name} would run, then trust it again.`);
           return EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged);
@@ -166,8 +165,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
         .catch((err) => onError(`${project.name} was not trusted: its hooks could not be read. ${err}`));
       return;
     }
-    const list = trustHooks.map((h) => `${h.event}: ${h.command}`).join("\n");
-    if (step === "confirm" && !(await askUser(`Trusting ${project.name} lets it run these commands (hooks):\n\n${list}`))) return;
+    const list = trustHooks.join("\n");
+    if (step === "confirm" && !(await askUser(`Trusting ${project.name} lets it run or try these:\n\n${list}`))) return;
     EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError);
   };
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -986,11 +985,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
               {trustHooks.length > 0 && (
                 <>
                   {" "}
-                  Trusting it lets it run these commands (hooks):
+                  Trusting it lets it run or try these:
                   <ul>
-                    {trustHooks.map((h, n) => (
+                    {trustHooks.map((line, n) => (
                       <li key={n}>
-                        {h.event}: <code>{h.command}</code>
+                        <code>{line}</code>
                       </li>
                     ))}
                   </ul>

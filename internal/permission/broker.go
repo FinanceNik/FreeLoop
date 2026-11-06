@@ -435,7 +435,7 @@ func (b *Broker) evaluate(pc Context, req Request) (Decision, bool) {
 		return allow(ActorMode, "accept-edits mode allows edits inside the project")
 	}
 
-	if (req.Kind.reads() || req.Kind == KindThink) && !outside {
+	if (req.Kind.reads() || req.Kind == KindThink) && !outside && !b.policy.secret(pc.Root, req.Paths) {
 		return allow(ActorPolicy, "reads inside the project are allowed")
 	}
 	return Decision{}, false

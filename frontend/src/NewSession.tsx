@@ -22,6 +22,7 @@ import {
 } from "./api.ts";
 import { inheritedLabel, OPTIMIZER_OFF } from "./optimizers.ts";
 import { orderModels } from "./models.ts";
+import { trustLines } from "./trust.ts";
 import type { Defaults } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
 
 interface Props {
@@ -317,14 +318,13 @@ export default function NewSession({ providers, projects, environments, profiles
               <code>CLAUDE.md</code>, its <code>.freeloop/</code> settings, run its hooks, or run <code>git status</code> in it. Trust only folders whose
               contents you know.
             </p>
-            {(settings.hooks ?? []).length > 0 && (
+            {trustLines(settings).length > 0 && (
               <div>
-                <strong>Trusting it lets it run these commands (hooks):</strong>
+                <strong>Trusting it lets it run or try these:</strong>
                 <ul>
-                  {(settings.hooks ?? []).map((h, n) => (
+                  {trustLines(settings).map((line, n) => (
                     <li key={n}>
-                      {h.event}
-                      {h.match ? ` (${h.match})` : ""}: <code>{h.command}</code> <span className="muted">{h.source}</span>
+                      <code>{line}</code>
                     </li>
                   ))}
                 </ul>

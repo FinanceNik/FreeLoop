@@ -12,7 +12,6 @@ import (
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
-	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
 // Config backup (SET-005): the settings, providers, profiles,
@@ -156,7 +155,9 @@ func (e *Engine) missingKeys(cfgs []config.Provider) []string {
 		if c.APIKey == "" {
 			continue
 		}
-		ref, err := secrets.ParseRef(c.APIKey)
+		// Only this app's own item is looked at: a restored file naming another app's,
+		// Claude Code's sign-in for one, must not get it read (HRN-008).
+		ref, err := ownRef(c.APIKey, providerRef(c.ID))
 		if err == nil {
 			_, err = e.secrets.Get(ref)
 		}

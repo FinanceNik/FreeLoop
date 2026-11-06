@@ -472,9 +472,17 @@ func TestSandboxIgnoresAPlantedCommonDir(t *testing.T) {
 func TestSkillLinksStayInTheSkill(t *testing.T) {
 	e, env, repo, home := sandboxedProject(t)
 	os.WriteFile(filepath.Join(home, ".netrc"), []byte("machine x password hunter2"), 0o600)
-	out, code := inSandbox(t, env, "mkdir -p .agents/skills/x && printf -- '---\\nname: x\\ndescription: d\\n---\\nb\\n' > .agents/skills/x/SKILL.md && printf note > .agents/skills/x/own.txt && ln -s "+home+"/.netrc .agents/skills/x/ref")
-	if code != 0 {
-		t.Fatalf("exit %d: %s", code, out)
+	// A sandboxed command cannot plant a skill at all now (SEC-005): skills steer the
+	// sessions that follow. One planted another way still must not lead out.
+	if out, code := inSandbox(t, env, "mkdir -p .agents/skills/y && echo x > .agents/skills/y/SKILL.md"); code == 0 {
+		t.Errorf("a sandboxed command wrote a project skill: %s", out)
+	}
+	dir := filepath.Join(repo, ".agents", "skills", "x")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: x\ndescription: d\n---\nb\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "own.txt"), []byte("note"), 0o644)
+	if err := os.Symlink(filepath.Join(home, ".netrc"), filepath.Join(dir, "ref")); err != nil {
+		t.Fatal(err)
 	}
 	p, err := e.store.ProjectByRoot(context.Background(), environment.Canonical(repo))
 	if err != nil {

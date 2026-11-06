@@ -294,6 +294,15 @@ Claude Code runs its tools in its own process, so the app decides only what it a
 
 Held before the fixes too: allow rules for `Bash`, `Bash(git push:*)` and `Bash(*)`, a default bypass mode and local settings all left the push to the user. Still open: auto mode is the agent's own, as OQ-032 chose, so the app's deny rules do not reach what it approves there; the case tried, a git hook, held because Claude Code refused it itself.
 
+Also from that review, 2026-11-05 and 06:
+
+- **One list of what is acted on later.** Accept-edits mode wrote `AGENTS.md`, `CLAUDE.md` and `.github/` without asking, which the SSH sync already held back: what the next session obeys, and what CI runs with the repository's secrets after a push. `permission.ActedOnLater` now covers everything the sync holds, and `TestActedOnLaterCoversTheSync` fails if they drift. A sandbox keeps them read-only, a project skill in `.agents/` included.
+- **A secret's file is read with the user's say.** Reads inside the project were allowed without asking, `.env` included, and what is read goes to the provider. A path the sync treats as secret by its name (`.env`, `.env.*` but not `.env.example`, `*.pem`, `*.key`, SSH keys, credentials) now asks, except in bypass. Claude Code reads files with its own tool, which does not ask the app.
+- **The trust prompt names agent config.** It lists the repository's own files for agents, the Claude Code hooks trusting it would let run, and settings that tell an agent not to ask.
+- **A restore reads only the app's own Keychain item.** A restored `providers.yaml` could name another app's item, such as Claude Code's sign-in, and the restore preview read it to see whether the key was there (HRN-008).
+- **Drafts are in the page's storage.** Redacted and capped at 64 KB, but kept in WebKit's storage, outside the data folder: they outlive deleting it, and `FREELOOP_HOME` does not move them. Not changed yet.
+- **The PDF viewer is not yet checked in the packaged app.** `make check-app` opens a hostile PDF in the served build only.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

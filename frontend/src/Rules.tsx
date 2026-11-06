@@ -59,7 +59,7 @@ export default function Rules({ session, version, onError }: Props) {
       <h2>Permission rules</h2>
       <p className="muted">
         Rules decide tool calls before you are asked. Deny rules win over allow rules in every scope and in every mode, bypass
-        included. Allow rules never lift plan mode or protected paths. A shell rule ending in <code>*</code> matches a prefix and
+        included, except an agent's own auto mode, where the agent approves for itself. Allow rules never lift plan mode or protected paths. A shell rule ending in <code>*</code> matches a prefix and
         only ever approves a single plain command, never a chain, pipe or redirection.
       </p>
 

@@ -137,6 +137,12 @@ var ActedOnLater = []string{
 	".devcontainer", ".devcontainer.json", ".mcp.json", ".envrc", ".vscode", ".idea", ".husky", ".githooks",
 	".pre-commit-config.yaml", ".claude", ".gemini", ".codex", ".goose", ".opencode", "opencode.json", ".cursor",
 	".windsurf", ".continue", ".zed", ".mise.toml", ".tool-versions", ".nvim.lua", ".nvimrc", ".exrc", ".cargo",
+	// What the next session obeys, and what CI runs with the repository's secrets after
+	// a push. The SSH sync held these back already; TestActedOnLaterCoversTheSync keeps
+	// the two lists one (SEC-005).
+	"AGENTS.md", "CLAUDE.md", "GEMINI.md", ".agents", ".github", ".gitlab", ".gitlab-ci.yml", ".circleci", ".travis.yml",
+	".gitattributes", ".gitmodules", ".lfsconfig", ".direnv", ".mise", "mise.toml", ".bundle", ".yarn", ".yarnrc",
+	".yarnrc.yml", ".pnpmfile.cjs", ".mvn", ".bazelrc", "gradle.properties", ".pylintrc", "pylintrc",
 }
 
 // actedOn reports a path that is or is inside one of ActedOnLater.
@@ -155,6 +161,18 @@ func (p *Policy) actedOn(root string, paths []string) bool {
 		}
 		// direnv looks in every folder on the way.
 		if parts[len(parts)-1] == environment.FoldPath(".envrc") {
+			return true
+		}
+	}
+	return false
+}
+
+// secret reports a path inside the project whose name says it holds secrets, as the
+// SSH sync judges it (SEC-005): reading one goes to the model, so the user decides.
+func (p *Policy) secret(root string, paths []string) bool {
+	roots := canonical(root)
+	for _, path := range paths {
+		if parts := pathParts(roots, path); len(parts) > 0 && environment.SecretPath(strings.Join(parts, "/")) {
 			return true
 		}
 	}
