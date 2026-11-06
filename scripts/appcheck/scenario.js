@@ -61,6 +61,9 @@ await step("a session shows what it runs on", async () => {
   const demo = mark("Check alpha");
   const agent = mark("Check agent");
   check("a sidebar row has a mark", demo && agent);
+  // A session in a git repository says so, and on which branch (GUI-044).
+  const git = withText(".session-row", "Check alpha")?.querySelector(".git-mark");
+  check("a row in a repository has the git mark", git && /^Git repository, on \S+/.test(git.getAttribute("aria-label")), git?.getAttribute("aria-label"));
   const title = withText(".session-row", "Check alpha").querySelector(".session-title");
   const gap = title.getBoundingClientRect().left - demo.getBoundingClientRect().right;
   const inner = document.createRange();
@@ -772,6 +775,15 @@ await step("panes fit, and the keyboard moves between them", async () => {
   await sleep(200);
 });
 
+await step("a session's header has the git mark", async () => {
+  openSession("Check alpha");
+  await until("Check alpha", () => activePane().querySelector(".session-titleline h2")?.textContent === "Check alpha");
+  const mark = await until("the git mark", () => activePane().querySelector(".session-titleline .git-mark"));
+  const title = activePane().querySelector(".session-titleline h2").getBoundingClientRect();
+  const at = mark.getBoundingClientRect();
+  check("the header has the git mark, after the title", at.left >= title.right - 1 && at.width > 0 && at.width <= 16, `${Math.round(at.left)} after ${Math.round(title.right)}, ${Math.round(at.width)} px wide`);
+});
+
 await step("a plan reads as a document and is reviewed in the panel", async () => {
   openSession("Check plan");
   await until("Check plan", () => activePane().querySelector(".session-titleline h2")?.textContent === "Check plan");
@@ -857,7 +869,13 @@ await step("an agent asks with a form", async () => {
   other.dispatchEvent(new Event("input", { bubbles: true }));
   await sleep(80);
   withText(".approval-buttons button", "Send", form.closest(".approval")).click();
-  const reply = await until("the agent's answer", () => all(".msg-agent, .md", pane).find((e) => e.textContent.includes("Thanks.")), 20000);
+  // The reply streams in a word at a time: wait for its end.
+  let reply = null;
+  try {
+    reply = await until("the agent's answer", () => all(".msg-agent, .md", pane).find((e) => e.textContent.includes("Thanks.") && e.textContent.includes("Tests, Types")), 20000);
+  } catch {
+    reply = all(".msg-agent, .md", pane).find((e) => e.textContent.includes("Thanks.")) ?? pane.querySelector(".conversation");
+  }
   check("the answers reach the agent", reply.textContent.includes("One by one (note: start with the backend)") && reply.textContent.includes("Tests, Types"), reply.textContent.slice(0, 200));
   check("the questions stay on the card", card.querySelectorAll(".agent-questions li").length === 2);
 });

@@ -56,6 +56,7 @@ import Splitter from "./Splitter.tsx";
 import { clampSidebar, rememberSidebar, setPanelWidth, SIDEBAR_MIN, sidebarMax, storedPanel, storedSidebar } from "./sizes.ts";
 import { forgetDraft, pruneDrafts } from "./drafts.ts";
 import SourceMark from "./SourceMark.tsx";
+import GitMark from "./GitMark.tsx";
 import { contextHigh, contextLabel, contextTitle } from "./contextMeter.ts";
 import { sourceId, sourceIndex, type SourceChoices } from "./source.ts";
 import ActivityLine from "./ActivityLine.tsx";
@@ -1253,6 +1254,7 @@ export default function App() {
                           <SourceMark source={sourceOf(s)} detail={s.model || undefined} />
                           {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" title="Finished while you were away" />}
                           <span className="session-title">{s.title}</span>
+                          {s.branch && <GitMark branch={s.branch} />}
                           {contextHigh(activities[s.id]?.context) && (
                             <span className="context-meter context-high" title={contextTitle(activities[s.id].context!)}>
                               {contextLabel(activities[s.id].context)}

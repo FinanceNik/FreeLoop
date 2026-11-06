@@ -5283,3 +5283,15 @@ table.hooks .hook-command {
   padding-left: 18px;
 }
 
+/* A session in a git repository (GUI-044): a small mark after its title. */
+.git-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--muted);
+  line-height: 0;
+}
+.session-line .git-mark {
+  margin-left: 4px;
+}
+

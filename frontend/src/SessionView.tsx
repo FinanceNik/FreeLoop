@@ -31,6 +31,7 @@ import { prepareImage, type PreparedImage } from "./imageprep.ts";
 import { addText, isPicture, type TextFile } from "./attach.ts";
 import SessionControls from "./SessionControls.tsx";
 import SourceMark from "./SourceMark.tsx";
+import GitMark from "./GitMark.tsx";
 import { contextHigh, contextLabel, contextTitle, shortTokens } from "./contextMeter.ts";
 import type { Source } from "./source.ts";
 import { draftOf, extrasOf, forgetDraft, rememberDraft, rememberExtras, storeDraft } from "./drafts.ts";
@@ -848,6 +849,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   <input autoFocus aria-label="Session title" value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
                 </form>
               )}
+              {(view.git?.repo || session.branch) && <GitMark branch={view.git?.repo ? view.git.branch : session.branch} />}
               <span
                 className="muted session-sub"
                 title={view.git?.repo ? `HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}` : undefined}
