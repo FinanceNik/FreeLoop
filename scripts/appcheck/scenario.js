@@ -86,7 +86,10 @@ await step("a session shows what it runs on", async () => {
   check("the sessions of one provider match", same, `${getComputedStyle(demo).backgroundColor} and ${getComputedStyle(mark("Check long")).backgroundColor}`);
 
   openSession("Check alpha");
-  await until("the header", () => document.querySelector(".session-header .source-mark"));
+  // DIAGNOSIS (CI): how long opening a session takes there, which once ran past 15 s.
+  const opening = Date.now();
+  await until("the header", () => document.querySelector(".session-header h2")?.textContent === "Check alpha" && document.querySelector(".session-header .source-mark"), 30000);
+  results.push({ name: "DIAGNOSIS opening a session", ok: true, detail: `${Date.now() - opening} ms` });
   check("the top bar has the mark and the name", document.querySelector(".session-header .source-mark").textContent === demo.textContent && document.querySelector(".session-sub").textContent.startsWith("Scripted demo"), document.querySelector(".session-sub").textContent);
 
   // In a grid: each pane its own line, and nothing past a pane or row.
@@ -567,8 +570,10 @@ await step("a click clears a selection", async () => {
   const msg = all(".msg-agent", activePane()).at(-1);
   // On a machine that never shows the window (CI), messages out of sight keep their
   // placeholder heights, so the last one need not be where the view ends: bring it in.
+  // Only a reader's input stops the view following the end, so scroll as one would.
+  conversation().dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
   msg.scrollIntoView({ block: "center" });
-  await sleep(200);
+  await sleep(300);
   await clicked("text", msg);
   await clicked("the conversation's margin", conversation(), 0.01, 0.5);
   await clicked("the header's title", document.querySelector(".session-header h2"));
