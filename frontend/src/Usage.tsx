@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import UsageOverview from "./UsageOverview.tsx";
 import TokenFigures from "./TokenFigures.tsx";
 import { tabAfterKey } from "./a11y.ts";
-import type { ActivityRow as FoldedRow, EffRow } from "./activity.ts";
+import { heldStats, type ActivityRow as FoldedRow, type EffRow } from "./activity.ts";
+import { heldNote, reportingNotes } from "./reporting.ts";
+import Budgets from "./Budgets.tsx";
 import { EngineService, type ActivityReport, type HarnessInfo, type ProjectInfo, type ProviderInfo, type UsageReport, type UsageRow } from "./api.ts";
 import { byType, change, compact, daily, dailyByType, days, groupBy, OTHER, TOKEN_TYPES, topKeys, totals, value, weekStart, weeks, withoutCacheReads, type Metric } from "./analytics.ts";
 import { formatCost } from "./cost.ts";
@@ -130,7 +132,10 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
     project,
   };
 
-  const unfiltered = (report?.rows ?? []) as (UsageRow & EffRow)[];
+  // A row with no calls holds only turns an agent reported nothing for (PRV-008):
+  // no tokens to count, said in words instead.
+  const reported = (report?.rows ?? []) as (UsageRow & EffRow)[];
+  const unfiltered = reported.filter((r) => r.calls > 0);
   const until = report?.until ?? new Date().toISOString().slice(0, 10);
   const span = report ? days(report.since, until) : [];
   const since = span[Math.max(0, span.length - range)] ?? until;
@@ -157,6 +162,10 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
   const all = cacheReads ? fetched : withoutCacheReads(fetched);
   const rows = all.filter((r) => r.day >= since);
   const before = all.filter((r) => r.day < since && r.day >= beforeSince);
+  const reporting = reportingNotes(
+    reported.filter((r) => r.day >= since && shared(r) && (!filters.model || keyOf.model(r) === filters.model || r.calls === 0)),
+    agent,
+  );
   const now = totals(rows);
   const prev = totals(before);
   const priced = rows.some((r) => r.priced);
@@ -309,7 +318,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
             pricesAsOf,
             filtered: Object.values(filters).some(Boolean),
             cacheReads,
-          })}
+          }, [...reporting, heldNote(heldStats(activityRows).total)])}
           onClose={() => setSharing(false)}
           onError={onError}
         />
@@ -329,6 +338,12 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                 <p className="muted">Usage is counted from every session's model calls, including external agents that report their tokens.</p>
               </div>
             )}
+            <Budgets onOpenPrices={onOpenPrices} />
+            {reporting.map((note) => (
+              <p key={note} className="muted usage-note usage-reporting">
+                {note}
+              </p>
+            ))}
             {rows.length > 0 && (
               <>
                 <TokenFigures now={now} delta={delta} before={RANGES.find((r) => r.days === range)?.label ?? ""} metric={m} priced={priced} cacheReads={cacheReads} />

@@ -73,10 +73,10 @@ export function settingsKey<T extends { commandApprovals?: unknown }>(c: T): str
   return JSON.stringify(rest);
 }
 
-// autoSaved is what the General page saves by itself: everything but hooks, prices and
-// the web search settings. Saving a hook approves a command to run, a half-typed
-// address would take its key along, and a price row is unfinished while being typed,
-// so those wait for the Save button.
-export function autoSaved<T extends { hooks?: unknown; prices?: unknown; web?: unknown }>(form: T, saved: T): T {
-  return { ...form, hooks: saved.hooks, prices: saved.prices, web: saved.web };
+// autoSaved is what the General page saves by itself: everything but hooks, prices,
+// budgets and the web search settings. Saving a hook approves a command to run, a
+// half-typed address would take its key along, and a price or budget row is unfinished
+// while being typed, so those wait for the Save button.
+export function autoSaved<T extends { hooks?: unknown; prices?: unknown; budgets?: unknown; web?: unknown }>(form: T, saved: T): T {
+  return { ...form, hooks: saved.hooks, prices: saved.prices, budgets: saved.budgets, web: saved.web };
 }

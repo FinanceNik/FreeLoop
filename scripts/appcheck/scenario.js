@@ -706,6 +706,37 @@ await step("the More menu closes like a menu", async () => {
   check("Escape closes the More menu", !menu.open);
 });
 
+await step("a budget shows on the usage page", async () => {
+  // PRV-017: set beside the prices, shown with what this period spent.
+  const setInput = (el, value) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const general = async () => {
+    document.querySelector(".settings-link").click();
+    (await until("the General page", () => withText(".settings-nav button", "General"))).click();
+  };
+  const save = async () => {
+    (await until("Save", () => document.querySelector(".settings-save button.primary"))).click();
+    await until("saved", () => !document.querySelector(".settings-save"), 8000);
+  };
+  await general();
+  (await until("Add a budget", () => withText("button", "Add a budget"))).click();
+  setInput(await until("the amount", () => document.querySelector("input[aria-label='Amount in US dollars']")), "0.01");
+  await sleep(50);
+  await save();
+  document.querySelector(".settings-nav .settings-back").click();
+  named(".footer-links button", "Usage").click();
+  const card = await until("the budget", () => document.querySelector(".budgets"), 8000);
+  check("a budget shows on the usage page", card.textContent.includes("Daily budget, $0.01") && card.textContent.includes("spent"), card.textContent.slice(0, 160));
+  await general();
+  (await until("Remove", () => document.querySelector(".budget-row button.danger"))).click();
+  await save();
+  document.querySelector(".settings-nav .settings-back").click();
+  openSession("Check alpha");
+  await until("the conversation", () => document.querySelector(".conversation"));
+});
+
 await step("the policy page says what a call would meet", async () => {
   // SEC-018: the broker's own judgment of a call not made, with the rule that decided.
   const set = (el, value) => {

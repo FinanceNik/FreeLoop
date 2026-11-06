@@ -614,6 +614,10 @@ var addedColumns = []struct{ table, column, definition string }{
 	// Cache writes that last an hour cost more (PRV-008). Earlier calls did not say.
 	{"usage", "cache_write_1h", "INTEGER NOT NULL DEFAULT 0"},
 	{"usage_recent", "cache_write_1h", "INTEGER NOT NULL DEFAULT 0"},
+	// How an external agent counted its usage (PRV-008): turns counted by their total,
+	// and turns it reported no tokens for.
+	{"usage", "turn_totals", "INTEGER NOT NULL DEFAULT 0"},
+	{"usage", "unreported", "INTEGER NOT NULL DEFAULT 0"},
 }
 
 // addColumns adds what addedColumns holds and the database does not.

@@ -69,3 +69,44 @@ func TestUsagePerDay(t *testing.T) {
 		t.Errorf("since the 2nd = %+v", later)
 	}
 }
+
+// PRV-008: an external agent's turn totals are counted as such, priced by the model it
+// named, and a turn it reported nothing for is counted as unreported, with no tokens.
+func TestUsageSaysHowItWasCounted(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.Local)
+	s, err := Open(Options{Dir: t.TempDir(), Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	a, _ := s.CreateSession(ctx, session.Session{Title: "codex", HarnessID: "codex", ProfileID: "work"})
+	s.Append(ctx, a.ID, event.UsageUpdate, raw(event.UsageData{InputTokens: 10, OutputTokens: 5, Model: "gpt-x", Measured: event.MeasuredTurn}))
+	s.Append(ctx, a.ID, event.UsageUpdate, raw(event.UsageData{Measured: event.MeasuredNone}))
+	s.Append(ctx, a.ID, event.UsageUpdate, raw(event.UsageData{Measured: event.MeasuredNone}))
+	s.indexed.Wait()
+	got, err := s.UsageRowsSince(ctx, "2026-10-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("rows = %+v", got)
+	}
+	for _, r := range got {
+		if r.ProfileID != "work" {
+			t.Errorf("row %+v has no profile", r)
+		}
+		switch r.Model {
+		case "gpt-x":
+			if r.InputTokens != 10 || r.TurnTotals != 1 || r.Unreported != 0 || r.Calls != 1 {
+				t.Errorf("turn totals = %+v", r.Usage)
+			}
+		case "":
+			if r.Unreported != 2 || r.InputTokens != 0 || r.Calls != 0 {
+				t.Errorf("unreported = %+v", r.Usage)
+			}
+		default:
+			t.Errorf("row %+v", r)
+		}
+	}
+}

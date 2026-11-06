@@ -671,6 +671,11 @@ func (s *EngineService) ProjectFiles(ctx context.Context, sessionID string) ([]s
 	return s.eng.ProjectFiles(ctx, sessionID)
 }
 
+// Budgets returns every budget with what has been spent this period (PRV-017).
+func (s *EngineService) Budgets(ctx context.Context) ([]engine.BudgetState, error) {
+	return s.eng.Budgets(ctx)
+}
+
 // CheckPolicy says what the broker would do with a call, and why (SEC-018).
 func (s *EngineService) CheckPolicy(ctx context.Context, q engine.PolicyQuery) (engine.PolicyCheck, error) {
 	return s.eng.CheckPolicy(ctx, q)

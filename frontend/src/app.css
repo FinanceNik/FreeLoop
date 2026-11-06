@@ -5319,3 +5319,42 @@ table.hooks .hook-command {
   margin: 4px 0;
   font-size: calc(12rem / 14);
 }
+
+/* Budgets (PRV-017). */
+.budgets {
+  display: grid;
+  gap: 10px;
+}
+
+.budget-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: calc(13rem / 14);
+}
+
+.budget meter {
+  width: 100%;
+  height: 8px;
+}
+
+.budget-reached .budget-head span:first-child {
+  color: var(--danger);
+}
+
+.budget-warning .budget-head span:first-child {
+  color: var(--warn);
+}
+
+.footer-links .footer-cost.footer-cost-warning {
+  color: var(--warn);
+}
+
+.footer-links .footer-cost.footer-cost-reached {
+  color: var(--danger);
+}
+
+.budget-row input[type="number"] {
+  width: 8rem;
+}

@@ -62,6 +62,8 @@ type Config struct {
 	Skills Skills `yaml:"skills,omitempty" json:"skills"`
 	// Prices estimate what sessions cost (PRV-008).
 	Prices []Price `yaml:"prices,omitempty" json:"prices"`
+	// Budgets warn when estimated spending reaches a share of an amount (PRV-017).
+	Budgets []Budget `yaml:"budgets,omitempty" json:"budgets"`
 	// Fallbacks name, per agent (a harness ID, "builtin" for the built-in one), the
 	// profile a stuck session is offered to continue on (HRN-020).
 	Fallbacks map[string]string `yaml:"fallbacks,omitempty" json:"fallbacks"`
@@ -263,6 +265,9 @@ func (c *Config) Validate() []Issue {
 	issues = append(issues, validateFont("ui.codeFont", &c.UI.CodeFont)...)
 	var priceIssues, hookIssues []Issue
 	c.Prices, priceIssues = validatePrices(c.Prices)
+	var budgetIssues []Issue
+	c.Budgets, budgetIssues = validateBudgets(c.Budgets)
+	priceIssues = append(priceIssues, budgetIssues...)
 	c.Hooks, hookIssues = validateHooks(c.Hooks, "hooks")
 	return append(append(issues, priceIssues...), hookIssues...)
 }

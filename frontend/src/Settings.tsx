@@ -10,6 +10,7 @@ import type { FontChoice } from "./fonts.ts";
 import { bindingOf, keyLabel } from "./shortcuts.ts";
 import { Browser } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
+import BudgetTable from "./BudgetTable.tsx";
 import { HookTable, PendingCommands } from "./Hooks.tsx";
 import { groupPending, pendingLabel } from "./pending.ts";
 import { EngineService, type Blocked, type ConfigPreview, type ConfigRestore, type Config, type UpdateInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
@@ -493,10 +494,13 @@ export default function Settings({ config, providers, harnesses, environments, p
         <h3 id="prices">Prices</h3>
         <PriceTable prices={form.prices ?? []} providers={providers} onChange={(prices) => setForm({ ...form, prices })} />
 
+        <h3 id="budgets">Budgets</h3>
+        <BudgetTable budgets={form.budgets ?? []} profiles={profiles} onChange={(budgets) => setForm({ ...form, budgets })} />
+
         <div className={unsaved ? "row settings-save" : "row"} role="status">
           {unsaved ? (
             <>
-              <span className="muted">Hooks, prices and the search settings wait for Save.</span>
+              <span className="muted">Hooks, prices, budgets and the search settings wait for Save.</span>
               <button type="submit" className="primary">
                 Save
               </button>

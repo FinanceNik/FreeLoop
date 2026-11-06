@@ -67,6 +67,7 @@ type row struct {
 type usage struct {
 	day, providerID, model                                    string
 	input, output, cacheRead, cacheWrite, cacheWrite1h, calls int64
+	turnTotals, unreported                                    int64
 }
 
 // batch is what events add to the index.
@@ -135,10 +136,20 @@ func (x *indexer) feed(ev event.Event) (batch, int64) {
 	case event.UsageUpdate:
 		var d event.UsageData
 		json.Unmarshal(ev.Data, &d)
-		if ev.Seq > x.copied && d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens > 0 {
-			b.usage = append(b.usage, usage{day: ev.TS.In(time.Local).Format(time.DateOnly),
+		day := ev.TS.In(time.Local).Format(time.DateOnly)
+		switch {
+		case ev.Seq <= x.copied:
+		case d.Measured == event.MeasuredNone:
+			// A turn the agent reported nothing for, so a total can say it is missing.
+			b.usage = append(b.usage, usage{day: day, providerID: x.providerID, unreported: 1})
+		case d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens > 0:
+			u := usage{day: day,
 				providerID: cmp.Or(d.ProviderID, x.providerID), model: pricedModel(cmp.Or(d.Model, x.model), d),
-				input: d.InputTokens, output: d.OutputTokens, cacheRead: d.CacheReadTokens, cacheWrite: d.CacheWriteTokens, cacheWrite1h: d.CacheWrite1hTokens, calls: callCount(d)})
+				input: d.InputTokens, output: d.OutputTokens, cacheRead: d.CacheReadTokens, cacheWrite: d.CacheWriteTokens, cacheWrite1h: d.CacheWrite1hTokens, calls: callCount(d)}
+			if d.Measured == event.MeasuredTurn {
+				u.turnTotals = 1
+			}
+			b.usage = append(b.usage, u)
 		}
 	}
 	rows := b.rows
@@ -272,12 +283,13 @@ func (s *Store) writeIndex(ctx context.Context, sid string, b batch, done int64,
 	}
 	defer tx.Rollback()
 	for _, u := range b.usage {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO usage (day, session_id, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO usage (day, session_id, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls, turn_totals, unreported)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (day, session_id, provider_id, model) DO UPDATE SET
 			input = input + excluded.input, output = output + excluded.output, cache_read = cache_read + excluded.cache_read,
-			cache_write = cache_write + excluded.cache_write, cache_write_1h = cache_write_1h + excluded.cache_write_1h, calls = calls + excluded.calls`,
-			u.day, sid, u.providerID, u.model, u.input, u.output, u.cacheRead, u.cacheWrite, u.cacheWrite1h, u.calls); err != nil {
+			cache_write = cache_write + excluded.cache_write, cache_write_1h = cache_write_1h + excluded.cache_write_1h, calls = calls + excluded.calls,
+			turn_totals = turn_totals + excluded.turn_totals, unreported = unreported + excluded.unreported`,
+			u.day, sid, u.providerID, u.model, u.input, u.output, u.cacheRead, u.cacheWrite, u.cacheWrite1h, u.calls, u.turnTotals, u.unreported); err != nil {
 			return err
 		}
 	}
@@ -531,6 +543,10 @@ type Usage struct {
 	// CacheWrite1hTokens is the part of CacheWriteTokens that lasts an hour.
 	CacheWrite1hTokens int64 `json:"cacheWrite1hTokens"`
 	Calls              int64 `json:"calls"`
+	// TurnTotals are turns an external agent counted by their total, and Unreported
+	// turns it gave no tokens for, which no cost includes (PRV-008).
+	TurnTotals int64 `json:"turnTotals"`
+	Unreported int64 `json:"unreported"`
 }
 
 // pricedModel is the model a usage event counts under. An adjustment is a sum of
@@ -555,7 +571,7 @@ func callCount(d event.UsageData) int64 {
 // stays: the tokens were spent.
 func (s *Store) UsageSince(ctx context.Context, since string) ([]Usage, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT day, provider_id, model, sum(input), sum(output), sum(cache_read), sum(cache_write), sum(cache_write_1h), sum(calls)
+		`SELECT day, provider_id, model, sum(input), sum(output), sum(cache_read), sum(cache_write), sum(cache_write_1h), sum(calls), sum(turn_totals), sum(unreported)
 		 FROM usage WHERE day >= ? GROUP BY day, provider_id, model ORDER BY day DESC, provider_id, model`, since)
 	if err != nil {
 		return nil, fmt.Errorf("store: usage: %w", err)
@@ -564,7 +580,7 @@ func (s *Store) UsageSince(ctx context.Context, since string) ([]Usage, error) {
 	out := []Usage{}
 	for rows.Next() {
 		var u Usage
-		if err := rows.Scan(&u.Day, &u.ProviderID, &u.Model, &u.InputTokens, &u.OutputTokens, &u.CacheReadTokens, &u.CacheWriteTokens, &u.CacheWrite1hTokens, &u.Calls); err != nil {
+		if err := rows.Scan(&u.Day, &u.ProviderID, &u.Model, &u.InputTokens, &u.OutputTokens, &u.CacheReadTokens, &u.CacheWriteTokens, &u.CacheWrite1hTokens, &u.Calls, &u.TurnTotals, &u.Unreported); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -582,6 +598,7 @@ type UsageRow struct {
 	ProjectID   string   `json:"projectId"`
 	ProjectRoot string   `json:"projectRoot"`
 	HarnessID   string   `json:"harnessId"`
+	ProfileID   string   `json:"profileId"`
 	ParentID    string   `json:"parentId"`
 	Tags        []string `json:"tags"`
 	Deleted     bool     `json:"deleted"`
@@ -592,8 +609,9 @@ type UsageRow struct {
 func (s *Store) UsageRowsSince(ctx context.Context, since string) ([]UsageRow, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT u.day, u.provider_id, u.model, sum(u.input), sum(u.output), sum(u.cache_read), sum(u.cache_write), sum(u.cache_write_1h), sum(u.calls),
+		        sum(u.turn_totals), sum(u.unreported),
 		        u.session_id, coalesce(s.title, ''), coalesce(s.project_id, ''), coalesce(s.project_root, ''),
-		        coalesce(s.harness_id, ''), coalesce(s.parent_id, ''), coalesce(s.tags, ''), s.id IS NULL
+		        coalesce(s.harness_id, ''), coalesce(s.profile_id, ''), coalesce(s.parent_id, ''), coalesce(s.tags, ''), s.id IS NULL
 		 FROM usage u LEFT JOIN sessions s ON s.id = u.session_id
 		 WHERE u.day >= ?
 		 GROUP BY u.day, u.session_id, u.provider_id, u.model
@@ -607,7 +625,8 @@ func (s *Store) UsageRowsSince(ctx context.Context, since string) ([]UsageRow, e
 		var r UsageRow
 		var tags string
 		if err := rows.Scan(&r.Day, &r.ProviderID, &r.Model, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens, &r.CacheWriteTokens, &r.CacheWrite1hTokens, &r.Calls,
-			&r.SessionID, &r.Title, &r.ProjectID, &r.ProjectRoot, &r.HarnessID, &r.ParentID, &tags, &r.Deleted); err != nil {
+			&r.TurnTotals, &r.Unreported,
+			&r.SessionID, &r.Title, &r.ProjectID, &r.ProjectRoot, &r.HarnessID, &r.ProfileID, &r.ParentID, &tags, &r.Deleted); err != nil {
 			return nil, err
 		}
 		r.Tags = strings.Fields(tags)

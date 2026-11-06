@@ -28,13 +28,18 @@ type ModelCost struct {
 	Calls            int64   `json:"calls"`
 	Cost             float64 `json:"cost"`
 	Priced           bool    `json:"priced"`
+	// TurnTotals and Unreported say how an external agent counted (PRV-008).
+	TurnTotals int64 `json:"turnTotals"`
+	Unreported int64 `json:"unreported"`
 }
 
-// DayCost is a day's usage across sessions. Cost adds up the priced models.
+// DayCost is a day's usage across sessions. Cost adds up the priced models;
+// Unreported counts turns an agent gave no tokens for, which it cannot include.
 type DayCost struct {
-	Day    string      `json:"day"`
-	Cost   float64     `json:"cost"`
-	Models []ModelCost `json:"models"`
+	Day        string      `json:"day"`
+	Cost       float64     `json:"cost"`
+	Unreported int64       `json:"unreported"`
+	Models     []ModelCost `json:"models"`
 }
 
 // Usage returns the estimated cost per day for the last days days, today
@@ -58,7 +63,12 @@ func (e *Engine) Usage(ctx context.Context, days int) ([]DayCost, error) {
 		}
 		d := &out[len(out)-1]
 		m := ModelCost{ProviderID: u.ProviderID, Model: u.Model, InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
-			CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, Calls: u.Calls}
+			CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, Calls: u.Calls, TurnTotals: u.TurnTotals, Unreported: u.Unreported}
+		d.Unreported += u.Unreported
+		if u.Calls == 0 {
+			// Only unreported turns: no tokens to price, and no model to show.
+			continue
+		}
 		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
 			m.Cost, m.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheWrite1hTokens), true
 			d.Cost += m.Cost

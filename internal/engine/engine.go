@@ -89,6 +89,11 @@ type Engine struct {
 	// queueMu guards queue.json (SES-025); onQueue tells the interface it changed.
 	queueMu sync.Mutex
 	onQueue func()
+	// onNotice sends a notice (GUI-008); budgets alerted holds which budget periods
+	// have warned at which level, so each says so once (PRV-017).
+	onNotice      func(Notice)
+	budgetsMu     sync.Mutex
+	budgetsWarned map[string]string
 	// importMu lets one session import at a time (SES-020).
 	importMu sync.Mutex
 	// hookProgram is what an agent's hook runs to reach the app (HRN-019).
@@ -275,6 +280,7 @@ func Open(opts Options) (*Engine, error) {
 	e.adoptExistingCommands()
 	e.rememberStoredSecrets()
 	e.recover(context.Background())
+	e.onNotice = opts.OnNotice
 	if opts.OnNotice != nil {
 		events, _ := e.bus.subscribe(1024)
 		e.notifying.Add(1)

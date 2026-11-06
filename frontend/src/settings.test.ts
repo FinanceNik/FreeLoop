@@ -40,13 +40,14 @@ test("the text size shortcuts", () => {
   assert.equal(textSizeAfter(keys("-", { ctrlKey: true }), 14), null);
 });
 
-test("the General page saves by itself, but not hooks, prices or the search settings", () => {
-  const saved = { permissions: { allowBypass: false }, hooks: ["old"], prices: [1], web: { searchURL: "a" }, commandApprovals: ["x"] };
-  const form = { ...saved, permissions: { allowBypass: true }, hooks: ["half typed"], prices: [2], web: { searchURL: "https://ha" } };
+test("the General page saves by itself, but not hooks, prices, budgets or the search settings", () => {
+  const saved = { permissions: { allowBypass: false }, hooks: ["old"], prices: [1], budgets: [10], web: { searchURL: "a" }, commandApprovals: ["x"] };
+  const form = { ...saved, permissions: { allowBypass: true }, hooks: ["half typed"], prices: [2], budgets: [0], web: { searchURL: "https://ha" } };
   const next = autoSaved(form, saved);
   assert.equal(next.permissions.allowBypass, true);
   assert.deepEqual(next.hooks, ["old"]);
   assert.deepEqual(next.prices, [1]);
+  assert.deepEqual(next.budgets, [10]);
   assert.deepEqual(next.web, { searchURL: "a" });
 });
 

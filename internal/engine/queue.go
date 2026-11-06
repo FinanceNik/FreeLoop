@@ -122,9 +122,16 @@ func (e *Engine) runQueue(ctx context.Context, now time.Time) {
 			return nil
 		}
 		held := e.agentsAtLimit(ctx, now)
+		budgets, _ := e.budgetStates(ctx, now)
 		for i := range q.Tasks {
 			t := &q.Tasks[i]
 			if t.State != config.TaskWaiting || running >= q.RunLimit() {
+				continue
+			}
+			if note := budgetHeld(budgets, cmp.Or(t.ProfileID, config.DefaultProfileID)); note != "" {
+				if t.Note != note {
+					t.Note, changed = note, true
+				}
 				continue
 			}
 			agent := e.taskAgent(ctx, *t)

@@ -50,6 +50,9 @@ export function costSummary<R extends Row>(
   rows: R[],
   keys: { agent: (r: R) => string; model: (r: R) => string },
   range: { label: string; since: string; until: string; pricesAsOf: string; filtered: boolean; cacheReads: boolean },
+  // What else the summary says: how agents reported (reporting.ts) and what the
+  // policy held.
+  more: string[] = [],
 ): CostSummary {
   const unpriced = rows.filter((r) => !r.priced);
   const whole = groupBy(rows, () => "all", "tokens")[0];
@@ -59,6 +62,7 @@ export function costSummary<R extends Row>(
     const calls = unpriced.reduce((n, r) => n + r.calls, 0);
     notes.push(`${calls} model ${calls === 1 ? "call" : "calls"} on ${names.join(", ")} ${calls === 1 ? "has" : "have"} no price, so the cost leaves ${calls === 1 ? "it" : "them"} out.`);
   }
+  notes.push(...more.filter(Boolean));
   if (!range.cacheReads) notes.push("Tokens leave out cache reads.");
   if (range.filtered) notes.push("A filtered part of the usage, not all of it.");
   return {

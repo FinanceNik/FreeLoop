@@ -10,7 +10,7 @@ import {
   errorText,
   type AttentionItem,
   type Config,
-  type DayCost,
+  type BudgetState, type DayCost,
   type EnvironmentInfo,
   type HarnessInfo,
   type Issue,
@@ -50,6 +50,7 @@ import Workspace, { SESSION_DRAG_TYPE } from "./Workspace.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav from "./SettingsNav.tsx";
+import { budgetLine, budgetName, worst } from "./budgets.ts";
 import { BellIcon, BoardIcon, ChevronIcon, FilterIcon, Logo, NavIcon as Icon, NewSessionIcon, UsageIcon } from "./icons.tsx";
 import { clearSelectionOnClick } from "./selection.ts";
 import Splitter from "./Splitter.tsx";
@@ -220,6 +221,8 @@ export default function App() {
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   // Today's model calls and their estimated cost (PRV-008).
   const [today, setToday] = useState<DayCost | null>(null);
+  // The budgets, for the sidebar's cost (PRV-017).
+  const [budgets, setBudgets] = useState<BudgetState[]>([]);
   // The command palette (GUI-014) and the actions views offer to it.
   const [palette, setPalette] = useState<PaletteItem[] | null>(null);
   const { registry, collect } = useRegistry();
@@ -261,10 +264,14 @@ export default function App() {
     EngineService.Attention()
       .then((list) => setAttention(list ?? []))
       .catch(report);
-  const refreshToday = () =>
+  const refreshToday = () => {
     EngineService.Usage(1)
       .then((days) => setToday(days?.[0] ?? null))
       .catch(report);
+    EngineService.Budgets()
+      .then((list) => setBudgets(list ?? []))
+      .catch(() => setBudgets([]));
+  };
   // Events that change what needs attention arrive in bursts; one refresh
   // per burst is enough.
   const attentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1373,11 +1380,14 @@ export default function App() {
               </button>
               {today && (today.models ?? []).some((m) => m.priced) && (
                 <button
-                  className="footer-cost"
-                  title="Today's estimated cost, from the price table in Settings; calls to models without a price are left out. Opens the usage dashboard."
+                  className={`footer-cost${worst(budgets) ? ` footer-cost-${worst(budgets)}` : ""}`}
+                  title={[
+                    "Today's estimated cost, from the price table in Settings; calls to models without a price and turns an agent did not report are left out. Opens the usage dashboard.",
+                    ...budgets.filter((b) => b.level).map((b) => `${budgetName(b)}: ${budgetLine(b)}`),
+                  ].join("\n")}
                   onClick={() => setScreen({ kind: "usage" })}
                 >
-                  {`≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) ? "+" : ""}`}
+                  {`≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) || (today.unreported ?? 0) > 0 ? "+" : ""}`}
                 </button>
               )}
             </div>
