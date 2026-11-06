@@ -26,6 +26,7 @@ import {
 import { pickLabel } from "./a11y.ts";
 import AttachedImages from "./AttachedImages.tsx";
 import { useDismiss } from "./useDismiss.ts";
+import { placeholder } from "./composer.ts";
 import ToolView, { openSessionEvent } from "./ToolView.tsx";
 import Tags from "./Tags.tsx";
 import { prepareImage, type PreparedImage } from "./imageprep.ts";
@@ -1296,7 +1297,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 e.preventDefault();
                 addFiles(files);
               }}
-              placeholder={view.running ? "Queue a message for when this turn ends" : "Ask for a change, a fix, an explanation… Type @ to attach a file, / for commands."}
+              placeholder={placeholder(view.running, active || !split)}
               value={draft}
               rows={1}
               onChange={(e) => {

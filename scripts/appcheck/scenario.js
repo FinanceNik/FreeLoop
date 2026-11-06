@@ -967,6 +967,10 @@ await step("an agent asks with a form", async () => {
 await step("the usage pane cycles through its views", async () => {
   document.querySelector('.layout-switch button[aria-label="4 panes"]').click();
   await sleep(300);
+  // An empty box's height leaves out its placeholder, so one in a pane the user is not in
+  // is short and on one line (GUI-042).
+  const idle = await until("a pane not in use", () => document.querySelector(".pane-split:not(.pane-active) .composer textarea"));
+  check("a pane not in use shows its placeholder whole", idle.value !== "" || (idle.placeholder.length <= 20 && getComputedStyle(idle, "::placeholder").whiteSpace === "nowrap"), `"${idle.placeholder}"`);
   let usage = document.querySelector(".pane-usage");
   if (!usage) {
     (await until("an empty pane's Show usage", () => withText(".pane-empty button", "Show usage"))).click();

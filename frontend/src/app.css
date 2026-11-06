@@ -1401,6 +1401,13 @@ button.ghost[aria-pressed="true"] {
   padding-bottom: 10px;
 }
 
+/* And its placeholder stays on its one line, whatever the width. */
+.pane-split:not(.pane-active) .composer textarea::placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .composer-spacer {
   flex: 1;
 }
