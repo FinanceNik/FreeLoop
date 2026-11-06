@@ -165,7 +165,18 @@ type UsageData struct {
 	// empty when the harness does not say (an external agent).
 	ProviderID string `json:"providerId,omitempty"`
 	Model      string `json:"model,omitempty"`
+	// Measured says how an external agent's usage was counted (PRV-008): MeasuredTurn
+	// for a turn's total from its answer, MeasuredNone when the agent reported no
+	// tokens for the turn. Empty is per model call, as the built-in agent and an agent
+	// on the Claude Agent SDK report.
+	Measured string `json:"measured,omitempty"`
 }
+
+// How usage was measured.
+const (
+	MeasuredTurn = "turn"
+	MeasuredNone = "none"
+)
 
 // CompactionData is the payload of compaction_update (HRN-013): status
 // started or completed, why (auto or manual), the context size before and

@@ -178,6 +178,59 @@ func TestUsagePerModelCall(t *testing.T) {
 	}
 }
 
+// PRV-008: an agent that reports only a turn's total has it priced by the model it
+// says it is on, and a turn it reports nothing for is said to have none, never $0.
+func TestUsagePerTurn(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	os.WriteFile(filepath.Join(root, "notes.txt"), []byte("hello"), 0o644)
+	policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+	env, err := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root), Shell: []string{"sh", "-c"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, _ := os.Executable()
+	for _, c := range []struct {
+		name, prompt string
+		model        bool
+		want         event.UsageData
+	}{
+		{"no model setting", "go", false, event.UsageData{InputTokens: 10, OutputTokens: 5, Measured: event.MeasuredTurn}},
+		{"a model setting", "go", true, event.UsageData{InputTokens: 10, OutputTokens: 5, Measured: event.MeasuredTurn, Model: "agent-model"}},
+		{"nothing reported", "silent", true, event.UsageData{Measured: event.MeasuredNone}},
+	} {
+		rec := &recorder{}
+		broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
+		vars := map[string]string{acptest.EnvVar: "1"}
+		if c.model {
+			vars[acptest.ModelVar] = "1"
+		}
+		h := Harness{Preset: config.HarnessPreset{ID: "ref", Name: "Reference", Command: exe, Env: vars}}
+		s, err := h.NewSession(context.Background(), harness.Params{SessionID: "ses", Env: env, Broker: broker, Mode: permission.ModeBypass, Emit: rec.emit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Prompt(context.Background(), harness.Prompt{Text: c.prompt}); err != nil {
+			t.Fatal(err)
+		}
+		s.Close()
+		var got []event.UsageData
+		rec.mu.Lock()
+		for _, e := range rec.events {
+			if e.Type == event.UsageUpdate {
+				var d event.UsageData
+				json.Unmarshal(e.Data, &d)
+				got = append(got, d)
+			}
+		}
+		rec.mu.Unlock()
+		if len(got) != 1 || got[0] != c.want {
+			t.Errorf("%s: usage events = %+v, want %+v", c.name, got, c.want)
+		}
+	}
+}
+
 // A write the agent did not ask permission for is refused when the user
 // denies it, and a protected path is refused by the environment anyway.
 func TestUnaskedWritesGoThroughTheBroker(t *testing.T) {

@@ -50,6 +50,8 @@ func TestCreateListAppendRead(t *testing.T) {
 	if len(list) != 2 || list[0].ID != b.ID || list[1].ID != a.ID {
 		t.Fatalf("list = %+v, want second then first", list)
 	}
+	// Sessions updated in the same millisecond list by ID.
+	time.Sleep(2 * time.Millisecond)
 
 	for i, msg := range []string{"one", "two", "three"} {
 		ev, err := s.Append(ctx, a.ID, event.Notice, text(msg))

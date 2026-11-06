@@ -44,7 +44,7 @@ import { usePaletteActions } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
 import { drawOnce, HOLD_PLACE, holdsPlace, READER_PAUSE, readerScrolling, scrollsByKey, scrollsUpByKey, settledPlace } from "./scrollPlace.ts";
-import { estimate, formatCost, type PriceEntry } from "./cost.ts";
+import { costText, estimate, formatCost, type PriceEntry } from "./cost.ts";
 import { trustLines, trustStep } from "./trust.ts";
 
 interface Props {
@@ -688,7 +688,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
 
   // The folders a command's leading `cd` adds nothing for (quietCommand).
   const roots = useMemo(() => [session.projectRoot, session.worktree].filter(Boolean) as string[], [session.projectRoot, session.worktree]);
-  const costLabel = costs.calls === 0 ? "none yet" : costs.session.unpriced === costs.calls ? "no price set" : `≈ ${formatCost(costs.session.cost)}${costs.session.unpriced ? "+" : ""}`;
+  const costLabel = costText(costs.session, costs.calls, view.measured);
 
   // Everything this view shows a control for, for the palette (GUI-014).
   const showPanel = (t: PanelTab) => {

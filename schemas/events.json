@@ -335,7 +335,8 @@
         "contextTokens": { "type": "integer" },
         "contextWindow": { "type": "integer" },
         "providerId": { "type": "string" },
-        "model": { "type": "string" }
+        "model": { "type": "string" },
+        "measured": { "enum": ["turn", "none"], "description": "How an external agent's usage was counted: a turn's total, or none reported. Absent: per model call." }
       }
     },
     "error": {

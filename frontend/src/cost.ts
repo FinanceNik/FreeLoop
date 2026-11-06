@@ -62,6 +62,16 @@ function escape(c: string): string {
 }
 
 export function findPrice(prices: readonly PriceEntry[], providerId: string, model: string): PriceEntry | null {
+  const whole = matchPrice(prices, providerId, model);
+  if (whole) return whole;
+  // An agent may name a model with its provider, openai/gpt-5.5, or with its effort,
+  // gpt-5.5/high, as config.FindPrice allows (PRV-008).
+  const slash = model.indexOf("/");
+  if (slash < 0) return null;
+  return matchPrice(prices, providerId, model.slice(slash + 1)) ?? matchPrice(prices, providerId, model.slice(0, slash));
+}
+
+function matchPrice(prices: readonly PriceEntry[], providerId: string, model: string): PriceEntry | null {
   for (const p of prices) {
     if (p.providerId && p.providerId !== providerId) continue;
     if (p.model === model || globMatch(p.model, model)) return p;
@@ -107,4 +117,15 @@ export function estimate(prices: readonly PriceEntry[], calls: readonly ModelCal
 export function formatCost(n: number): string {
   if (n > 0 && n < 0.01) return "<$0.01";
   return `$${n.toFixed(2)}`;
+}
+
+// costText is a session's estimated cost in words (PRV-008): what the price table
+// makes of its calls, and how the agent counted them, so a missing count never reads
+// as nothing spent.
+export function costText(e: Estimate, calls: number, measured: { turns: number; unreported: number }): string {
+  if (calls === 0) return measured.unreported > 0 ? "not reported by the agent" : "none yet";
+  let text = e.unpriced === calls ? "no price set" : `≈ ${formatCost(e.cost)}${e.unpriced ? "+" : ""}`;
+  if (measured.turns > 0) text += ", from the agent's turn totals";
+  if (measured.unreported > 0) text += `; ${measured.unreported === 1 ? "1 turn" : `${measured.unreported} turns`} not reported`;
+  return text;
 }

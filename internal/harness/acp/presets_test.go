@@ -46,10 +46,13 @@ func TestPresetScenarios(t *testing.T) {
 		// repo writes what a repository would, to get the agent to stop asking. None
 		// means the agent reads no such file from a project, as far as its docs say.
 		repo func(t *testing.T, home, root string)
+		// usage is how the agent reports a turn's usage, and the model it says.
+		usage struct{ measured, model string }
 	}{
 		{
-			id:   "gemini-cli",
-			argv: []string{filepath.Join(dir, "gemini/node_modules/.bin/gemini"), "--acp"},
+			id:    "gemini-cli",
+			usage: struct{ measured, model string }{event.MeasuredTurn, ""},
+			argv:  []string{filepath.Join(dir, "gemini/node_modules/.bin/gemini"), "--acp"},
 			env: func(url string) map[string]string {
 				return map[string]string{"GEMINI_API_KEY": "stand-in", "GOOGLE_GEMINI_BASE_URL": url, "GEMINI_MODEL": "gemini-2.5-pro", "GEMINI_CLI_TRUST_WORKSPACE": "true"}
 			},
@@ -58,8 +61,9 @@ func TestPresetScenarios(t *testing.T) {
 			},
 		},
 		{
-			id:   "codex",
-			argv: []string{filepath.Join(dir, "codex/node_modules/.bin/codex-acp")},
+			id:    "codex",
+			usage: struct{ measured, model string }{event.MeasuredTurn, "stand-in"},
+			argv:  []string{filepath.Join(dir, "codex/node_modules/.bin/codex-acp")},
 			env: func(url string) map[string]string {
 				return map[string]string{"CODEX_API_KEY": "stand-in"}
 			},
@@ -87,15 +91,19 @@ env_key = "CODEX_API_KEY"
 			},
 		},
 		{
-			id:   "goose",
-			argv: []string{filepath.Join(dir, "goose/goose"), "acp"},
+			id: "goose",
+			// Not measured yet: goose waits to be pinned (scripts/verify-agents.sh), and
+			// this is a guess for the first run to correct.
+			usage: struct{ measured, model string }{event.MeasuredTurn, ""},
+			argv:  []string{filepath.Join(dir, "goose/goose"), "acp"},
 			env: func(url string) map[string]string {
 				return map[string]string{"GOOSE_PROVIDER": "openai", "GOOSE_MODEL": "stand-in", "OPENAI_HOST": url, "OPENAI_API_KEY": "stand-in", "GOOSE_DISABLE_KEYRING": "1"}
 			},
 		},
 		{
-			id:   "opencode",
-			argv: []string{filepath.Join(dir, "opencode/node_modules/opencode-darwin-"+goArch()+"/bin/opencode"), "acp"},
+			id:    "opencode",
+			usage: struct{ measured, model string }{event.MeasuredNone, ""},
+			argv:  []string{filepath.Join(dir, "opencode/node_modules/opencode-darwin-"+goArch()+"/bin/opencode"), "acp"},
 			env: func(url string) map[string]string {
 				cfg, _ := json.Marshal(map[string]any{"model": "local/stand-in", "provider": map[string]any{"local": map[string]any{
 					"npm": "@ai-sdk/openai-compatible", "options": map[string]any{"baseURL": url + "/v1", "apiKey": "stand-in"}, "models": map[string]any{"stand-in": map[string]any{"tool_call": true}},
@@ -178,6 +186,27 @@ env_key = "CODEX_API_KEY"
 				defer pcancel()
 				reason, err := s.Prompt(pctx, harness.Prompt{Text: "Create the file made.txt."})
 				t.Logf("%s: stopped %s, err %v; asked %d; notices %s", name, reason, err, len(asked), rec.text(event.Notice))
+				if name == "allow" {
+					// What the agent tells the app about its usage and its model (PRV-008),
+					// as measured on 2026-11-06; a new version that changes it fails here.
+					var turn *event.UsageData
+					rec.mu.Lock()
+					for _, e := range rec.events {
+						var d event.UsageData
+						if e.Type == event.UsageUpdate && json.Unmarshal(e.Data, &d) == nil && d.Measured != "" {
+							turn = &d
+						}
+					}
+					rec.mu.Unlock()
+					switch {
+					case turn == nil:
+						t.Errorf("usage: no turn's usage recorded: %s", rec.text(event.UsageUpdate))
+					case turn.Measured != c.usage.measured || turn.Model != c.usage.model || (turn.Measured == event.MeasuredTurn && turn.InputTokens+turn.OutputTokens == 0):
+						t.Errorf("usage: got %+v, want measured %q with model %q", *turn, c.usage.measured, c.usage.model)
+					default:
+						t.Logf("usage: %s, %d in, %d out, model %q", turn.Measured, turn.InputTokens, turn.OutputTokens, turn.Model)
+					}
+				}
 				if os.Getenv("FREELOOP_AGENTS_DEBUG") != "" {
 					t.Logf("%s: tool calls %s %s", name, rec.text(event.ToolCall), rec.text(event.ToolCallUpdate))
 					t.Logf("%s: stderr %s", name, s.(*session).proc.Stderr())

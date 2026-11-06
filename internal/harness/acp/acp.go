@@ -205,6 +205,18 @@ func (s *session) reportOptions(options []sdk.SessionConfigOption) {
 }
 
 // Options implements harness.Configurable.
+// currentModel is the model the agent says it is on, from its model setting, or "".
+func (s *session) currentModel() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, o := range s.options {
+		if o.Category == "model" {
+			return o.Current
+		}
+	}
+	return ""
+}
+
 func (s *session) Options() []harness.Option {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -543,13 +555,21 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	} else if ctx.Err() != nil {
 		stop = harness.StopCancelled
 	}
-	if u := a.res.Usage; !s.endCalls() && u != nil {
-		d := event.UsageData{InputTokens: int64(u.InputTokens), OutputTokens: int64(u.OutputTokens)}
-		if u.CachedReadTokens != nil {
-			d.CacheReadTokens = int64(*u.CachedReadTokens)
+	if !s.endCalls() && answered {
+		// The turn's total from its answer, priced by the model the agent says it is
+		// on, or said not to be there at all (PRV-008).
+		d := event.UsageData{Measured: event.MeasuredTurn, Model: s.currentModel()}
+		if u := a.res.Usage; u != nil {
+			d.InputTokens, d.OutputTokens = int64(u.InputTokens), int64(u.OutputTokens)
+			if u.CachedReadTokens != nil {
+				d.CacheReadTokens = int64(*u.CachedReadTokens)
+			}
+			if u.CachedWriteTokens != nil {
+				d.CacheWriteTokens = int64(*u.CachedWriteTokens)
+			}
 		}
-		if u.CachedWriteTokens != nil {
-			d.CacheWriteTokens = int64(*u.CachedWriteTokens)
+		if d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens == 0 {
+			d.Measured, d.Model = event.MeasuredNone, ""
 		}
 		s.p.Emit(event.UsageUpdate, d)
 	}

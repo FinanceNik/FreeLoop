@@ -21,6 +21,10 @@ func TestFindPrice(t *testing.T) {
 		{"home", "gpt-x", 3, true},
 		{"home", "gpt-x-mini", 0, false},
 		{"home", "", 0, false},
+		// An agent's names for a model (PRV-008).
+		{"", "openai/gpt-x", 3, true},
+		{"", "gpt-x/high", 3, true},
+		{"", "local/stand-in", 0, false},
 	} {
 		p, ok := FindPrice(prices, c.provider, c.model)
 		if ok != c.ok || p.Input != c.input {

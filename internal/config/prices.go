@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"path"
+	"strings"
 )
 
 // Price is what a model's tokens cost, in US dollars per million tokens
@@ -39,6 +40,22 @@ func PricedModel(model string, prompt int64) string {
 
 // FindPrice returns the first entry for a provider's model.
 func FindPrice(prices []Price, providerID, model string) (Price, bool) {
+	if p, ok := findPrice(prices, providerID, model); ok {
+		return p, true
+	}
+	// An agent may name a model with its provider, openai/gpt-5.5, or with its
+	// effort, gpt-5.5/high (PRV-008): without a price for the whole name, try either
+	// side of the first slash.
+	if before, after, ok := strings.Cut(model, "/"); ok {
+		if p, ok := findPrice(prices, providerID, after); ok {
+			return p, true
+		}
+		return findPrice(prices, providerID, before)
+	}
+	return Price{}, false
+}
+
+func findPrice(prices []Price, providerID, model string) (Price, bool) {
 	for _, p := range prices {
 		if p.ProviderID != "" && p.ProviderID != providerID {
 			continue

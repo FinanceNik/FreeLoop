@@ -169,6 +169,9 @@ export interface SessionView {
   usage: Usage;
   // Every model call, for cost estimates (PRV-008).
   calls: ModelCall[];
+  // How an external agent's usage was counted (PRV-008): turns counted by their
+  // total, and turns the agent reported no tokens for.
+  measured: { turns: number; unreported: number };
   git: GitState | null;
   mode: string | null;
   // Counts changes to the session's model, effort and rules, for what shows them.
@@ -265,6 +268,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   // that does not name its own was made with ("" until a switch: the
   // session's).
   const calls: ModelCall[] = [];
+  const measured = { turns: 0, unreported: 0 };
   let turnCalls: ModelCall[] = [];
   let setup: string | null = null;
   let plan: PlanEntry[] = [];
@@ -434,6 +438,8 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         turnCalls = [];
         break;
       case "usage_update": {
+        if (d.measured === "turn") measured.turns++;
+        if (d.measured === "none") measured.unreported++;
         const c: ModelCall = {
           providerId: d.model ? (d.providerId ?? "") : current.providerId,
           model: d.model || current.model,
@@ -554,7 +560,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
     const tool = toolCallId ? tools.get(toolCallId) : undefined;
     return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || "A request" };
   });
-  return { items, usage, calls, git, mode, status, running, commands, context, setup, plan, planThisTurn, settings, held, stuck };
+  return { items, usage, calls, measured, git, mode, status, running, commands, context, setup, plan, planThisTurn, settings, held, stuck };
 }
 
 function replaceTool(

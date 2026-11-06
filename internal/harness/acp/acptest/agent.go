@@ -38,6 +38,13 @@ const ImageVar = "FREELOOP_ACP_TEST_IMAGE"
 // terminal, none of which a client that only reads may grant.
 const ImportVar = "FREELOOP_ACP_TEST_IMPORT"
 
+// ModelVar set to 1 makes the agent report a model setting, and a prompt containing
+// "silent" end with no usage, as agents that report none do (PRV-008).
+const ModelVar = "FREELOOP_ACP_TEST_MODEL"
+
+// agentModel is the model setting the agent reports with ModelVar.
+const agentModel = `[{"type":"select","id":"model","name":"Model","category":"model","currentValue":"agent-model","options":[{"value":"agent-model","name":"Agent model"}]}]`
+
 // Serve runs the agent on stdin and stdout until the client disconnects and
 // reports whether it did, so a TestMain can return early.
 func Serve() bool {
@@ -145,7 +152,11 @@ func (a *agent) NewSession(_ context.Context, r sdk.NewSessionRequest) (sdk.NewS
 			a.mcp = append(a.mcp, m.Http.Name+"="+m.Http.Url)
 		}
 	}
-	return sdk.NewSessionResponse{SessionId: "s1"}, nil
+	res := sdk.NewSessionResponse{SessionId: "s1"}
+	if os.Getenv(ModelVar) == "1" {
+		json.Unmarshal([]byte(agentModel), &res.ConfigOptions)
+	}
+	return res, nil
 }
 
 func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResponse, error) {
@@ -216,6 +227,9 @@ func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResp
 	}
 	if a.callTokens {
 		a.sendCalls(ctx, r.SessionId)
+	}
+	if os.Getenv(ModelVar) == "1" && strings.Contains(text, "silent") {
+		return sdk.PromptResponse{StopReason: sdk.StopReasonEndTurn}, nil
 	}
 	in, out := 10, 5
 	return sdk.PromptResponse{StopReason: sdk.StopReasonEndTurn, Usage: &sdk.Usage{InputTokens: in, OutputTokens: out, TotalTokens: in + out}}, nil

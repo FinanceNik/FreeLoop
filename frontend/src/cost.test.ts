@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { estimate, findPrice, formatCost, globMatch, type ModelCall, type PriceEntry } from "./cost.ts";
+import { costText, estimate, findPrice, formatCost, globMatch, type ModelCall, type PriceEntry } from "./cost.ts";
 
 test("globMatch follows path.Match", () => {
   assert.ok(globMatch("claude-*", "claude-big-5"));
@@ -30,6 +30,13 @@ test("findPrice takes the first entry for the provider", () => {
   assert.equal(findPrice(prices, "work", "big-1")?.input, 1);
   assert.equal(findPrice(prices, "home", "big-1")?.input, 2);
   assert.equal(findPrice(prices, "home", "small"), null);
+});
+
+test("findPrice reads an agent's names for a model, as the engine does", () => {
+  const prices = [price("", "gpt-x", 3)];
+  assert.equal(findPrice(prices, "", "openai/gpt-x")?.input, 3);
+  assert.equal(findPrice(prices, "", "gpt-x/high")?.input, 3);
+  assert.equal(findPrice(prices, "", "local/stand-in"), null);
 });
 
 test("estimate prices calls and counts the unpriced", () => {
@@ -64,4 +71,13 @@ test("an hour's cache write and a long prompt pay their own prices", () => {
   near(estimate(prices, [call("m", 101, 0, 0)], own).cost, (101 * 5) / 1e6);
   near(estimate(prices, [call("m", 100, 0, 0)], own).cost, (100 * 1) / 1e6);
   near(estimate(prices, [call("plain", 0, 10, 10)], own).cost, (10 * 2) / 1e6);
+});
+
+test("a session's cost says how the agent counted it", () => {
+  const none = { turns: 0, unreported: 0 };
+  assert.equal(costText({ cost: 0, unpriced: 0 }, 0, none), "none yet");
+  assert.equal(costText({ cost: 0, unpriced: 0 }, 0, { turns: 0, unreported: 2 }), "not reported by the agent");
+  assert.equal(costText({ cost: 0.5, unpriced: 0 }, 3, none), "≈ $0.50");
+  assert.equal(costText({ cost: 0, unpriced: 2 }, 2, { turns: 2, unreported: 0 }), "no price set, from the agent's turn totals");
+  assert.equal(costText({ cost: 0.5, unpriced: 0 }, 2, { turns: 2, unreported: 1 }), "≈ $0.50, from the agent's turn totals; 1 turn not reported");
 });
