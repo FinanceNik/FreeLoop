@@ -169,8 +169,13 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 	if err := cmd.Start(); err != nil {
 		return ExecResult{}, fmt.Errorf("environment: start %s: %w", cmd.Path, err)
 	}
+	track(cmd.Process.Pid, cmd.Path)
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	go func() {
+		err := cmd.Wait()
+		untrack(cmd.Process.Pid)
+		done <- err
+	}()
 	var waitErr error
 	select {
 	case waitErr = <-done:

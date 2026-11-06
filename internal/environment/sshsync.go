@@ -521,8 +521,13 @@ func (s *SSH) streamRemote(ctx context.Context, stdin []byte, read func(io.Reade
 		pr.CloseWithError(errors.New("no longer reading"))
 		readDone <- err
 	}()
+	track(cmd.Process.Pid, cmd.Path)
 	waited := make(chan error, 1)
-	go func() { waited <- cmd.Wait() }()
+	go func() {
+		err := cmd.Wait()
+		untrack(cmd.Process.Pid)
+		waited <- err
+	}()
 	var waitErr error
 	select {
 	case waitErr = <-waited:

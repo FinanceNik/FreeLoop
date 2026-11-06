@@ -112,6 +112,8 @@ The bill lists what is in the app: Go modules from the binary's build informatio
 
 ## Logs and recovery
 
+**After a crash.** `running.json` in the data folder lists the process groups the app has running: commands, agents, MCP servers, syncs and terminals, each with its first process's start time and program name. A clean quit leaves it empty; after a crash or `kill -9`, the next start stops what is still there and logs it (NFR-REL-005, `internal/environment/ledger.go`). A process is stopped only if it still has the recorded start time, so one that later got the same number is never touched.
+
 `logs/freeloop.log` holds the log and, in a launched app, crash traces; a development build also keeps its terminal. Everything through `log` passes the engine's redaction. Deleting `freeloop.db` is safe: it is rebuilt from the daily copy, `meta.json` and the transcripts, with projects untrusted unless the copy says otherwise. A data folder takes one copy of the app at a time, so `make dev` beside an installed app needs its own `FREELOOP_HOME`.
 
 ## Before the repository goes public

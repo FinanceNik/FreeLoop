@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -53,6 +54,10 @@ type Options struct {
 	PDFArgv func(path string) []string
 	// FolderArgv is the command that shows a folder, never running what is in it.
 	FolderArgv func(path string) []string
+	// ProcessStarted says when a process started, so the commands, agents and
+	// terminals a crash left running are stopped at the next start and nothing
+	// else is (NFR-REL-005). Without it, none are recorded or stopped.
+	ProcessStarted func(pid int) (time.Time, bool)
 	// Home is the user's home directory, for the protected-path policy.
 	// Default os.UserHomeDir().
 	Home string
@@ -250,6 +255,19 @@ func Open(opts Options) (*Engine, error) {
 	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: func(ev event.Event) { e.bus.publish(ev); e.observe(ev) }, Redact: e.redact})
 	if err != nil {
 		return nil, err
+	}
+	// What the last run left running, if it ended without stopping it, goes before
+	// anything of this run starts (NFR-REL-005). The caller holds the data folder's
+	// lock, so these are this folder's own.
+	if opts.ProcessStarted != nil {
+		environment.ProcessStarted = opts.ProcessStarted
+		ledger := filepath.Join(opts.DataDir, "running.json")
+		if stopped, err := environment.ReapLeftovers(ledger); err != nil {
+			log.Printf("engine: what the last run left running: %v", err)
+		} else if len(stopped) > 0 {
+			log.Printf("engine: stopped %d left running by the last run: %s", len(stopped), strings.Join(stopped, ", "))
+		}
+		environment.UseLedger(ledger)
 	}
 	e.broker = permission.NewBroker(permission.NewPolicy(opts.Home, opts.DataDir), e.emit)
 	e.rules = newRuleStore(opts.DataDir, func(issues []config.Issue) { e.setIssues(issueRules, issues) })

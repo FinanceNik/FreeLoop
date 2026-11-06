@@ -257,6 +257,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 - **NFR-REL-002** · MVP · An external harness or MCP server crash is isolated to its session and shown as an error; the next message starts the agent again.
 - **NFR-REL-003** · MVP · Engine packages have unit tests; the provider and ACP layers have replayable fixtures; CI runs on a macOS runner on every commit.
 - **NFR-REL-004** · v1 · Contributor documentation: architecture overview, how to add a provider, a harness preset, an environment.
+- **NFR-REL-005** · v1 · Nothing outlives a crash. Every command, agent, MCP server, sync and terminal the app starts is a process group recorded in `running.json` in the data folder while it runs, with when its first process started; the next start stops, before anything else starts, each group whose leader is still that very process (asked to end, killed two seconds later), and never a process that only got the same number. Only the program's name is recorded, since a command line can carry a secret. *Accept:* a `sleep` left running when an engine is dropped without closing is stopped when the next engine opens the folder; one whose recorded start time differs is left alone; a command that ended is no longer recorded.
 
 ## Cut from MVP, and why
 

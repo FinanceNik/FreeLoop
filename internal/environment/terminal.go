@@ -91,8 +91,10 @@ func (l *Local) OpenTerminal(ctx context.Context, spec TerminalSpec) (Terminal, 
 		return nil, fmt.Errorf("environment: start a terminal: %w", err)
 	}
 	t := &ptyTerminal{f: f, cmd: cmd, done: make(chan struct{})}
+	track(cmd.Process.Pid, cmd.Path)
 	go func() {
 		err := cmd.Wait()
+		untrack(cmd.Process.Pid)
 		var exitErr *exec.ExitError
 		switch {
 		case err == nil:
