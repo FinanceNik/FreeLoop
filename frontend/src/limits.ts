@@ -84,6 +84,16 @@ export function percentText(used: number): string {
   return used > 0 && used < 1 ? "under 1%" : `${Math.round(used)}%`;
 }
 
+// STALE_MINUTES is when a limit's report is old enough to say how old.
+export const STALE_MINUTES = 10;
+
+// reportAge says how old a report is, or "" while it is fresh: a fresh figure needs no
+// note, an old one may be out of date (GUI-028).
+export function reportAge(lastReport: string | Date, now: Date, since: (t: string | Date, now: Date) => string): string {
+  const minutes = (now.getTime() - new Date(lastReport).getTime()) / 60000;
+  return minutes < STALE_MINUTES ? "" : `reported ${since(lastReport, now)}`;
+}
+
 // resetText says when a limit starts over, in words.
 export function resetText(resetsAt: Date, now: Date = new Date()): string {
   const minutes = Math.round((resetsAt.getTime() - now.getTime()) / 60000);

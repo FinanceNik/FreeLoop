@@ -29,7 +29,7 @@ type sdkLimitWindow struct {
 
 // limitLabels names the windows in words. A window with no name here still shows.
 var limitLabels = map[string]string{
-	"five_hour": "Session limit (5 hours)",
+	"five_hour": "5-hour limit",
 	"seven_day": "Weekly limit",
 }
 

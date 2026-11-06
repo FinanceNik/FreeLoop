@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { recentChart, recentSeries, recentTotals, type RecentBucket, bucketsOf, filterRecent, groupedChart, NO_RECENT_FILTERS, recentKeys, recentOptions } from "./recentUsage.ts";
+import { recentChart, recentSeries, recentTotals, type RecentBucket, bucketsOf, filterRecent, groupedChart, NO_RECENT_FILTERS, recentKeys, recentOptions, shortTime } from "./recentUsage.ts";
 
 const b = (start: number, over: Partial<RecentBucket> = {}): RecentBucket => ({ start, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0, cost: 0, unpriced: 0, ...over });
 
@@ -89,3 +89,10 @@ test("cost groups by cost, and cache reads count only when asked", () => {
   assert.equal(groupedChart([1], all, all, keys.model, "tokens", true).data[0].total, 15);
 });
 
+
+test("a time on the axis is short: AM and PM become a letter", () => {
+  assert.equal(shortTime("11:30 AM"), "11:30a");
+  assert.equal(shortTime("1:15\u202fPM"), "1:15p");
+  assert.equal(shortTime("10:00 p.m."), "10:00p");
+  assert.equal(shortTime("23:45"), "23:45");
+});

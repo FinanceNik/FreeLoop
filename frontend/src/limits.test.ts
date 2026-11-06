@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { currentLimits, limitSummaries, percentText, resetText } from "./limits.ts";
+import { currentLimits, limitSummaries, percentText, reportAge, resetText } from "./limits.ts";
 
 const now = new Date("2026-11-03T12:00:00Z");
 const run = (window: string, resetsAt: string, peak: number, more = {}) => ({
@@ -74,4 +74,10 @@ test("words for use and for the reset", () => {
   assert.equal(after(125), "resets in 2 h 5 min");
   assert.equal(after(60 * 25), "resets in 1 day 1 h");
   assert.equal(after(60 * 49), "resets in 2 days 1 h");
+});
+
+test("a fresh report says nothing of its age, an old one does", () => {
+  const since = (_t: string | Date) => "12 min ago";
+  assert.equal(reportAge(new Date(now.getTime() - 5 * 60000), now, since), "");
+  assert.equal(reportAge(new Date(now.getTime() - 12 * 60000), now, since), "reported 12 min ago");
 });

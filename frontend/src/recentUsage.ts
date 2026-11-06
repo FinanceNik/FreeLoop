@@ -55,9 +55,15 @@ export function recentTotals(buckets: RecentBucket[], cacheReads: boolean): Rece
   return t;
 }
 
-// timeLabel is a step's start on the axis.
+// timeLabel is a step's start on the axis: 11:30 in a 24-hour locale, 11:30a in one with
+// AM and PM, so labels stay short enough not to touch in a narrow pane.
 export function timeLabel(start: string | number): string {
-  return new Date(Number(start)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return shortTime(new Date(Number(start)).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+}
+
+// shortTime folds a time's AM or PM into one letter.
+export function shortTime(text: string): string {
+  return text.replace(/[\s\u202f]*([AaPp])\.?\s?[Mm]\.?$/, (_, p: string) => p.toLowerCase());
 }
 
 // stepLabel is a step in the chart's readout: from when to when.

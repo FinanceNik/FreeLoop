@@ -25,6 +25,7 @@ import {
 } from "./transcript.ts";
 import { pickLabel } from "./a11y.ts";
 import AttachedImages from "./AttachedImages.tsx";
+import { useDismiss } from "./useDismiss.ts";
 import ToolView, { openSessionEvent } from "./ToolView.tsx";
 import Tags from "./Tags.tsx";
 import { prepareImage, type PreparedImage } from "./imageprep.ts";
@@ -812,27 +813,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
 
   // The header's More menu closes once an action is picked.
   const moreMenu = useRef<HTMLDetailsElement>(null);
-  // It also closes on a click anywhere else, and on Escape, as a Mac menu does.
-  useEffect(() => {
-    const outside = (e: PointerEvent) => {
-      const menu = moreMenu.current;
-      if (menu?.open && !menu.contains(e.target as Node)) menu.open = false;
-    };
-    const escape = (e: globalThis.KeyboardEvent) => {
-      const menu = moreMenu.current;
-      if (!menu?.open || e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      menu.open = false;
-      menu.querySelector("summary")?.focus();
-    };
-    window.addEventListener("pointerdown", outside, true);
-    window.addEventListener("keydown", escape, true);
-    return () => {
-      window.removeEventListener("pointerdown", outside, true);
-      window.removeEventListener("keydown", escape, true);
-    };
-  }, []);
+  // It also closes on a click anywhere else, and on Escape.
+  useDismiss(moreMenu);
   // What the header leaves to its tooltip and the Info tab.
   const headerDetails = [
     session.worktree ? `Worktree of ${session.projectRoot}: ${session.worktree}` : session.projectRoot,

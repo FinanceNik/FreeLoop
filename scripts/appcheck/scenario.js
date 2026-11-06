@@ -1010,6 +1010,33 @@ await step("the usage pane cycles through its views", async () => {
   arrow("Next").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
   await sleep(150);
   check("the left key goes back a view", name() === "Tokens", name());
+  // GUI-042: in a pane of four, Recent hours keeps its controls to one row, its times
+  // apart, and a filter in view.
+  await to("Recent hours");
+  const bar = await until("the controls", () => usage.querySelector(".live-usage-bar"));
+  const tops = [...bar.children].map((c) => Math.round(c.getBoundingClientRect().top));
+  check("the pane's controls are one row", tops.every((t) => Math.abs(t - tops[0]) <= 4) && [...usage.querySelectorAll(".live-usage-controls select")].every((sel) => sel.closest(".usage-filter-menu")), tops.join(", "));
+  await until("the time axis", () => usage.querySelector("text.usage-axis"));
+  // The times are the bottom row; the values share the class up the left side.
+  const axis = [...usage.querySelectorAll("text.usage-axis")].map((t) => t.getBoundingClientRect());
+  const bottom = Math.max(...axis.map((r) => r.top));
+  const labels = axis.filter((r) => Math.abs(r.top - bottom) < 2).sort((x, y) => x.left - y.left);
+  check("the pane's times do not touch", labels.length > 1 && labels.every((r, i) => i === 0 || r.left >= labels[i - 1].right + 4), labels.map((r) => `${Math.round(r.left)}-${Math.round(r.right)}`).join(" "));
+  const menu = bar.querySelector(".usage-filter-menu");
+  menu.querySelector("summary").click();
+  await until("the filter menu", () => menu.open);
+  const project = menu.querySelector("select[aria-label^='Filter:']");
+  if (project.options.length > 1) {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(project, project.options[1].value);
+    project.dispatchEvent(new Event("change", { bubbles: true }));
+    const chip = await until("the filter's chip", () => usage.querySelector(".usage-chips .chip"));
+    check("a filter shows as a chip", chip.textContent.includes(project.options[1].value) && /1/.test(menu.querySelector(".filter-count")?.textContent ?? ""));
+    chip.click();
+    await until("the chip gone", () => !usage.querySelector(".usage-chips .chip"));
+  }
+  document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  await sleep(50);
+  check("the filter menu closes on a click elsewhere", !menu.open);
   // The same figures as the usage page over the same 30 days.
   usage.querySelector('button[aria-label="Full usage page"]').click();
   const pageTotal = (await until("the usage page's tokens", () => document.querySelector(".usage-page .usage-hero strong"), 20000))?.textContent;

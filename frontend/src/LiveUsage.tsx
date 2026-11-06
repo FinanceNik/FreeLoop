@@ -20,6 +20,8 @@ import {
   type RecentRow,
 } from "./recentUsage.ts";
 import UsageChart from "./UsageChart.tsx";
+import { CloseIcon, FilterIcon } from "./icons.tsx";
+import { useDismiss } from "./useDismiss.ts";
 import { Tile } from "./UsageInsights.tsx";
 
 // LiveUsage is the last 12 or 24 hours of usage (GUI-023), on the usage page and
@@ -112,67 +114,129 @@ export default function LiveUsage({
   const filtered = Object.values(filters).some(Boolean);
   const format = metric === "cost" ? formatCost : formatTokens;
   const priced = totals.calls > totals.unpriced;
-  const measure = metric === "cost" ? "Estimated cost" : "Tokens";
-  const title = `${measure} per ${step} minutes, last ${hours} hours`;
+  const measureName = metric === "cost" ? "Estimated cost" : "Tokens";
+  const title = `${measureName} per ${step} minutes, last ${hours} hours`;
+  // In a pane the toggles above already say what and how long.
+  const heading = compact ? `Per ${step} minutes` : title;
+  const menu = useRef<HTMLDetailsElement>(null);
+  useDismiss(menu);
+
+  const active = DIMENSIONS.filter((d) => filters[d.id]);
+  // What the filter button holds that is not as it starts.
+  const settings = active.length + (cacheReads ? 1 : 0) + (group !== "type" ? 1 : 0);
+  const range = (short: boolean) => (
+    <div className="segmented" role="radiogroup" aria-label="Range">
+      {RANGES.map((r) => (
+        <button key={r.hours} role="radio" aria-checked={hours === r.hours} aria-label={r.label} className={hours === r.hours ? "on" : ""} onClick={() => setHours(r.hours)}>
+          {short ? `${r.hours} h` : r.label}
+        </button>
+      ))}
+    </div>
+  );
+  const measure = (
+    <div className="segmented" role="radiogroup" aria-label="Measure">
+      {(["tokens", "cost"] as const).map((m) => (
+        <button key={m} role="radio" aria-checked={metric === m} className={metric === m ? "on" : ""} onClick={() => setMetric(m)}>
+          {m === "tokens" ? "Tokens" : "Cost"}
+        </button>
+      ))}
+    </div>
+  );
+  const cacheToggle = (
+    <label className="row">
+      <input type="checkbox" checked={cacheReads} onChange={(e) => setCacheReads(e.target.checked)} /> Cache reads
+    </label>
+  );
+  const groupSelect = (
+    <label className="row">
+      Group by
+      <select value={group} onChange={(e) => setGroup(e.target.value as RecentGroup)}>
+        {GROUPS.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  const filterSelects = DIMENSIONS.map((d) => (
+    <select
+      key={d.id}
+      aria-label={`Filter: ${d.plural}`}
+      className={filters[d.id] ? "usage-filter-on" : ""}
+      value={filters[d.id]}
+      onChange={(e) => setFilters({ ...filters, [d.id]: e.target.value })}
+    >
+      <option value="">{d.plural}</option>
+      {recentOptions(all, keys[d.id], filters[d.id]).map((name) => (
+        <option key={name} value={name}>
+          {name}
+        </option>
+      ))}
+    </select>
+  ));
+  const grouping = (
+    <>
+      {groupSelect}
+      {filterSelects}
+      {cacheToggle}
+      {filtered && (
+        <button className="link" onClick={() => setFilters(NO_RECENT_FILTERS)}>
+          Clear filters
+        </button>
+      )}
+    </>
+  );
 
   return (
     <section className={compact ? "live-usage live-usage-compact" : "live-usage"} aria-label="Recent usage">
-      <div className="live-usage-controls">
-        <div className="segmented" role="radiogroup" aria-label="Range">
-          {RANGES.map((r) => (
-            <button key={r.hours} role="radio" aria-checked={hours === r.hours} className={hours === r.hours ? "on" : ""} onClick={() => setHours(r.hours)}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-        <div className="segmented" role="radiogroup" aria-label="Measure">
-          {(["tokens", "cost"] as const).map((m) => (
-            <button key={m} role="radio" aria-checked={metric === m} className={metric === m ? "on" : ""} onClick={() => setMetric(m)}>
-              {m === "tokens" ? "Tokens" : "Cost"}
-            </button>
-          ))}
-        </div>
-        <label className="row">
-          <input type="checkbox" checked={cacheReads} onChange={(e) => setCacheReads(e.target.checked)} /> Cache reads
-        </label>
-      </div>
-      <div className="live-usage-controls" role="group" aria-label="Filters and grouping">
-        <label className="row">
-          Group by
-          <select value={group} onChange={(e) => setGroup(e.target.value as RecentGroup)}>
-            {GROUPS.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {DIMENSIONS.map((d) => (
-          <select
-            key={d.id}
-            aria-label={`Filter: ${d.plural}`}
-            className={filters[d.id] ? "usage-filter-on" : ""}
-            value={filters[d.id]}
-            onChange={(e) => setFilters({ ...filters, [d.id]: e.target.value })}
-          >
-            <option value="">{d.plural}</option>
-            {recentOptions(all, keys[d.id], filters[d.id]).map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        ))}
-        {filtered && (
-          <button className="link" onClick={() => setFilters(NO_RECENT_FILTERS)}>
-            Clear filters
-          </button>
-        )}
-      </div>
       {compact ? (
-        <p className="live-usage-strip">
-          <strong>{formatTokens(totals.tokens)}</strong> tokens · <strong>{formatTokens(totals.output)}</strong> output · <strong>{totals.calls.toLocaleString()}</strong> calls · <strong>{priced ? formatCost(totals.cost) : "No price"}</strong>
-          {priced && totals.unpriced > 0 && <span className="muted"> · {totals.unpriced} unpriced</span>}
+        <>
+          {/* In a pane: the range and the measure, and the rest behind one button (GUI-042). */}
+          <div className="live-usage-controls live-usage-bar">
+            {range(true)}
+            {measure}
+            <details className="usage-filter-menu" ref={menu}>
+              <summary className="icon-button" aria-label={settings ? `Filters and grouping, ${settings} set` : "Filters and grouping"} title="Filters and grouping">
+                <FilterIcon />
+                {settings > 0 && <span className="filter-count">{settings}</span>}
+              </summary>
+              <div className="usage-filter-panel">{grouping}</div>
+            </details>
+          </div>
+          {active.length > 0 && (
+            <div className="usage-chips" aria-label="Filters in use">
+              {active.map((d) => (
+                <button key={d.id} className="chip" aria-label={`Remove the filter ${filters[d.id]}`} title="Remove this filter" onClick={() => setFilters({ ...filters, [d.id]: "" })}>
+                  {filters[d.id]}
+                  <CloseIcon />
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="live-usage-controls">
+            {range(false)}
+            {measure}
+            {cacheToggle}
+          </div>
+          <div className="live-usage-controls" role="group" aria-label="Filters and grouping">
+            {groupSelect}
+            {filterSelects}
+            {filtered && (
+              <button className="link" onClick={() => setFilters(NO_RECENT_FILTERS)}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      {compact ? (
+        <p className="live-usage-strip" title={`${formatTokens(totals.output)} output · ${totals.calls.toLocaleString()} model calls${priced && totals.unpriced > 0 ? ` · ${totals.unpriced} without a price` : ""}`}>
+          <strong>{formatTokens(totals.tokens)}</strong> tokens · <strong>{priced ? formatCost(totals.cost) : "No price"}</strong>
+          {priced && totals.unpriced > 0 && "+"}
         </p>
       ) : (
         <div className="live-usage-tiles">
@@ -184,7 +248,7 @@ export default function LiveUsage({
       )}
       <div className="usage-card">
         <div className="usage-card-head">
-          <h3>{title}</h3>
+          <h3>{heading}</h3>
           {series.length > 1 && (
             <ul className="usage-legend" aria-label="Legend">
               {series.map((s) => (

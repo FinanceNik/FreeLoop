@@ -316,7 +316,7 @@ What the open "later" list held that follows from the sandbox or needs no accoun
 
 ### A calmer interface (built 2026-11-06)
 
-1. **Less on screen (GUI-042).** Quieter turn ends, a mark for allowed tool calls, one-line mode banners, no running command on sidebar rows, icons in the usage pane's head. `SessionView.tsx`, `ToolView.tsx`, `Workspace.tsx`, `App.tsx`.
+1. **Less on screen (GUI-042).** Quieter turn ends, a mark for allowed tool calls, one-line mode banners, no running command on sidebar rows, icons in the usage pane's head. Then the usage pane's Recent hours: one row of controls with the rest behind a filter button, limits as lines, short times, no box in the box (`LiveUsage.tsx`, `Limits.tsx`, `useDismiss.ts`). `SessionView.tsx`, `ToolView.tsx`, `Workspace.tsx`, `App.tsx`.
 2. **Icons where the action is obvious (GUI-041).** One icon module (`frontend/src/icons.tsx`, the Settings icons moved in), icon-only header, footer, composer and queue controls, each named and with a tooltip. *`make check-app` checks every visible control has a name and every icon-only one a tooltip. Not yet looked at by the user in light and dark, or with VoiceOver.*
 
 ### Seeing what sessions do, and checking the running app (built 2026-11-04)

@@ -4606,9 +4606,14 @@ table.hooks .hook-command {
   gap: 8px;
   margin-bottom: 0;
 }
+/* In a pane the limits are lines, not boxes in a box (GUI-042). */
+.limits-compact .limits-tiles {
+  gap: 8px 20px;
+}
 .limits-compact .limit-tile {
-  gap: 3px;
-  padding: 6px 10px;
+  gap: 4px;
+  padding: 0;
+  border: none;
 }
 .limits-compact .limit-tile .muted {
   font-size: 0.8em;
@@ -4637,8 +4642,10 @@ table.hooks .hook-command {
   flex: 1;
   flex-direction: column;
   min-height: 170px;
-  margin-top: 0;
-  padding: 8px 10px;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: none;
 }
 .live-usage-compact .usage-card-head h3 {
   font-size: 0.8em;
@@ -5357,4 +5364,78 @@ table.hooks .hook-command {
 
 .budget-row input[type="number"] {
   width: 8rem;
+}
+
+/* The usage pane's one row of controls (GUI-042): range, measure, and the rest behind
+   the filter button, whose count says how much is set. */
+.live-usage-bar {
+  flex-wrap: nowrap;
+}
+.usage-filter-menu {
+  position: relative;
+}
+.usage-filter-menu > summary {
+  position: relative;
+  list-style: none;
+}
+.usage-filter-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.usage-filter-menu[open] > summary {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.filter-count {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: calc(10rem / 14);
+  line-height: 14px;
+  text-align: center;
+}
+.usage-filter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: max-content;
+  max-width: min(280px, 80vw);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-card);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  font-size: calc(13rem / 14);
+}
+.usage-filter-panel select {
+  max-width: none;
+}
+.usage-filter-panel label.row {
+  justify-content: space-between;
+  gap: 8px;
+}
+.usage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.usage-chips .chip {
+  cursor: pointer;
+}
+.usage-chips .chip svg {
+  width: 11px;
+  height: 11px;
+}
+.live-usage-compact .usage-card-head h3 {
+  color: var(--muted);
+  font-weight: 500;
 }

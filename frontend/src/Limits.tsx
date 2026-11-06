@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import { EngineService, EVENT_NAME } from "./api.ts";
 import { since } from "./board.ts";
-import { currentLimits, LIMIT_STATE_LABEL, limitSummaries, percentText, resetText, type LimitPeriodRow } from "./limits.ts";
+import { currentLimits, LIMIT_STATE_LABEL, limitSummaries, percentText, reportAge, resetText, type LimitPeriodRow } from "./limits.ts";
 
 // Limits shows how much of an account's limits agents have reported using (GUI-028).
 // No agent or vendor is asked: a report comes back with a model call, and the page says
@@ -46,17 +46,19 @@ export default function Limits({ compact = false, onError }: { compact?: boolean
                 {sources.size > 1 ? `${l.source}: ` : ""}
                 {l.label}
               </span>
-              <strong>{l.used === null ? "No current figure" : `${percentText(l.used)} used`}</strong>
+              {/* The meter says it is used; the words stay for VoiceOver (GUI-042). */}
+              <strong>
+                {l.used === null ? "No current figure" : percentText(l.used)}
+                {l.used !== null && <span className="sr-only"> used</span>}
+              </strong>
             </span>
             {l.used !== null && (
-              <div className="limit-meter" role="meter" aria-label={l.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(l.used)}>
+              <div className="limit-meter" role="meter" aria-label={`${l.label}, ${percentText(l.used)} used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(l.used)}>
                 <div style={{ width: `${Math.min(100, l.used)}%` }} />
               </div>
             )}
             {LIMIT_STATE_LABEL[l.state] && <span className="limit-state">{LIMIT_STATE_LABEL[l.state]}</span>}
-            <span className="muted">
-              {l.used !== null && `${resetText(l.resetsAt, now)} · `}reported {since(l.lastReport, now)}
-            </span>
+            <span className="muted">{[l.used !== null ? resetText(l.resetsAt, now) : "", reportAge(l.lastReport, now, since)].filter(Boolean).join(" · ")}</span>
           </div>
         ))}
       </div>
