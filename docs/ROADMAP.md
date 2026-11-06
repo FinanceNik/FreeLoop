@@ -311,9 +311,14 @@ What the open "later" list held that follows from the sandbox or needs no accoun
 2. **Markdown and PDFs in the Files tab (GUI-035, OQ-035).** `frontend/src/FilesPanel.tsx`, `PdfView.tsx`, `pdfview.ts`, `ViewPDF` in `internal/engine/files.go`. *`make check-app` opens a hostile PDF on the served build: its script does not run, a click on its link leaves it in place, and that step fails with the viewer's policy loosened. Not yet seen on the packaged app's own scheme, on macOS 14 or 15, or with a large file.*
 3. **Context at a glance (GUI-036).** A meter on each pane, the sidebar from 80 %, a Compact button and a note when a call sends the whole context again. `frontend/src/contextMeter.ts`, `noteContext` and `reportCall` in `internal/harness/acp/calls.go`. *`make check-app` fills a real session of the demo provider and compacts it. External agents are tested with the reference agent's messages, shaped as the Claude adapter 0.99.1 sends them; a real Claude Code session has not been watched. A session not touched since the app opened has no figure in the sidebar. A custom endpoint's model gets its limit from the user (`ContextLimit.tsx`, `SetContextLimit`).*
 
+### A calmer interface (built 2026-11-06)
+
+1. **Less on screen (GUI-042).** Quieter turn ends, a mark for allowed tool calls, one-line mode banners, no running command on sidebar rows, icons in the usage pane's head. `SessionView.tsx`, `ToolView.tsx`, `Workspace.tsx`, `App.tsx`.
+2. **Icons where the action is obvious (GUI-041).** One icon module (`frontend/src/icons.tsx`, the Settings icons moved in), icon-only header, footer, composer and queue controls, each named and with a tooltip. *`make check-app` checks every visible control has a name and every icon-only one a tooltip. Not yet looked at by the user in light and dark, or with VoiceOver.*
+
 ### Seeing what sessions do, and checking the running app (built 2026-11-04)
 
-1. **What each session is doing (GUI-030).** A line on sidebar rows of sessions that are not idle, Board cards and pane tabs' tooltips (`frontend/src/sessionActivity.ts`, `ActivityLine.tsx`). *Unit-tested; `make check-app` sees it on the sidebar and the Board with the demo provider. A real agent has not been watched. A session not touched since the app opened has no line.*
+1. **What each session is doing (GUI-030).** A line on Board cards, and in the tooltips of sidebar rows and pane tabs (the line on the sidebar row itself went with GUI-042) (`frontend/src/sessionActivity.ts`, `ActivityLine.tsx`). *Unit-tested; `make check-app` sees it in the sidebar row's tooltip and on the Board with the demo provider. A real agent has not been watched. A session not touched since the app opened has no line.*
 2. **The app check (`make check-app`).** See DEVELOPING.md. *Shown to fail with the scrolling bug of 2026-11-04 put back. The native dialog stays outside it.*
 
 ### A quiet window and grouping by date (built 2026-11-03)

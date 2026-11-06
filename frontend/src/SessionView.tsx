@@ -35,7 +35,7 @@ import { contextHigh, contextLabel, contextTitle, shortTokens } from "./contextM
 import type { Source } from "./source.ts";
 import { draftOf, extrasOf, forgetDraft, rememberDraft, rememberExtras, storeDraft } from "./drafts.ts";
 import { MAX_IMAGES, room } from "./images.ts";
-import { CheckIcon, CopyIcon, ForkIcon, PaperclipIcon, RewindIcon, StopIcon } from "./icons.tsx";
+import { CheckIcon, CloseIcon, CompactIcon, CopyIcon, ForkIcon, InfoIcon, MoreIcon, PanelRightIcon, PaperclipIcon, QueueIcon, RewindIcon, SendIcon, StopIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
 import { usePaletteActions } from "./Palette.tsx";
@@ -877,8 +877,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
           </div>
           <div className="session-actions">
             {contextHigh(view.context) && view.commands.some((c) => c.name === "compact") && (
-              <button className="ghost" disabled={view.running || accepting} onClick={compactNow} title="Summarise the conversation so far, so each message sends less">
-                Compact
+              <button className="icon-button" aria-label="Compact context" disabled={view.running || accepting} onClick={compactNow} title="Compact context: summarise the conversation so far, so each message sends less">
+                <CompactIcon />
               </button>
             )}
             {exported && (
@@ -886,12 +886,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 Exported
               </span>
             )}
-            <button className="ghost" onClick={togglePanel} aria-pressed={panelOpen && (active || !split)} title="Show or hide the right panel">
-              Panel
+            <button className="icon-button" aria-label="Panel" onClick={togglePanel} aria-pressed={panelOpen && (active || !split)} title="Show or hide the right panel">
+              <PanelRightIcon />
             </button>
             <details className="export-menu" ref={moreMenu}>
-              <summary aria-label="More actions for this session" title="More actions">
-                ⋯
+              <summary className="icon-button" aria-label="More actions for this session" title="More actions">
+                <MoreIcon />
               </summary>
               <div className="export-options">
                 {otherProfiles.length > 0 && (
@@ -929,8 +929,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
               </div>
             </details>
             {onClosePane && (
-              <button className="ghost pane-close" onClick={onClosePane} aria-label="Close this pane" title="Close this pane">
-                ×
+              <button className="icon-button pane-close" onClick={onClosePane} aria-label="Close this pane" title="Close this pane">
+                <CloseIcon />
               </button>
             )}
           </div>
@@ -1009,8 +1009,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
           </div>
         )}
         {mode === "auto" && (
-          <div className="banner warn" role="status">
-            Auto mode: the agent decides by itself which tool calls to run. What it does not ask about never reaches Freeloop.
+          <div className="banner warn banner-slim" role="status" title="What the agent does not ask about never reaches Freeloop, and your deny rules do not apply to it.">
+            <InfoIcon /> Auto mode: the agent approves its own tool calls.
           </div>
         )}
 {view.stuck && !archived && (
@@ -1037,8 +1037,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
           </div>
         )}
                 {mode === "bypass" && (
-          <div className="banner error" role="status">
-            Bypass mode: tool calls run without asking. Protected paths are still refused.
+          <div className="banner error banner-slim" role="status" title="Protected paths and deny rules still hold.">
+            <InfoIcon /> Bypass: tool calls run without asking.
           </div>
         )}
 
@@ -1197,7 +1197,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 <li key={p.id}>
                   <img src={p.url} alt={`Picture ${i + 1}`} />
                   <button className="picture-remove" aria-label={`Remove picture ${i + 1}`} title="Remove" onClick={() => dropPicture(p.id)}>
-                    ×
+                    <CloseIcon />
                   </button>
                 </li>
               ))}
@@ -1208,8 +1208,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
               {textFiles.map((f) => (
                 <li key={f.name} className="chip" title={`${f.text.length.toLocaleString()} characters`}>
                   {f.name}
-                  <button className="link" aria-label={`Remove ${f.name}`} onClick={() => setTextFiles((list) => list.filter((x) => x !== f))}>
-                    ×
+                  <button className="link" aria-label={`Remove ${f.name}`} onClick={() => setTextFiles((list) => list.filter((x) => x !== f))} title="Remove">
+                    <CloseIcon />
                   </button>
                 </li>
               ))}
@@ -1220,8 +1220,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
               {attached.map((a) => (
                 <li key={`${a.server} ${a.uri}`} className="chip" title={a.uri}>
                   {a.server}: {a.name || a.uri}
-                  <button className="link" aria-label={`Remove ${a.name || a.uri}`} onClick={() => setAttached(attached.filter((x) => x !== a))}>
-                    ×
+                  <button className="link" aria-label={`Remove ${a.name || a.uri}`} onClick={() => setAttached(attached.filter((x) => x !== a))} title="Remove">
+                    <CloseIcon />
                   </button>
                 </li>
               ))}
@@ -1305,8 +1305,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
               {/* Stop sits at the far end from Send, so a second click on Send
                   never stops the turn it started. */}
               {view.running && (
-                <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger composer-stop" title="Stop the turn">
-                  <StopIcon /> Stop
+                <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger composer-stop icon-button" aria-label="Stop" title="Stop the turn">
+                  <StopIcon />
                 </button>
               )}
               <SessionControls
@@ -1367,8 +1367,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
               >
                 <PaperclipIcon />
               </button>
-              <button className="primary" onClick={send} disabled={(!draft.trim() && pictures.length === 0 && textFiles.length === 0) || accepting}>
-                {view.running ? "Queue" : "Send"}
+              <button
+                className="primary icon-button composer-send"
+                aria-label={view.running ? "Queue" : "Send"}
+                title={view.running ? "Queue for when this turn ends" : "Send"}
+                onClick={send}
+                disabled={(!draft.trim() && pictures.length === 0 && textFiles.length === 0) || accepting}
+              >
+                {view.running ? <QueueIcon /> : <SendIcon />}
               </button>
             </div>
           </div>
@@ -1492,7 +1498,9 @@ function ItemBody({
     case "turn_end":
       return (
         <div className={`turn-end ${item.stopReason !== "end_turn" ? "turn-end-warn" : ""}`}>
-          {STOP_LABEL[item.stopReason] ?? item.stopReason} · {new Date(item.ts).toLocaleTimeString()}
+          {/* A turn that ended as usual says only when and what it cost (GUI-042). */}
+          {item.stopReason === "end_turn" ? <span className="sr-only">Turn complete · </span> : `${STOP_LABEL[item.stopReason] ?? item.stopReason} · `}
+          {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           {cost && <span title="Estimated from the price table in Settings"> · {cost}</span>}
         </div>
       );

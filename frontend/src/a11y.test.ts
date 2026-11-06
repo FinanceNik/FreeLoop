@@ -109,3 +109,13 @@ test("no code uses the page's confirm, alert or prompt, which the packaged app a
     assert.doesNotMatch(readFileSync(new URL(name, dir), "utf8"), /(?<![\w."])(confirm|alert|prompt)\(/, name);
   }
 });
+
+test("an icon is never the name of its button", () => {
+  // GUI-041: the button carries the name; every drawn icon is hidden from VoiceOver.
+  const source = readFileSync(new URL("./icons.tsx", import.meta.url), "utf8");
+  const svgs = source.match(/<svg\b[^>]*>/g) ?? [];
+  assert.ok(svgs.length >= 3);
+  for (const svg of svgs) {
+    assert.match(svg, /aria-hidden="true"/, svg);
+  }
+});

@@ -13,6 +13,8 @@ const until = async (what, fn, ms = 15000) => {
 };
 const all = (sel, root = document) => [...root.querySelectorAll(sel)];
 const withText = (sel, text, root = document) => all(sel, root).find((e) => e.textContent.includes(text));
+// Icon-only controls are found by their accessible name, as VoiceOver finds them (GUI-041).
+const named = (sel, name, root = document) => all(sel, root).find((e) => e.getAttribute("aria-label") === name);
 const openSession = (title) => withText(".session-row", title).click();
 const type = (box, text) => {
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, text);
@@ -37,13 +39,13 @@ const turn = async (title, afterSend = () => {}) => {
   box.focus();
   type(box, "go");
   await sleep(50);
-  (await until("Send to be enabled", () => { const b = withText(".composer-actions button.primary", "Send", pane); return b && !b.disabled && b; })).click();
+  (await until("Send to be enabled", () => { const b = named(".composer-actions button.primary", "Send", pane); return b && !b.disabled && b; })).click();
   afterSend();
   let waitingLine = "";
   await until("the turn to end", () => {
     const allow = pane.querySelector(".approval-buttons button.primary");
     if (allow) {
-      waitingLine = waitingLine || withText(".session-row", title)?.querySelector(".session-activity")?.textContent || "";
+      waitingLine = waitingLine || withText(".session-row", title)?.title || "";
       allow.click();
     }
     return ended() > before;
@@ -116,7 +118,7 @@ await step("a session shows what it runs on", async () => {
 await step("a pane shows how full its context is", async () => {
   const meter = () => activePane().querySelector(".session-titleline .context-meter");
   const rowMeter = (title) => withText(".session-row", title)?.querySelector(".context-meter");
-  const compactButton = () => withText(".session-actions button", "Compact", activePane());
+  const compactButton = () => named(".session-actions button", "Compact context", activePane());
   const open = async (title) => {
     openSession(title);
     await until(`${title} to open`, () => activePane().querySelector(".session-titleline h2")?.textContent === title);
@@ -135,7 +137,7 @@ await step("a pane shows how full its context is", async () => {
   box.focus();
   type(box, `[no steps] ${"the quick brown fox jumps over a lazy dog\n".repeat(8100)}`);
   await sleep(100);
-  (await until("Send", () => { const b = withText(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
+  (await until("Send", () => { const b = named(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
   await until("the meter to rise", () => meter()?.classList.contains("context-high"), 30000);
   check("a full context stands out", /^8\d %$/.test(meter().textContent), meter().textContent);
   check("a full context shows in the sidebar", rowMeter("Check full")?.classList.contains("context-high"), rowMeter("Check full")?.textContent);
@@ -147,7 +149,7 @@ await step("a pane shows how full its context is", async () => {
   check("Compact goes once the context has room", !compactButton());
   check("the sidebar's figure goes with it", !rowMeter("Check full"));
   // A limit the user sets reaches a running session's next call, and can be taken back.
-  const panelToggle = withText(".session-actions button", "Panel", activePane());
+  const panelToggle = named(".session-actions button", "Panel", activePane());
   const panelWasOpen = panelToggle.getAttribute("aria-pressed") === "true";
   if (!panelWasOpen) panelToggle.click();
   (await until("the Info tab", () => withText(".panel-tabs [role=tab]", "Info"))).click();
@@ -167,7 +169,7 @@ await step("a pane shows how full its context is", async () => {
   again.focus();
   type(again, "[no steps] again");
   await sleep(100);
-  (await until("Send", () => { const b = withText(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
+  (await until("Send", () => { const b = named(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
   await until("the share of the new limit", () => /^\d+ %$/.test(meter()?.textContent ?? "") && parseInt(meter().textContent) >= 5, 15000);
   check("a running session takes a new limit", true);
   await setLimit("");
@@ -177,7 +179,7 @@ await step("a pane shows how full its context is", async () => {
 });
 
 await step("a provider can be reached from any profile", async () => {
-  withText(".sidebar header button", "New session").click();
+  named(".sidebar header button", "New session").click();
   const profile = await until("the new-session form", () => withText("label", "Profile")?.querySelector("select"));
   const external = [...profile.options].find((o) => o.value === "claude-code");
   if (!external) throw new Error("no Claude Code profile to start from");
@@ -420,7 +422,7 @@ await step("a draft stays until sent or deleted", async () => {
 });
 
 await step("the file viewer shows Markdown formatted", async () => {
-  const panelButton = withText(".session-actions button", "Panel");
+  const panelButton = named(".session-actions button", "Panel");
   if (panelButton.getAttribute("aria-pressed") !== "true") panelButton.click();
   (await until("the Files tab", () => withText(".panel-tabs [role=tab]", "Files"))).click();
   (await until("guide.md", () => withText(".file-tree button", "guide.md"))).click();
@@ -549,7 +551,7 @@ await step("a click clears a selection", async () => {
   await clicked("the sidebar's empty space", nav, 0.5, 0.98);
   await clicked("the footer's empty space", document.querySelector(".footer-links"), 0.98, 0.5);
   // A button still does its work, and leaves no selection behind.
-  const panel = withText(".session-actions button", "Panel");
+  const panel = named(".session-actions button", "Panel");
   const pressed = panel.getAttribute("aria-pressed");
   await clicked("a button", panel);
   check("the button still worked", panel.getAttribute("aria-pressed") !== pressed);
@@ -574,7 +576,7 @@ await step("a click clears a selection", async () => {
 });
 
 await step("the panel's tabs clear its close button", async () => {
-  const panel = withText(".session-actions button", "Panel");
+  const panel = named(".session-actions button", "Panel");
   if (panel.getAttribute("aria-pressed") !== "true") panel.click();
   const close = await until("the panel", () => document.querySelector(".panel-close"));
   const last = all(".panel-tablist [role=tab]").at(-1);
@@ -583,7 +585,7 @@ await step("the panel's tabs clear its close button", async () => {
 });
 
 await step("the year at a glance", async () => {
-  withText(".footer-links button", "Usage").click();
+  named(".footer-links button", "Usage").click();
   const box = await until("the overview", () => document.querySelector(".usage-overview"), 8000);
   const cells = await until("the calendar", () => { const c = all(".usage-calendar-day", box); return c.length > 300 && c; }, 8000);
   check("the calendar has a square per day", cells.length >= 365 && cells.length <= 371, `${cells.length} squares`);
@@ -605,7 +607,7 @@ await step("the year at a glance", async () => {
 });
 
 await step("the queue takes a task and holds it while paused", async () => {
-  withText(".footer-links button", "Board").click();
+  named(".footer-links button", "Board").click();
   (await until("the board's link to the queue", () => document.querySelector(".board-queue"), 8000)).click();
   const page = await until("the queue page", () => [...document.querySelectorAll(".page h2")].find((h) => h.textContent === "Queue")?.closest(".page"), 8000);
   if (withText("button", "Pause", page)) withText("button", "Pause", page).click();
@@ -643,7 +645,7 @@ await step("the side parts are resizable", async () => {
   await sleep(200);
   check("a double click puts the sidebar back", Math.round(sidebar.getBoundingClientRect().width) === 264, `${Math.round(sidebar.getBoundingClientRect().width)} px`);
 
-  const panelButton = withText(".session-actions button", "Panel");
+  const panelButton = named(".session-actions button", "Panel");
   if (panelButton.getAttribute("aria-pressed") !== "true") panelButton.click();
   const panel = await until("the panel", () => document.querySelector("aside.panel"));
   const usual = panel.getBoundingClientRect().width;
@@ -669,12 +671,29 @@ await step("the side parts are resizable", async () => {
 });
 
 await step("a finished session says so on the board", async () => {
-  withText(".footer-links button", "Board").click();
+  named(".footer-links button", "Board").click();
   const card = await until("the board's card", () => withText(".board-card", "Check alpha"));
   const line = card.querySelector(".session-activity")?.textContent ?? "";
   check("a finished session says so on the board", line.startsWith("Finished"), `it said "${line}"`);
   openSession("Check alpha");
   await until("the conversation", () => document.querySelector(".conversation"));
+});
+
+await step("every control has a name", async () => {
+  // GUI-041: a control drawn as an icon alone is named in aria-label and explained in a tooltip.
+  const unnamed = [];
+  const untitled = [];
+  for (const e of all("button, a[href], summary, [role=tab], [role=menuitem]")) {
+    if (!e.getClientRects().length || e.closest("[aria-hidden=true]")) continue;
+    const text = e.textContent.trim();
+    const name = e.getAttribute("aria-label") || (e.getAttribute("aria-labelledby") && "labelled") || text;
+    const what = e.outerHTML.slice(0, 120);
+    if (!name) unnamed.push(what);
+    else if (!text && !e.title) untitled.push(what);
+  }
+  check("every control has an accessible name", unnamed.length === 0, unnamed.join(" | "));
+  check("every icon-only control has a tooltip", untitled.length === 0, untitled.join(" | "));
+  check("the sidebar does not show what a session runs", all(".session-row .session-activity").length === 0);
 });
 
 await step("panes fit, and the keyboard moves between them", async () => {
@@ -725,7 +744,7 @@ await step("panes fit, and the keyboard moves between them", async () => {
   type(prompt, "a long line of a prompt\n".repeat(200));
   await sleep(300);
   const paneBox = short.getBoundingClientRect();
-  const send = withText(".composer-actions button.primary", "Send", short);
+  const send = named(".composer-actions button.primary", "Send", short);
   const talk = short.querySelector(".conversation");
   check("a long prompt leaves Send in the pane", send && send.getBoundingClientRect().bottom <= paneBox.bottom, `Send ends at ${Math.round(send?.getBoundingClientRect().bottom)}, the pane at ${Math.round(paneBox.bottom)}`);
   check("a long prompt leaves room for the conversation", talk.clientHeight >= 60, `${talk.clientHeight} px left`);

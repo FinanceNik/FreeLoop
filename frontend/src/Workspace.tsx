@@ -3,6 +3,7 @@ import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
 import Limits from "./Limits.tsx";
 import LiveUsage from "./LiveUsage.tsx";
+import { CloseIcon, ExpandIcon } from "./icons.tsx";
 import { basename } from "./paths.ts";
 import Splitter from "./Splitter.tsx";
 import SourceMark from "./SourceMark.tsx";
@@ -217,11 +218,11 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
                   <div className="pane-usage-head" draggable={split && !asTabs} onDragStart={(e) => startPaneDrag(e, i)}>
                     <h2>Usage</h2>
                     <span className="spacer" />
-                    <button className="link" onClick={onUsagePage}>
-                      Full usage page
+                    <button className="icon-button" aria-label="Full usage page" title="Full usage page" onClick={onUsagePage}>
+                      <ExpandIcon />
                     </button>
-                    <button onClick={() => onClose(i)} aria-label="Close this pane" title="Close this pane">
-                      ×
+                    <button className="icon-button" onClick={() => onClose(i)} aria-label="Close this pane" title="Close this pane">
+                      <CloseIcon />
                     </button>
                   </div>
                   <Limits compact onError={onError} />

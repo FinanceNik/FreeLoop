@@ -49,8 +49,8 @@ import Onboarding from "./Onboarding.tsx";
 import Workspace, { SESSION_DRAG_TYPE } from "./Workspace.tsx";
 import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
-import SettingsNav, { Icon } from "./SettingsNav.tsx";
-import { ChevronIcon, FilterIcon, Logo } from "./icons.tsx";
+import SettingsNav from "./SettingsNav.tsx";
+import { BellIcon, BoardIcon, ChevronIcon, FilterIcon, Logo, NavIcon as Icon, NewSessionIcon, UsageIcon } from "./icons.tsx";
 import { clearSelectionOnClick } from "./selection.ts";
 import Splitter from "./Splitter.tsx";
 import { clampSidebar, rememberSidebar, setPanelWidth, SIDEBAR_MIN, sidebarMax, storedPanel, storedSidebar } from "./sizes.ts";
@@ -1049,8 +1049,8 @@ export default function App() {
               <Logo />
               Freeloop
             </h1>
-            <button onClick={() => setScreen({ kind: "new" })}>
-              New session
+            <button className="icon-button new-session" aria-label="New session" title="New session" onClick={() => setScreen({ kind: "new" })}>
+              <NewSessionIcon />
             </button>
           </header>
           {attentionCount > 0 && (
@@ -1261,7 +1261,6 @@ export default function App() {
                           {groupBy === "date" && <RowProject session={s} project={projects.find((p) => p.id === s.projectId)} />}
                           {s.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>}
                         </span>
-                        {s.status !== "idle" && <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
                         {(s.tags ?? []).length > 0 && (
                           <span className="session-meta">
                             {(s.tags ?? []).map((t) => (
@@ -1345,18 +1344,22 @@ export default function App() {
                 <button
                   aria-current={screen.kind === "attention" ? "page" : undefined}
                   aria-keyshortcuts={ariaKeys(bindingOf("attention"))}
-                  title={keyLabel(bindingOf("attention"))}
+                  title={bindingOf("attention") ? `Attention (${keyLabel(bindingOf("attention"))})` : "Attention"}
                   onClick={openAttention}
+                  className="icon-button"
+                  aria-label="Attention"
                 >
-                  Attention
+                  <BellIcon />
                 </button>
               )}
-              <button aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
-                Board
+              <button className="icon-button" aria-label="Board" title="Board" aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
+                <BoardIcon />
               </button>
               <button
                 aria-current={screen.kind === "usage" ? "page" : undefined}
-                title="Drag to a pane to watch it beside your sessions"
+                className="icon-button"
+                aria-label="Usage"
+                title="Usage. Drag to a pane to watch it beside your sessions."
                 draggable={!STANDALONE}
                 onDragStart={(e) => {
                   e.dataTransfer.setData(SESSION_DRAG_TYPE, ws.USAGE_PANE);
@@ -1364,7 +1367,7 @@ export default function App() {
                 }}
                 onClick={() => setScreen({ kind: "usage" })}
               >
-                Usage
+                <UsageIcon />
               </button>
               {today && (today.models ?? []).some((m) => m.priced) && (
                 <button
@@ -1378,14 +1381,14 @@ export default function App() {
             </div>
             <div className="footer-row">
               <button
-                className="settings-link"
+                className="settings-link icon-button"
+                aria-label="Settings"
                 aria-current={inSettings(screen.kind) ? "page" : undefined}
                 aria-keyshortcuts={ariaKeys(bindingOf("settings"))}
-                title={keyLabel(bindingOf("settings"))}
+                title={bindingOf("settings") ? `Settings (${keyLabel(bindingOf("settings"))})` : "Settings"}
                 onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen({ kind: "settings" }))}
               >
                 <Icon name="general" />
-                Settings
               </button>
               <div className="layout-switch" role="group" aria-label="Sessions side by side">
                 {([1, 2, 3, 4] as const).map((n) => (

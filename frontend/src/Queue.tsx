@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { EngineService, type Profile, type ProjectInfo } from "./api.ts";
+import { DownIcon, UpIcon } from "./icons.tsx";
 import { basename } from "./paths.ts";
 import { canMove, queueSummary, TASK_STATE_LABEL, type QueueTask } from "./queue.ts";
 
@@ -115,11 +116,11 @@ export default function Queue({ projects, profiles, onOpen, onError }: { project
                 <td>{basename(t.projectRoot)}</td>
                 <td>{TASK_STATE_LABEL[t.state] ?? t.state}</td>
                 <td className="row">
-                  <button aria-label={`Move ${t.title} up`} disabled={!canMove(queue.tasks, i, -1)} onClick={() => EngineService.MoveTask(t.id, -1).then(take).catch(onError)}>
-                    ↑
+                  <button className="icon-button" title="Move up" aria-label={`Move ${t.title} up`} disabled={!canMove(queue.tasks, i, -1)} onClick={() => EngineService.MoveTask(t.id, -1).then(take).catch(onError)}>
+                    <UpIcon />
                   </button>
-                  <button aria-label={`Move ${t.title} down`} disabled={!canMove(queue.tasks, i, 1)} onClick={() => EngineService.MoveTask(t.id, 1).then(take).catch(onError)}>
-                    ↓
+                  <button className="icon-button" title="Move down" aria-label={`Move ${t.title} down`} disabled={!canMove(queue.tasks, i, 1)} onClick={() => EngineService.MoveTask(t.id, 1).then(take).catch(onError)}>
+                    <DownIcon />
                   </button>
                   <button aria-label={`Remove ${t.title}`} onClick={() => EngineService.RemoveTask(t.id).then(take).catch(onError)}>
                     Remove

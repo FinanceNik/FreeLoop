@@ -1,3 +1,4 @@
+import { AllowedIcon, RuleIcon } from "./icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { quietCommand, toolStatusLabel, visibleCommand } from "./a11y.ts";
 import { EngineService } from "./api.ts";
@@ -63,11 +64,17 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
         <span className="tool-title">{visibleCommand(waiting ? item.title : quietCommand(item.title, roots))}</span>
         {!item.tool.startsWith("acp:") && <span className="muted"> {item.tool}</span>}
         {via && <span className="muted"> · via {via}</span>}
-        {shownDecision && (
-          <span className={`decision decision-${decided.outcome}`}>
-            {decided.actor === "sandbox" ? "sandboxed" : `${decided.outcome} by ${decided.actor}`}
-          </span>
-        )}
+        {shownDecision &&
+          (decided.outcome === "allowed" ? (
+            // What went ahead is a small mark; what the policy held keeps its words (GUI-042).
+            <span className={`decision decision-allowed decision-icon`} role="img" aria-label={decided.actor === "sandbox" ? "sandboxed" : `allowed by ${decided.actor}`} title={decided.actor === "sandbox" ? "Ran in the sandbox" : `Allowed by ${decided.actor}`}>
+              {decided.actor === "rule" ? <RuleIcon /> : <AllowedIcon />}
+            </span>
+          ) : (
+            <span className={`decision decision-${decided.outcome}`}>
+              {decided.actor === "sandbox" ? "sandboxed" : `${decided.outcome} by ${decided.actor}`}
+            </span>
+          ))}
       </summary>
       {plan !== null ? (
         <div className="plan">{plan}</div>
