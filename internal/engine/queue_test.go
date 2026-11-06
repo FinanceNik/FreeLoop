@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -146,5 +148,15 @@ func TestQueueOrder(t *testing.T) {
 	}
 	if _, err := e.SetQueue(false, 99); err == nil {
 		t.Error("a limit of 99 was taken")
+	}
+}
+
+// The schedule loop looks at the queue every 30 seconds; when nothing changes, it
+// writes nothing, so the data folder only changes when something did.
+func TestAnIdleQueueWritesNothing(t *testing.T) {
+	e, _ := queueEngine(t)
+	e.runQueue(context.Background(), time.Now())
+	if _, err := os.Stat(filepath.Join(e.dataDir, config.QueueFile)); !os.IsNotExist(err) {
+		t.Errorf("an empty queue was written: %v", err)
 	}
 }

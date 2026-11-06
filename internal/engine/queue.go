@@ -1,8 +1,10 @@
 package engine
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -39,8 +41,13 @@ func (e *Engine) changeQueue(fn func(q *config.Queue) error) (config.Queue, erro
 	if err != nil {
 		return q, err
 	}
+	was, _ := json.Marshal(q)
 	if err := fn(&q); err != nil {
 		return q, err
+	}
+	// The schedule loop looks every 30 seconds; a queue it left as it was stays unwritten.
+	if now, _ := json.Marshal(q); bytes.Equal(was, now) {
+		return q, nil
 	}
 	return q, config.SaveQueue(e.dataDir, q)
 }
