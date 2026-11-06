@@ -32,11 +32,14 @@ type Emitter func(typ event.Type, data any)
 
 // Params is what a session runs with.
 type Params struct {
-	SessionID string
-	Env       environment.Environment
-	Broker    *permission.Broker
-	Provider  provider.Provider
-	Model     string
+	// AllowUnattended says why auto or bypass mode cannot hold for the session, or
+	// nil when it can; for a mode the user chose approving an agent's plan.
+	AllowUnattended func(permission.Mode) error
+	SessionID       string
+	Env             environment.Environment
+	Broker          *permission.Broker
+	Provider        provider.Provider
+	Model           string
 	// Fallback takes a model call the provider keeps failing with
 	// retryable errors (PRV-010); nil for none.
 	Fallback *Fallback
@@ -421,3 +424,10 @@ var ErrSignIn = errors.New("the agent is not signed in")
 // ErrAgentExited marks a prompt that failed because an external agent's process
 // ended. The session itself is fine; the next prompt can start the agent again.
 var ErrAgentExited = errors.New("the agent exited")
+
+// ReasonDropper is a session whose agent gets no note with a refusal: ACP's answer to
+// a permission request has no field for one. The engine sends such a note on as the
+// user's next message when it is feedback on a plan.
+type ReasonDropper interface {
+	DropsReasons() bool
+}

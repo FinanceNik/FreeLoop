@@ -9,6 +9,8 @@ import { HOLD_PLACE } from "./scrollPlace.ts";
 import Splitter from "./Splitter.tsx";
 import { clampPanel, PANEL_MIN, panelMax, setPanelWidth } from "./sizes.ts";
 import DiffPanel from "./DiffPanel.tsx";
+import { PlanPanel } from "./PlanReview.tsx";
+import { planVersions } from "./planView.ts";
 import FilesPanel from "./FilesPanel.tsx";
 // xterm.js is large; it loads when a terminal is first shown.
 const TerminalPanel = lazy(() => import("./TerminalPanel.tsx"));
@@ -19,7 +21,7 @@ import PreviewPanel from "./PreviewPanel.tsx";
 // details. It reads the same
 // folded transcript as the conversation, so it never disagrees with it.
 
-export type Tab = "approvals" | "diff" | "files" | "terminal" | "preview" | "info";
+export type Tab = "approvals" | "plan" | "diff" | "files" | "terminal" | "preview" | "info";
 
 interface Props {
   // Shows a moment of the session in the conversation.
@@ -58,6 +60,7 @@ export function showTool(toolCallId: string) {
 
 export default function SessionPanel({ session, tab, onTab: setTab, view, provider, environment, configVersion, costLabel, onReview, terminalNonce, onClose, onError, onJump }: Props) {
   const data = panelData(view);
+  const plans = planVersions(view.items);
   // Uncommitted files, from the latest git state.
   const dirty = view.git?.repo && view.git.dirty > 0 ? view.git.dirty : 0;
   // The panel's width, dragged by its left edge (GUI-032). Each tab has a usual width.
@@ -74,7 +77,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
   };
 
   return (
-    <aside ref={panelBox} className={tab === "diff" || tab === "files" || tab === "terminal" || tab === "preview" ? "panel panel-wide" : "panel"} aria-label="Session panel">
+    <aside ref={panelBox} className={tab === "plan" || tab === "diff" || tab === "files" || tab === "terminal" || tab === "preview" ? "panel panel-wide" : "panel"} aria-label="Session panel">
       <Splitter
         className="splitter-panel"
         label="Panel width"
@@ -106,6 +109,11 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
           <TabButton id="approvals" tab={tab} setTab={setTab}>
             Approvals{data.pending.length > 0 && <span className="badge badge-waiting_permission">{data.pending.length}</span>}
           </TabButton>
+          {plans.length > 0 && (
+            <TabButton id="plan" tab={tab} setTab={setTab}>
+              Plan{plans.at(-1)?.state === "waiting" && <span className="badge badge-waiting_permission">1</span>}
+            </TabButton>
+          )}
           <TabButton id="diff" tab={tab} setTab={setTab}>
             Diff{dirty > 0 && <span className="muted"> {dirty}</span>}
           </TabButton>
@@ -128,6 +136,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
       </div>
       <div className="panel-body" role="tabpanel" id="panel-body" aria-labelledby={`panel-tab-${tab}`}>
         {tab === "approvals" && <Approvals session={session} configVersion={configVersion} settings={view.settings} pending={data.pending} decided={data.decided} onError={onError} />}
+        {tab === "plan" && <PlanPanel items={view.items} onError={onError} />}
         {tab === "diff" && <DiffPanel session={session} gitKey={JSON.stringify(view.git)} agentEdits={data.changes} onReview={onReview} onError={onError} />}
         {tab === "files" && <FilesPanel session={session} gitKey={JSON.stringify(view.git) + data.changes.length} agentEdits={data.changes} onError={onError} />}
         {tab === "terminal" && (

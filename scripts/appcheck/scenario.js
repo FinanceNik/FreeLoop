@@ -772,6 +772,96 @@ await step("panes fit, and the keyboard moves between them", async () => {
   await sleep(200);
 });
 
+await step("a plan reads as a document and is reviewed in the panel", async () => {
+  openSession("Check plan");
+  await until("Check plan", () => activePane().querySelector(".session-titleline h2")?.textContent === "Check plan");
+  const pane = activePane();
+  const send = async (text) => {
+    const box = await until("the message box", () => pane.querySelector(".composer textarea"));
+    box.focus();
+    type(box, text);
+    await sleep(80);
+    (await until("Send", () => { const b = pane.querySelector(".composer-send"); return b && !b.disabled && b; })).click();
+  };
+  const setValue = (el, value) => {
+    const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLTextAreaElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
+    el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
+  };
+  await send("[plan] tidy the code");
+  const card = await until("the plan", () => pane.querySelector(".plan-card"), 20000);
+  check("a plan is formatted", card.querySelector("h1, h2, h3, h4")?.textContent === "The plan" && card.querySelectorAll("li").length === 2, card.innerHTML.slice(0, 120));
+  const tool = card.closest("details");
+  check("a plan is shown once, not as its input", !tool.querySelector(".tool-input") && !tool.textContent.includes("# The plan"));
+  const approval = await until("the plan's decision", () => pane.querySelector(".plan-approval"));
+  const menu = [...approval.querySelectorAll("select option")].map((o) => o.textContent);
+  check("a plan's options say what follows", menu.join("|") === "Ask before edits|Accept edits", menu.join("|"));
+  check("a plan is approved or sent back", withText("button", "Approve", approval) && withText("button", "Keep planning", approval));
+
+  card.querySelector(".plan-review-link").click();
+  const panel = await until("the Plan tab", () => document.querySelector("aside.panel .plan-panel"));
+  check("the card opens the Plan tab", withText(".panel-tabs [role=tab]", "Plan")?.getAttribute("aria-selected") === "true");
+  const list = [...panel.querySelectorAll(".plan-block")].find((b) => b.querySelector("li"));
+  list.querySelector(".plan-comment-add").click();
+  setValue(await until("the comment box", () => list.querySelector(".plan-comment")), "Add a test for the parser.");
+  const back = await until("Keep planning", () => withText("button", "Keep planning (1 comment)", panel));
+  back.click();
+  const sentBack = await until("the plan to go back", () => withText("p", "Sent back with:", document.querySelector("aside.panel .plan-panel")), 15000);
+  check("a comment goes back quoting its line", sentBack.textContent.includes("> Read the code") && sentBack.textContent.includes("Add a test for the parser."), sentBack.textContent);
+
+  await send("[plan] again");
+  const version = await until("the second version", () => {
+    const sel = document.querySelector("aside.panel .plan-panel select[aria-label=Version]");
+    return sel && sel.options.length === 2 && sel;
+  }, 20000);
+  check("the latest version shows", version.selectedIndex === 1, version.value);
+  const toggle = withText("aside.panel .plan-changes-toggle", "Changes since version 1").querySelector("input");
+  toggle.click();
+  const diff = await until("the changes", () => document.querySelector("aside.panel .plan-diff"));
+  check("the changes since the last version show", diff.textContent.includes("+ 3. Change the code"), diff.textContent.slice(0, 200));
+  toggle.click();
+  const decision = await until("the decision", () => document.querySelector("aside.panel .plan-decision"));
+  setValue(decision.querySelector("select"), [...decision.querySelectorAll("select option")].find((o) => o.textContent === "Accept edits").value);
+  withText("button", "Approve", decision).click();
+  await until("the plan approved", () => document.querySelector("aside.panel .plan-panel select[aria-label=Version]")?.selectedOptions[0]?.textContent.includes("Approved"), 15000);
+  await until("the turn to end", () => !withText(".composer-actions button", "Stop", pane), 15000);
+  withText(".panel-tabs [role=tab]", "Info").click();
+  const permissions = await until("the mode", () => [...document.querySelectorAll("aside.panel .panel-info > div")].find((d) => d.querySelector("dt")?.textContent === "Permissions"));
+  check("approving goes on in the mode chosen", /accept/i.test(permissions.querySelector("dd").textContent), permissions.querySelector("dd").textContent);
+  withText(".panel-tabs [role=tab]", "Approvals")?.click();
+});
+
+await step("an agent asks with a form", async () => {
+  openSession("Check plan");
+  await until("Check plan", () => activePane().querySelector(".session-titleline h2")?.textContent === "Check plan");
+  const pane = activePane();
+  const box = await until("the message box", () => pane.querySelector(".composer textarea"));
+  box.focus();
+  type(box, "[ask] the tickets");
+  await sleep(80);
+  (await until("Send", () => { const b = pane.querySelector(".composer-send"); return b && !b.disabled && b; })).click();
+  const form = await until("the questions", () => pane.querySelector(".approval .mcp-form"), 20000);
+  const card = form.closest("details");
+  check("a question is no input to read", !card.querySelector(".tool-input"));
+  const radios = form.querySelectorAll('input[type="radio"]');
+  const boxes = form.querySelectorAll('input[type="checkbox"]');
+  check("a choice reads as a list, with what each means", radios.length === 2 && form.textContent.includes("You paste all tickets first"), `${radios.length} radios`);
+  check("several can be picked where the agent allows it", boxes.length === 3, `${boxes.length} boxes`);
+  const buttons = [...form.closest(".approval").querySelectorAll(".approval-buttons button")].map((b) => b.textContent.trim());
+  check("a form is sent or skipped", buttons.includes("Send") && buttons.includes("Skip"), buttons.join(", "));
+  withText(".mcp-choice", "One by one", form).querySelector("input").click();
+  withText(".mcp-choice", "Tests", form).querySelector("input").click();
+  withText(".mcp-choice", "Types", form).querySelector("input").click();
+  const other = [...form.querySelectorAll('input[type="text"]')][0];
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(other, "start with the backend");
+  other.dispatchEvent(new Event("input", { bubbles: true }));
+  await sleep(80);
+  withText(".approval-buttons button", "Send", form.closest(".approval")).click();
+  const reply = await until("the agent's answer", () => all(".msg-agent, .md", pane).find((e) => e.textContent.includes("Thanks.")), 20000);
+  check("the answers reach the agent", reply.textContent.includes("One by one (note: start with the backend)") && reply.textContent.includes("Tests, Types"), reply.textContent.slice(0, 200));
+  check("the questions stay on the card", card.querySelectorAll(".agent-questions li").length === 2);
+});
+
 await step("the usage pane cycles through its views", async () => {
   document.querySelector('.layout-switch button[aria-label="4 panes"]').click();
   await sleep(300);

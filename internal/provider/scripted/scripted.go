@@ -23,6 +23,15 @@ type Call struct {
 // leave a session with a large context and no further call to compact it.
 const NoSteps = "[no steps]"
 
+// PlanPrompt starts a prompt that gets a plan to approve (present_plan, which the
+// built-in agent offers in plan mode), then a short answer once it is decided. Each
+// plan of a conversation has one step more than the one before.
+const PlanPrompt = "[plan]"
+
+// AskPrompt starts a prompt that gets questions for the user (ask_user), then the
+// answers said back once they come.
+const AskPrompt = "[ask]"
+
 // Step is one scripted model response.
 type Step struct {
 	Text  string
@@ -95,6 +104,12 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 	if asksNoSteps(req.Messages) {
 		step = Step{Text: "Noted."}
 	}
+	if s, ok := planStep(req.Messages); ok {
+		step = s
+	}
+	if s, ok := askStep(req.Messages); ok {
+		step = s
+	}
 	input := inputTokens(req.Messages)
 	turn := len(p.Requests())
 
@@ -145,6 +160,74 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 			Usage: provider.Usage{InputTokens: input, OutputTokens: int64(len(step.Text)/4 + 10)}})
 	}()
 	return ch, nil
+}
+
+// askStep answers an AskPrompt: two questions while the prompt is the latest message,
+// and the tool's result said back once it is answered.
+func askStep(msgs []provider.Message) (Step, bool) {
+	if len(msgs) == 0 {
+		return Step{}, false
+	}
+	prompt := -1
+	for i, m := range msgs {
+		if m.Role == provider.RoleUser && len(m.Parts) > 0 && m.Parts[0].Type == provider.PartText {
+			prompt = i
+		}
+	}
+	if prompt < 0 || !strings.HasPrefix(msgs[prompt].Parts[0].Text, AskPrompt) {
+		return Step{}, false
+	}
+	if prompt == len(msgs)-1 {
+		questions := []map[string]any{
+			{"question": "How should I estimate the tickets?", "header": "Order", "options": []map[string]any{
+				{"label": "All at once", "description": "You paste all tickets first, then I estimate them together."},
+				{"label": "One by one", "description": "I estimate each ticket as soon as you paste it."},
+			}},
+			{"question": "Which checks should run?", "header": "Checks", "multiSelect": true, "options": []map[string]any{
+				{"label": "Tests"}, {"label": "Lint"}, {"label": "Types"},
+			}},
+		}
+		return Step{Calls: []Call{{Name: "ask_user", Input: map[string]any{"questions": questions}}}}, true
+	}
+	last := msgs[len(msgs)-1]
+	said := "nothing"
+	for _, part := range last.Parts {
+		if part.Type == provider.PartToolResult {
+			said = part.Text
+		}
+	}
+	return Step{Text: "Thanks. " + said}, true
+}
+
+// planStep answers a PlanPrompt: a plan while the prompt is the latest message, and a
+// line of text once the plan has its answer.
+func planStep(msgs []provider.Message) (Step, bool) {
+	prompt := -1
+	plans := 0
+	for i, m := range msgs {
+		if m.Role == provider.RoleUser && len(m.Parts) > 0 && m.Parts[0].Type == provider.PartText {
+			prompt = i
+		}
+		for _, part := range m.Parts {
+			if part.Type == provider.PartToolUse && part.ToolName == "present_plan" {
+				plans++
+			}
+		}
+	}
+	if prompt < 0 || !strings.HasPrefix(msgs[prompt].Parts[0].Text, PlanPrompt) {
+		return Step{}, false
+	}
+	if prompt != len(msgs)-1 {
+		return Step{Text: "Understood."}, true
+	}
+	steps := []string{"Read the code", "Write the tests", "Change the code", "Ask before each change"}
+	var b strings.Builder
+	b.WriteString("# The plan\n\nWhat changes and why.\n\n")
+	for i, s := range steps[:min(len(steps), plans+2)] {
+		fmt.Fprintf(&b, "%d. %s\n", i+1, s)
+	}
+	b.WriteString("\n## Checks\n\nThe tests pass.")
+	return Step{Calls: []Call{{Name: "present_plan", Input: map[string]any{"plan": b.String()}}}}, true
 }
 
 // asksNoSteps reports whether the latest message starts with NoSteps.

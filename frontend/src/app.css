@@ -5174,3 +5174,112 @@ table.hooks .hook-command {
   margin-top: 8px;
 }
 
+/* Plans (GUI-043): a document to read, comment on and decide about. */
+.plan-card .plan {
+  white-space: normal;
+  max-height: 22em;
+  overflow-y: auto;
+  padding: 4px 12px;
+  border-left: 3px solid var(--border-strong);
+}
+.plan-review-link {
+  margin-top: 6px;
+}
+.plan-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.plan-decision-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.plan-decision textarea,
+.plan-comment {
+  width: 100%;
+  box-sizing: border-box;
+}
+.plan-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.plan-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.plan-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.plan-block {
+  position: relative;
+  padding: 2px 8px;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+}
+.plan-block:hover,
+.plan-block:focus-within {
+  background: var(--surface);
+}
+.plan-block-noted {
+  border-left-color: var(--accent);
+}
+.plan-comment-add {
+  visibility: hidden;
+  font-size: 0.8rem;
+}
+.plan-block:hover .plan-comment-add,
+.plan-comment-add:focus-visible {
+  visibility: visible;
+}
+.plan-diff .add {
+  color: var(--ok);
+}
+.plan-diff .del {
+  color: var(--danger);
+}
+
+/* An agent's questions (HRN-021): choices as a list, each with what it means. */
+.mcp-choices {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mcp-choices legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.mcp-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.mcp-choice:has(input:checked) {
+  border-color: var(--accent);
+}
+.mcp-choice input {
+  margin-top: 3px;
+}
+.mcp-choice-detail {
+  display: block;
+  font-size: 0.85em;
+}
+.agent-questions {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+

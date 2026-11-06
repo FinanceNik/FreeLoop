@@ -1,5 +1,5 @@
 import { visibleCommand } from "./a11y.ts";
-import { optionLabel } from "./shortcuts.ts";
+import { optionLabel, formLabel } from "./shortcuts.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EngineService, type AttentionItem, type PermissionRequest } from "./api.ts";
 import { currentOf, editPreview, moved, oldestFirst } from "./attentionview.ts";
@@ -185,7 +185,7 @@ export function RequestView({ req, current, onError }: { req: PermissionRequest;
             title={o.kind === "allow_always" ? "Saves a rule" : undefined}
             onClick={() => mcpForm.choose(o.optionId, o.kind, decide)}
           >
-            {optionLabel(o.kind, o.name)}
+            {req.form ? formLabel(o.kind) : optionLabel(o.kind, o.name)}
           </button>
         ))}
       </div>

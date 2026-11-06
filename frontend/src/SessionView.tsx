@@ -38,6 +38,7 @@ import { MAX_IMAGES, room } from "./images.ts";
 import { CheckIcon, CloseIcon, CompactIcon, CopyIcon, ForkIcon, InfoIcon, MoreIcon, PanelRightIcon, PaperclipIcon, QueueIcon, RewindIcon, SendIcon, StopIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
+import { REVIEW_PLAN_EVENT } from "./PlanReview.tsx";
 import { usePaletteActions } from "./Palette.tsx";
 import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
@@ -693,6 +694,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
     setPanelTab(t);
     if (!panelOpen) togglePanel();
   };
+  // A plan's card opens the Plan tab (GUI-043).
+  useEffect(() => {
+    const el = layoutBox.current;
+    if (!el) return;
+    const review = () => showPanel("plan");
+    el.addEventListener(REVIEW_PLAN_EVENT, review);
+    return () => el.removeEventListener(REVIEW_PLAN_EVENT, review);
+  });
   const showRules = () => {
     showPanel("approvals");
     requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`[data-rules="${session.id}"]`)?.scrollIntoView({ block: "start" })));

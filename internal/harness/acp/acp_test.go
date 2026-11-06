@@ -259,6 +259,45 @@ func TestAgentCannotLoosenTheMode(t *testing.T) {
 	}
 }
 
+// Auto or bypass the user chose approving the agent's plan holds when the app allows
+// it, and otherwise the session asks: it used to stay in plan mode, and said the
+// agent had tried it on its own (2026-11-06).
+func TestTheUserChoosesTheModeApprovingAPlan(t *testing.T) {
+	rec := &recorder{}
+	var refusal error
+	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit, AllowUnattended: func(permission.Mode) error { return refusal }}, preset: config.HarnessPreset{Name: "Agent"}}
+	approve := func(byUser bool) {
+		s.mu.Lock()
+		s.mode = permission.ModePlan
+		s.approved = approval{kind: permission.KindSwitchMode, until: time.Now().Add(time.Minute), byUser: byUser}
+		s.mu.Unlock()
+	}
+
+	approve(true)
+	s.agentMode(permission.ModeBypass)
+	if s.Mode() != permission.ModeBypass {
+		t.Errorf("the user's choice of bypass left %s", s.Mode())
+	}
+
+	approve(true)
+	refusal = errors.New("bypass mode is off")
+	s.agentMode(permission.ModeBypass)
+	if s.Mode() != permission.ModeAsk {
+		t.Errorf("a refused choice left %s, not ask", s.Mode())
+	}
+	if got := rec.text(event.ModeRefused); !strings.Contains(got, `"chosen":true`) || !strings.Contains(got, "bypass mode is off") {
+		t.Errorf("the user was not told why: %s", got)
+	}
+
+	// A rule or the mode approving the plan is no choice of the user's.
+	approve(false)
+	refusal = nil
+	s.agentMode(permission.ModeAuto)
+	if s.Mode() != permission.ModePlan {
+		t.Errorf("an approval not by the user reached %s", s.Mode())
+	}
+}
+
 // HRN-007: several of the app's modes can share one of the agent's, and a mode
 // the preset does not name changes nothing.
 func TestAgentReportsItsMode(t *testing.T) {

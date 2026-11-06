@@ -177,6 +177,36 @@ func TestPlanModeRefusesWritesAndApprovalSwitchesMode(t *testing.T) {
 	}
 }
 
+// HRN-021: the agent's questions reach the user as a form, in every mode, bypass and
+// plan included, and the answers come back as the tool's result.
+func TestAskUserAsksInEveryMode(t *testing.T) {
+	questions := []map[string]any{{"question": "Which order?", "options": []map[string]any{{"label": "All at once"}, {"label": "One by one"}}}}
+	for _, mode := range []permission.Mode{permission.ModeBypass, permission.ModePlan} {
+		f := setup(t, mode,
+			scripted.Step{Calls: []scripted.Call{{Name: "ask_user", Input: map[string]any{"questions": questions}}}},
+			scripted.Step{Text: "ok"},
+		)
+		go func() {
+			for len(f.broker.Pending()) == 0 {
+				time.Sleep(time.Millisecond)
+			}
+			p := f.broker.Pending()[0]
+			if p.Form == nil || p.Form.Message != "Which order?" {
+				t.Errorf("%s: the request = %+v", mode, p)
+			}
+			f.broker.DecideWith(p.ID, "accept", "", "", map[string]any{"question_0": "One by one", "question_0_custom": "start small"})
+		}()
+		if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "ask me"}); err != nil {
+			t.Fatal(err)
+		}
+		reqs := f.prov.Requests()
+		got := reqs[len(reqs)-1].Messages[2].Parts[0].Text
+		if !strings.Contains(got, `"Which order?" = "One by one (note: start small)"`) {
+			t.Errorf("%s: the answer reached the model as %q", mode, got)
+		}
+	}
+}
+
 func TestCancelWhileWaitingForApproval(t *testing.T) {
 	f := setup(t, permission.ModeAsk,
 		scripted.Step{Calls: []scripted.Call{{Name: "shell", Input: map[string]any{"command": "echo hi"}}}},

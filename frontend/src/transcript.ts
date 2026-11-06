@@ -407,6 +407,11 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       }
       case "mode_refused":
+        // The user chose the mode approving a plan, and the app does not allow it here.
+        if (d.chosen) {
+          items.push({ kind: "notice", key, rev, message: `You chose ${d.to} mode approving the plan, but ${d.reason || "it is not available here"}. This session asks before changes instead.`, warn: true });
+          break;
+        }
         items.push({ kind: "notice", key, rev, message: `The agent tried to change the mode from ${d.from} to ${d.to} on its own; the mode stays ${d.from}.`, warn: false });
         denied.push({ seq: ev.seq, kind: "mode_change", what: `${d.from} to ${d.to}`, reason: "" });
         break;

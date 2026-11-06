@@ -10,6 +10,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -288,6 +289,14 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		e.emit(sid, event.Notice, event.NoticeData{Message: fmt.Sprintf("%d messages of this conversation could not be read from its saved record, so the model does not have them. The rest it still has.", n)})
 	}
 	params := harness.Params{
+		AllowUnattended: func(m permission.Mode) error {
+			ses, err := e.store.GetSession(context.Background(), sid)
+			if err != nil {
+				return err
+			}
+			ses.Mode = string(m)
+			return e.unattendedRefusal(ses)
+		},
 		SessionID:      sid,
 		Env:            env,
 		Broker:         e.broker,
@@ -757,7 +766,47 @@ type DecideRequest struct {
 
 // Decide answers a pending permission request.
 func (e *Engine) Decide(req DecideRequest) error {
-	return e.broker.DecideWith(req.RequestID, req.OptionID, req.Reason, permission.Scope(req.Scope), req.Answers)
+	var asked *permission.Request
+	for _, r := range e.broker.Pending() {
+		if r.ID == req.RequestID {
+			asked = &r
+			break
+		}
+	}
+	if err := e.broker.DecideWith(req.RequestID, req.OptionID, req.Reason, permission.Scope(req.Scope), req.Answers); err != nil {
+		return err
+	}
+	e.forwardPlanFeedback(asked, req)
+	return nil
+}
+
+// forwardPlanFeedback sends the user's note on a plan they sent back as their next
+// message, to an agent whose answer cannot carry one (ACP): without it "keep planning"
+// would reach the agent with no word of what to change.
+func (e *Engine) forwardPlanFeedback(asked *permission.Request, req DecideRequest) {
+	note := strings.TrimSpace(req.Reason)
+	if asked == nil || asked.Kind != permission.KindSwitchMode || note == "" {
+		return
+	}
+	i := slices.IndexFunc(asked.Options, func(o permission.Option) bool { return o.ID == req.OptionID })
+	if i < 0 || !strings.HasPrefix(asked.Options[i].Kind, "reject") {
+		return
+	}
+	e.mu.Lock()
+	r, ok := e.runtimes[asked.SessionID]
+	e.mu.Unlock()
+	if !ok {
+		return
+	}
+	if d, ok := r.hs.(harness.ReasonDropper); !ok || !d.DropsReasons() {
+		return
+	}
+	sid := asked.SessionID
+	go func() {
+		if _, err := e.Prompt(context.Background(), sid, "My feedback on the plan:\n\n"+note); err != nil {
+			log.Printf("engine: plan feedback for %s: %s", sid, e.redactText(err.Error()))
+		}
+	}()
 }
 
 // PendingPermissions returns every request waiting for the user, across

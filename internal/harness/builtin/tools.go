@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
+	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider"
 )
@@ -39,7 +40,9 @@ type call struct {
 	// contained and leaves are the shell's standing with the sandbox (ENV-009).
 	contained permission.Containment
 	leaves    bool
-	run       func(ctx context.Context, d permission.Decision) (result, error)
+	// form asks the user for input instead of approval (HRN-021).
+	form *permission.Form
+	run  func(ctx context.Context, d permission.Decision) (result, error)
 }
 
 // result is what a tool returns: text for the model and display content for
@@ -121,7 +124,7 @@ func decode(input json.RawMessage, v any, required ...string) error {
 }
 
 func tools() []*tool {
-	return []*tool{readFile(), listDir(), globTool(), grepTool(), writeFile(), editFile(), shellTool(), presentPlan(), loadSkill(), taskTool(), webFetch(), webSearch(), todoWrite()}
+	return []*tool{readFile(), listDir(), globTool(), grepTool(), writeFile(), editFile(), shellTool(), presentPlan(), askUser(), loadSkill(), taskTool(), webFetch(), webSearch(), todoWrite()}
 }
 
 func readFile() *tool {
@@ -567,6 +570,48 @@ func presentPlan() *tool {
 					}
 					s.SetMode(mode)
 					return result{text: fmt.Sprintf("The user approved the plan. The session is now in %s mode; go ahead.", mode)}, nil
+				},
+			}, nil
+		},
+	}
+}
+
+// askUser asks the user questions with options to choose from (HRN-021), shown as a
+// form in the conversation; the answers come back as the tool's result.
+func askUser() *tool {
+	option := map[string]any{"type": "object", "required": []string{"label"}, "properties": map[string]any{
+		"label":       str("What the user picks, a few words."),
+		"description": str("What the option means or leads to."),
+	}}
+	question := map[string]any{"type": "object", "required": []string{"question", "options"}, "properties": map[string]any{
+		"question":    str("The question, ending with a question mark."),
+		"header":      str("A label of a word or two."),
+		"options":     map[string]any{"type": "array", "items": option, "description": "2 to 8 choices; the user can always type an answer of their own."},
+		"multiSelect": map[string]any{"type": "boolean", "description": "Whether the user may choose more than one."},
+	}}
+	return &tool{
+		spec: provider.ToolSpec{
+			Name:        "ask_user",
+			Description: "Ask the user 1 to 4 questions with choices, when you need a decision only they can make. Do not use it to ask for approval of a plan or a change.",
+			InputSchema: schema([]string{"questions"}, map[string]any{"questions": map[string]any{"type": "array", "items": question}}),
+		},
+		kind: permission.KindOther, readOnly: true,
+		prepare: func(s *session, input json.RawMessage) (*call, error) {
+			var in struct{ Questions []harness.Question }
+			// CheckQuestions requires them: decode's check is for text fields.
+			if err := decode(input, &in); err != nil {
+				return nil, err
+			}
+			if err := harness.CheckQuestions(in.Questions); err != nil {
+				return nil, err
+			}
+			message, form := harness.QuestionForm(in.Questions)
+			return &call{
+				title:   "Asking for your input",
+				options: permission.FormOptions,
+				form:    &permission.Form{Server: "The agent", Message: message, Schema: form},
+				run: func(_ context.Context, d permission.Decision) (result, error) {
+					return result{text: "The user answered:\n" + harness.QuestionAnswers(in.Questions, d.Answers)}, nil
 				},
 			}, nil
 		},

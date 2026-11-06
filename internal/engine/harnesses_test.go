@@ -14,6 +14,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness/acp/acptest"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 )
 
 // HRN-004, HRN-005, MCP-004: a preset file adds an external harness with a
@@ -253,5 +254,138 @@ func TestExternalAgentImages(t *testing.T) {
 		}
 		cancel()
 		e.Close()
+	}
+}
+
+// A plan from an external agent (2026-11-06): the option the user clicks goes back as
+// it is, a mode they chose that the app does not allow leaves the session asking, and
+// a note sent back with "keep planning" reaches the agent as the next message.
+func TestAnExternalAgentsPlan(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	exe, _ := os.Executable()
+	os.MkdirAll(filepath.Join(dir, config.PresetsDir), 0o700)
+	os.WriteFile(filepath.Join(dir, config.PresetsDir, "ref.yaml"),
+		[]byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\nmodes:\n  plan: plan\n  ask: default\n  auto: auto\n  bypass: bypassPermissions\n"), 0o600)
+	e.loadPresets()
+	e.loadProfiles()
+	approvePending(t, e)
+	root := t.TempDir()
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "ref", Mode: "plan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	said := func() string {
+		evs, _ := e.Events(ctx, ses.ID, 0)
+		var b strings.Builder
+		for _, ev := range evs {
+			if ev.Type == event.AgentMessageChunk || ev.Type == event.ModeRefused || ev.Type == event.UserMessageChunk {
+				b.Write(ev.Data)
+			}
+		}
+		return b.String()
+	}
+	answer := func(option, note string) {
+		t.Helper()
+		waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.PermissionRequested && ev.SID == ses.ID })
+		for _, r := range e.PendingPermissions() {
+			if r.SessionID == ses.ID {
+				if err := e.Decide(DecideRequest{RequestID: r.ID, OptionID: option, Reason: note}); err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+		}
+		t.Fatal("no request")
+	}
+
+	// Bypass is off here: the choice goes to the agent as made, and the session asks.
+	if _, err := e.Prompt(ctx, ses.ID, "PLAN one"); err != nil {
+		t.Fatal(err)
+	}
+	answer("bypassPermissions", "")
+	waitIdle(t, ch, ses.ID)
+	if !strings.Contains(said(), "chose: bypassPermissions") {
+		t.Errorf("the agent did not get the option the user chose: %s", said())
+	}
+	if got, _ := e.store.GetSession(ctx, ses.ID); got.Mode != "ask" {
+		t.Errorf("after a refused choice the mode is %q, not ask", got.Mode)
+	}
+	if !strings.Contains(said(), `"chosen":true`) {
+		t.Errorf("the refusal did not say the user chose it: %s", said())
+	}
+
+	// Sent back with a note: the note follows as the user's next message.
+	if err := e.SetMode(ctx, ses.ID, "plan"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Prompt(ctx, ses.ID, "PLAN two"); err != nil {
+		t.Fatal(err)
+	}
+	answer("plan", "Add tests first.")
+	// The note runs as a prompt of its own; in plan mode its edit is refused.
+	waitFor(t, ch, func(ev event.Event) bool {
+		return ev.Type == event.UserMessageChunk && ev.SID == ses.ID && strings.Contains(string(ev.Data), "My feedback on the plan")
+	})
+	waitIdle(t, ch, ses.ID)
+	if !strings.Contains(said(), "My feedback on the plan:") || !strings.Contains(said(), "Add tests first.") {
+		t.Errorf("the note did not reach the agent: %s", said())
+	}
+}
+
+// HRN-021: an external agent's question reaches the user as a form on the agent's own
+// call, and the answers go back to it. The app says it takes forms, without which
+// Claude Code leaves its AskUserQuestion off.
+func TestAnExternalAgentAsks(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	exe, _ := os.Executable()
+	os.MkdirAll(filepath.Join(dir, config.PresetsDir), 0o700)
+	os.WriteFile(filepath.Join(dir, config.PresetsDir, "ref.yaml"),
+		[]byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n"), 0o600)
+	e.loadPresets()
+	e.loadProfiles()
+	approvePending(t, e)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProfileID: "ref"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Prompt(ctx, ses.ID, "ASK"); err != nil {
+		t.Fatal(err)
+	}
+	ev := waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.PermissionRequested && ev.SID == ses.ID })
+	var asked struct {
+		RequestID  string           `json:"requestId"`
+		ToolCallID string           `json:"toolCallId"`
+		Form       *permission.Form `json:"form"`
+	}
+	json.Unmarshal(ev.Data, &asked)
+	if asked.Form == nil || asked.Form.Message != "Which order?" || asked.Form.Server != "Reference agent" || !strings.Contains(string(asked.Form.Schema), "Paste all first") {
+		t.Fatalf("the form = %+v", asked.Form)
+	}
+	if asked.ToolCallID != "q1" {
+		t.Errorf("the form is on %q, not the agent's call", asked.ToolCallID)
+	}
+	if err := e.broker.DecideWith(asked.RequestID, "accept", "", "", map[string]any{"question_0": "One by one"}); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, ch, ses.ID)
+	evs, _ := e.Events(ctx, ses.ID, 0)
+	var said strings.Builder
+	for _, ev := range evs {
+		if ev.Type == event.AgentMessageChunk {
+			said.Write(ev.Data)
+		}
+	}
+	if !strings.Contains(said.String(), `answer: {\"question_0\":\"One by one\"}`) {
+		t.Errorf("the agent heard: %s", said.String())
 	}
 }

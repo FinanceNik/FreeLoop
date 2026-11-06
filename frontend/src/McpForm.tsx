@@ -51,6 +51,9 @@ export function useMcpForm(form: McpFormRequest | null | undefined, requestId: s
   };
 }
 
+// Up to this many choices show as a list to pick from, more as a menu.
+const CHOICES_SHOWN = 8;
+
 // McpFormView shows the request: its message as plain text, one field per
 // property, and a link it asks the user to open, shown in full so the user
 // sees where it goes.
@@ -85,6 +88,33 @@ export function McpFormView({ form, state, idPrefix = "form" }: { form: McpFormR
           );
         }
         const value = typeof values[f.name] === "string" ? (values[f.name] as string) : "";
+        // A short list of choices reads as a list, with what each means; a long one stays
+        // a menu (HRN-021).
+        if ((f.type === "enum" && f.options!.length <= CHOICES_SHOWN) || f.type === "multi") {
+          const picked = Array.isArray(values[f.name]) ? (values[f.name] as string[]) : [];
+          return (
+            <fieldset key={f.name} className="mcp-field mcp-choices">
+              <legend>
+                {f.label}
+                {f.required && <span aria-hidden="true"> *</span>}
+              </legend>
+              {f.description && <span className="muted">{f.description}</span>}
+              {f.options!.map((o, i) => (
+                <label key={o.value} className="mcp-choice">
+                  {f.type === "multi" ? (
+                    <input type="checkbox" checked={picked.includes(o.value)} onChange={(e) => setValues({ ...values, [f.name]: e.target.checked ? [...picked, o.value] : picked.filter((x) => x !== o.value) })} />
+                  ) : (
+                    <input type="radio" name={id} id={i === 0 ? id : undefined} checked={value === o.value} onChange={() => set(f.name, o.value)} />
+                  )}
+                  <span>
+                    {o.label}
+                    {o.description && <span className="muted mcp-choice-detail">{o.description}</span>}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          );
+        }
         return (
           <div key={f.name} className="mcp-field">
             {label}

@@ -495,6 +495,11 @@ func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, ans
 		d.Outcome = Allowed
 	case "allow_always":
 		d.Outcome = Allowed
+		// An agent's plan approval may say "always" for the mode it goes on in. That
+		// is a choice about this plan, not a rule for later ones.
+		if p.req.Kind == KindSwitchMode {
+			break
+		}
 		if scope == "" {
 			scope = ScopeSession
 		}

@@ -303,6 +303,16 @@ Also from that review, 2026-11-05 and 06:
 - **Drafts are in the page's storage.** Redacted and capped at 64 KB, but kept in WebKit's storage, outside the data folder: they outlive deleting it, and `FREELOOP_HOME` does not move them. Not changed yet.
 - **The PDF viewer is not yet checked in the packaged app.** `make check-app` opens a hostile PDF in the served build only.
 
+## A plan's mode, 2026-11-06
+
+An external agent's plan approval offers to go on in a mode, Claude Code's among them in auto or bypass. Freeloop refused every such change as the agent's own, so a user who chose bypass approving a plan was left in plan mode, told the agent had tried it alone (9 of the user's approvals). Now a change to auto or bypass holds only when all of these are true: the agent reports it within two minutes of a switch_mode request the user approved with their own click, not a rule or the mode; and the app's own conditions for that mode hold, the same `unattendedRefusal` as Settings (bypass turned on and approved, a trusted project; auto offered by the agent's preset). Otherwise the session goes to `ask`, not plan, with the reason in the transcript. A change the agent makes without such an approval is still refused. The chosen option goes back to the agent as it is, where other "always" answers go back as "once" (SEC-016), and the broker saves no rule for it, so approving one plan approves no later one. Tests: `TestTheUserChoosesTheModeApprovingAPlan`, `TestAPlanApprovedAlwaysSavesNoRule`, `TestAnExternalAgentsPlan`.
+
+The user's note with "keep planning" reaches an ACP agent as their next message, which is no new path: it is the text they typed, sent as a message they could have sent.
+
+## An agent's questions, 2026-11-06
+
+Freeloop now tells an ACP agent it takes forms (HRN-021), which turns Claude Code's AskUserQuestion on and lets the agent pass on its MCP servers' forms. A form is a request for input, not for approval: the broker asks the user in every mode, bypass included, runs no hook for it, and saves no rule. What the user enters goes to the agent that asked and is not written to the transcript, which records the decision only. Forms that ask the user to open a link are not offered, so an agent cannot send the user to an address through the app. A question's text and options are the model's words, shown as text, never as markup.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

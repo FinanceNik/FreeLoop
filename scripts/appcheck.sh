@@ -50,14 +50,17 @@ until "$APP" sessions >/dev/null 2>&1; do
   sleep 0.2
 done
 
-for name in alpha beta menu full; do
+for name in alpha beta menu full plan; do
   mkdir -p "$DATA/projects/$name"
   git -C "$DATA/projects/$name" init -q
   git -C "$DATA/projects/$name" -c user.name=check -c user.email=check@example.com commit -q --allow-empty -m start
   # "Check full" sets a model's limit, which needs a provider in the file.
   provider=demo
   [ "$name" != full ] || provider=stand-in
-  "$APP" new "$DATA/projects/$name" -title "Check $name" -provider "$provider" -model scripted >/dev/null
+  # "Check plan" starts in plan mode, for the plan's review.
+  mode=ask
+  [ "$name" != plan ] || mode=plan
+  "$APP" new "$DATA/projects/$name" -title "Check $name" -provider "$provider" -model scripted -mode "$mode" >/dev/null
 done
 
 # Files for the viewer: Markdown carrying markup that must not run, and a PDF.

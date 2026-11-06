@@ -632,7 +632,7 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 	d := s.p.Broker.Request(ctx, permission.Context{Mode: mode, Root: s.env.Root()}, permission.Request{
 		SessionID: s.p.SessionID, ToolCallID: c.ToolCallID, Tool: cmp.Or(prepared.permTool, c.ToolName), Kind: kind,
 		Title: title, Input: c.Input, Paths: prepared.paths, Command: prepared.command, Options: prepared.options,
-		Contained: prepared.contained, LeavesSandbox: prepared.leaves,
+		Contained: prepared.contained, LeavesSandbox: prepared.leaves, Form: prepared.form,
 	})
 	switch d.Outcome {
 	case permission.Cancelled:
@@ -640,6 +640,9 @@ func (s *session) runTool(ctx context.Context, c provider.Part, mode permission.
 	case permission.Denied:
 		// Only the user's own "keep planning" is their feedback; a rule or
 		// hook that denies the plan is reported as such below.
+		if c.ToolName == "ask_user" && d.Actor == permission.ActorUser {
+			return fail("The user chose not to answer. Go on with your best judgement, and say what you assumed.", "failed")
+		}
 		if c.ToolName == "present_plan" && d.Actor == permission.ActorUser {
 			msg := "The user wants to keep planning."
 			if d.Reason != "" {

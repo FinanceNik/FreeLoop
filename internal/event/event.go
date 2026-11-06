@@ -223,6 +223,10 @@ type RewindData struct {
 type ModeRefusedData struct {
 	From string `json:"from"`
 	To   string `json:"to"`
+	// Chosen says the user chose the mode, approving the agent's plan, and Reason why
+	// it does not hold; the session then asks instead of staying in plan mode.
+	Chosen bool   `json:"chosen,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // StuckData is the payload of stuck: a session that is not getting on, why, and where

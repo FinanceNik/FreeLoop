@@ -171,11 +171,13 @@
     },
     "modeRefused": {
       "type": "object",
-      "description": "An agent tried to loosen the mode on its own, and it stayed as it was.",
+      "description": "An agent tried to loosen the mode on its own, and it stayed as it was; or the user chose a mode approving a plan that does not hold, and the session asks instead.",
       "required": ["from", "to"],
       "properties": {
         "from": { "type": "string" },
-        "to": { "type": "string" }
+        "to": { "type": "string" },
+        "chosen": { "type": "boolean" },
+        "reason": { "type": "string" }
       }
     },
     "stuck": {

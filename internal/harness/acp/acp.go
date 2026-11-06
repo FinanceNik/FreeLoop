@@ -68,6 +68,10 @@ type session struct {
 	// browsing marks a process started only to list, copy or read the agent's
 	// sessions: it may not ask for anything or touch anything.
 	browsing bool
+	// questionCall is the agent's last call carrying questions, which its form
+	// answers (HRN-021); forms is how many have no such call.
+	questionCall string
+	forms        int
 	// calls follows the agent's model calls (calls.go).
 	calls callLedger
 	// approved holds what the user or a rule just allowed for a permission
@@ -93,6 +97,8 @@ type approval struct {
 	paths   []string
 	command string
 	until   time.Time
+	// byUser says the user decided, not a rule or the mode.
+	byUser bool
 }
 
 // NewSession starts the agent, initializes it and opens a session in the
@@ -155,9 +161,12 @@ func (s *session) start(ctx context.Context, sp environment.Spawner) (sdk.Initia
 	s.proc = proc
 	s.conn = sdk.NewClientSideConnection(s, proc.Stdin(), proc.Stdout())
 	init, err := s.conn.Initialize(ctx, sdk.InitializeRequest{
-		ProtocolVersion:    sdk.ProtocolVersionNumber,
-		ClientCapabilities: sdk.ClientCapabilities{Fs: sdk.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true}, Terminal: true},
-		ClientInfo:         &sdk.Implementation{Name: "freeloop", Version: "0.1"},
+		ProtocolVersion: sdk.ProtocolVersionNumber,
+		// Forms (HRN-021): an agent's questions to the user, Claude Code's AskUserQuestion
+		// among them, which its adapter leaves off for a client without them.
+		ClientCapabilities: sdk.ClientCapabilities{Fs: sdk.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true}, Terminal: true,
+			Elicitation: &sdk.ElicitationCapabilities{Form: &sdk.ElicitationFormCapabilities{}}},
+		ClientInfo: &sdk.Implementation{Name: "freeloop", Version: "0.1"},
 	})
 	if err != nil {
 		return init, s.startFailed("initialize", err)
@@ -390,6 +399,27 @@ func (s *session) agentMode(m permission.Mode) {
 	cur := s.mode
 	asked := s.approved.kind == permission.KindSwitchMode && time.Now().Before(s.approved.until)
 	loosens := modeLooseness(m) > modeLooseness(cur)
+	// Auto or bypass the user chose approving the plan holds when the app's own rules
+	// let it (SEC-001); otherwise the session asks, which is what approving a plan
+	// means at least, instead of staying in plan mode.
+	if loosens && m.Unattended() && asked && s.approved.byUser && s.p.AllowUnattended != nil {
+		why := s.p.AllowUnattended(m)
+		s.approved = approval{}
+		next := m
+		if why != nil {
+			next = permission.ModeAsk
+		}
+		s.mode = next
+		s.mu.Unlock()
+		if why != nil {
+			s.p.Emit(event.ModeRefused, event.ModeRefusedData{From: string(cur), To: string(m), Chosen: true, Reason: why.Error()})
+			s.p.Emit(event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: string(next)})
+			s.restoreMode()
+			return
+		}
+		s.p.Emit(event.CurrentModeUpdate, event.CurrentModeData{CurrentModeID: string(next)})
+		return
+	}
 	refused := loosens && (!asked || m.Unattended())
 	if m == cur || refused {
 		s.mu.Unlock()
@@ -596,6 +626,15 @@ func (s *session) SessionUpdate(_ context.Context, n sdk.SessionNotification) er
 	case t == event.ToolCall:
 		kind, _ := m["kind"].(string)
 		m["tool"] = toolName(kind)
+		// The card the agent's questions are shown on, when its form follows.
+		if in, ok := m["rawInput"].(map[string]any); ok {
+			if _, ok := in["questions"].([]any); ok {
+				id, _ := m["toolCallId"].(string)
+				s.mu.Lock()
+				s.questionCall = id
+				s.mu.Unlock()
+			}
+		}
 	case !t.Valid():
 		return nil
 	}
@@ -708,6 +747,11 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 					sdk.PermissionOptionKindAllowAlways:  sdk.PermissionOptionKindAllowOnce,
 					sdk.PermissionOptionKindRejectAlways: sdk.PermissionOptionKindRejectOnce,
 				}[o.Kind]
+				// A plan's options say which mode the agent goes on in, and saves no rule:
+				// the one the user chose goes back as it is.
+				if kind == permission.KindSwitchMode {
+					once = ""
+				}
 				for _, alt := range r.Options {
 					if once != "" && alt.Kind == once {
 						chosen = alt.OptionId
@@ -728,7 +772,7 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 	switch d.Outcome {
 	case permission.Allowed:
 		s.mu.Lock()
-		s.approved = approval{kind: kind, paths: paths, command: command, until: time.Now().Add(2 * time.Minute)}
+		s.approved = approval{kind: kind, paths: paths, command: command, until: time.Now().Add(2 * time.Minute), byUser: d.Actor == permission.ActorUser}
 		s.mu.Unlock()
 		if via != "" {
 			// The agent's own updates only ever name the command the model wrote.
@@ -1046,3 +1090,64 @@ type signInError string
 
 func (e signInError) Error() string        { return string(e) }
 func (e signInError) Is(target error) bool { return target == harness.ErrSignIn }
+
+// DropsReasons implements harness.ReasonDropper: ACP's answer carries no note.
+func (s *session) DropsReasons() bool { return true }
+
+// questionCallWait is how long a form waits for the call it belongs to.
+const questionCallWait = 500 * time.Millisecond
+
+// UnstableCreateElicitation shows an agent's form to the user and answers with what
+// they entered (HRN-021): questions it asks, Claude Code's AskUserQuestion among them.
+// It goes through the broker, which asks the user in every mode. A link to open is not
+// offered, so none comes.
+func (s *session) UnstableCreateElicitation(ctx context.Context, r sdk.UnstableCreateElicitationRequest) (sdk.UnstableCreateElicitationResponse, error) {
+	if s.browsing || r.Form == nil {
+		return sdk.NewUnstableCreateElicitationResponseCancel(), nil
+	}
+	ctx, done := s.duringTurn(ctx)
+	defer done()
+	form, err := json.Marshal(r.Form.RequestedSchema)
+	if err != nil {
+		return sdk.NewUnstableCreateElicitationResponseCancel(), nil
+	}
+	// The agent's call carrying the questions comes as a notification, which may be
+	// handled a moment after this request: wait for it a little.
+	var id string
+	for wait := time.Now().Add(questionCallWait); ; {
+		s.mu.Lock()
+		id, s.questionCall = s.questionCall, ""
+		if id == "" && !time.Now().Before(wait) {
+			s.forms++
+			id = fmt.Sprintf("form-%d", s.forms)
+		}
+		s.mu.Unlock()
+		if id != "" {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return sdk.NewUnstableCreateElicitationResponseCancel(), nil
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if strings.HasPrefix(id, "form-") {
+		// Nothing of the agent's to show it on: a card of its own.
+		s.p.Emit(event.ToolCall, map[string]any{"toolCallId": id, "title": r.Form.Message, "kind": "other", "status": "pending", "tool": "acp:question"})
+		defer s.p.Emit(event.ToolCallUpdate, map[string]any{"toolCallId": id, "status": "completed"})
+	}
+	d := s.p.Broker.Request(ctx, permission.Context{Mode: s.Mode(), Root: s.env.Root()}, permission.Request{
+		SessionID: s.p.SessionID, ToolCallID: id, Tool: "acp:question", Kind: permission.KindOther,
+		Title: r.Form.Message, Options: permission.FormOptions,
+		Form: &permission.Form{Server: s.preset.Name, Message: r.Form.Message, Schema: form},
+	})
+	switch d.Outcome {
+	case permission.Allowed:
+		resp := sdk.NewUnstableCreateElicitationResponseAccept()
+		resp.Accept.Content = d.Answers
+		return resp, nil
+	case permission.Denied:
+		return sdk.NewUnstableCreateElicitationResponseDecline(), nil
+	}
+	return sdk.NewUnstableCreateElicitationResponseCancel(), nil
+}

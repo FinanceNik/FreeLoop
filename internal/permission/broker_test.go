@@ -568,3 +568,25 @@ func TestReadAndWriteDenied(t *testing.T) {
 type crossingRules []Rule
 
 func (r crossingRules) Rules(string) ([]Rule, error) { return r, nil }
+
+// A plan's "always" option names the mode the agent goes on in. It is a choice about
+// that plan, so it allows it and saves no rule that would approve the next plan.
+func TestAPlanApprovedAlwaysSavesNoRule(t *testing.T) {
+	b, _, _, root := setup(t)
+	rules := &memRules{}
+	b.SetRules(rules, rules)
+	got := make(chan Decision, 1)
+	go func() {
+		got <- b.Request(context.Background(), Context{Mode: ModePlan, Root: root}, Request{SessionID: "s", Tool: "acp:switch_mode", Kind: KindSwitchMode,
+			Options: []Option{{ID: "auto", Name: "Yes, and use auto mode", Kind: "allow_always"}, {ID: "no", Name: "No, keep planning", Kind: "reject_once"}}})
+	}()
+	for len(b.Pending()) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	if err := b.Decide(b.Pending()[0].ID, "auto", "", ScopeGlobal); err != nil {
+		t.Fatal(err)
+	}
+	if d := <-got; d.Outcome != Allowed || d.OptionID != "auto" || d.Persisted != nil || len(rules.global)+len(rules.session) != 0 {
+		t.Errorf("decision = %+v, rules = %+v %+v", d, rules.global, rules.session)
+	}
+}

@@ -6,6 +6,7 @@ package acptest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,6 +53,8 @@ func Serve() bool {
 // agent is a reference ACP agent: it edits notes.txt after asking, and
 // runs a command without asking when the prompt says "terminal".
 type agent struct {
+	// forms says the client takes forms (HRN-021).
+	forms  bool
 	conn   *sdk.AgentSideConnection
 	mcp    []string
 	loaded string
@@ -120,7 +123,8 @@ func pluginOf(meta map[string]any) string {
 	return ""
 }
 
-func (a *agent) Initialize(context.Context, sdk.InitializeRequest) (sdk.InitializeResponse, error) {
+func (a *agent) Initialize(_ context.Context, r sdk.InitializeRequest) (sdk.InitializeResponse, error) {
+	a.forms = r.ClientCapabilities.Elicitation != nil && r.ClientCapabilities.Elicitation.Form != nil
 	var sessions sdk.SessionCapabilities
 	if os.Getenv(ImportVar) == "1" {
 		sessions = sdk.SessionCapabilities{List: &sdk.SessionListCapabilities{}, Fork: &sdk.SessionForkCapabilities{}}
@@ -171,6 +175,12 @@ func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResp
 	}
 	if a.plugin != "" {
 		say("plugin: " + a.plugin)
+	}
+	if strings.HasPrefix(text, "PLAN") {
+		return a.plan(ctx, r.SessionId, say)
+	}
+	if strings.HasPrefix(text, "ASK") {
+		return a.ask(ctx, r.SessionId, say)
 	}
 	cwd, _ := os.Getwd()
 	path := filepath.Join(cwd, "notes.txt")
@@ -305,4 +315,64 @@ func (a *agent) replay(ctx context.Context, id sdk.SessionId) {
 	})))
 	send(sdk.StartToolCall("open", "Never finished", sdk.WithStartKind(sdk.ToolKindExecute)))
 	send(sdk.SessionUpdate{SessionInfoUpdate: &sdk.SessionSessionInfoUpdate{Title: sdk.Ptr("A title the replay must not set")}})
+}
+
+// plan asks for approval of a plan as Claude Code does: a switch_mode call carrying the
+// plan, with options that each name the mode it goes on in. A chosen mode is reported
+// back as the agent's own, and the choice is said.
+func (a *agent) plan(ctx context.Context, sid sdk.SessionId, say func(string)) (sdk.PromptResponse, error) {
+	const plan = "# The plan\n\n1. Read the code\n2. Change it"
+	a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: sid, Update: sdk.StartToolCall("p1", "Approve Plan",
+		sdk.WithStartKind(sdk.ToolKindSwitchMode), sdk.WithStartRawInput(map[string]any{"plan": plan}),
+		sdk.WithStartContent([]sdk.ToolCallContent{sdk.ToolContent(sdk.TextBlock(plan))}))})
+	res, err := a.conn.RequestPermission(ctx, sdk.RequestPermissionRequest{
+		SessionId: sid,
+		ToolCall:  sdk.ToolCallUpdate{ToolCallId: "p1", Title: sdk.Ptr("Approve Plan"), Kind: sdk.Ptr(sdk.ToolKindSwitchMode), RawInput: map[string]any{"plan": plan}},
+		Options: []sdk.PermissionOption{
+			{OptionId: "default", Name: "Yes, manually approve edits", Kind: sdk.PermissionOptionKindAllowOnce},
+			{OptionId: "auto", Name: "Yes, and use auto mode", Kind: sdk.PermissionOptionKindAllowAlways},
+			{OptionId: "bypassPermissions", Name: "Yes, and bypass permissions", Kind: sdk.PermissionOptionKindAllowAlways},
+			{OptionId: "plan", Name: "No, keep planning", Kind: sdk.PermissionOptionKindRejectOnce},
+		},
+	})
+	chosen := "cancelled"
+	if err == nil && res.Outcome.Selected != nil {
+		chosen = string(res.Outcome.Selected.OptionId)
+	}
+	say("chose: " + chosen)
+	if chosen != "plan" && chosen != "cancelled" {
+		a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: sid, Update: sdk.SessionUpdate{CurrentModeUpdate: &sdk.SessionCurrentModeUpdate{CurrentModeId: sdk.SessionModeId(chosen)}}})
+	}
+	return sdk.PromptResponse{StopReason: sdk.StopReasonEndTurn}, nil
+}
+
+// ask asks the user a question as Claude Code's adapter does: a tool call carrying the
+// questions, then a form for them. It says the answer, or that it could not ask.
+func (a *agent) ask(ctx context.Context, sid sdk.SessionId, say func(string)) (sdk.PromptResponse, error) {
+	if !a.forms {
+		say("forms: not offered")
+		return sdk.PromptResponse{StopReason: sdk.StopReasonEndTurn}, nil
+	}
+	questions := []any{map[string]any{"question": "Which order?", "header": "Order", "multiSelect": false,
+		"options": []any{map[string]any{"label": "All at once", "description": "Paste all first"}, map[string]any{"label": "One by one"}}}}
+	a.conn.SessionUpdate(ctx, sdk.SessionNotification{SessionId: sid, Update: sdk.StartToolCall("q1", "Asking for your input",
+		sdk.WithStartKind(sdk.ToolKindOther), sdk.WithStartRawInput(map[string]any{"questions": questions}))})
+	req := sdk.NewUnstableCreateElicitationRequestForm(sdk.UnstableElicitationSchema{Properties: map[string]any{
+		"question_0":        map[string]any{"type": "string", "title": "Order", "oneOf": []any{map[string]any{"const": "All at once", "title": "All at once", "description": "Paste all first"}, map[string]any{"const": "One by one", "title": "One by one"}}},
+		"question_0_custom": map[string]any{"type": "string", "title": "Other"},
+	}})
+	req.Form.Message = "Which order?"
+	res, err := a.conn.UnstableCreateElicitation(ctx, req)
+	switch {
+	case err != nil:
+		say("ask failed: " + err.Error())
+	case res.Accept != nil:
+		b, _ := json.Marshal(res.Accept.Content)
+		say("answer: " + string(b))
+	case res.Decline != nil:
+		say("answer: declined")
+	default:
+		say("answer: cancelled")
+	}
+	return sdk.PromptResponse{StopReason: sdk.StopReasonEndTurn}, nil
 }

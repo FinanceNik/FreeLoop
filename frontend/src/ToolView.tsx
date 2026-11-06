@@ -3,8 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { quietCommand, toolStatusLabel, visibleCommand } from "./a11y.ts";
 import { EngineService } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
-import { APPROVAL_GRACE_MS, approvalHint, approvalShortcut, isTextField, optionKind, optionLabel } from "./shortcuts.ts";
+import { APPROVAL_GRACE_MS, approvalHint, approvalShortcut, formLabel, isTextField, optionKind, optionLabel } from "./shortcuts.ts";
 import { awaitingDecision, lineDiff, type Item, type PermissionOption, type ToolContent } from "./transcript.ts";
+import { planText } from "./planView.ts";
+import { agentQuestions } from "./forms.ts";
+import { PlanCard, PlanDecision } from "./PlanReview.tsx";
 
 // ToolView is one tool call in the conversation: what it asked and did and,
 // while it waits, the approval card (GUI-006).
@@ -49,7 +52,10 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
 
   // A token optimizer ran this command in a shorter form (HRN-019).
   const via = item.via ?? item.content.find((c) => c.via)?.via;
-  const plan = item.tool === "present_plan" ? String((item.input as { plan?: string } | null)?.plan ?? "") : null;
+  // A plan reads as a document, from either agent (GUI-043).
+  const plan = planText(item);
+  // An agent's questions read as questions (HRN-021).
+  const questions = plan === null ? agentQuestions(item.input) : null;
 
   return (
     <details
@@ -77,20 +83,39 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
           ))}
       </summary>
       {plan !== null ? (
-        <div className="plan">{plan}</div>
+        <PlanCard text={plan} />
+      ) : questions ? (
+        // The form shows them while it waits; after, the questions stay readable.
+        !waiting && (
+          <ul className="agent-questions">
+            {questions.map((q, i) => (
+              <li key={i}>
+                {q.question} <span className="muted">{q.options.join(" · ")}</span>
+              </li>
+            ))}
+          </ul>
+        )
       ) : (
         <pre className="tool-input">{JSON.stringify(item.input, null, 2)}</pre>
       )}
-      {item.content.map((c, i) => (
-        <ContentView key={i} c={c} />
-      ))}
+      {item.content
+        // An external agent sends the plan again as text: once is enough.
+        .filter((c) => plan === null || (c.content?.text ?? "").trim() !== plan.trim())
+        .map((c, i) => (
+          <ContentView key={i} c={c} />
+        ))}
       {shownDecision && decided.reason && <p className="muted">{decided.reason}</p>}
       {decided?.persisted && (
         <p className="muted">
           Saved rule: <code>{decided.persisted.command || decided.persisted.path || decided.persisted.tool}</code> ({decided.persisted.scope})
         </p>
       )}
-      {waiting && (
+      {waiting && plan !== null && (
+        <div className="approval plan-approval" role="group" aria-label="Approve this plan" ref={box}>
+          <PlanDecision item={item} onError={onError} />
+        </div>
+      )}
+      {waiting && plan === null && (
         <div className="approval" role="group" aria-label={form ? `${form.server} asks for input` : "Approve this tool call"} ref={box}>
           {form && <McpFormView form={form} state={mcpForm} />}
           {item.permission?.command && (
@@ -121,7 +146,7 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
                   onClick={() => choose(o)}
                   title={hint && !form ? `Shortcut: ${hint}` : undefined}
                 >
-                  {optionLabel(o.kind, o.name)}
+                  {form ? formLabel(o.kind) : optionLabel(o.kind, o.name)}
                   {hint && !form && <kbd aria-hidden="true">{hint.split(" ")[0]}</kbd>}
                 </button>
               );

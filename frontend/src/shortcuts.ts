@@ -162,3 +162,10 @@ export function isTextField(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   return el.isContentEditable || el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT";
 }
+
+// formLabel names a form's buttons (MCP-008, HRN-021): it answers, or it is skipped.
+// The kind decides, as for any approval.
+export function formLabel(kind: string): string {
+  return kind.startsWith("allow") ? "Send" : "Skip";
+}
+
