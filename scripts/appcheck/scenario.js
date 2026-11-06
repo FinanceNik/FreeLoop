@@ -89,6 +89,13 @@ await step("a session shows what it runs on", async () => {
   check("each pane has its provider's line", lines.length === 2 && lines[0] !== lines[1] && lines.every((c) => c !== "rgba(0, 0, 0, 0)"), lines.join(" and "));
   const rowsFit = all(".session-row").every((r) => all("*", r).every((e) => e.getBoundingClientRect().right <= r.getBoundingClientRect().right + 1));
   check("nothing runs past a row", rowsFit);
+  // The line stands clear of the active pane's outline, and the title clear of the line.
+  const pane = document.querySelector(".pane-split.pane-active");
+  const lineTop = parseFloat(getComputedStyle(pane, "::before").top);
+  const lineBottom = pane.getBoundingClientRect().top + lineTop + parseFloat(getComputedStyle(pane, "::before").height);
+  const titleTop = pane.querySelector(".session-titleline h2").getBoundingClientRect().top;
+  check("the provider's line clears the pane's outline", lineTop >= 4, `${lineTop} px from the top`);
+  check("the title clears the provider's line", titleTop - lineBottom >= 6, `${Math.round(titleTop - lineBottom)} px`);
   document.querySelector('.layout-switch button[aria-label="One pane"]').click();
   await sleep(200);
 

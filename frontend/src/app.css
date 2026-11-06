@@ -5152,3 +5152,25 @@ table.hooks .hook-command {
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
+/* A pane's header has room (2026-11-06): the provider's line stands clear of the outline
+   of the active pane, which is drawn over the pane's top 2 px, and the title stands clear
+   of the line. */
+.pane-split::before {
+  top: 5px;
+  left: 16px;
+  right: 16px;
+  border-radius: 2px;
+}
+.pane-split .session-header {
+  padding: 16px 14px 10px 20px;
+}
+.session-titleline {
+  gap: 10px;
+}
+.session-actions {
+  gap: 4px;
+}
+.pane-split .banner {
+  margin-top: 8px;
+}
+
