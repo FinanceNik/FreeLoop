@@ -604,6 +604,26 @@ await step("the year at a glance", async () => {
   await until("the conversation", () => document.querySelector(".conversation"));
 });
 
+await step("the queue takes a task and holds it while paused", async () => {
+  withText(".footer-links button", "Board").click();
+  (await until("the board's link to the queue", () => document.querySelector(".board-queue"), 8000)).click();
+  const page = await until("the queue page", () => [...document.querySelectorAll(".page h2")].find((h) => h.textContent === "Queue")?.closest(".page"), 8000);
+  if (withText("button", "Pause", page)) withText("button", "Pause", page).click();
+  await until("paused", () => page.querySelector('[role="status"]')?.textContent.startsWith("Paused"), 5000);
+  const box = page.querySelector('textarea[aria-label="Task"]');
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, "Write a haiku about queues");
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  await sleep(50);
+  withText("button", "Add to queue", page).click();
+  const row = await until("the task listed", () => [...page.querySelectorAll(".queue-table tbody tr")].find((r) => r.textContent.includes("Write a haiku")), 5000);
+  check("a paused queue keeps the task waiting", row.textContent.includes("Waiting"), row.textContent);
+  check("the summary counts it", page.querySelector('[role="status"]').textContent.includes("1 waiting"), page.querySelector('[role="status"]').textContent);
+  row.querySelector('button[aria-label^="Remove"]').click();
+  await until("the task removed", () => !page.textContent.includes("Write a haiku"), 5000);
+  openSession("Check alpha");
+  await until("the conversation", () => document.querySelector(".conversation"));
+});
+
 await step("the side parts are resizable", async () => {
   const mouse = (...a) => window.webkit.messageHandlers.mouse.postMessage(a);
   const centre = (el) => { const b = el.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };

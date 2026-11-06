@@ -417,7 +417,7 @@ Open for the user: whether a finished task is a merged change or archived with a
 
 For someone running many sessions, the waste is in the gaps: an agent idle while tasks wait, and a session that hit its limit or got stuck and sits there. Both build on what exists.
 
-1. **A queue of tasks (SES-025).** About 5 days.
+1. **A queue of tasks (SES-025).** *Built 2026-11-06, at the user's request ahead of the release: `queue.json` (`internal/config/queue.go`), `internal/engine/queue.go` run by the schedule loop, the Queue page (`Queue.tsx`, `frontend/src/queue.ts`) from the Board and the palette, and a `make check-app` step. Not yet: several issues at once, budgets (GUI-038), a task that hits its limit handing off by itself.*
    - Engine: `internal/engine/queue.go`, a `queue.yaml` beside `schedules.yaml`, run by the schedule loop (`scheduleLoop`, every 30 seconds). It starts a task with `CreateSession` and `Prompt` when there is room: the queue's limit, the provider's slots (`limit.go`), the agent's limits (`Engine.Limits`, paused until `resetsAt`) and budgets once GUI-038 exists.
    - Interface: a Queue page with the board's columns (waiting, running, done), "Add to queue" in the new-session form, several issues at once from the issue picker, and the queue's limit in Settings.
    - Tests: a fake clock and the scripted provider for start order, slots, a limit pausing and resuming, approvals keeping a slot, and a paused queue. A `make check-app` step adds three tasks and sees two start.

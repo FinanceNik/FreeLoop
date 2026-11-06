@@ -86,6 +86,9 @@ type ConfigChange struct {
 type Engine struct {
 	// stuck follows each session for HRN-020.
 	stuck stuckWatch
+	// queueMu guards queue.json (SES-025); onQueue tells the interface it changed.
+	queueMu sync.Mutex
+	onQueue func()
 	// importMu lets one session import at a time (SES-020).
 	importMu sync.Mutex
 	// hookProgram is what an agent's hook runs to reach the app (HRN-019).

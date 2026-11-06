@@ -16,6 +16,7 @@ export default function Board<T extends Card>({
   markOf,
   renderRequest,
   onOpen,
+  onQueue,
 }: {
   sessions: T[];
   projectName: (s: T) => string;
@@ -30,6 +31,8 @@ export default function Board<T extends Card>({
   // The approval a session waits on longest, answered on its card.
   renderRequest: (sid: string) => ReactNode;
   onOpen: (id: string) => void;
+  // Opens the queue of tasks (SES-025), whose tasks start as the sessions here.
+  onQueue?: () => void;
 }) {
   const cols = columns(sessions);
   return (
@@ -40,6 +43,11 @@ export default function Board<T extends Card>({
           {sessions.length} {sessions.length === 1 ? "session" : "sessions"}
           {filtered ? ", filtered in the sidebar" : ""}
         </span>
+        {onQueue && (
+          <button className="link board-queue" onClick={onQueue}>
+            Queue of tasks
+          </button>
+        )}
       </header>
       <div className="board">
         {cols.map((c) => (

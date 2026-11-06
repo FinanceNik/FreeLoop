@@ -181,6 +181,7 @@ func (e *Engine) scheduleLoop(interval time.Duration) {
 	for {
 		// A first check right away runs what was missed while closed.
 		e.runDue(e.scheduleCtx, time.Now())
+		e.runQueue(e.scheduleCtx, time.Now())
 		select {
 		case <-e.stopSchedules:
 			return

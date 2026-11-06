@@ -68,6 +68,7 @@ import { inSettings, isSettingsShortcut, MAX_FONT_SIZE, textSizeAfter } from "./
 import ClaudeImport from "./ClaudeImport.tsx";
 import SessionImport from "./SessionImport.tsx";
 import { basename } from "./paths.ts";
+import Queue from "./Queue.tsx";
 
 type Screen =
   | { kind: "session"; id: string; focus?: { seq: number; n: number } }
@@ -79,6 +80,7 @@ type Screen =
   | { kind: "settings" }
   | { kind: "attention" }
   | { kind: "board" }
+  | { kind: "queue" }
   | { kind: "schedules" }
   | { kind: "optimizers" }
   | { kind: "usage" }
@@ -817,6 +819,7 @@ export default function App() {
             page(`panes-${n}`, n === 1 ? "One pane" : `${n} panes side by side`, () => showWork(ws.chooseLayout(workRef.current, n)), { keywords: "workspace layout split columns grid" }),
           )),
       page("board", "Board", () => setScreen({ kind: "board" }), { keywords: "cards overview columns kanban" }),
+      page("queue", "Queue", () => setScreen({ kind: "queue" }), { keywords: "tasks later batch" }),
       page("providers", "Providers", () => setScreen({ kind: "providers" }), { keywords: "api keys models" }),
       page("profiles", "Profiles", () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
       page("skills", "Skills", () => setScreen({ kind: "skills" })),
@@ -1596,8 +1599,10 @@ export default function App() {
         {screen.kind === "usage" && (
           <Usage onShowInPane={STANDALONE ? undefined : () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new"))} projects={projects} providers={providers} harnesses={harnesses} onOpenSession={(id) => openSession(id)} onOpenPrices={() => setScreen({ kind: "settings" })} onError={report} />
         )}
+        {screen.kind === "queue" && <Queue projects={projects} profiles={profiles} onOpen={openSession} onError={report} />}
         {screen.kind === "board" && (
           <Board
+            onQueue={() => setScreen({ kind: "queue" })}
             activityOf={(s) => <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
             markOf={(s) => <SourceMark source={sourceOf(s)} detail={s.model || undefined} />}
             sessions={visible.filter((s) => s.status !== "archived")}

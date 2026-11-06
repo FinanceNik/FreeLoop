@@ -539,6 +539,25 @@ func (s *EngineService) OptimizerSavings(ctx context.Context, sessionID string) 
 	return s.eng.CheckOptimizerSavings(ctx, sessionID)
 }
 
+// Queue returns the queue of tasks (SES-025).
+func (s *EngineService) Queue() (config.Queue, error) { return s.eng.Queue() }
+
+// AddTask puts a task at the end of the queue.
+func (s *EngineService) AddTask(t config.Task) (config.Queue, error) { return s.eng.AddTask(t) }
+
+// MoveTask moves a task by places in the queue.
+func (s *EngineService) MoveTask(id string, by int) (config.Queue, error) {
+	return s.eng.MoveTask(id, by)
+}
+
+// RemoveTask takes a task off the queue.
+func (s *EngineService) RemoveTask(id string) (config.Queue, error) { return s.eng.RemoveTask(id) }
+
+// SetQueue pauses or resumes the queue and sets how many tasks run at once.
+func (s *EngineService) SetQueue(paused bool, limit int) (config.Queue, error) {
+	return s.eng.SetQueue(paused, limit)
+}
+
 // HandOff continues a session on another profile in one step (HRN-020).
 func (s *EngineService) HandOff(ctx context.Context, sessionID, profileID, reason string) (engine.HandOffResult, error) {
 	return s.eng.HandOff(ctx, sessionID, profileID, reason, false)
