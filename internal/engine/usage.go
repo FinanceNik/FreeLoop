@@ -65,8 +65,9 @@ func (e *Engine) Usage(ctx context.Context, days int) ([]DayCost, error) {
 		m := ModelCost{ProviderID: u.ProviderID, Model: u.Model, InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
 			CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, Calls: u.Calls, TurnTotals: u.TurnTotals, Unreported: u.Unreported}
 		d.Unreported += u.Unreported
-		if u.Calls == 0 {
-			// Only unreported turns: no tokens to price, and no model to show.
+		if u.InputTokens+u.OutputTokens+u.CacheReadTokens+u.CacheWriteTokens == 0 {
+			// Only unreported turns: no tokens to price, and no model to show. An
+			// adjustment has no calls of its own but does have tokens, which cost.
 			continue
 		}
 		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {

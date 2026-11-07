@@ -116,10 +116,13 @@ func (l *Local) Spawn(ctx context.Context, spec SpawnSpec) (Process, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("environment: start %s: %w", spec.Argv[0], err)
 	}
-	track(cmd.Process.Pid, cmd.Path)
+	started := track(cmd.Process.Pid, cmd.Path)
 	go func() {
 		p.err = cmd.Wait()
-		untrack(cmd.Process.Pid)
+		// An agent or server that ended leaves nothing of its own running behind it
+		// (NFR-REL-005).
+		stopGroup(cmd.Process.Pid)
+		untrack(cmd.Process.Pid, started)
 		close(p.done)
 	}()
 	go func() {

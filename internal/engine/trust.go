@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"path"
 	"slices"
@@ -16,6 +17,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
+	"github.com/FinanceNik/Freeloop/internal/store"
 )
 
 // Project trust (SEC-006) and project settings (SET-002). Until the user
@@ -304,24 +306,39 @@ func (e *Engine) sessionProject(ctx context.Context, ses session.Session) sessio
 
 // scopedRules returns a session's environment, profile and project rules for the
 // broker, with the error that makes it fail closed.
+//
+// What cannot be read may hold deny rules, so each failure is an error: the broker
+// then asks for everything but reads in the project, as for a broken rules.yaml,
+// instead of judging by what is left (SEC-002). A session from before projects
+// existed has none, and counts as untrusted.
 func (e *Engine) scopedRules(sid string) ([]permission.Rule, error) {
 	ctx := context.Background()
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("the session's rules: %w", err)
 	}
-	project := e.sessionProject(ctx, ses)
+	project, err := e.store.GetProject(ctx, ses.ProjectID)
+	if errors.Is(err, store.ErrProjectNotFound) {
+		project, err = session.Project{ID: ses.ProjectID, Root: ses.ProjectRoot}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("the project's rules: %w", err)
+	}
 	pc := e.projectConfig(project)
 	var out []permission.Rule
 	envID := ses.EnvironmentID
 	if envID == "" {
 		envID = DefaultEnvironmentID
 	}
-	if env, err := e.environment(envID); err == nil {
-		out = append(out, env.Rules...)
+	env, err := e.environment(envID)
+	if err != nil {
+		return nil, fmt.Errorf("the environment's rules: %w", err)
 	}
-	if prof, err := e.profileFor(project, ses.ProfileID); err == nil {
-		out = append(out, prof.Rules...)
+	out = append(out, env.Rules...)
+	prof, err := e.profileFor(project, ses.ProfileID)
+	if err != nil {
+		return nil, fmt.Errorf("the profile's rules: %w", err)
 	}
+	out = append(out, prof.Rules...)
 	return append(out, pc.Rules...), pc.rulesErr
 }

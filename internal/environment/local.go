@@ -36,6 +36,11 @@ type LocalOptions struct {
 
 // Local is a folder on this machine.
 type Local struct {
+	// lingering are process groups a finished command left running, by group, with
+	// when their first process started; StopLingering ends them (NFR-REL-005).
+	lingerMu  sync.Mutex
+	lingering map[int]ledgerEntry
+
 	id    string
 	root  string
 	shell []string
@@ -169,11 +174,25 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 	if err := cmd.Start(); err != nil {
 		return ExecResult{}, fmt.Errorf("environment: start %s: %w", cmd.Path, err)
 	}
-	track(cmd.Process.Pid, cmd.Path)
+	pgid := cmd.Process.Pid
+	started := track(pgid, cmd.Path)
 	done := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
-		untrack(cmd.Process.Pid)
+		// What the command put in the background runs on in its group until the
+		// session stops (StopLingering): a dev server the agent started is meant to
+		// outlive the command, not the session (NFR-REL-005).
+		if groupAlive(pgid) {
+			linger(pgid, started)
+			l.lingerMu.Lock()
+			if l.lingering == nil {
+				l.lingering = map[int]ledgerEntry{}
+			}
+			l.lingering[pgid] = ledgerEntry{Pgid: pgid, Started: started, Lingering: time.Now()}
+			l.lingerMu.Unlock()
+		} else {
+			untrack(pgid, started)
+		}
 		done <- err
 	}()
 	var waitErr error
@@ -202,6 +221,23 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		return res, ctx.Err() // cancelled by the caller
 	}
 	return res, nil
+}
+
+// StopLingering stops what this environment's finished commands left running in the
+// background, such as a dev server an agent started. A session calls it when it stops,
+// and so on quitting (NFR-REL-005).
+func (l *Local) StopLingering() {
+	l.lingerMu.Lock()
+	groups := l.lingering
+	l.lingering = nil
+	l.lingerMu.Unlock()
+	for pgid, e := range groups {
+		// A group that ended by itself may have left its number to another since.
+		if ProcessStarted == nil || leftover(e) {
+			stopGroup(pgid)
+		}
+		untrack(pgid, e.Started)
+	}
 }
 
 // waitDelay bounds how long Exec waits for output after the command exits.

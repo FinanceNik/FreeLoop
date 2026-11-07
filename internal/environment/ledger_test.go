@@ -3,6 +3,9 @@
 package environment
 
 import (
+	"os/exec"
+	"strconv"
+	"strings"
 	"context"
 	"encoding/json"
 	"os"
@@ -13,6 +16,18 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+// members is darwin.GroupMembers, by asking ps, which is enough for a test.
+func members(pgid int) []int {
+	out, _ := exec.Command("ps", "-g", strconv.Itoa(pgid), "-o", "pid=").Output()
+	var pids []int
+	for _, f := range strings.Fields(string(out)) {
+		if n, err := strconv.Atoi(f); err == nil {
+			pids = append(pids, n)
+		}
+	}
+	return pids
+}
 
 // started is darwin.ProcessStart, which this package cannot import in its tests.
 func started(pid int) (time.Time, bool) {
@@ -89,5 +104,76 @@ func TestLeftoversAreStopped(t *testing.T) {
 	}
 	if names, err := ReapLeftovers(filepath.Join(t.TempDir(), "none.json")); err != nil || names != nil {
 		t.Errorf("no file: %q, %v", names, err)
+	}
+}
+
+// NFR-REL-005: what a command puts in the background runs on until the session stops,
+// then stops; an agent that ends takes its children with it; and after a crash, a
+// group whose first process had ended is still stopped at the next start.
+func TestBackgroundedProcessesStop(t *testing.T) {
+	ProcessStarted, GroupMembers = started, members
+	t.Cleanup(func() { ProcessStarted, GroupMembers = nil, nil; UseLedger(filepath.Join(t.TempDir(), "off.json")) })
+	ledgerFile := filepath.Join(t.TempDir(), "running.json")
+	UseLedger(ledgerFile)
+	l, err := NewLocal(LocalOptions{Root: t.TempDir(), Guard: denyGuard{}, Shell: []string{"sh", "-c"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pidOf := func(out string) int {
+		n, _ := strconv.Atoi(strings.TrimSpace(out))
+		return n
+	}
+	gone := func(pid int) bool {
+		for range 100 {
+			if syscall.Kill(pid, 0) != nil {
+				return true
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		return false
+	}
+
+	// A dev server an agent starts: it outlives the command, not the session.
+	res, err := l.Exec(context.Background(), ExecSpec{Command: "sleep 60 >/dev/null 2>&1 & echo $!"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := pidOf(res.Output)
+	t.Cleanup(func() { syscall.Kill(server, syscall.SIGKILL) })
+	if server == 0 || syscall.Kill(server, 0) != nil {
+		t.Fatalf("the background process did not start: %q", res.Output)
+	}
+	l.StopLingering()
+	if !gone(server) {
+		t.Error("the background process outlived its session")
+	}
+
+	// An agent that exits: its children go with it.
+	p, err := l.Spawn(context.Background(), SpawnSpec{Argv: []string{"sh", "-c", "sleep 60 >/dev/null 2>&1 & echo $!"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := make([]byte, 32)
+	n, _ := p.Stdout().Read(b)
+	child := pidOf(string(b[:n]))
+	t.Cleanup(func() { syscall.Kill(child, syscall.SIGKILL) })
+	p.Wait()
+	if !gone(child) {
+		t.Error("an exited agent's child ran on")
+	}
+
+	// A crash with something lingering: the next start stops it.
+	res, err = l.Exec(context.Background(), ExecSpec{Command: "sleep 60 >/dev/null 2>&1 & echo $!"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	orphan := pidOf(res.Output)
+	t.Cleanup(func() { syscall.Kill(orphan, syscall.SIGKILL) })
+	stopped, err := ReapLeftovers(ledgerFile)
+	if err != nil || len(stopped) != 1 {
+		t.Errorf("stopped %q, %v", stopped, err)
+	}
+	if !gone(orphan) {
+		t.Error("what a crash left lingering ran on")
 	}
 }

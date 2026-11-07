@@ -16,6 +16,7 @@ import (
 	"log"
 	"maps"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -941,14 +942,29 @@ func (s *session) CreateTerminal(ctx context.Context, r sdk.CreateTerminalReques
 	if s.browsing {
 		return sdk.CreateTerminalResponse{}, errBrowsing
 	}
-	line := strings.TrimSpace(r.Command + " " + strings.Join(r.Args, " "))
+	// The line judged is the command exactly as it runs: its arguments and values
+	// quoted as a shell reads them, so that a rule, a hook and the user see what will
+	// run and not words that read otherwise (SEC-003). A command given as one string
+	// runs through the shell, so it is judged as written.
+	words := []string{shellWord(r.Command)}
+	for _, a := range r.Args {
+		words = append(words, shellWord(a))
+	}
+	line := strings.Join(words, " ")
+	if len(r.Args) == 0 && strings.ContainsAny(r.Command, " ;&|") {
+		line = strings.TrimSpace(r.Command)
+	}
 	// What decides what runs is part of what is approved: PATH=./evil, or a folder
 	// with its own Makefile, changes what the same words do.
-	for _, v := range r.Env {
-		line = v.Name + "=" + v.Value + " " + line
+	for i := len(r.Env) - 1; i >= 0; i-- {
+		v := r.Env[i]
+		if !envName.MatchString(v.Name) {
+			return sdk.CreateTerminalResponse{}, fmt.Errorf("%q is not a variable name", v.Name)
+		}
+		line = v.Name + "=" + shellWord(v.Value) + " " + line
 	}
 	if r.Cwd != nil && *r.Cwd != "" {
-		line = "cd " + *r.Cwd + " && " + line
+		line = "cd " + shellWord(*r.Cwd) + " && " + line
 	}
 	// This command runs here, so the sandbox can hold it, unlike the ones an
 	// agent runs itself after session/request_permission (ENV-009).
@@ -1170,4 +1186,15 @@ func (s *session) UnstableCreateElicitation(ctx context.Context, r sdk.UnstableC
 		return sdk.NewUnstableCreateElicitationResponseDecline(), nil
 	}
 	return sdk.NewUnstableCreateElicitationResponseCancel(), nil
+}
+
+// envName is what a shell takes as a variable's name.
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// shellWord quotes s as one shell word, unless it needs none.
+func shellWord(s string) string {
+	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_@%+=:,./-") == "" {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

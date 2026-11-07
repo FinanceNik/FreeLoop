@@ -91,10 +91,13 @@ func (l *Local) OpenTerminal(ctx context.Context, spec TerminalSpec) (Terminal, 
 		return nil, fmt.Errorf("environment: start a terminal: %w", err)
 	}
 	t := &ptyTerminal{f: f, cmd: cmd, done: make(chan struct{})}
-	track(cmd.Process.Pid, cmd.Path)
+	started := track(cmd.Process.Pid, cmd.Path)
 	go func() {
 		err := cmd.Wait()
-		untrack(cmd.Process.Pid)
+		// A terminal tab's shell that ended takes its jobs with it, as closing a
+		// terminal window does (NFR-REL-005).
+		stopGroup(cmd.Process.Pid)
+		untrack(cmd.Process.Pid, started)
 		var exitErr *exec.ExitError
 		switch {
 		case err == nil:

@@ -95,6 +95,13 @@ func (r *runtime) stop() {
 	if r.hs != nil {
 		r.hs.Close()
 	}
+	// What the session's commands left running in the background ends with it
+	// (NFR-REL-005).
+	for _, env := range []environment.Environment{r.env, r.host} {
+		if l, ok := env.(interface{ StopLingering() }); ok {
+			l.StopLingering()
+		}
+	}
 	if r.closeEgress != nil {
 		r.closeEgress()
 	}

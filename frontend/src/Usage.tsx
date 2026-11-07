@@ -132,10 +132,10 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
     project,
   };
 
-  // A row with no calls holds only turns an agent reported nothing for (PRV-008):
-  // no tokens to count, said in words instead.
+  // A row with no tokens holds only turns an agent reported nothing for (PRV-008):
+  // nothing to count, said in words instead. An adjustment has tokens and no calls.
   const reported = (report?.rows ?? []) as (UsageRow & EffRow)[];
-  const unfiltered = reported.filter((r) => r.calls > 0);
+  const unfiltered = reported.filter((r) => r.inputTokens + r.outputTokens + r.cacheReadTokens + r.cacheWriteTokens > 0);
   const until = report?.until ?? new Date().toISOString().slice(0, 10);
   const span = report ? days(report.since, until) : [];
   const since = span[Math.max(0, span.length - range)] ?? until;
@@ -163,7 +163,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
   const rows = all.filter((r) => r.day >= since);
   const before = all.filter((r) => r.day < since && r.day >= beforeSince);
   const reporting = reportingNotes(
-    reported.filter((r) => r.day >= since && shared(r) && (!filters.model || keyOf.model(r) === filters.model || r.calls === 0)),
+    reported.filter((r) => r.day >= since && shared(r) && (!filters.model || keyOf.model(r) === filters.model || (r.unreported ?? 0) > 0)),
     agent,
   );
   const now = totals(rows);

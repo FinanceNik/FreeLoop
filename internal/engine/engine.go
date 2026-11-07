@@ -58,6 +58,9 @@ type Options struct {
 	// terminals a crash left running are stopped at the next start and nothing
 	// else is (NFR-REL-005). Without it, none are recorded or stopped.
 	ProcessStarted func(pid int) (time.Time, bool)
+	// GroupMembers lists a process group's processes, so a group whose first process
+	// ended is recognised and stopped too.
+	GroupMembers func(pgid int) []int
 	// Home is the user's home directory, for the protected-path policy.
 	// Default os.UserHomeDir().
 	Home string
@@ -264,7 +267,7 @@ func Open(opts Options) (*Engine, error) {
 	// anything of this run starts (NFR-REL-005). The caller holds the data folder's
 	// lock, so these are this folder's own.
 	if opts.ProcessStarted != nil {
-		environment.ProcessStarted = opts.ProcessStarted
+		environment.ProcessStarted, environment.GroupMembers = opts.ProcessStarted, opts.GroupMembers
 		ledger := filepath.Join(opts.DataDir, "running.json")
 		if stopped, err := environment.ReapLeftovers(ledger); err != nil {
 			log.Printf("engine: what the last run left running: %v", err)

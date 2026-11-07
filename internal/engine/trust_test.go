@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -131,4 +132,40 @@ func decided(t *testing.T, e *Engine, sid string, outcome permission.Outcome) bo
 		}
 	}
 	return false
+}
+
+// SEC-002: rules that cannot be read may include deny rules, so a session whose
+// environment, profile or record cannot be loaded gets an error, and the broker asks,
+// rather than judging by the rules that are left.
+func TestScopedRulesFailClosed(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	if err := e.SaveProfileYAML("guarded", "name: Guarded\nprovider: demo\nrules:\n  - effect: deny\n    tool: shell\n    command: git push *\n"); err != nil {
+		t.Fatal(err)
+	}
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProfileID: "guarded"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rules, err := e.rules.Rules(ses.ID); err != nil || !slices.ContainsFunc(rules, func(r permission.Rule) bool { return r.Command == "git push *" }) {
+		t.Fatalf("with the environment: %v, %v", rules, err)
+	}
+	if err := e.DeleteProfile("guarded"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.rules.Rules(ses.ID); err == nil {
+		t.Error("the profile's deny rules were dropped without an error")
+	}
+	if _, err := e.rules.Rules("ses_unknown"); err == nil {
+		t.Error("an unknown session's rules came back complete")
+	}
+	// And so the broker asks: a shell call is not allowed by the remaining rules.
+	if err := e.AddRule(permission.Rule{Effect: permission.Allow, Tool: "shell"}); err != nil {
+		t.Fatal(err)
+	}
+	rules, rerr := e.rules.Rules(ses.ID)
+	if d := e.broker.Explain(permission.Context{Mode: permission.ModeAsk, Root: ses.ProjectRoot}, permission.Request{SessionID: ses.ID, Tool: "shell", Kind: permission.KindExecute, Command: "git push origin main"}, rules, rerr); d.Outcome != permission.Ask {
+		t.Errorf("after the profile went, git push is %s: %s", d.Outcome, d.Reason)
+	}
 }

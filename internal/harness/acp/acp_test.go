@@ -114,7 +114,7 @@ func TestReferenceAgent(t *testing.T) {
 		t.Errorf("notes.txt = %q", b)
 	}
 	mu.Lock()
-	if len(asked) != 2 || asked[0].Tool != "edit_file" || asked[0].Paths[0] != filepath.Join(env.Root(), "notes.txt") || asked[1].Tool != "shell" || asked[1].Command != "sh -c echo from-terminal" {
+	if len(asked) != 2 || asked[0].Tool != "edit_file" || asked[0].Paths[0] != filepath.Join(env.Root(), "notes.txt") || asked[1].Tool != "shell" || asked[1].Command != "sh -c 'echo from-terminal'" {
 		t.Errorf("asked = %+v", asked)
 	}
 	mu.Unlock()
@@ -419,5 +419,52 @@ func TestHiddenAgentText(t *testing.T) {
 	got := rec.text(event.AgentMessageChunk)
 	if strings.Contains(got, "MODE_UPDATE") || !strings.Contains(got, "real words") {
 		t.Errorf("conversation = %s", got)
+	}
+}
+
+// SEC-003: the line judged for an agent's terminal is what runs. A variable whose name
+// is not one, which once made `git x=1 sh evil.sh` of `sh evil.sh` and so passed an
+// allow rule for git, is refused; arguments and values are quoted as the shell reads
+// them, so a rule sees each as one word.
+func TestATerminalIsJudgedAsItRuns(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+	env, err := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root), Shell: []string{"sh", "-c"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &recorder{}
+	broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
+	exe, _ := os.Executable()
+	h := Harness{Preset: config.HarnessPreset{ID: "ref", Name: "Reference", Command: exe, Env: map[string]string{acptest.EnvVar: "1"}}}
+	hs, err := h.NewSession(context.Background(), harness.Params{SessionID: "ses", Env: env, Broker: broker, Mode: permission.ModeAsk, Emit: rec.emit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hs.Close()
+	s := hs.(*session)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := s.CreateTerminal(ctx, sdk.CreateTerminalRequest{SessionId: "s1", Command: "sh", Args: []string{"evil.sh"}, Env: []sdk.EnvVariable{{Name: "git x", Value: "1"}}}); err == nil || !strings.Contains(err.Error(), "not a variable name") {
+		t.Errorf("a variable named %q: %v", "git x", err)
+	}
+	// Asked about, the line names each word as it runs; refused here, nothing runs.
+	go func() {
+		for range 200 {
+			if p := broker.Pending(); len(p) == 1 {
+				if got := p[0].Command; got != `GIT_X='a; rm -rf ~' sh -c 'echo hi'` {
+					t.Errorf("judged %q", got)
+				}
+				broker.Decide(p[0].ID, "reject_once", "", "")
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Error("nothing was asked")
+	}()
+	if _, err := s.CreateTerminal(ctx, sdk.CreateTerminalRequest{SessionId: "s1", Command: "sh", Args: []string{"-c", "echo hi"}, Env: []sdk.EnvVariable{{Name: "GIT_X", Value: "a; rm -rf ~"}}}); err == nil {
+		t.Error("a refused terminal ran")
 	}
 }
