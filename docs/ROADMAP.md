@@ -412,6 +412,73 @@ What follows, in order, before anything else in v1:
 
 Not before those: features that copy a vendor app's. Token optimizers get no more work (OQ-031). What the vision lists as borrowed from vendor apps stays built; nothing more of that kind is added without a reason in this list.
 
+## From here to 0.1.0 (planned 2026-11-07)
+
+Where it stands. The release plan above is built through phase 3, and its phase 4 tooling is written: a release job on tags, the version at `0.1.0-beta.1`, download steps in the README, and the MVP checklist in `docs/CHECKLIST-0.1.md`. The checklist has 33 rows automated, 41 partly covered (most of the rest needs a real account or a person), 8 for the user's runs and 1 gap (which Macs are supported). Since the release plan, stopping what a crash leaves running (NFR-REL-005), recording what each model call carries (NFR-PRIV-003), checking every event against the schema (EXT-002), and tests for SEC-010, HRN-008, GUI-004, NFR-PERF-003 and NFR-PERF-005 are built. What stands between this and a release is no longer code. It is three things: a CI the repository can afford, which the release job depends on; the user's runs on real accounts; and people other than the author using it.
+
+The private repository ran out of GitHub Actions minutes on 2026-11-06: macOS minutes count ten times, and a run takes about eight. Twelve commits wait unpushed for that reason, and the release job could not run.
+
+Goals, each measurable:
+- **B-G1, an affordable CI that stays green.** Every push runs the Go and frontend tests; the macOS build and the app check run on tags, weekly and by hand; a red run is fixed before new work.
+- **B-G2, the claims hold on real accounts.** The checklist's runs for the user are done, with what each found recorded in it.
+- **B-G3, a stranger gets going in five minutes.** From download to a first reply, or to the demo, without help.
+- **B-G4, no loss.** Two weeks of daily use without a lost transcript or crossed sessions, by the user and by testers.
+- **B-G5, five testers for a week**, with their blocking issues fixed (the v1 definition of done).
+
+### Stage 1: plumbing (Claude, about a day; needs nothing from the user)
+
+1. **CI in two parts.** `.github/workflows/ci.yml`: a `test` job on `ubuntu-latest` runs `make verify-deps`, the Go tests of every package that builds off macOS, and the frontend tests and type check, on every push and pull request. The `build` job on macOS keeps the build, `make test`, lint and `make check-app`, and runs on tags, weekly and from the Actions page. First, check which Go packages build on Linux: the macOS-only code is in `internal/platform/darwin` (NFR-XPLAT-002), and anything else that does not build there is a finding. *Done when:* a push costs about a tenth of what it did, and both jobs are green.
+2. **Push the twelve commits**, then watch both jobs (`gh run watch`), and fix anything red before going on.
+3. **A dry run of the release job** from the Actions page (`dry_run`): download its files, check `SHA256SUMS`, mount the DMG and read the version. If minutes are short, `make release` on the user's Mac builds the same files; DEVELOPING.md gets the steps for that, with `gh release create --draft --prerelease`.
+4. **A time for opening a session in the app's log**, so the stall seen only on CI (opening took over 30 s in about one run in four) can be found if a tester meets it.
+5. **Rebuild the app** in `bin/` for the user's runs.
+
+### Stage 2: the user's runs (the user, about a week alongside daily work)
+
+In the checklist's order of risk, recording each result in `docs/CHECKLIST-0.1.md`:
+1. Claude Code on a subscription, from the app, with an MCP server; nothing of its sign-in stored by the app.
+2. Real providers: Anthropic, OpenRouter and Ollama, three sessions on three repositories at once.
+3. A `kill -9` of the packaged app while an agent streams; relaunch; nothing lost, and nothing left running (`running.json`).
+4. Ten busy sessions on the user's Mac: typing lag, memory (`make memcheck`), no crossed sessions.
+5. A first run on an empty data folder, timed to a first reply (B-G3).
+6. The hostile PDF in the packaged app; notifications in the background; light and dark; keyboard only, and a short VoiceOver pass over an approval.
+7. `TRUST_NEW_AGENT=1 make verify-agents`, which pins goose and runs every agent's checks.
+
+Claude, meanwhile: fix what these find, first; then stage 3.
+
+### Stage 3: what testers need (Claude, about three days)
+
+1. **The demo inside the app (G3 of the release plan).** "Try it" on the first-run screen starts a session on a scripted agent in a scratch project in the data folder. The script meets each claim in turn: a read goes ahead; an edit asks; `git push` is refused by a starter deny rule, also in bypass; a write into `.git/hooks` is refused as a protected path; reading `.env` asks. Each step says why. It ends on the usage page, with what it cost at list prices and what the policy held. "Remove demo" deletes the project and the session. *Done when:* `make check-app` runs it to the end, and a new user sees the claims without a key.
+2. **A model for external agents' usage.** A profile on an external agent can name the model it runs on, for agents that do not report it (Gemini CLI), so its turn totals are priced (PRV-008).
+3. **A way to report a problem.** Settings, Data: "Copy a report" puts the version, macOS, Mac model, the last 200 log lines (already redacted) and the session's harness and provider names on the clipboard, for an issue. Nothing is sent anywhere (NFR-PRIV-001).
+
+### Stage 4: beta 1 (the user decides, Claude prepares)
+
+1. **Decide which Macs**: "Apple Silicon, macOS 14 or later" for the beta (recommended, and NFR-XPLAT-001 reworded to it), or an Intel build in the release job (`GOARCH=amd64`, or a universal app with `lipo`), which then needs someone with an Intel Mac.
+2. **Tag `v0.1.0-beta.1`**, read the draft release, publish it.
+3. **Add three to five testers** to the private repository, with the release notes and a short note on what to try and how to report.
+4. **A weekly beta**: fixes go out as `0.1.0-beta.2` and on, each through the same tag and draft.
+
+### Stage 5: 0.1.0 (after two weeks of beta)
+
+*Done when:* every checklist row is automated or has its run recorded; two weeks of daily use without loss (B-G4); five testers for a week with their blocking issues fixed (B-G5); and CI green.
+
+Decisions before 0.1.0, each the user's:
+1. **Signing (OQ-009, reopened).** With an Apple Developer account (99 USD a year), releases are signed and notarized: no "Open Anyway", and the Keychain stops asking after each update. Without it, both stay, as the README says.
+2. **Going public.** The steps in DEVELOPING.md, "Before the repository goes public", with their own approval: rewriting commit identities, cleaning up what GitHub holds, a last scan, private vulnerability reporting. A public repository's Actions minutes are free, and the update check works only then.
+3. **Contributions (OQ-017):** the DCO and a code of conduct when they open after v1 scoping.
+
+### Not before 0.1.0
+
+The feature freeze stands: only fixes, the stages above and what the testers' blocking issues need. The two "After 0.1.0" plans below wait for the release and for real use, which is what will show whether they are the right next thing.
+
+### Risks
+
+- **CI minutes run out again.** Stage 1 cuts the cost about tenfold; a public repository removes it.
+- **Real accounts behave unlike the stand-ins.** Stage 2 comes before testers for that reason.
+- **The stall seen on CI is real.** Stage 1's timing in the log will show it if a tester meets it.
+- **An unsigned app puts testers off.** Signing is the first decision before 0.1.0.
+
 ## After 0.1.0: the bill measured by what it bought (planned 2026-11-06)
 
 Three features that make the second claim, one honest bill across agents, answer the question a user actually has: what did this work cost, and could it have cost less. They wait for the release and for every agent's usage to be priced (release plan, phase 3), or they mostly cover Claude Code.
