@@ -15,7 +15,8 @@ export interface McpFormRequest {
 export interface McpFormState {
   fields: FormField[];
   values: FormValues;
-  setValues: (v: FormValues) => void;
+  // An update builds on the latest answers, so two changes in a row both count.
+  setValues: (v: FormValues | ((old: FormValues) => FormValues)) => void;
   error: string;
   // choose answers the request with an option: the allow option sends the
   // answers once they are complete, any other is sent as it is. Without a
@@ -59,7 +60,7 @@ const CHOICES_SHOWN = 8;
 // sees where it goes.
 export function McpFormView({ form, state, idPrefix = "form" }: { form: McpFormRequest; state: McpFormState; idPrefix?: string }) {
   const { fields, values, setValues, error } = state;
-  const set = (name: string, v: string | boolean) => setValues({ ...values, [name]: v });
+  const set = (name: string, v: string | boolean) => setValues((old) => ({ ...old, [name]: v }));
   return (
     <div className="mcp-form">
       <p>
@@ -102,7 +103,13 @@ export function McpFormView({ form, state, idPrefix = "form" }: { form: McpFormR
               {f.options!.map((o, i) => (
                 <label key={o.value} className="mcp-choice">
                   {f.type === "multi" ? (
-                    <input type="checkbox" checked={picked.includes(o.value)} onChange={(e) => setValues({ ...values, [f.name]: e.target.checked ? [...picked, o.value] : picked.filter((x) => x !== o.value) })} />
+                    <input type="checkbox" checked={picked.includes(o.value)} onChange={(e) => {
+                        const on = e.target.checked;
+                        setValues((old) => {
+                          const was = Array.isArray(old[f.name]) ? (old[f.name] as string[]) : [];
+                          return { ...old, [f.name]: on ? [...was.filter((x) => x !== o.value), o.value] : was.filter((x) => x !== o.value) };
+                        });
+                      }} />
                   ) : (
                     <input type="radio" name={id} id={i === 0 ? id : undefined} checked={value === o.value} onChange={() => set(f.name, o.value)} />
                   )}
