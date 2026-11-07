@@ -63,3 +63,4 @@ Layout notes: the engine composes `internal/environment` (files and processes), 
 - A decision you cannot make from the docs goes into `docs/OPEN_QUESTIONS.md` with options and a recommendation; do not decide silently. Close a question with its outcome and the date.
 - More than one Claude Code session may be working in this checkout at the same time. Stage only the files you changed; never `git add -A` or `git commit -a`.
 - Ask before installing anything system-wide or adding a dependency; keep npm dependencies few and pinned.
+- After pushing code, wait for CI (`gh run watch`) and say how it went; a red run is fixed before new work. CI's Linux job runs on every push; the macOS job (build, lint, `make check-app`) runs on tags, weekly and by hand, so run `make check-app` locally after an interface change.

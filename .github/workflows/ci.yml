@@ -7,7 +7,7 @@ on:
       - "docs/**"
       - "*.md"
   pull_request:
-  # Run from the Actions page, for a commit pushed with [skip ci]. With dry_run, the
+  # Run from the Actions page: the macOS build and the real-app check. With dry_run, the
   # release job builds what a release would hold and keeps it as an artifact.
   workflow_dispatch:
     inputs:
@@ -23,8 +23,49 @@ on:
 permissions:
   contents: read
 
+# Two jobs, for what minutes cost on a private repository, where a macOS minute counts
+# ten: the tests on Linux for every push, and the macOS build, lint and real-app check
+# on tags, weekly and from the Actions page (docs/ROADMAP.md, "From here to 0.1.0").
 jobs:
+  test:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Dependencies match their checksums
+        run: make verify-deps
+
+      # Commands run through the login shell, zsh by default, as on a Mac.
+      - name: zsh
+        run: sudo apt-get install -y --no-install-recommends zsh
+
+      - name: Formatted and vetted
+        run: |
+          test -z "$(gofmt -l cmd internal frontend/embed.go)" || { gofmt -l cmd internal frontend/embed.go; exit 1; }
+          go vet ./internal/...
+
+      # macOS-only tests carry a darwin build tag and run in the build job.
+      - name: Engine tests, every event checked against the schema
+        env:
+          FREELOOP_CHECK_EVENTS: ${{ github.workspace }}/schemas/events.json
+        run: go test -race ./internal/... ./cmd/freeloop-sbom
+
+      - name: Frontend tests
+        run: make frontend-test
+
   build:
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -75,7 +116,7 @@ jobs:
 
       # Each preset's real agent on a stand-in model, a hostile repository included.
       - name: Real agents hold the policy
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/')
         run: make verify-agents
 
       # Two clean builds are slow, so only for what becomes a release.

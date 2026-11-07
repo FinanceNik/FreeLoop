@@ -98,6 +98,10 @@ A release comes from a tag, made by CI (the `release` job in `.github/workflows/
 5. **Tag and push the tag**: `git tag v<version> && git push origin v<version>`. CI runs every check, the real agents and the reproducibility check, then makes a **draft** pre-release with the files and the notes. The tag must be `v` plus `AppVersion`.
 6. **Read the draft** on the Releases page and publish it.
 
+**When CI cannot run** (no Actions minutes left), the same files come from a Mac: check out the tag, run `make test lint check-app`, then `make release`, and make the draft yourself with `gh release create v<version> --draft --prerelease --verify-tag --title "Freeloop <version>" --notes-file docs/release-notes/<version>.md bin/release/*`. CI's reproducibility check (`make verify-repro REF=v<version>`) is then yours to run too.
+
+**CI's two jobs.** `test`, on Linux, runs on every push and pull request: dependency checksums, `gofmt` and `go vet`, the Go tests with every event checked against the schema, and the frontend tests. Tests that need macOS carry a `darwin` build tag. `build`, on macOS, runs on tags, weekly and from the Actions page (`gh workflow run CI`): the build, `make test`, lint, `make check-app`, and on tags and weekly the real agents and the reproducibility check. A macOS minute counts ten on a private repository, which is why the app check runs locally after an interface change rather than on every push.
+
 What it builds:
 
 `make release` writes `bin/release`: the DMG, its bill of materials (`Freeloop.sbom.cdx.json`, CycloneDX 1.6), the tools it was built with (`BUILDINFO.txt`), and checksums (`SHA256SUMS`, and `APP-FILES.sha256` for every file in the bundle).

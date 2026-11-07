@@ -995,7 +995,14 @@ func (e *Engine) AppendEvent(ctx context.Context, req AppendEventRequest) (event
 // Events returns a session's events with seq greater than afterSeq. The GUI
 // uses it for the initial load and to fill a gap in the live stream.
 func (e *Engine) Events(ctx context.Context, sessionID string, afterSeq int64) ([]event.Event, error) {
-	return e.store.Events(ctx, sessionID, afterSeq)
+	start := time.Now()
+	evs, err := e.store.Events(ctx, sessionID, afterSeq)
+	// Opening a session once took over 30 s on CI and never here; a slow read says so
+	// in the log, and a stall without one is in the page or the connection.
+	if took := time.Since(start); took > time.Second {
+		log.Printf("engine: reading %s's events after %d took %v (%d events)", sessionID, afterSeq, took.Round(time.Millisecond), len(evs))
+	}
+	return evs, err
 }
 
 // Subscribe returns a channel of every event persisted from now on, in seq
