@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formAnswers, formFields, initialValues, type FormField, type FormValues } from "./forms.ts";
 
 // An MCP server's request for input (MCP-008), answered on the tool card in
@@ -26,9 +26,14 @@ export interface McpFormState {
 
 export function useMcpForm(form: McpFormRequest | null | undefined, requestId: string | undefined): McpFormState {
   const fields = useMemo(() => formFields(form?.schema), [form]);
-  const [values, setValues] = useState<FormValues>({});
+  // The defaults from the first render, so a choice made at once is not wiped by a
+  // reset a frame later; another request starts over.
+  const [values, setValues] = useState<FormValues>(() => initialValues(form?.schema));
   const [error, setError] = useState("");
+  const shown = useRef(requestId);
   useEffect(() => {
+    if (shown.current === requestId) return;
+    shown.current = requestId;
     setValues(initialValues(form?.schema));
     setError("");
   }, [requestId]);

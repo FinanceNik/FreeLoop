@@ -66,8 +66,9 @@ export function findPrice(prices: readonly PriceEntry[], providerId: string, mod
   if (whole) return whole;
   // An agent may name a model with its provider, openai/gpt-5.5, or with its effort,
   // gpt-5.5/high, as config.FindPrice allows (PRV-008).
+  // Only for an agent's usage, which names no provider (config.FindPrice does the same).
   const slash = model.indexOf("/");
-  if (slash < 0) return null;
+  if (slash < 0 || providerId) return null;
   return matchPrice(prices, providerId, model.slice(slash + 1)) ?? matchPrice(prices, providerId, model.slice(0, slash));
 }
 

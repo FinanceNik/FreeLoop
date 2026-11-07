@@ -107,3 +107,29 @@ func TestViewPDF(t *testing.T) {
 		t.Error("a PDF outside the session's folder was read")
 	}
 }
+
+// A repository's link to a file elsewhere on this Mac is not shown in the Files panel,
+// nor opened, nor listed into.
+func TestFilesStayInTheSessionFolder(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	elsewhere := t.TempDir()
+	os.WriteFile(filepath.Join(elsewhere, "private.txt"), []byte("private"), 0o644)
+	ses, root := demoSession(t, e, "links", "ask")
+	os.Symlink(filepath.Join(elsewhere, "private.txt"), filepath.Join(root, "CONTRIBUTING.md"))
+	os.Symlink(elsewhere, filepath.Join(root, "docs"))
+	os.WriteFile(filepath.Join(root, "own.txt"), []byte("own"), 0o644)
+	if v, err := e.ViewFile(ctx, ses.ID, "CONTRIBUTING.md"); err == nil {
+		t.Errorf("a link out of the project was shown: %q", v.Text)
+	}
+	if _, err := e.ListFolder(ctx, ses.ID, "docs"); err == nil {
+		t.Error("a linked folder outside the project was listed")
+	}
+	if _, err := e.FileOnHost(ctx, ses.ID, "CONTRIBUTING.md"); err == nil {
+		t.Error("a link out of the project was handed to another app")
+	}
+	if v, err := e.ViewFile(ctx, ses.ID, "own.txt"); err != nil || v.Text != "own" {
+		t.Errorf("the project's own file: %q, %v", v.Text, err)
+	}
+}

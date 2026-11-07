@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
@@ -135,7 +136,7 @@ func (e *Engine) runQueue(ctx context.Context, now time.Time) {
 			if t.State != config.TaskWaiting || running >= q.RunLimit() {
 				continue
 			}
-			if note := budgetHeld(budgets, cmp.Or(t.ProfileID, config.DefaultProfileID)); note != "" {
+			if note := budgetHeld(budgets, e.taskProfile(ctx, *t).ID); note != "" {
 				if t.Note != note {
 					t.Note, changed = note, true
 				}
@@ -199,18 +200,28 @@ func (e *Engine) taskState(ctx context.Context, sid string) string {
 
 // taskAgent names the agent a task's session would run, as account limits name it.
 func (e *Engine) taskAgent(ctx context.Context, t config.Task) string {
-	project := session.Project{Root: t.ProjectRoot}
-	if p, err := e.store.ProjectByRoot(ctx, t.ProjectRoot); err == nil {
-		project = p
-	}
-	prof, err := e.profileFor(project, cmp.Or(t.ProfileID, config.DefaultProfileID))
-	if err != nil || prof.Harness == "" || prof.Harness == "builtin" {
+	prof := e.taskProfile(ctx, t)
+	if prof.Harness == "" || prof.Harness == "builtin" {
 		return ""
 	}
 	if p, err := e.preset(prof.Harness); err == nil {
 		return p.Name
 	}
 	return prof.Harness
+}
+
+// taskProfile is the profile a task's session will have, chosen as CreateSession
+// chooses it: the task's, else the project's default, else the app's.
+func (e *Engine) taskProfile(ctx context.Context, t config.Task) config.Profile {
+	project := session.Project{Root: t.ProjectRoot}
+	if p, err := e.store.ProjectByRoot(ctx, environment.Canonical(t.ProjectRoot)); err == nil {
+		project = p
+	}
+	prof, err := e.profileFor(project, cmp.Or(t.ProfileID, project.DefaultProfileID, e.Config().Defaults.ProfileID))
+	if err != nil {
+		return config.Profile{ID: cmp.Or(t.ProfileID, config.DefaultProfileID)}
+	}
+	return prof
 }
 
 // agentsAtLimit names the agents whose account limit is at a warning or reached, with

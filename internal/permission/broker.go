@@ -247,6 +247,11 @@ func (b *Broker) Request(ctx context.Context, pc Context, req Request) Decision 
 		// Input only the user can give.
 		d, settled = Decision{}, false
 	}
+	// Two answers under one ID would let the user's "Deny" pick an allow: such a
+	// request is refused before anyone is asked.
+	if dup := duplicateOption(req.Options); dup != "" {
+		d, settled = Decision{Outcome: Denied, Actor: ActorPolicy, Reason: fmt.Sprintf("the request offers two answers named %q", dup)}, true
+	}
 	// Hooks run only for calls that are not denied already: a deny wins
 	// without running anything.
 	if b.hooks != nil && req.Form == nil && (!settled || d.Outcome != Denied) {
@@ -561,4 +566,16 @@ func (b *Broker) Pending() []Request {
 	}
 	slices.SortFunc(out, func(a, b Request) int { return a.Created.Compare(b.Created) })
 	return out
+}
+
+// duplicateOption returns an option ID that two of options share, or "".
+func duplicateOption(options []Option) string {
+	seen := map[string]bool{}
+	for _, o := range options {
+		if seen[o.ID] {
+			return o.ID
+		}
+		seen[o.ID] = true
+	}
+	return ""
 }

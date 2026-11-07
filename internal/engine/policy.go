@@ -112,7 +112,7 @@ func (e *Engine) policyScene(ctx context.Context, q PolicyQuery) (policyScene, e
 		if err != nil {
 			return sc, err
 		}
-		root = environment.Canonical(root)
+		root = e.projectRootOf(ctx, environment.Canonical(root))
 		// A folder never opened has no trust and no settings, as a new project would.
 		sc.project = session.Project{Root: root}
 		if p, err := e.store.ProjectByRoot(ctx, root); err == nil {
@@ -132,7 +132,11 @@ func (e *Engine) policyScene(ctx context.Context, q PolicyQuery) (policyScene, e
 	}
 	sc.env, sc.profile = env, prof
 	if mode == "" {
+		// As a new session starts: never in a mode only the user chooses (SEC-001).
 		mode = cmpOr(e.startMode(prof), env.DefaultMode, string(permission.ModeAsk))
+		if m := permission.Mode(mode); !m.Valid() || m.Unattended() {
+			mode = string(permission.ModeAsk)
+		}
 	}
 	sc.mode = permission.Mode(mode)
 	if !sc.mode.Valid() {
@@ -152,6 +156,25 @@ func (e *Engine) policyScene(ctx context.Context, q PolicyQuery) (policyScene, e
 		sc.rules, sc.rulesErr = e.rules.withGlobal(scoped, pc.rulesErr)
 	}
 	return sc, nil
+}
+
+// projectRootOf is the project a folder belongs to: the nearest folder at or above it
+// that is a project the app knows, else the nearest with a git repository, else the
+// folder itself; so a check from a subfolder judges the project, not the subfolder.
+func (e *Engine) projectRootOf(ctx context.Context, dir string) string {
+	repo := ""
+	for d := dir; ; d = filepath.Dir(d) {
+		if _, err := e.store.ProjectByRoot(ctx, d); err == nil {
+			return d
+		}
+		if repo == "" && environment.IsDir(filepath.Join(d, ".git")) {
+			repo = d
+		}
+		if filepath.Dir(d) == d || d == e.home {
+			break
+		}
+	}
+	return cmpOr(repo, dir)
 }
 
 // agentNotes says what the scene's agent decides by itself, in mode; "" for every mode.

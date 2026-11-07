@@ -746,6 +746,17 @@ await step("the app's settings are seven short pages", async () => {
   document.querySelector(".settings-link").click();
   const back = await until("the page last shown", () => document.querySelector(".settings-page h2"));
   check("the settings open on the page last shown", back.textContent === "Data", back.textContent);
+  // What waits for Save survives a visit to another page (SET-007).
+  withText(".settings-nav button", "Costs").click();
+  (await until("Add a budget", () => withText("button", "Add a budget"))).click();
+  await until("the Save bar", () => document.querySelector(".settings-save"));
+  withText(".settings-nav button", "Providers").click();
+  await until("the Providers page", () => document.querySelector(".settings-page h2")?.textContent !== "Costs");
+  withText(".settings-nav button", "Costs").click();
+  await until("Costs again", () => document.querySelector(".settings-page h2")?.textContent === "Costs");
+  check("an unsaved budget survives another page", !!document.querySelector(".budget-row") && !!document.querySelector(".settings-save"));
+  withText(".settings-save button", "Revert")?.click();
+  await until("reverted", () => !document.querySelector(".budget-row"), 4000).catch(() => {});
   document.querySelector(".settings-nav .settings-back").click();
   await sleep(100);
 });

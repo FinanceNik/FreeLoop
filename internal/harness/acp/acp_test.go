@@ -318,7 +318,8 @@ func TestAgentCannotLoosenTheMode(t *testing.T) {
 func TestTheUserChoosesTheModeApprovingAPlan(t *testing.T) {
 	rec := &recorder{}
 	var refusal error
-	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit, AllowUnattended: func(permission.Mode) error { return refusal }}, preset: config.HarnessPreset{Name: "Agent"}}
+	modes := map[string]string{"ask": "default", "accept_edits": "default", "plan": "plan", "auto": "auto", "bypass": "default"}
+	s := &session{p: harness.Params{SessionID: "x", Emit: rec.emit, AllowUnattended: func(permission.Mode) error { return refusal }}, preset: config.HarnessPreset{Name: "Agent", Modes: modes}}
 	approve := func(byUser bool) {
 		s.mu.Lock()
 		s.mode = permission.ModePlan
@@ -348,6 +349,25 @@ func TestTheUserChoosesTheModeApprovingAPlan(t *testing.T) {
 	s.agentMode(permission.ModeAuto)
 	if s.Mode() != permission.ModePlan {
 		t.Errorf("an approval not by the user reached %s", s.Mode())
+	}
+
+	// The user chose the option that asks before edits; an agent reporting its auto
+	// mode after that has not been approved into it.
+	approve(true)
+	s.mu.Lock()
+	s.approved.option = "default"
+	s.mu.Unlock()
+	s.agentReported("auto")
+	if s.Mode() == permission.ModeAuto {
+		t.Error("the agent chose auto over the user's choice")
+	}
+	approve(true)
+	s.mu.Lock()
+	s.approved.option = "auto"
+	s.mu.Unlock()
+	s.agentReported("auto")
+	if s.Mode() != permission.ModeAuto {
+		t.Errorf("the user's own choice of auto left %s", s.Mode())
 	}
 }
 

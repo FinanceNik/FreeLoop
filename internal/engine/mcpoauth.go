@@ -109,9 +109,9 @@ func (e *Engine) saveOAuth(serverID string, r oauthRecord) {
 	if err := e.secrets.Set(oauthRef(serverID), string(b)); err != nil {
 		log.Printf("mcp %s: keep the sign-in in the Keychain: %v", serverID, err)
 	}
-	if r.Token != nil {
-		e.remember(r.Token.AccessToken)
-		e.remember(r.Token.RefreshToken)
+	// From now, not only from the next start: a registration's client secret too.
+	for _, secret := range oauthSecrets(string(b)) {
+		e.remember(secret)
 	}
 }
 

@@ -100,3 +100,30 @@ func TestAnAdjustmentAloneStillCosts(t *testing.T) {
 		t.Errorf("the budget = %+v", states)
 	}
 }
+
+// PRV-017: a task that names no profile is held by the budget of the profile its
+// session will get, here the app's default.
+func TestABudgetHoldsATaskByItsRealProfile(t *testing.T) {
+	ctx := context.Background()
+	e, root := queueEngine(t)
+	cfg := e.Config()
+	cfg.Prices = []config.Price{{Model: "m", Input: 1_000_000}}
+	cfg.Budgets = []config.Budget{{Period: config.BudgetDay, Amount: 1, ProfileID: "main"}}
+	cfg.Defaults.ProfileID = "main"
+	if _, err := e.SaveSettings(cfg); err != nil {
+		t.Fatal(err)
+	}
+	ses, err := e.store.CreateSession(ctx, session.Session{Title: "a", HarnessID: "builtin", ProviderID: "s", Model: "m", ProfileID: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.emit(ses.ID, event.UsageUpdate, event.UsageData{InputTokens: 2, Model: "m"})
+	if _, err := e.AddTask(config.Task{Prompt: "go", ProjectRoot: root}); err != nil {
+		t.Fatal(err)
+	}
+	e.runQueue(ctx, time.Now())
+	q, _ := e.Queue()
+	if q.Tasks[0].State != config.TaskWaiting || !strings.Contains(q.Tasks[0].Note, "for profile main is reached") {
+		t.Errorf("a task with no profile under main's reached budget: %+v", q.Tasks[0])
+	}
+}

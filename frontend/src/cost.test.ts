@@ -37,6 +37,7 @@ test("findPrice reads an agent's names for a model, as the engine does", () => {
   assert.equal(findPrice(prices, "", "openai/gpt-x")?.input, 3);
   assert.equal(findPrice(prices, "", "gpt-x/high")?.input, 3);
   assert.equal(findPrice(prices, "", "local/stand-in"), null);
+  assert.equal(findPrice(prices, "ollama", "someone/gpt-x"), null);
 });
 
 test("estimate prices calls and counts the unpriced", () => {

@@ -46,7 +46,9 @@ func FindPrice(prices []Price, providerID, model string) (Price, bool) {
 	// An agent may name a model with its provider, openai/gpt-5.5, or with its
 	// effort, gpt-5.5/high (PRV-008): without a price for the whole name, try either
 	// side of the first slash.
-	if before, after, ok := strings.Cut(model, "/"); ok {
+	// Only for an agent's usage, which names no provider: a model on one of the
+	// user's own providers (a local one, say) is priced by its own name or not at all.
+	if before, after, ok := strings.Cut(model, "/"); ok && providerID == "" {
 		if p, ok := findPrice(prices, providerID, after); ok {
 			return p, true
 		}

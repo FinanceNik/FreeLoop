@@ -61,7 +61,10 @@ func (e *Engine) ViewPDF(ctx context.Context, sid, rel string) (PDFFile, error) 
 	if err != nil {
 		return PDFFile{}, err
 	}
-	abs := env.Resolve(rel)
+	abs, err := inSessionFolder(env, rel)
+	if err != nil {
+		return PDFFile{}, err
+	}
 	fi, err := env.FS().Stat(abs)
 	if err != nil {
 		return PDFFile{}, err
@@ -101,6 +104,17 @@ func (e *Engine) sessionEnv(ctx context.Context, sid string) (environment.Enviro
 	return e.localEnv(ses.WorkRoot(), nil)
 }
 
+// inSessionFolder resolves rel, following links, and refuses it when that leads out
+// of the session's folder: a repository's link to a file elsewhere on this Mac is not
+// the project's to show.
+func inSessionFolder(env environment.Environment, rel string) (string, error) {
+	abs := env.Resolve(rel)
+	if !env.Contains(abs) {
+		return "", errors.New("that leads outside the session's folder")
+	}
+	return abs, nil
+}
+
 // cleanRel checks a path relative to the session's folder.
 func cleanRel(rel string) (string, error) {
 	rel = path.Clean("/" + strings.TrimPrefix(rel, "/"))[1:]
@@ -121,7 +135,11 @@ func (e *Engine) ListFolder(ctx context.Context, sid, rel string) ([]FileEntry, 
 	if err != nil {
 		return nil, err
 	}
-	infos, err := env.FS().ReadDir(env.Resolve(cmp.Or(rel, ".")))
+	dir, err := inSessionFolder(env, cmp.Or(rel, "."))
+	if err != nil {
+		return nil, err
+	}
+	infos, err := env.FS().ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +173,10 @@ func (e *Engine) ViewFile(ctx context.Context, sid, rel string) (FileView, error
 	if err != nil {
 		return FileView{}, err
 	}
-	abs := env.Resolve(rel)
+	abs, err := inSessionFolder(env, rel)
+	if err != nil {
+		return FileView{}, err
+	}
 	fi, err := env.FS().Stat(abs)
 	if err != nil {
 		return FileView{}, err
@@ -195,7 +216,10 @@ func (e *Engine) FileOnHost(ctx context.Context, sid, rel string) (string, error
 	if err != nil {
 		return "", err
 	}
-	abs := env.Resolve(rel)
+	abs, err := inSessionFolder(env, rel)
+	if err != nil {
+		return "", err
+	}
 	fi, err := env.FS().Stat(abs)
 	if err != nil {
 		return "", err

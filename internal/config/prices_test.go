@@ -25,6 +25,8 @@ func TestFindPrice(t *testing.T) {
 		{"", "openai/gpt-x", 3, true},
 		{"", "gpt-x/high", 3, true},
 		{"", "local/stand-in", 0, false},
+		// A model on the user's own provider is not taken for a cloud model.
+		{"ollama", "someone/gpt-x", 0, false},
 	} {
 		p, ok := FindPrice(prices, c.provider, c.model)
 		if ok != c.ok || p.Input != c.input {

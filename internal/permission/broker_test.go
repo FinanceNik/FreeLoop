@@ -590,3 +590,20 @@ func TestAPlanApprovedAlwaysSavesNoRule(t *testing.T) {
 		t.Errorf("decision = %+v, rules = %+v %+v", d, rules.global, rules.session)
 	}
 }
+
+// SEC-003: a request offering two answers under one ID is refused, since the user's
+// "Deny" could otherwise pick the allow that shares its name.
+func TestTwoAnswersUnderOneIDAreRefused(t *testing.T) {
+	b, rec, _, root := setup(t)
+	req := Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "make deploy", Options: []Option{
+		{ID: "x", Name: "Allow", Kind: "allow_once"},
+		{ID: "x", Name: "Deny", Kind: "reject_once"},
+	}}
+	d := decide(t, b, Context{Mode: ModeAsk, Root: root}, req, "")
+	if d.Outcome != Denied || d.Actor != ActorPolicy || len(b.Pending()) != 0 {
+		t.Errorf("decision = %+v", d)
+	}
+	if len(rec.events) == 0 {
+		t.Error("the refusal was not recorded")
+	}
+}

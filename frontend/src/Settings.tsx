@@ -119,8 +119,13 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
   );
 }
 
+// waitingDraft holds the edits that wait for Save (hooks, prices, budgets, web search)
+// while the user is on another page, so leaving the settings does not drop them.
+let waitingDraft: Pick<Config, "hooks" | "prices" | "budgets" | "web"> | null = null;
+
 export default function Settings({ page, config, providers, harnesses, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError }: Props) {
-  const [form, setForm] = useState<Config>(config);
+  // What waited for Save when the settings were last left comes back with them.
+  const [form, setForm] = useState<Config>(() => (waitingDraft ? { ...config, ...waitingDraft } : config));
   const [saved, setSaved] = useState(false);
   // Connections local-only mode refused (NFR-OFF-003).
   const [blocked, setBlocked] = useState<Blocked[]>([]);
@@ -156,7 +161,13 @@ export default function Settings({ page, config, providers, harnesses, environme
   // What the page saved itself comes back as a new config, and must not undo what is
   // being typed elsewhere on the page.
   const ownSave = useRef("");
+  // Not on opening: the form starts from the config already, with any draft kept.
+  const opened = useRef(true);
   useEffect(() => {
+    if (opened.current) {
+      opened.current = false;
+      return;
+    }
     if (ownSave.current !== settingsKey(config)) setForm(config);
   }, [JSON.stringify([savedRest, savedUi])]);
   useEffect(
@@ -219,9 +230,13 @@ export default function Settings({ page, config, providers, harnesses, environme
   }, [form, left]);
   useEffect(
     () => () => {
-      saveByItself(current.current.form, current.current.config)
-        ?.then((c) => c && onSaved(c))
+      const { form: f, config: c } = current.current;
+      saveByItself(f, c)
+        ?.then((saved) => saved && onSaved(saved))
         .catch(onError);
+      // Leaving for another page keeps what waits for Save, for the app's run.
+      const waiting = { hooks: f.hooks, prices: f.prices, budgets: f.budgets, web: f.web };
+      waitingDraft = JSON.stringify(waiting) === JSON.stringify({ hooks: c.hooks, prices: c.prices, budgets: c.budgets, web: c.web }) ? null : waiting;
     },
     [],
   );

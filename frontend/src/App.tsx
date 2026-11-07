@@ -1388,7 +1388,8 @@ export default function App() {
               >
                 <UsageIcon />
               </button>
-              {today && (today.models ?? []).some((m) => m.priced) && (
+              {/* Shown once anything is priced today, and whenever a budget is near or reached (PRV-017). */}
+              {((today && (today.models ?? []).some((m) => m.priced)) || worst(budgets) !== "") && (
                 <button
                   className={`footer-cost${worst(budgets) ? ` footer-cost-${worst(budgets)}` : ""}`}
                   title={[
@@ -1397,7 +1398,7 @@ export default function App() {
                   ].join("\n")}
                   onClick={() => setScreen({ kind: "usage" })}
                 >
-                  {`≈ ${formatCost(today.cost)}${(today.models ?? []).some((m) => !m.priced) || (today.unreported ?? 0) > 0 ? "+" : ""}`}
+                  {`≈ ${formatCost(today?.cost ?? 0)}${today && ((today.models ?? []).some((m) => !m.priced) || (today.unreported ?? 0) > 0) ? "+" : ""}`}
                 </button>
               )}
             </div>

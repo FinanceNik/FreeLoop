@@ -100,6 +100,9 @@ type approval struct {
 	until   time.Time
 	// byUser says the user decided, not a rule or the mode.
 	byUser bool
+	// option is the option the user chose. For a plan it names the mode the agent
+	// goes on in, and only that mode counts as approved (SEC-001).
+	option string
 }
 
 // NewSession starts the agent, initializes it and opens a session in the
@@ -376,6 +379,13 @@ func (s *session) agentReported(id string) {
 	if len(s.preset.Modes) == 0 {
 		return
 	}
+	// Approving a plan approves the mode its chosen option names, not whichever one
+	// the agent then reports.
+	s.mu.Lock()
+	if s.approved.kind == permission.KindSwitchMode && s.approved.option != "" && s.approved.option != id {
+		s.approved = approval{}
+	}
+	s.mu.Unlock()
 	if s.preset.Modes[string(s.Mode())] == id {
 		return
 	}
@@ -793,7 +803,7 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 	switch d.Outcome {
 	case permission.Allowed:
 		s.mu.Lock()
-		s.approved = approval{kind: kind, paths: paths, command: command, until: time.Now().Add(2 * time.Minute), byUser: d.Actor == permission.ActorUser}
+		s.approved = approval{kind: kind, paths: paths, command: command, until: time.Now().Add(2 * time.Minute), byUser: d.Actor == permission.ActorUser, option: d.OptionID}
 		s.mu.Unlock()
 		if via != "" {
 			// The agent's own updates only ever name the command the model wrote.

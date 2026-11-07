@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 )
@@ -89,6 +90,11 @@ func TestCheckPolicy(t *testing.T) {
 	}
 	if got := check(PolicyQuery{Tool: "shell", Command: "make test"}); len(got.Hooks) != 1 || got.Outcome != "allowed" {
 		t.Errorf("the project's hook = %+v", got)
+	}
+	// From a subfolder, as `freeloop check` run there: the project is judged.
+	os.MkdirAll(filepath.Join(root, "src", "deep"), 0o755)
+	if got := check(PolicyQuery{ProjectRoot: filepath.Join(root, "src", "deep"), Tool: "shell", Command: "make deploy"}); got.Outcome != "denied" || got.Root != environment.Canonical(root) {
+		t.Errorf("from a subfolder: %s in %s", got.Outcome, got.Root)
 	}
 
 	// In a session, its own rules count, and its mode is the default.

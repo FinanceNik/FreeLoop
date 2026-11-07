@@ -3,13 +3,13 @@
 package environment
 
 import (
-	"os/exec"
-	"strconv"
-	"strings"
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
