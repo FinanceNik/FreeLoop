@@ -367,6 +367,8 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
                     {testing.busy ? "Asking the model…" : "Run the test"}
                   </button>
                 </div>
+                {/* What this call sends (NFR-PRIV-003): it belongs to no session, so no session records it. */}
+                <p className="muted">Sends the model your prompt, a one-line system prompt and the list of skills with their descriptions; nothing from your projects.</p>
                 {testing.result && (
                   <p className={testing.result.picked ? "ok" : "banner warn"}>
                     {testing.result.picked

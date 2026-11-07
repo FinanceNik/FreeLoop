@@ -1,3 +1,4 @@
+import ModelSees from "./ModelSees.tsx";
 import ContextLimit from "./ContextLimit.tsx";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { visibleCommand } from "./a11y.ts";
@@ -458,6 +459,7 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
         ))}
       </ul>
       {rules.length > 0 && <p className="muted">Session rules last as long as the session; global rules are on the Rules page.</p>}
+      <ModelSees records={view.modelContext} />
     </>
   );
 }

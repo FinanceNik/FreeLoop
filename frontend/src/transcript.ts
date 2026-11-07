@@ -1,5 +1,6 @@
 import { contextResent } from "./contextMeter.ts";
 import type { ModelCall } from "./cost.ts";
+import type { ModelContext } from "./modelContext.ts";
 
 // A session's transcript in the UI is a pure function of its events. Replay
 // from disk and the live stream both go through apply, so they cannot drift.
@@ -172,6 +173,9 @@ export interface SessionView {
   // How an external agent's usage was counted (PRV-008): turns counted by their
   // total, and turns the agent reported no tokens for.
   measured: { turns: number; unreported: number };
+  // What each kind of model call carried besides the conversation, as recorded
+  // (NFR-PRIV-003); empty for an agent that builds its own requests.
+  modelContext: ModelContext[];
   git: GitState | null;
   mode: string | null;
   // Counts changes to the session's model, effort and rules, for what shows them.
@@ -269,6 +273,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   // session's).
   const calls: ModelCall[] = [];
   const measured = { turns: 0, unreported: 0 };
+  const modelContext: ModelContext[] = [];
   let turnCalls: ModelCall[] = [];
   let setup: string | null = null;
   let plan: PlanEntry[] = [];
@@ -437,6 +442,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         items.push({ kind: "turn_end", key, rev, stopReason: d.stopReason ?? "", ts: ev.ts, calls: turnCalls });
         turnCalls = [];
         break;
+      case "model_context":
+        modelContext.push(d as ModelContext);
+        break;
       case "usage_update": {
         if (d.measured === "turn") measured.turns++;
         if (d.measured === "none") measured.unreported++;
@@ -560,7 +568,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
     const tool = toolCallId ? tools.get(toolCallId) : undefined;
     return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || "A request" };
   });
-  return { items, usage, calls, measured, git, mode, status, running, commands, context, setup, plan, planThisTurn, settings, held, stuck };
+  return { items, usage, calls, measured, modelContext, git, mode, status, running, commands, context, setup, plan, planThisTurn, settings, held, stuck };
 }
 
 function replaceTool(

@@ -128,7 +128,8 @@ func (s *session) compact(ctx context.Context, reason string) error {
 		msgs = fitForSummary(msgs, int64(summaryBudget*float64(window)))
 	}
 	prov, model := s.current()
-	summary, err := s.complete(ctx, prov, provider.ChatRequest{Model: model, System: compactPrompt, Messages: msgs, Tools: s.toolSpecs(s.Mode()), Effort: s.p.Effort})
+	// The record of what was sent says what this call is (NFR-PRIV-003).
+	summary, err := s.complete(provider.WithPurpose(ctx, provider.PurposeCompaction, "The conversation so far, to be summarised"), prov, provider.ChatRequest{Model: model, System: compactPrompt, Messages: msgs, Tools: s.toolSpecs(s.Mode()), Effort: s.p.Effort})
 	if err != nil {
 		return err
 	}

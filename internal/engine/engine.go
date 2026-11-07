@@ -96,6 +96,10 @@ type Engine struct {
 	onQueue func()
 	// onNotice sends a notice (GUI-008); budgets alerted holds which budget periods
 	// have warned at which level, so each says so once (PRV-017).
+	// contextSeen is what was last recorded of each session's kinds of model call
+	// (NFR-PRIV-003), so only a change is written.
+	contextMu     sync.Mutex
+	contextSeen   map[string][32]byte
 	onNotice      func(Notice)
 	budgetsMu     sync.Mutex
 	budgetsWarned map[string]string

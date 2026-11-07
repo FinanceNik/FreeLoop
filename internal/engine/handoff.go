@@ -110,6 +110,7 @@ func (e *Engine) handoffSummary(ctx context.Context, src session.Session, harnes
 			continue
 		}
 		cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		cctx = provider.WithPurpose(cctx, provider.PurposeHandoff, "The conversation so far, as text ("+sizeText(len(transcript))+")")
 		text, u, err := complete(cctx, e.limit(cp, src.ID), provider.ChatRequest{Model: c.model, System: handoffPrompt,
 			Messages: []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: transcript}}}}})
 		cancel()

@@ -450,3 +450,17 @@ test("a to-do list finished in an earlier turn does not come back with the next 
   assert.equal(v.planThisTurn, false);
 });
 
+
+test("what the model sees is kept, and never shows in the conversation", () => {
+  const ctx = (seq: number, purpose: string, system: string): TranscriptEvent => ({ ...ev(seq, { purpose, model: "m", system, tools: [{ name: "read_file", description: "Read" }] }), type: "model_context" });
+  const view = buildView([ctx(1, "turn", "one"), ctx(2, "turn", "two"), ctx(3, "commit_message", "commits")]);
+  assert.deepEqual(
+    view.modelContext.map((c) => [c.purpose, c.system]),
+    [
+      ["turn", "one"],
+      ["turn", "two"],
+      ["commit_message", "commits"],
+    ],
+  );
+  assert.equal(view.items.length, 0);
+});

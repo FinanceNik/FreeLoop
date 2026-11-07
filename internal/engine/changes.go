@@ -468,7 +468,7 @@ func (e *Engine) SuggestCommitMessage(ctx context.Context, sid string) (string, 
 	if len(diff) > maxSuggestDiff {
 		diff = diff[:maxSuggestDiff] + "\n[diff truncated]"
 	}
-	msg, err := e.complete(ctx, ses,
+	msg, err := e.complete(provider.WithPurpose(ctx, provider.PurposeCommitMessage, "The session's diff ("+sizeText(len(diff))+")"), ses,
 		"You write git commit messages. Reply with the message only: a summary line of at most 72 characters "+
 			"in the imperative mood, then, if the change needs it, a blank line and a short body. No code fences, no quotes.",
 		"Write a commit message for this diff:\n\n"+diff, 400)
@@ -489,7 +489,9 @@ func (e *Engine) complete(ctx context.Context, ses session.Session, system, prom
 	defer cancel()
 	// Little reasoning for a short text, and room for the reasoning there
 	// is: models that reason count it against the output limit.
-	ch, err := p.p.Stream(ctx, provider.ChatRequest{
+	// Through the session's limit, as every model call for a session is: it waits for a
+	// free slot (OQ-013), and what it sends is recorded (NFR-PRIV-003).
+	ch, err := e.limit(p, ses.ID).Stream(ctx, provider.ChatRequest{
 		Model:     ses.Model,
 		System:    system,
 		Messages:  []provider.Message{{Role: provider.RoleUser, Parts: []provider.Part{{Type: provider.PartText, Text: prompt}}}},

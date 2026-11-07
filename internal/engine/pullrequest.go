@@ -13,6 +13,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
+	"github.com/FinanceNik/Freeloop/internal/provider"
 )
 
 // Pull requests (SES-011): the diff panel pushes the session's branch and
@@ -197,7 +198,7 @@ func (e *Engine) SuggestPullRequest(ctx context.Context, sid string) (PullReques
 	if len(diff) > maxPRDiff {
 		diff = diff[:maxPRDiff] + "\n[diff truncated]"
 	}
-	text, err := e.complete(ctx, ses,
+	text, err := e.complete(provider.WithPurpose(ctx, provider.PurposePullRequest, "The session's commit messages and diff ("+sizeText(len(log)+len(diff))+")"), ses,
 		"You write GitHub pull request descriptions. Reply with a title of at most 72 characters on the first line, "+
 			"a blank line, then the description in Markdown: what changes and why, and how it was tested if the commits say. "+
 			"Be brief and factual. No code fences around the reply.",

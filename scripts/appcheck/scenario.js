@@ -817,6 +817,27 @@ await step("the policy page says what a call would meet", async () => {
   await until("the conversation", () => document.querySelector(".conversation"));
 });
 
+await step("the Info tab says what the model sees", async () => {
+  // NFR-PRIV-003: the system prompt and the tools a built-in session's calls carry.
+  const info = async (title) => {
+    openSession(title);
+    await until(title, () => activePane().querySelector(".session-titleline h2")?.textContent === title);
+    const panel = named(".session-actions button", "Panel", activePane());
+    if (panel.getAttribute("aria-pressed") !== "true") panel.click();
+    (await until("the Info tab", () => withText(".panel-tabs [role=tab]", "Info"))).click();
+    return until("what the model sees", () => document.querySelector("aside.panel .model-sees"), 8000);
+  };
+  const sees = await info("Check alpha");
+  const parts = all(".model-sees-part > summary", sees).map((x) => x.textContent);
+  check("a built-in session shows its system prompt in parts", parts.some((p) => p.startsWith("Safety")) && parts.some((p) => p.startsWith("Environment")), parts.join(" | "));
+  check("and its tools", all(".model-sees-tools code", sees).some((c) => c.textContent === "write_file"));
+  check("the prompt is text, not markup", !sees.querySelector(".md, a[href]"));
+  const agent = await info("Check agent");
+  check("an agent with its own requests says it records none", agent.textContent.includes("Nothing recorded yet") && !agent.querySelector(".model-sees-kind"));
+  openSession("Check alpha");
+  await until("the conversation", () => document.querySelector(".conversation"));
+});
+
 await step("every control has a name", async () => {
   // GUI-041: a control drawn as an icon alone is named in aria-label and explained in a tooltip.
   const unnamed = [];

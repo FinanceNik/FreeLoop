@@ -231,7 +231,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 
 - **NFR-PRIV-001** · MVP · No telemetry, analytics or crash reporting leaves the machine. Diagnostics are local files the user can share manually.
 - **NFR-PRIV-002** · MVP · Transcripts, config and indexes are stored locally only; export is an explicit user action.
-- **NFR-PRIV-003** · MVP · The app sends to a provider only what the user can see in the transcript plus the system prompt, tool definitions and skill index, which are inspectable.
+- **NFR-PRIV-003** · MVP · The app sends to a provider only what the user can see in the transcript plus the system prompt, tool definitions and skill index, which are inspectable. Every model call a session makes goes through the engine's provider wrapper, which writes a `model_context` event to the transcript whenever what the call carries besides the conversation changes: the kind of call (a turn, compaction, a commit message, a pull request text, a handoff summary), provider, model, effort, system prompt and tool definitions, and for the app's own calls what else they sent, in words. The store redacts it like any event. The session's Info tab shows it as "What the model sees", in plain text. An agent that builds its own requests records none, and the tab says so. *Accept:* a built-in session's first turn records the system prompt with the project's AGENTS.md and the tools; a turn that changes nothing records nothing; plan mode records a new one; a commit message records its own with "The session's diff"; a known secret in AGENTS.md is redacted; `make check-app` reads the prompt's sections and tools in the Info tab, and the Claude Code session's message.
 
 ### Offline and local-only operation (NFR-OFF)
 

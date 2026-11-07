@@ -51,7 +51,8 @@
         "limit_update",
         "mode_refused",
         "stuck",
-        "handed_off"
+        "handed_off",
+        "model_context"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -138,6 +139,10 @@
       "then": { "properties": { "data": { "$ref": "#/$defs/handedOff" } } }
     },
     {
+      "if": { "properties": { "type": { "const": "model_context" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/modelContext" } } }
+    },
+    {
       "if": { "properties": { "type": { "const": "mode_refused" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/modeRefused" } } }
     },
@@ -147,6 +152,27 @@
     }
   ],
   "$defs": {
+    "modelContext": {
+      "type": "object",
+      "description": "What one kind of model call for the session carries besides the conversation, recorded when it changes (NFR-PRIV-003).",
+      "required": ["purpose", "model", "system", "tools"],
+      "properties": {
+        "purpose": { "enum": ["turn", "compaction", "commit_message", "pull_request", "handoff"] },
+        "providerId": { "type": "string" },
+        "model": { "type": "string" },
+        "effort": { "type": "string" },
+        "system": { "type": "string" },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": { "name": { "type": "string" }, "description": { "type": "string" }, "inputSchema": { "type": "object" } }
+          }
+        },
+        "sent": { "type": "string", "description": "What else went with a call that is not a turn, in words." }
+      }
+    },
     "sessionImported": {
       "type": "object",
       "description": "The agent's session this one was imported from. What it replayed comes before this event, and the usage views leave it out.",

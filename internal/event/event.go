@@ -36,8 +36,11 @@ const (
 	HandedOff               Type = "handed_off"
 	ModeRefused             Type = "mode_refused"
 	Notice                  Type = "notice"
-	CompactionUpdate        Type = "compaction_update"
-	CompactionSummaryChunk  Type = "compaction_summary_chunk"
+	// ModelContext records what a model call carries besides the conversation: the
+	// system prompt and the tools, when they change (NFR-PRIV-003).
+	ModelContext           Type = "model_context"
+	CompactionUpdate       Type = "compaction_update"
+	CompactionSummaryChunk Type = "compaction_summary_chunk"
 )
 
 // Variants Freeloop adds on top of ACP.
@@ -93,7 +96,7 @@ var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
 	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged, SessionImported,
-	LimitUpdate, ModeRefused, Stuck, HandedOff,
+	LimitUpdate, ModeRefused, Stuck, HandedOff, ModelContext,
 }
 
 // AllTypes returns every known variant.
@@ -177,6 +180,27 @@ const (
 	MeasuredTurn = "turn"
 	MeasuredNone = "none"
 )
+
+// ModelContextData is the payload of model_context (NFR-PRIV-003): what one kind of
+// model call for the session carries besides the conversation. Purpose is a
+// provider.Purpose* value; Sent says in words what else went with a call that is not a
+// turn, such as the session's diff for a commit message.
+type ModelContextData struct {
+	Purpose    string    `json:"purpose"`
+	ProviderID string    `json:"providerId,omitempty"`
+	Model      string    `json:"model"`
+	Effort     string    `json:"effort,omitempty"`
+	System     string    `json:"system"`
+	Tools      []ToolDef `json:"tools"`
+	Sent       string    `json:"sent,omitempty"`
+}
+
+// ToolDef is a tool as a model is told of it.
+type ToolDef struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"inputSchema,omitempty"`
+}
 
 // CompactionData is the payload of compaction_update (HRN-013): status
 // started or completed, why (auto or manual), the context size before and
