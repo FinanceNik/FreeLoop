@@ -571,8 +571,10 @@ await step("a click clears a selection", async () => {
   // On a machine that never shows the window (CI), messages out of sight keep their
   // placeholder heights, so the last one need not be where the view ends: bring it in.
   // Only a reader's input stops the view following the end, so scroll as one would.
-  conversation().dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
-  msg.scrollIntoView({ block: "center" });
+  // The conversation alone: scrollIntoView would move the page around it too.
+  const c = conversation();
+  c.dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true }));
+  c.scrollTop += msg.getBoundingClientRect().top - c.getBoundingClientRect().top - c.clientHeight / 2;
   await sleep(300);
   await clicked("text", msg);
   await clicked("the conversation's margin", conversation(), 0.01, 0.5);

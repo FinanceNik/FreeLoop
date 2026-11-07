@@ -50,7 +50,7 @@ func TestSearchIndexesAsItAppends(t *testing.T) {
 	call, _ := s.Append(ctx, a.ID, event.ToolCall, raw(map[string]any{"toolCallId": "c1", "title": "Run go test", "rawInput": map[string]any{"command": "go test ./pool/..."}}))
 	s.Append(ctx, a.ID, event.ToolCallUpdate, toolOutput("c1", "panic: send on closed channel in reaper_loop"))
 	s.Append(ctx, b.ID, event.AgentMessageChunk, text("Nothing about pools here, only a closed door."))
-	s.Append(ctx, b.ID, event.TurnEnded, nil)
+	s.Append(ctx, b.ID, event.TurnEnded, raw(event.TurnEndedData{StopReason: "end_turn"}))
 	// The last message is still being streamed: it is not searchable yet.
 	s.Append(ctx, a.ID, event.AgentMessageChunk, text("pending words zanzibar"))
 
@@ -76,7 +76,7 @@ func TestSearchIndexesAsItAppends(t *testing.T) {
 	if h := searchFor(t, s, "zanzibar"); len(h) != 0 {
 		t.Errorf("a message still streaming was indexed: %+v", h)
 	}
-	s.Append(ctx, a.ID, event.TurnEnded, nil)
+	s.Append(ctx, a.ID, event.TurnEnded, raw(event.TurnEndedData{StopReason: "end_turn"}))
 	if h := searchFor(t, s, "zanzibar"); len(h) != 1 {
 		t.Errorf("a finished message was not indexed: %+v", h)
 	}
@@ -107,7 +107,7 @@ func TestSearchCatchesUpOldTranscripts(t *testing.T) {
 	a, _ := s.CreateSession(ctx, session.Session{Title: "a", HarnessID: "builtin"})
 	b, _ := s.CreateSession(ctx, session.Session{Title: "b", HarnessID: "builtin"})
 	s.Append(ctx, a.ID, event.AgentMessageChunk, text("an old answer about kerberos"))
-	s.Append(ctx, a.ID, event.TurnEnded, nil)
+	s.Append(ctx, a.ID, event.TurnEnded, raw(event.TurnEndedData{StopReason: "end_turn"}))
 	s.Append(ctx, b.ID, event.ToolCallUpdate, toolOutput("c", "old output mentioning kerberos"))
 	// Forget the index, as a database from before it would be.
 	s.db.Exec(`DELETE FROM search`)
@@ -203,7 +203,7 @@ func TestSearchRecoversFromAFailedWrite(t *testing.T) {
 	s.Append(ctx, a.ID, event.UsageUpdate, raw(event.UsageData{InputTokens: 5, Model: "m"}))
 	s.Append(ctx, a.ID, event.AgentMessageChunk, text("the lost ostrich"))
 	s.db.Exec(`DROP TRIGGER fail`)
-	s.Append(ctx, a.ID, event.TurnEnded, nil)
+	s.Append(ctx, a.ID, event.TurnEnded, raw(event.TurnEndedData{StopReason: "end_turn"}))
 	if h := searchFor(t, s, "ostrich"); len(h) != 1 {
 		t.Errorf("hits = %+v", h)
 	}
@@ -253,7 +253,7 @@ func TestCatchUpMidMessage(t *testing.T) {
 	tr.mu.Unlock()
 	s.Append(ctx, a.ID, event.AgentMessageChunk, text("burrows "))
 	s.Append(ctx, a.ID, event.AgentMessageChunk, text("deep"))
-	s.Append(ctx, a.ID, event.TurnEnded, nil)
+	s.Append(ctx, a.ID, event.TurnEnded, raw(event.TurnEndedData{StopReason: "end_turn"}))
 	if h := searchFor(t, s, `"wombat burrows deep"`); len(h) != 1 {
 		t.Errorf("hits = %+v", h)
 	}

@@ -60,6 +60,14 @@ func TestQueueStartsUnderItsLimit(t *testing.T) {
 		t.Errorf("the session: %+v", ses)
 	}
 	waitIdle(t, ch, q.Tasks[0].SessionID, q.Tasks[1].SessionID)
+	// The queue reads the stored status, written just after turn_ended.
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		a, _ := e.store.GetSession(ctx, q.Tasks[0].SessionID)
+		b, _ := e.store.GetSession(ctx, q.Tasks[1].SessionID)
+		if a.Status == "idle" && b.Status == "idle" {
+			break
+		}
+	}
 	e.runQueue(ctx, time.Now())
 	q, _ = e.Queue()
 	if got := states(q); got[0] != "done" || got[1] != "done" || got[2] != "running" {

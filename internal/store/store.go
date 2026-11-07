@@ -258,6 +258,13 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 		ts = s.now()
 	}
 	ev := event.Event{V: event.Version, Seq: t.lastSeq + 1, TS: ts.UTC(), SID: sid, Type: typ, Data: data}
+	if v := eventCheck(); v != nil {
+		if err := v.Validate(ev); err != nil {
+			// Only tests set FREELOOP_CHECK_EVENTS: an event the schema does not
+			// describe stops them where it is written.
+			panic("store: an event does not match schemas/events.json (EXT-002): " + err.Error())
+		}
+	}
 	if err := t.write(ev); err != nil {
 		return event.Event{}, err
 	}
@@ -711,3 +718,22 @@ func (s *Store) SetExternalID(ctx context.Context, sid, externalID string) error
 	s.writeMeta(ses)
 	return nil
 }
+
+// eventCheck is the schema check `make test` turns on (EXT-002): FREELOOP_CHECK_EVENTS
+// names schemas/events.json, and every event every test writes is checked against it.
+// The app never sets it.
+var eventCheck = sync.OnceValue(func() *event.Validator {
+	path := os.Getenv("FREELOOP_CHECK_EVENTS")
+	if path == "" {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		panic("store: FREELOOP_CHECK_EVENTS: " + err.Error())
+	}
+	v, err := event.NewValidator(b)
+	if err != nil {
+		panic("store: FREELOOP_CHECK_EVENTS: " + err.Error())
+	}
+	return v
+})

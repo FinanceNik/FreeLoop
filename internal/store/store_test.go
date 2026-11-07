@@ -247,7 +247,7 @@ func TestProjectsAndRelink(t *testing.T) {
 		t.Error("two projects with one root")
 	}
 	ses, _ := s.CreateSession(ctx, session.Session{Title: "x", ProjectID: p.ID, ProjectRoot: p.Root, EnvironmentID: "local", BaseCommit: "abc"})
-	s.Append(ctx, ses.ID, event.GitState, json.RawMessage(`{"branch":"main","head":"abc"}`))
+	s.Append(ctx, ses.ID, event.GitState, json.RawMessage(`{"repo":true,"branch":"main","head":"abc"}`))
 
 	p.Root = "/new/repo"
 	if err := s.UpdateProject(ctx, p); err != nil {

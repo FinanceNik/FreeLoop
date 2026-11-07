@@ -66,6 +66,8 @@ verify-deps: ## Check modules against go.sum and that go.mod is tidy (needs the 
 	go mod verify
 	go mod tidy -diff
 
+# Every event a test writes is checked against the schema (EXT-002).
+test: export FREELOOP_CHECK_EVENTS := $(CURDIR)/schemas/events.json
 test: ## Run Go tests (race detector on) and frontend tests
 	go test -race ./internal/...
 	$(MAKE) cmd-test

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
@@ -419,5 +420,51 @@ func TestPromptRacingAStop(t *testing.T) {
 		if now == nil || now == r {
 			t.Error("the prompt ran without a live runtime")
 		}
+	}
+}
+
+// GUI-004: a message sent while a turn runs waits, and goes out as the next turn once
+// that one ends, without the user sending it again.
+func TestAQueuedMessageGoesOutWhenTheTurnEnds(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	withScript(e, "s",
+		scripted.Step{Calls: []scripted.Call{{Name: "write_file", Input: map[string]any{"path": "a.txt", "content": "a\n"}}}},
+		scripted.Step{Text: "first done"},
+		scripted.Step{Text: "second done"},
+	)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: t.TempDir(), ProviderID: "s", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Prompt(ctx, ses.ID, "first")
+	req := waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.PermissionRequested })
+	if res, err := e.Prompt(ctx, ses.ID, "second"); err != nil || !res.Queued {
+		t.Fatalf("second prompt = %+v, %v", res, err)
+	}
+	_ = req
+	// Every write is allowed; the script starts over each turn, so the second asks too.
+	stop := make(chan struct{})
+	defer close(stop)
+	approveAll(e, stop)
+	waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.TurnEnded })
+	waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.TurnEnded })
+	evs, _ := e.Events(ctx, ses.ID, 0)
+	var order []string
+	for _, ev := range evs {
+		switch ev.Type {
+		case event.TurnEnded:
+			order = append(order, "end")
+		case event.UserMessageChunk:
+			var d event.MessageChunk
+			json.Unmarshal(ev.Data, &d)
+			order = append(order, d.Content.Text)
+		}
+	}
+	if got := strings.Join(order, " | "); got != "first | end | second | end" {
+		t.Errorf("the turns went %s", got)
 	}
 }
