@@ -751,7 +751,7 @@ func (s *session) RequestPermission(ctx context.Context, r sdk.RequestPermission
 	judged, readOnly, via := command, false, ""
 	if s.p.Optimizer != nil && command != "" {
 		if original, by, ok := s.p.Optimizer.Original(command); ok {
-			judged, title, readOnly, via = original, original, permission.ReadOnlyCommand(original), by
+			judged, title, readOnly, via = original, original, s.p.Broker.Policy().ReadOnlyCommand(s.env.Root(), original), by
 			if in, ok := r.ToolCall.RawInput.(map[string]any); ok {
 				shown := maps.Clone(in)
 				shown["command"] = original

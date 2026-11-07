@@ -1,9 +1,12 @@
 package permission
 
 import (
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/FinanceNik/Freeloop/internal/environment"
 )
 
 // safeLine is what a command that only reads may be spelled with: no expansion,
@@ -144,4 +147,62 @@ func forbiddenOption(word string, bad []string) bool {
 		}
 	}
 	return false
+}
+
+// followsLinks are options with which a program reads through symbolic links it
+// meets, to wherever they lead; a link in the project could lead it anywhere.
+var followsLinks = map[string][]string{
+	"grep": {"-R", "--dereference-recursive"},
+	"rg":   {"-L", "--follow"},
+	"find": {"-L", "-H", "-follow"},
+}
+
+// ReadOnlyCommand is ReadOnlyCommand, also judged against the project's files: every
+// path the command names is followed through symbolic links, and the command is not
+// read-only when one leads out of the project, into a protected location, or to a
+// file whose name says it holds secrets, which reading asks about (SEC-005, SEC-017);
+// nor when it reads through the links it meets. What is not read-only is asked about.
+func (p *Policy) ReadOnlyCommand(root, line string) bool {
+	if !ReadOnlyCommand(line) {
+		return false
+	}
+	commands, _ := shellWords(line)
+	for _, fields := range commands {
+		for _, word := range fields[1:] {
+			if followingLinks(fields[0], word) {
+				return false
+			}
+			if strings.HasPrefix(word, "-") && !strings.Contains(word, "=") {
+				continue
+			}
+			if _, value, ok := strings.Cut(word, "="); ok && strings.HasPrefix(word, "-") {
+				word = value
+			}
+			if word != "" && !p.readsSafely(root, word) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// followingLinks reports one of prog's options that follow links, a short one also
+// among others in one word (-Rn).
+func followingLinks(prog, word string) bool {
+	for _, opt := range followsLinks[prog] {
+		if word == opt || strings.HasPrefix(word, opt+"=") {
+			return true
+		}
+		if len(opt) == 2 && !strings.HasPrefix(word, "--") && strings.HasPrefix(word, "-") && strings.ContainsRune(word[1:], rune(opt[1])) {
+			return true
+		}
+	}
+	return false
+}
+
+// readsSafely reports a path, relative to root, that leads to something in the
+// project that is neither protected nor secret, after following links.
+func (p *Policy) readsSafely(root, rel string) bool {
+	real := environment.Canonical(filepath.Join(root, rel))
+	return p.insideRoot(root, real) && p.readRefusal(real) == "" && !p.secret(root, []string{real})
 }

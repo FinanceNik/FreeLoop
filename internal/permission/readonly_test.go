@@ -1,6 +1,10 @@
 package permission
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestReadOnlyCommand(t *testing.T) {
 	for line, want := range map[string]bool{
@@ -32,6 +36,48 @@ func TestReadOnlyCommand(t *testing.T) {
 	} {
 		if got := ReadOnlyCommand(line); got != want {
 			t.Errorf("ReadOnlyCommand(%q) = %v", line, got)
+		}
+	}
+}
+
+// HRN-019, SEC-005, SEC-017: judged against the project's files, a rewritten command
+// is read-only only when what it names stays in the project, unprotected and not
+// secret, after following links; and a search that follows links is never.
+func TestReadOnlyCommandFollowsTheFiles(t *testing.T) {
+	_, _, home, root := setup(t)
+	p := NewPolicy(home, filepath.Join(home, "Library", "Application Support", "freeloop"))
+	elsewhere := filepath.Join(home, "elsewhere")
+	for _, d := range []string{root, elsewhere, filepath.Join(home, ".ssh"), filepath.Join(root, "src")} {
+		os.MkdirAll(d, 0o755)
+	}
+	os.WriteFile(filepath.Join(home, ".ssh", "id_ed25519"), []byte("key"), 0o600)
+	os.WriteFile(filepath.Join(elsewhere, "notes.txt"), []byte("notes"), 0o644)
+	os.WriteFile(filepath.Join(root, ".env"), []byte("TOKEN=x"), 0o644)
+	os.WriteFile(filepath.Join(root, ".env.example"), []byte("TOKEN="), 0o644)
+	os.WriteFile(filepath.Join(root, "main.go"), []byte("package main"), 0o644)
+	os.Symlink(filepath.Join(home, ".ssh", "id_ed25519"), filepath.Join(root, "key"))
+	os.Symlink(filepath.Join(elsewhere, "notes.txt"), filepath.Join(root, "notes"))
+	os.Symlink(elsewhere, filepath.Join(root, "linked"))
+	for line, want := range map[string]bool{
+		"cat main.go":               true,
+		"head -n 5 .env.example":    true,
+		"rg TODO src":               true,
+		"grep -rn TODO src":         true,
+		"git log -n 3":              true,
+		"cat key":                   false, // a link into ~/.ssh
+		"cat notes":                 false, // a link out of the project
+		"ls linked":                 false, // a linked folder out of the project
+		"cat .env":                  false, // secret: reading it asks
+		"wc -l main.go && cat .env": false,
+		"grep -R TODO .":            false, // follows the links it meets
+		"grep -Rn TODO src":         false,
+		"rg -L TODO":                false,
+		"rg --follow TODO":          false,
+		"find -L . -name x":         false,
+		"git diff --stat":           true,
+	} {
+		if got := p.ReadOnlyCommand(root, line); got != want {
+			t.Errorf("%q: read-only %v, want %v", line, got, want)
 		}
 	}
 }
