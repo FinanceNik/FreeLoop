@@ -49,6 +49,19 @@ RUN arch=$(dpkg --print-architecture); ldarch=$([ "$arch" = arm64 ] && echo aarc
  && echo "${ld_sha}  /opt/linuxdeploy/linuxdeploy.AppImage" | sha256sum -c - \
  && chmod 755 /opt/linuxdeploy/linuxdeploy.AppImage
 
+# pasta (package passt), which gives the sandbox's localhost the host's loopback
+# ports (OQ-037). Ubuntu 22.04 has none, so it is built from the source of Ubuntu
+# 24.04's, the version the sandbox is pinned to; the SHA-256 is the one in that
+# package's .dsc. It lands in /usr/local/bin, where the sandbox looks for it.
+ARG PASST_VERSION=0.0~git20240220.1e6f92b
+ARG PASST_SHA256=a83098c04140939045c5a5906cab12285fb0e9339c890cb1007af840af8f397f
+RUN curl -fsSLo /tmp/passt.txz "http://archive.ubuntu.com/ubuntu/pool/universe/p/passt/passt_${PASST_VERSION}.orig.tar.xz" \
+ && echo "${PASST_SHA256}  /tmp/passt.txz" | sha256sum -c - \
+ && mkdir /tmp/passt && tar -C /tmp/passt --strip-components=1 -xJf /tmp/passt.txz \
+ && make -C /tmp/passt -j"$(nproc)" passt pasta \
+ && install -m 0755 /tmp/passt/passt /usr/local/bin/passt && ln -s passt /usr/local/bin/pasta \
+ && rm -rf /tmp/passt /tmp/passt.txz
+
 # A user to run as: tests that check a file is unreadable mean nothing as root.
 RUN useradd -m -u 1000 build && mkdir -p /home/build/go /home/build/.cache && chown -R build:build /home/build
 USER build

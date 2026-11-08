@@ -62,6 +62,25 @@ func (e *Egress) URL() string {
 	return (&url.URL{Scheme: "http", User: url.UserPassword(proxyUser, e.token), Host: e.addr}).String()
 }
 
+// Port is the loopback port the proxy listens on.
+func (e *Egress) Port() int {
+	_, p, _ := net.SplitHostPort(e.addr)
+	port, _ := strconv.Atoi(p)
+	return port
+}
+
+// ServeUnix serves the proxy on a Unix socket at path too, for a sandbox whose
+// commands cannot reach this computer's loopback (bubblewrap's, OQ-037); the
+// socket is mounted into it. The password is still needed. Close removes it.
+func (e *Egress) ServeUnix(path string) error {
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		return fmt.Errorf("the egress proxy: %w", err)
+	}
+	go e.srv.Serve(ln)
+	return nil
+}
+
 // Token is the proxy's password, for redaction.
 func (e *Egress) Token() string { return e.token }
 

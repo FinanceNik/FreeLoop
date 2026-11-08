@@ -1,12 +1,15 @@
 package netguard
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -153,5 +156,41 @@ func TestEgressNeedsItsPassword(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("in local-only mode: %s", res.Status)
+	}
+}
+
+// OQ-037: the proxy also on a Unix socket, for bubblewrap's sandbox, with the same
+// password and list; Close removes the socket.
+func TestEgressOnAUnixSocket(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "hello") }))
+	defer srv.Close()
+	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	e, _, _ := proxied(t, []string{host + ":" + port}, true)
+	if _, p, _ := net.SplitHostPort(strings.TrimPrefix(e.URL(), "http://freeloop:"+e.Token()+"@")); p != fmt.Sprint(e.Port()) {
+		t.Errorf("Port() = %d, URL %s", e.Port(), e.URL())
+	}
+	sock := filepath.Join(t.TempDir(), "egress.sock")
+	if err := e.ServeUnix(sock); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(e.URL())
+	via := func(proxy *url.URL) (*http.Response, error) {
+		tr := &http.Transport{Proxy: http.ProxyURL(proxy), DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", sock)
+		}}
+		return (&http.Client{Transport: tr}).Get(srv.URL)
+	}
+	res, err := via(u)
+	if err != nil || res.StatusCode != http.StatusOK {
+		t.Fatalf("through the socket: %v, %v", res, err)
+	}
+	res.Body.Close()
+	u.User = url.UserPassword("freeloop", "wrong")
+	if res, err := via(u); err != nil || res.StatusCode != http.StatusProxyAuthRequired {
+		t.Errorf("a wrong password through the socket: %v, %v", res, err)
+	}
+	e.Close()
+	if _, err := os.Stat(sock); err == nil {
+		t.Error("the socket outlived the proxy")
 	}
 }

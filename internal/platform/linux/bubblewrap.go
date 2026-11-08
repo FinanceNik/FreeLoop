@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
@@ -35,33 +36,42 @@ const maxPatternWalk = 200_000
 //   - sockets: /tmp, /run and the home folder are fresh, so Docker's, the SSH agent's,
 //     D-Bus's and the keyring's sockets are out of reach;
 //   - network: none, or the sandbox's own loopback, in a namespace of its own; or the
-//     host's when the environment allows all of it.
+//     host's when the environment allows all of it. network says how localhost and
+//     the listed hosts reach this computer's loopback.
 //
 // What it cannot do is protect a path that does not exist when the command starts:
 // only existing paths can be mounted read-only.
-type Bubblewrap struct{}
+type Bubblewrap struct {
+	// noPasta leaves pasta out even where it is installed, for tests of the
+	// sandbox without it.
+	noPasta bool
+}
 
 // Confine wraps argv in bwrap for c. An error means the command must not run.
-func (Bubblewrap) Confine(c environment.Confinement, argv []string) ([]string, error) {
-	bwrap := ""
-	for _, p := range bwrapPaths {
-		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
-			bwrap = p
-			break
-		}
-	}
+func (b Bubblewrap) Confine(c environment.Confinement, argv []string) ([]string, error) {
+	bwrap := firstFile(bwrapPaths)
 	if bwrap == "" {
 		return nil, errors.New("the sandbox needs bubblewrap: install the bubblewrap package")
 	}
-	args, err := BubblewrapArgs(c)
+	n, err := b.network(c)
 	if err != nil {
 		return nil, err
 	}
-	return append(append(append([]string{bwrap}, args...), "--"), argv...), nil
+	args, err := bubblewrapArgs(c, n)
+	if err != nil {
+		return nil, err
+	}
+	out := append(append(append(slices.Clone(n.pasta), bwrap), args...), "--")
+	return append(append(out, n.bridge...), argv...), nil
 }
 
-// BubblewrapArgs are bwrap's options for c, in order: later mounts go on top.
+// BubblewrapArgs are bwrap's options for c, with only the sandbox's own loopback
+// for localhost, in order: later mounts go on top.
 func BubblewrapArgs(c environment.Confinement) ([]string, error) {
+	return bubblewrapArgs(c, netPlan{})
+}
+
+func bubblewrapArgs(c environment.Confinement, n netPlan) ([]string, error) {
 	if c.Home == "" || len(c.Write) == 0 {
 		return nil, errors.New("a sandbox needs a home folder and a project")
 	}
@@ -69,7 +79,15 @@ func BubblewrapArgs(c environment.Confinement) ([]string, error) {
 		"--die-with-parent", "--new-session",
 		"--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-cgroup-try",
 	}
-	if c.Network != environment.NetworkAll {
+	switch {
+	case c.Network == environment.NetworkAll:
+	case n.pasta != nil:
+		// pasta's network namespace, whose loopback it serves. bwrap starts in it as
+		// root of pasta's user namespace, which owns that network: as that, a command
+		// could bring up pasta's interface and reach out through it. So the command
+		// gets a user namespace of its own, as the user, with no capabilities.
+		a = append(a, "--unshare-user", "--uid", strconv.Itoa(os.Getuid()), "--gid", strconv.Itoa(os.Getgid()), "--cap-drop", "ALL")
+	default:
 		a = append(a, "--unshare-net")
 	}
 	a = append(a, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run")
@@ -77,6 +95,7 @@ func BubblewrapArgs(c environment.Confinement) ([]string, error) {
 	if fi, err := os.Lstat("/var/run"); err == nil && fi.IsDir() {
 		a = append(a, "--tmpfs", "/var/run")
 	}
+	a = append(a, n.mounts...)
 	a = append(a, "--tmpfs", c.Home)
 
 	// What can be read and written, outer folders first so inner mounts go on top.

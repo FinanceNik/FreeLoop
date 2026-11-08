@@ -65,7 +65,19 @@ type Confinement struct {
 	// Certificates lets commands ask the system to verify TLS certificates, as
 	// Go does, for an environment that can reach listed hosts (ENV-010).
 	Certificates bool
+	// ProxySocket is the egress proxy's Unix socket and ProxyPort the loopback
+	// port its variables name (ENV-010). A sandbox whose commands cannot reach
+	// this computer's loopback, bubblewrap's without pasta (OQ-037), mounts the
+	// socket in and has a bridge inside listen on the port. Seatbelt reaches the
+	// proxy on loopback and ignores both.
+	ProxySocket string
+	ProxyPort   int
 }
+
+// SandboxBridgeArg is the hidden first argument that makes the app's own binary
+// the bridge inside a sandbox (RunSandboxBridge): the binary is the one helper
+// sure to be there, since nothing else may need installing.
+const SandboxBridgeArg = "sandbox-bridge"
 
 // Confiner wraps a command line so that it runs confined. An error means it
 // must not run at all: there is no unconfined fallback.

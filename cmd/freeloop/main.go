@@ -61,6 +61,10 @@ func init() {
 }
 
 func main() {
+	// Inside a sandbox, before anything that needs the data folder (OQ-037).
+	if len(os.Args) > 1 && os.Args[1] == environment.SandboxBridgeArg {
+		os.Exit(environment.RunSandboxBridge(os.Args[2:]))
+	}
 	dataDir, err := config.DataDir(devEnv(config.HomeEnv))
 	if err != nil {
 		log.Fatal(err)

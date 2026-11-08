@@ -532,7 +532,7 @@ The user wants the app on macOS, Windows and Linux, working essentially the same
 3. **The engine on Windows.** Paths with backslashes and drive letters, Windows' protected paths, line endings, files Windows will not rename while open, install hints, and the system prompt telling the model it writes bash.
 4. **The interface on each system.** *Built 2026-11-08.* Ctrl as the primary shortcut key on Windows and Linux, per-system names (File Explorer, Credential Manager), paths with either separator, help per system.
 5. **Packages and CI.** A Windows installer and portable zip, an AppImage and a .deb, each for x64 and arm64; `make release` gathering them with their SBOMs and checksums; a Windows job on every push beside the Linux one.
-6. **Linux's remaining parts**, from the first commit: `pasta` and the listed-hosts network.
+6. **Linux's remaining parts**, from the first commit: `pasta` and the listed-hosts network. *Built 2026-11-08* (OQ-037): localhost through pasta, pinned to Ubuntu 24.04's 2024-02-20, with the host's loopback TCP ports forwarded and nothing beyond; without pasta, or offline, the sandbox's own loopback; the listed hosts through the proxy, forwarded by pasta or reached through its Unix socket and a bridge that is the app's own binary. Tried in the build image (pasta built from source there) with `TestTheSandboxs*` in `internal/platform/linux`, against a stand-in proxy and against the real proxy and internet, not yet on a Linux desktop or under Ubuntu 24.04's own AppArmor profiles.
 
 *Done when:* the Go tests pass on the Windows and Linux runners, the packages build, and the user has run a session on each system.
 

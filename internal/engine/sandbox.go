@@ -149,6 +149,21 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 		}
 		e.remember(egress.Token())
 		closeEgress = egress.Close
+		// bubblewrap's commands may not reach this loopback; a socket mounted in
+		// does (OQ-037).
+		if goruntime.GOOS == "linux" {
+			dir := e.appCache("egress")
+			sock := filepath.Join(dir, egress.Token()[:16]+".sock")
+			err := environment.PrivateCache(dir)
+			if err == nil {
+				err = egress.ServeUnix(sock)
+			}
+			if err != nil {
+				egress.Close()
+				return nil, nil, err
+			}
+			c.ProxySocket, c.ProxyPort = sock, egress.Port()
+		}
 		networkEnv = environment.ProxyEnv(egress.URL())
 		// Fetching means writing where a package manager keeps its downloads,
 		// which the user's own builds read, so this project gets its own. Go can
