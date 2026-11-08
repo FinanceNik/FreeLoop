@@ -239,7 +239,7 @@ func TestMCPOAuthSignIn(t *testing.T) {
 	}
 }
 
-// A remote server's sign-in may not reach this Mac or its network; a server
+// A remote server's sign-in may not reach this computer or its network; a server
 // that is itself on one may.
 func TestOAuthClientRefusesPrivateAddresses(t *testing.T) {
 	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) }))

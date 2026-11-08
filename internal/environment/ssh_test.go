@@ -199,7 +199,7 @@ func TestSSHRefusesWhatAConfigAllows(t *testing.T) {
 	r := newRig(t, map[string]string{"a": "a"})
 	r.exec("true")
 	if _, err := os.Stat(filepath.Join(r.sshd.Dir, "local-command-ran")); err == nil {
-		t.Error("a LocalCommand from the config ran on this Mac")
+		t.Error("a LocalCommand from the config ran on this computer")
 	}
 	res := r.exec(`echo "agent=[$SSH_AUTH_SOCK]"`)
 	if !strings.Contains(res.Output, "agent=[]") {
@@ -284,7 +284,7 @@ func TestSSHKeepsSecretsHere(t *testing.T) {
 	}
 }
 
-// What this Mac would run or an agent would obey does not come back.
+// What this computer would run or an agent would obey does not come back.
 func TestSSHHoldsBackWhatWouldRunHere(t *testing.T) {
 	r := newRig(t, map[string]string{"a.txt": "a", "AGENTS.md": "be good\n"}, func(o *SSHOptions) {
 		o.NoWrite = func(rel string) bool { return strings.HasPrefix(rel, "locked/") }
@@ -353,7 +353,7 @@ func TestSSHLinksDoNotCrossOrLead(t *testing.T) {
 func TestSSHUsersEditsWin(t *testing.T) {
 	r := newRig(t, map[string]string{"a.txt": "base\n", "b.txt": "base\n"})
 	// Both sides change a.txt between the push and the pull: a command that edits it
-	// while this Mac does too.
+	// while this computer does too.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

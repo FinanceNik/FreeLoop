@@ -76,7 +76,7 @@ func (e *Engine) updateInfo() UpdateInfo {
 // Settings works even with the daily check off.
 func (e *Engine) CheckForUpdate(ctx context.Context) (UpdateInfo, error) {
 	if netguard.LocalOnly() {
-		return e.updateInfo(), errors.New("the app is set to connect to nothing but this Mac")
+		return e.updateInfo(), errors.New("the app is set to connect to nothing but this computer")
 	}
 	latest, url, err := fetchLatestRelease(ctx, e.releaseURL())
 	e.mu.Lock()

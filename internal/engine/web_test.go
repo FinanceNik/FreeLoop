@@ -61,7 +61,7 @@ func TestWebFetch(t *testing.T) {
 	}
 	netguard.SetLocalOnly(true)
 	defer netguard.SetLocalOnly(false)
-	if _, err := w.Fetch(ctx, srv.URL+"/page"); err == nil || !strings.Contains(err.Error(), "nothing but this Mac") {
+	if _, err := w.Fetch(ctx, srv.URL+"/page"); err == nil || !strings.Contains(err.Error(), "nothing but this computer") {
 		t.Errorf("local-only: %v", err)
 	}
 }

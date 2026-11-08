@@ -44,7 +44,7 @@ type runtime struct {
 	// Hooks the session was told do not run for want of approval (SET-005).
 	unapproved map[string]bool
 	env        environment.Environment
-	// host is the session's folder on this Mac, where the app's own git
+	// host is the session's folder on this computer, where the app's own git
 	// commands run even when env is a container.
 	host *environment.Local
 	// noCheckpoints is set once a snapshot failed (SES-014).
@@ -217,7 +217,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		}
 	} else if isSSH(envCfg) {
 		// An external agent would need its own login and paths over there. It is not
-		// run on this Mac instead, which would be out of what the user chose.
+		// run on this computer instead, which would be out of what the user chose.
 		if ses.HarnessID != builtin.ID {
 			return nil, fmt.Errorf("the %s environment runs commands on %s, and so far only the built-in agent can work that way", envCfg.Name, envCfg.Host)
 		}
@@ -352,7 +352,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		if caps, err := e.ModelCapabilities(ctx, ses.ProviderID, ses.Model, false); err == nil {
 			params.ContextWindow = caps.ContextWindow
 		}
-		// A token optimizer's program is on this Mac, and commands are not.
+		// A token optimizer's program is on this computer, and commands are not.
 		if !isSSH(envCfg) {
 			r.optimizer = &sessionOptimizer{e: e, sid: sid, env: env}
 			params.Optimizer = r.optimizer

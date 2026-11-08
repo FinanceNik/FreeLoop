@@ -47,7 +47,7 @@ const maxBrief = 20 << 10
 // once trusted.
 func (e *Engine) issueEnv(ctx context.Context, root string) (environment.Environment, error) {
 	if netguard.LocalOnly() {
-		return nil, errors.New("the app is set to connect to nothing but this Mac")
+		return nil, errors.New("the app is set to connect to nothing but this computer")
 	}
 	if root == "" || !environment.IsDir(root) {
 		return nil, errors.New("choose a project folder first")

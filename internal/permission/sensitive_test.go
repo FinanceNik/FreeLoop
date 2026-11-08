@@ -8,7 +8,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/environment"
 )
 
-// SEC-005: what the SSH sync holds back as something this Mac acts on, accept-edits
+// SEC-005: what the SSH sync holds back as something this computer acts on, accept-edits
 // mode asks about and a sandbox keeps read-only. Two lists drifted apart once: the
 // policy lacked AGENTS.md and .github/ while the sync held them.
 func TestActedOnLaterCoversTheSync(t *testing.T) {

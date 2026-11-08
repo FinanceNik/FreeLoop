@@ -138,7 +138,7 @@ func (e *Engine) optimizerApproved(o config.Optimizer) bool {
 	return o.Source == "" || e.optimizerMarked(e.Config(), o)
 }
 
-// optimizerMarked reports whether c holds this Mac's mark for the optimizer.
+// optimizerMarked reports whether c holds this computer's mark for the optimizer.
 func (e *Engine) optimizerMarked(c config.Config, o config.Optimizer) bool {
 	mark, err := e.approvalMark(o.Fingerprint())
 	if err != nil {
@@ -743,7 +743,7 @@ func (s *sessionOptimizer) Rewrite(ctx context.Context, command string, raw bool
 	maps.Copy(out.Env, o.Env)
 	if s.env.Kind() != environment.KindDocker {
 		// It keeps commands' full output here, and would make the folder open
-		// to anyone on this Mac.
+		// to anyone on this computer.
 		dir := s.e.optimizerDir(ses, environment.IsSandboxed(s.env))
 		if err := environment.PrivateCache(dir); err != nil {
 			s.warn(o, err.Error())

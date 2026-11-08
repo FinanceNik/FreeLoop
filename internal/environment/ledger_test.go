@@ -42,8 +42,11 @@ func started(pid int) (time.Time, bool) {
 // that ended is forgotten; and a process that only got the same number is left alone.
 func TestLeftoversAreStopped(t *testing.T) {
 	ProcessStarted = started
-	t.Cleanup(func() { ProcessStarted = nil; UseLedger(filepath.Join(t.TempDir(), "off.json")) })
 	ledgerFile := filepath.Join(t.TempDir(), "running.json")
+	// Registered after the folder, so it runs before the folder is removed: a command
+	// ending late then writes to the other ledger, not into a folder being removed.
+	off := filepath.Join(t.TempDir(), "off.json")
+	t.Cleanup(func() { ProcessStarted = nil; UseLedger(off) })
 	UseLedger(ledgerFile)
 	l, err := NewLocal(LocalOptions{Root: t.TempDir(), Guard: denyGuard{}, Shell: []string{"sh", "-c"}})
 	if err != nil {

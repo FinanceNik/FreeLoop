@@ -1,6 +1,6 @@
 // Package netguard is the local-only switch (NFR-OFF-003): when it is on,
 // every connection the app makes through Go's default HTTP transport (the
-// providers, their SDKs and remote MCP servers) may only reach this Mac.
+// providers, their SDKs and remote MCP servers) may only reach this computer.
 // Host names other than localhost are refused without a DNS lookup, so not
 // even the name leaves the machine, and proxies are bypassed.
 package netguard
@@ -57,7 +57,7 @@ func Install() {
 			}
 			// A name under .localhost goes to the loopback address without
 			// a lookup, which could leave the Mac; and whatever a name
-			// resolved to, the connection must end up on this Mac.
+			// resolved to, the connection must end up on this computer.
 			if host, port, err := net.SplitHostPort(addr); err == nil && strings.HasSuffix(strings.ToLower(strings.TrimSuffix(host, ".")), ".localhost") {
 				addr = net.JoinHostPort("127.0.0.1", port)
 			}
@@ -121,7 +121,7 @@ func Check(addr string) error {
 	return fmt.Errorf("local-only mode blocks the connection to %s", host)
 }
 
-// Local reports whether host is this Mac: a loopback address, localhost
+// Local reports whether host is this computer: a loopback address, localhost
 // or a name under .localhost.
 func Local(host string) bool {
 	host = strings.TrimSuffix(strings.Trim(host, "[]"), ".")

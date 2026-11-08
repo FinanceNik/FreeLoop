@@ -22,7 +22,7 @@ import (
 type Network string
 
 const (
-	// NetworkLocalhost is this Mac's loopback only (OQ-028): tests and dev
+	// NetworkLocalhost is this computer's loopback only (OQ-028): tests and dev
 	// servers work, and so does anything else listening here.
 	NetworkLocalhost Network = "localhost"
 	NetworkNone      Network = "none"
@@ -149,7 +149,7 @@ func SandboxReach(env Environment) string {
 	if l, ok := env.(*Local); ok && l.sandbox != nil && l.sandbox.Reach != "" {
 		return l.sandbox.Reach
 	}
-	return "only this Mac's localhost"
+	return "only this computer's localhost"
 }
 
 // ProxyEnv is what points the usual tools at an egress proxy. Node needs asking,

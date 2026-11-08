@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// PortOpen reports whether something listens on a port of this Mac, so the
+// PortOpen reports whether something listens on a port of this computer, so the
 // preview (GUI-020) can say when nothing does instead of showing a blank
 // frame.
 func (e *Engine) PortOpen(ctx context.Context, port int) bool {

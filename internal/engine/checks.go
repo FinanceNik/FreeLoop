@@ -18,7 +18,7 @@ import (
 // on its own; the app never reads its token. Failing GitHub Actions jobs
 // can be turned into one message for the agent with the end of their
 // logs. Like opening the pull request, this is the user's own action from
-// the GUI and runs on this Mac.
+// the GUI and runs on this computer.
 
 // Check is one CI check of a pull request.
 type Check struct {
@@ -69,7 +69,7 @@ func (e *Engine) runGH(ctx context.Context, env environment.Environment, args ..
 // request's URL.
 func (e *Engine) prEnv(ctx context.Context, sid string) (environment.Environment, string, error) {
 	if netguard.LocalOnly() {
-		return nil, "", errors.New("the app is set to connect to nothing but this Mac")
+		return nil, "", errors.New("the app is set to connect to nothing but this computer")
 	}
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {

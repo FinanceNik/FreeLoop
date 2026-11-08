@@ -86,7 +86,7 @@ func (l *Local) Spawn(ctx context.Context, spec SpawnSpec) (Process, error) {
 	if len(spec.Argv) == 0 || spec.Argv[0] == "" {
 		return nil, errors.New("environment: no command to start")
 	}
-	argv := spec.Argv
+	argv := l.viaShellIfBatch(spec.Argv)
 	if spec.LoginShell {
 		argv = append(append(append([]string{}, l.shell...), `exec "$0" "$@"`), spec.Argv...)
 	}

@@ -61,7 +61,7 @@ type Options struct {
 	// GroupMembers lists a process group's processes, so a group whose first process
 	// ended is recognised and stopped too.
 	GroupMembers func(pgid int) []int
-	// SystemInfo describes this Mac for a problem report (macOS version, model,
+	// SystemInfo describes this computer for a problem report (macOS version, model,
 	// chip, memory). Without it the report says the system is unknown.
 	SystemInfo func() string
 	// Home is the user's home directory, for the protected-path policy.

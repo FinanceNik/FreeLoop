@@ -108,7 +108,7 @@ func TestViewPDF(t *testing.T) {
 	}
 }
 
-// A repository's link to a file elsewhere on this Mac is not shown in the Files panel,
+// A repository's link to a file elsewhere on this computer is not shown in the Files panel,
 // nor opened, nor listed into.
 func TestFilesStayInTheSessionFolder(t *testing.T) {
 	ctx := context.Background()

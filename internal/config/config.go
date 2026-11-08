@@ -128,7 +128,7 @@ type Updates struct {
 // Network settings.
 type Network struct {
 	// LocalOnly blocks every connection the app makes to anything but
-	// this Mac.
+	// this computer.
 	LocalOnly bool `yaml:"localOnly,omitempty" json:"localOnly"`
 }
 

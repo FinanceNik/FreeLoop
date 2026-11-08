@@ -20,8 +20,8 @@ import (
 
 // The engine's side of the built-in harness's web tools (HRN-017). A fetch
 // reaches public addresses only, so a page or a model cannot point the app
-// at services on this Mac or its network. The only search endpoint is one
-// the user configured (OQ-025), which may be on this Mac.
+// at services on this computer or its network. The only search endpoint is one
+// the user configured (OQ-025), which may be on this computer.
 
 const (
 	maxPageBytes  = 5 << 20
@@ -36,7 +36,7 @@ var webSearchKey = secrets.Ref{Service: "freeloop", Account: "web/search"}
 type sessionWeb struct {
 	e *Engine
 	// client replaces the public-only client in tests, whose pages are on
-	// this Mac.
+	// this computer.
 	client *http.Client
 }
 
@@ -49,7 +49,7 @@ func (e *Engine) searchApproved(address string) bool {
 
 func (w sessionWeb) Fetch(ctx context.Context, raw string) (harness.WebPage, error) {
 	if netguard.LocalOnly() {
-		return harness.WebPage{}, errors.New("the app is set to connect to nothing but this Mac")
+		return harness.WebPage{}, errors.New("the app is set to connect to nothing but this computer")
 	}
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

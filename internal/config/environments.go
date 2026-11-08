@@ -20,7 +20,7 @@ import (
 // EnvironmentsDir holds one YAML file per environment (ENV-002).
 const EnvironmentsDir = "environments"
 
-// Environment is one environment's settings. A local one runs on this Mac
+// Environment is one environment's settings. A local one runs on this computer
 // in the session's project folder; a docker one runs each session in its
 // own container with the project bind-mounted (ENV-005). Several projects
 // and sessions can share an environment.

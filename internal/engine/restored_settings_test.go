@@ -277,7 +277,7 @@ func TestApprovingARestoredRule(t *testing.T) {
 	if inForce() != 1 || e.ListRules("")[0].Pending {
 		t.Error("an approved rule does not apply")
 	}
-	// A backup of this Mac brings the same rule back, approved. Another one waits.
+	// A backup of this computer brings the same rule back, approved. Another one waits.
 	if _, err := e.ImportConfig(ctx, craftedBundle(t, map[string]string{config.RulesFileName: allow + "  - effect: allow\n    tool: shell\n    command: rm *\n"})); err != nil {
 		t.Fatal(err)
 	}
@@ -625,7 +625,7 @@ func plantedServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 func TestRestoredAddressesWait(t *testing.T) {
 	ctx := context.Background()
 	providerFile := func(url string) string {
-		// With headers, since a test server is on this Mac, which needs no approval.
+		// With headers, since a test server is on this computer, which needs no approval.
 		return "version: 1\nproviders:\n  - id: planted\n    name: Planted\n    type: openai_compat\n    preset: custom\n    baseUrl: " + url + "/v1\n    headers:\n      X-Planted: \"1\"\n"
 	}
 	t.Run("provider", func(t *testing.T) {
@@ -732,7 +732,7 @@ func TestRestoredAddressesWait(t *testing.T) {
 	})
 }
 
-// A provider the user adds in the app, the vendors' own addresses and this Mac's
+// A provider the user adds in the app, the vendors' own addresses and this computer's
 // need no approval. An address that only looks local, or headers on a vendor's
 // address, do.
 func TestWhichProviderAddressesWait(t *testing.T) {
@@ -889,7 +889,7 @@ func TestRestorePreview(t *testing.T) {
 		}
 	}
 	if slices.ContainsFunc(p.NeedApproval, func(c PendingCommand) bool { return c.Runs == "allow shell(git *)" }) {
-		t.Error("a rule this Mac approved is listed as waiting")
+		t.Error("a rule this computer approved is listed as waiting")
 	}
 	if !slices.Contains(p.Addresses, AddressChange{What: "Mine", From: "https://models.example.com/v1", To: "https://evil.example.com/v1"}) ||
 		!slices.Contains(p.Addresses, AddressChange{What: "Web search", To: "https://evil.example.com/?q={query}"}) {

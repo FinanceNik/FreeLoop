@@ -9,7 +9,7 @@ import (
 )
 
 // NFR-OFF-003: with the switch on, a request to another host fails before
-// any lookup and is recorded; this Mac stays reachable; off, nothing
+// any lookup and is recorded; this computer stays reachable; off, nothing
 // changes.
 func TestLocalOnly(t *testing.T) {
 	Install()
@@ -31,7 +31,7 @@ func TestLocalOnly(t *testing.T) {
 		t.Fatalf("loopback: %v", err)
 	}
 	resp.Body.Close()
-	// A name under .localhost reaches this Mac without a lookup.
+	// A name under .localhost reaches this computer without a lookup.
 	resp, err = http.Get(strings.Replace(srv.URL, "127.0.0.1", "some-app.localhost", 1))
 	if err != nil || resp.StatusCode != 200 {
 		t.Fatalf(".localhost: %v", err)

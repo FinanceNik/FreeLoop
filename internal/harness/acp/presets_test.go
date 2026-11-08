@@ -26,7 +26,7 @@ import (
 // HRN-007: each preset passes the HRN-005 scenario with the real agent at its
 // pinned version, on a local stand-in for its model: a write it was told to
 // make reaches the app's approval, lands when allowed and not when denied, and
-// plan mode stops it. No key is needed and nothing leaves this Mac for a model.
+// plan mode stops it. No key is needed and nothing leaves this computer for a model.
 // scripts/verify-agents.sh downloads the agents and runs this; without
 // FREELOOP_AGENTS_DIR it skips.
 func TestPresetScenarios(t *testing.T) {
@@ -263,7 +263,7 @@ func writeFile(t *testing.T, path, text string) {
 	}
 }
 
-// goArch names this Mac's architecture as OpenCode's packages do.
+// goArch names this computer's architecture as OpenCode's packages do.
 func goArch() string {
 	if runtime.GOARCH == "amd64" {
 		return "x64"

@@ -105,7 +105,7 @@ func (e *Engine) sessionEnv(ctx context.Context, sid string) (environment.Enviro
 }
 
 // inSessionFolder resolves rel, following links, and refuses it when that leads out
-// of the session's folder: a repository's link to a file elsewhere on this Mac is not
+// of the session's folder: a repository's link to a file elsewhere on this computer is not
 // the project's to show.
 func inSessionFolder(env environment.Environment, rel string) (string, error) {
 	abs := env.Resolve(rel)
@@ -203,7 +203,7 @@ func (e *Engine) ViewFile(ctx context.Context, sid, rel string) (FileView, error
 }
 
 // FileOnHost returns the absolute path of a file in a session's folder, to
-// open it in another app; the session's folder is on this Mac for every
+// open it in another app; the session's folder is on this computer for every
 // environment.
 func (e *Engine) FileOnHost(ctx context.Context, sid, rel string) (string, error) {
 	rel, err := cleanRel(rel)

@@ -130,7 +130,7 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 		ReadAlways: []string{filepath.Join(environment.Canonical(e.dataDir), config.SkillsDir)},
 		Network:    environment.Network(cmp.Or(cfg.Sandbox.Network, string(environment.NetworkLocalhost))),
 	}
-	// The sandbox still lets commands reach only this Mac; the listed hosts are
+	// The sandbox still lets commands reach only this computer; the listed hosts are
 	// through a proxy here, which refuses the rest (ENV-010).
 	closeEgress := func() {}
 	var networkEnv map[string]string

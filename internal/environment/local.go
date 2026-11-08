@@ -142,7 +142,7 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 	if len(spec.Argv) > 0 && spec.LoginShell {
 		argv = append(append(append([]string{l.shell[0]}, l.shell[1:]...), `exec "$0" "$@"`), spec.Argv...)
 	} else if len(spec.Argv) > 0 {
-		argv = spec.Argv
+		argv = l.viaShellIfBatch(spec.Argv)
 	} else {
 		argv = append(append([]string{}, l.shell...), spec.Command)
 	}
@@ -232,6 +232,30 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		return res, ctx.Err() // cancelled by the caller
 	}
 	return res, nil
+}
+
+// viaShellIfBatch runs argv through the shell when its program is a Windows batch
+// file, as npm's npx.cmd and most shims installed by npm are. Windows starts a batch
+// file through cmd.exe, which reads the arguments again by rules of its own, so an
+// argument with & or | in it would run something else; Git Bash finds the shim's
+// shell-script twin instead and passes the arguments as they are.
+func (l *Local) viaShellIfBatch(argv []string) []string {
+	if runtime.GOOS != "windows" || !isBatch(argv[0]) {
+		return argv
+	}
+	return append(append(append([]string{}, l.shell...), `exec "$0" "$@"`), argv...)
+}
+
+// isBatch reports a program that is, or is found on PATH as, a .cmd or .bat file.
+func isBatch(program string) bool {
+	if p, err := exec.LookPath(program); err == nil {
+		program = p
+	}
+	switch strings.ToLower(filepath.Ext(program)) {
+	case ".cmd", ".bat":
+		return true
+	}
+	return false
 }
 
 // StopLingering stops what this environment's finished commands left running in the
@@ -585,7 +609,9 @@ func (f *localFS) Grep(ctx context.Context, dir, expr, include string, ignoreCas
 		sc := bufio.NewScanner(file)
 		sc.Buffer(make([]byte, 64*1024), 1024*1024)
 		for n := 1; sc.Scan(); n++ {
-			line := sc.Bytes()
+			// A file with Windows line endings keeps its \r out of the match, so foo$
+			// finds foo at a line's end, and out of what is shown.
+			line := bytes.TrimSuffix(sc.Bytes(), []byte("\r"))
 			if n == 1 && bytes.IndexByte(line, 0) >= 0 {
 				return false // binary
 			}

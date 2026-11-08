@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// LogsDir holds the app's log, which stays on this Mac (NFR-PRIV-001).
+// LogsDir holds the app's log, which stays on this computer (NFR-PRIV-001).
 const LogsDir = "logs"
 
 const maxLogSize = 5 << 20

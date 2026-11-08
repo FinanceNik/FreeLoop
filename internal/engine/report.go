@@ -15,7 +15,7 @@ import (
 const ReportLogLines = 200
 
 // ProblemReport is the text "Copy a report" puts on the clipboard, for an issue: the
-// app's version, this Mac, the session's agent, provider and model when a session is
+// app's version, this computer, the session's agent, provider and model when a session is
 // given, and the end of the log. It goes nowhere by itself (NFR-PRIV-001), and
 // the user reads it before pasting it. The log is redacted again here, since a
 // crash trace reaches the log file without passing the redaction the app's own lines

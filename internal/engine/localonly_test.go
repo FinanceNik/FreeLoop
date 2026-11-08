@@ -9,7 +9,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 )
 
-// NFR-OFF-003: with local-only on, a provider outside this Mac is not
+// NFR-OFF-003: with local-only on, a provider outside this computer is not
 // reached: the session says why and the attempt is listed; turning it off
 // in Settings lifts it.
 func TestLocalOnly(t *testing.T) {

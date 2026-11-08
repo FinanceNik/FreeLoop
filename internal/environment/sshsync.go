@@ -33,7 +33,7 @@ import (
 //     not replaced;
 //   - sizes and counts are capped, with no compression to expand;
 //   - a path through a symlink here is refused, and writes pass the Guard;
-//   - settings that this Mac runs or an agent obeys are held back, whatever they say;
+//   - settings that this computer runs or an agent obeys are held back, whatever they say;
 //   - the user's own edits win over what comes back;
 //   - if the project's ignore rules cannot be read, nothing comes back;
 //   - what is replaced or deleted is set aside first, and a mass delete is not applied,
@@ -113,11 +113,11 @@ func validSyncPath(rel string) bool {
 	return true
 }
 
-// What crosses is decided by name, at any depth, the way this Mac's file system compares
+// What crosses is decided by name, at any depth, the way this computer's file system compares
 // names, so .GIT/config is .git/config.
 //
 // Neither way: settings of tools and agents, which can hold secrets and which what is
-// over there has no use for, and installed code. What this Mac would run or an agent
+// over there has no use for, and installed code. What this computer would run or an agent
 // would obey with no one reading it first must not come back: a Python package in a
 // .venv runs at the next python, whatever git status shows.
 //
@@ -190,7 +190,7 @@ func SyncHeldNames() []string {
 // what the sync never sends, and the broker asks about before it is read.
 func SecretPath(rel string) bool { return secretPath(rel) }
 
-// secretPath reports a path that never leaves this Mac, tracked or not, and does not
+// secretPath reports a path that never leaves this computer, tracked or not, and does not
 // come back either.
 func secretPath(rel string) bool {
 	parts := strings.Split(FoldPath(rel), "/")
@@ -259,7 +259,7 @@ func (s *SSH) localHash(rel string) string {
 
 // push sends what changed here since the two sides last agreed, and removes there what
 // went from here. Secrets and what a deny rule covers stay here. The tar is written
-// here, of regular files only, so nothing of this Mac is reachable through a link.
+// here, of regular files only, so nothing of this computer is reachable through a link.
 func (s *SSH) push(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, syncTimeout)
 	defer cancel()
@@ -642,7 +642,7 @@ func (s *SSH) pull(ctx context.Context) ([]string, error) {
 	}
 	notes = append(notes, s.applyDeletes(everything)...)
 	if fresh := s.fresh("held", held); len(fresh) > 0 {
-		notes = append(notes, fmt.Sprintf("Held back on %s and not applied to the project here: %s. These are settings this Mac or an agent would act on, secrets, or paths a deny rule covers; copy them by hand if you want them.", s.opts.Host, listed(fresh)))
+		notes = append(notes, fmt.Sprintf("Held back on %s and not applied to the project here: %s. These are settings this computer or an agent would act on, secrets, or paths a deny rule covers; copy them by hand if you want them.", s.opts.Host, listed(fresh)))
 	}
 	if fresh := s.fresh("odd", odd); len(fresh) > 0 {
 		notes = append(notes, fmt.Sprintf("Not brought back from %s, because of their names: %s.", s.opts.Host, listed(fresh)))

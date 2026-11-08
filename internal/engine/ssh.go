@@ -18,7 +18,7 @@ import (
 )
 
 // SSH environments (ENV-008): a session's commands run on another machine, in a working
-// copy kept in sync with the project here. The project stays on this Mac, so the app's
+// copy kept in sync with the project here. The project stays on this computer, so the app's
 // git, diffs, checkpoints and file tools work as they do for a local folder. The other
 // machine is not trusted: see internal/environment/sshsync.go and docs/SECURITY.md.
 // The broker asks about commands there as it does here.

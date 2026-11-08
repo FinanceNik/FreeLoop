@@ -113,7 +113,7 @@ func TestEgress(t *testing.T) {
 	}
 }
 
-// ENV-010: a listed name that leads to this Mac or its network is refused, so a
+// ENV-010: a listed name that leads to this computer or its network is refused, so a
 // list cannot be turned on local services by changing what a name resolves to.
 func TestEgressRefusesPrivateAddresses(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "local") }))

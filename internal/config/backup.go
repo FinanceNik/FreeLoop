@@ -93,7 +93,7 @@ func withoutApprovals(content []byte) ([]byte, error) {
 }
 
 // keepLocalOnly keeps local-only mode on in a restored config.yaml when it is on
-// now (NFR-OFF-003): it blocks connections on this Mac, and a file from elsewhere
+// now (NFR-OFF-003): it blocks connections on this computer, and a file from elsewhere
 // has no say in that. The user turns it off in Settings. Done before anything is
 // written, so the watcher never sees the switch off.
 func keepLocalOnly(dir string, content []byte) ([]byte, error) {

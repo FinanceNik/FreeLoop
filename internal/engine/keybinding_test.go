@@ -488,7 +488,7 @@ func TestBypassIsRefusedInAnUntrustedProject(t *testing.T) {
 	}
 }
 
-// OAuth's exception for a server on this Mac covers that server, not what its
+// OAuth's exception for a server on this computer covers that server, not what its
 // metadata names.
 func TestOAuthPrivateExceptionIsTheServersOwn(t *testing.T) {
 	own, _ := keyTrap(t, "unused")
@@ -502,7 +502,7 @@ func TestOAuthPrivateExceptionIsTheServersOwn(t *testing.T) {
 	}
 	if res, err := c.Get(strings.Replace(other.URL, "127.0.0.1", "localhost", 1)); err == nil {
 		res.Body.Close()
-		t.Error("metadata could point at another service on this Mac")
+		t.Error("metadata could point at another service on this computer")
 	}
 }
 

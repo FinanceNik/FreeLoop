@@ -47,7 +47,7 @@ import (
 // And for where things are sent (SET-005, SEC-009): a provider's address, the
 // search and MCP registry addresses, a profile's fallback and the update check.
 // Nothing goes to one until approved. The app's own list of vendor addresses and
-// this Mac need no mark, as long as no key or headers of the file's go with them.
+// this computer need no mark, as long as no key or headers of the file's go with them.
 
 // Kinds of PendingCommand.
 const (
@@ -158,7 +158,7 @@ func settingsItems(c config.Config) []PendingCommand {
 }
 
 // providerItem says what a provider sends where, if that needs a mark. A vendor's
-// address the app ships and this Mac are no surprise, unless something of the
+// address the app ships and this computer are no surprise, unless something of the
 // file's goes along: headers can carry someone else's key, so that the vendor
 // keeps the prompts in their account, and a key is for an address the user chose.
 func providerItem(c config.Provider) (PendingCommand, bool) {
@@ -212,7 +212,7 @@ func shippedAddress(c config.Provider) string {
 	return originOf(base)
 }
 
-// localAddress reports an origin on this Mac, by the check local-only mode uses.
+// localAddress reports an origin on this computer, by the check local-only mode uses.
 func localAddress(origin string) bool {
 	u, err := url.Parse(origin)
 	return err == nil && u.Host != "" && netguard.Local(u.Hostname())
@@ -503,7 +503,7 @@ func (e *Engine) commandApproved(fingerprint string) bool {
 	return e.markIn(e.Config().CommandApprovals, fingerprint)
 }
 
-// markIn reports whether approvals hold this Mac's mark for fingerprint.
+// markIn reports whether approvals hold this computer's mark for fingerprint.
 func (e *Engine) markIn(approvals []string, fingerprint string) bool {
 	mark, err := e.approvalMark(fingerprint)
 	if err != nil {

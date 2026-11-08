@@ -223,7 +223,7 @@ func (e *Engine) CreatePullRequest(ctx context.Context, req CreatePullRequestReq
 		return event.PullRequestData{}, fmt.Errorf("%q is not a branch name", base)
 	}
 	if netguard.LocalOnly() {
-		return event.PullRequestData{}, errors.New("the app is set to connect to nothing but this Mac; turn local-only off in Settings to push and open a pull request")
+		return event.PullRequestData{}, errors.New("the app is set to connect to nothing but this computer; turn local-only off in Settings to push and open a pull request")
 	}
 	info, env, err := e.pullRequestInfo(ctx, req.SessionID, base)
 	if err != nil {

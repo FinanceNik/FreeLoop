@@ -14,7 +14,7 @@ import (
 
 // Server is a real sshd on a free port, with a config for it as the user's own
 // ~/.ssh/config would be: Host box connects with a known key, and Host unknownbox has a
-// host key this Mac does not know.
+// host key this computer does not know.
 type Server struct {
 	Dir, Config string
 }

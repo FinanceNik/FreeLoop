@@ -343,14 +343,14 @@ func freeLoopbackPort() (int, error) {
 // through http.DefaultTransport, so the local-only switch covers it
 // (NFR-OFF-003), and refuses private and loopback addresses unless the
 // server itself is on one (by address or by what its name resolves to), so
-// a server's metadata cannot point the app at services on this Mac or its
+// a server's metadata cannot point the app at services on this computer or its
 // network. Every request's host is checked before it is sent, proxied ones
 // too, and a direct connection's address once more after it is made.
 func oauthClient(serverURL string) *http.Client {
 	u, _ := url.Parse(serverURL)
 	if u != nil && hostIsPrivate(u.Hostname()) {
 		// Only the server itself: its metadata still cannot point at anything
-		// else on this Mac or its network, whatever its name resolves to later.
+		// else on this computer or its network, whatever its name resolves to later.
 		return &http.Client{Timeout: 30 * time.Second, Transport: ownHostOnly{host: u.Host, own: http.DefaultTransport, others: publicClient().Transport}}
 	}
 	return publicClient()
@@ -448,7 +448,7 @@ func privateHost(host string) bool {
 	return err == nil && netguard.PrivateAddr(ip)
 }
 
-// webPage reports an https address, or an http one on this Mac.
+// webPage reports an https address, or an http one on this computer.
 func webPage(raw string) bool {
 	u, err := url.Parse(raw)
 	if err != nil {

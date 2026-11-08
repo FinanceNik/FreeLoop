@@ -21,7 +21,7 @@ import (
 )
 
 // Egress is a sandboxed session's way to the internet (ENV-010). The sandbox
-// lets its commands reach only this Mac, and this proxy on this Mac forwards to
+// lets its commands reach only this computer, and this proxy on this computer forwards to
 // the hosts an environment lists and refuses the rest. So a command that ignores
 // the proxy variables gets no connection at all: it fails closed. TLS passes
 // through untouched, since the proxy sees only the host a client asks for.
@@ -42,7 +42,7 @@ type Egress struct {
 const proxyUser = "freeloop"
 
 // StartEgress starts a proxy on loopback for the listed hosts. A password in its
-// URL keeps other programs on this Mac, sandboxed sessions included, from
+// URL keeps other programs on this computer, sandboxed sessions included, from
 // borrowing its list. onBlocked hears once of each host it refuses.
 func StartEgress(hosts []string, onBlocked func(host string)) (*Egress, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -119,7 +119,7 @@ func (e *Egress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if LocalOnly() {
-		e.refuse(w, host, "the app is set to connect to nothing but this Mac")
+		e.refuse(w, host, "the app is set to connect to nothing but this computer")
 		return
 	}
 	if r.Method == http.MethodConnect {
@@ -185,7 +185,7 @@ func HostAllowed(hosts []string, host string, port int) bool {
 	return false
 }
 
-// PrivateAddr reports an address on this Mac or its local network.
+// PrivateAddr reports an address on this computer or its local network.
 func PrivateAddr(ip netip.Addr) bool {
 	ip = ip.Unmap()
 	if ip.Is6() {

@@ -113,3 +113,12 @@ func TestInheritedOnWindows(t *testing.T) {
 		t.Errorf("on a Mac, inherited = %q", got)
 	}
 }
+
+// A batch file is told by its extension, found on PATH or named in full.
+func TestIsBatch(t *testing.T) {
+	for p, want := range map[string]bool{`C:\nodejs\npx.cmd`: true, `C:\x\run.BAT`: true, `C:\Git\bin\bash.exe`: false, "definitely-not-a-program-here": false} {
+		if got := isBatch(p); got != want {
+			t.Errorf("isBatch(%q) = %v, want %v", p, got, want)
+		}
+	}
+}

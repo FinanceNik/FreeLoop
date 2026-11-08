@@ -19,7 +19,7 @@ import (
 // without secrets, and restored from it.
 
 // ConfigRestore is what a restore did: the files written, and the
-// providers whose API key is not in this Mac's Keychain, to enter again.
+// providers whose API key is not in this computer's Keychain, to enter again.
 type ConfigRestore struct {
 	Files    []string `json:"files"`
 	NeedKeys []string `json:"needKeys"`
@@ -148,7 +148,7 @@ func providerShown(c config.Provider) string {
 	return cmp.Or(c.BaseURL, shippedAddress(c), "its default endpoint")
 }
 
-// missingKeys names the providers whose API key is not in this Mac's Keychain.
+// missingKeys names the providers whose API key is not in this computer's Keychain.
 func (e *Engine) missingKeys(cfgs []config.Provider) []string {
 	out := []string{}
 	for _, c := range cfgs {
@@ -203,7 +203,7 @@ func (e *Engine) restoreBundle(b []byte) (ConfigRestore, error) {
 		changed[i] = filepath.FromSlash(rel)
 	}
 	e.reload(changed)
-	// What this Mac approved stays approved, for the files a backup does not hold
+	// What this computer approved stays approved, for the files a backup does not hold
 	// and for the same commands in those it does.
 	if err := e.addApprovals(approvals); err != nil {
 		return ConfigRestore{}, err

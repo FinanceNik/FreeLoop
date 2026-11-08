@@ -28,7 +28,7 @@ import (
 // are done. Each worktree session also gets a block of ports, so two dev
 // servers never collide, and a run command started in a terminal tab.
 // Commands run where the agent's own do, with the session environment's
-// variables and secrets: on this Mac in the worktree, or in the session's
+// variables and secrets: on this computer in the worktree, or in the session's
 // container (scriptHost); an untrusted project runs nothing. Files are copied
 // on the host, because the main checkout is not in the container.
 
@@ -339,14 +339,14 @@ func (e *Engine) scriptHost(ctx context.Context, ses session.Session) (environme
 	if err != nil {
 		return nil, nil, err
 	}
-	// What a machine elsewhere changed is here now: a script run here on this Mac would
+	// What a machine elsewhere changed is here now: a script run here on this computer would
 	// be running what it wrote, with no sandbox.
 	if isSSH(cfg) {
-		return nil, nil, errors.New("this session's commands run on another machine, so its scripts do not run on this Mac")
+		return nil, nil, errors.New("this session's commands run on another machine, so its scripts do not run on this computer")
 	}
 	if cfg.Kind != string(environment.KindDocker) {
 		if e.containerStarted(ctx, ses.ID) {
-			return nil, nil, errors.New("a container has had this worktree and the session's environment is no longer Docker, so this command does not run on this Mac")
+			return nil, nil, errors.New("a container has had this worktree and the session's environment is no longer Docker, so this command does not run on this computer")
 		}
 		if cfg.SandboxOn() {
 			sandboxed, closeIt, err := e.sandboxEnv(ctx, ses, cfg, nil)

@@ -134,7 +134,7 @@ func (e *Engine) SearchMCPRegistry(ctx context.Context, query, cursor string) (R
 		return RegistryPage{}, errors.New("set a registry address in Settings first")
 	}
 	if netguard.LocalOnly() {
-		return RegistryPage{}, errors.New("the app is set to connect to nothing but this Mac")
+		return RegistryPage{}, errors.New("the app is set to connect to nothing but this computer")
 	}
 	if !registryAddress(base) {
 		return RegistryPage{}, fmt.Errorf("%q is not an https address", base)
@@ -283,7 +283,7 @@ func (e *Engine) SetMCPRegistryAddress(address string) error {
 	return err
 }
 
-// registryAddress takes https, or http on this Mac for a registry of one's own.
+// registryAddress takes https, or http on this computer for a registry of one's own.
 func registryAddress(address string) bool {
 	u, err := url.Parse(address)
 	if err != nil || u.Host == "" {

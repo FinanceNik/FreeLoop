@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-// A font is a family name on this Mac (GUI-025). The names go into a style
+// A font is a family name on this computer (GUI-025). The names go into a style
 // sheet, in quotes, so only what family names are made of passes: quotes,
 // semicolons, braces, parentheses and slashes cannot get in, so a value edited
 // into the file can neither add a rule nor make the page fetch something.

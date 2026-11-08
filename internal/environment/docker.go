@@ -231,7 +231,7 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 			return false
 		}
 		for _, p := range d.opts.ReadOnly {
-			dir := strings.HasSuffix(p, "/")
+			dir := strings.HasSuffix(p, "/") || strings.HasSuffix(p, string(filepath.Separator))
 			p = filepath.Clean(p)
 			if !inside(p) {
 				continue

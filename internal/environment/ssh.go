@@ -19,7 +19,7 @@ import (
 )
 
 // An SSH environment runs a session's commands on another machine (ENV-008). The
-// project stays on this Mac, where the app's git, diffs, checkpoints and file tools
+// project stays on this computer, where the app's git, diffs, checkpoints and file tools
 // work as they do for a local folder; the session has a working copy over there.
 //
 // The other machine is not trusted, and neither is what runs on it. An approved
@@ -89,7 +89,7 @@ type SSHOptions struct {
 	RemoteDir string
 	// SessionID names the session's folder there, which is all that is ever deleted.
 	SessionID string
-	// Root is the project on this Mac.
+	// Root is the project on this computer.
 	Root string
 	// Env reaches every command, by way of its standard input: never on a command line
 	// here or there, and never in the environment of ssh.
@@ -112,11 +112,11 @@ type SSHOptions struct {
 	// Ignored returns those of paths the project ignores, which are not brought back.
 	// An error brings nothing back, since what it would have kept out could run here.
 	Ignored func(ctx context.Context, paths []string) ([]string, error)
-	// NoRead reports a path that must not leave this Mac: a deny rule covers reading it.
+	// NoRead reports a path that must not leave this computer: a deny rule covers reading it.
 	NoRead func(rel string) bool
 	// NoWrite reports a path that must not change from over there: a deny rule covers it.
 	NoWrite func(rel string) bool
-	// ActedOn names files and folders something on this Mac acts on, which cross neither
+	// ActedOn names files and folders something on this computer acts on, which cross neither
 	// way, on top of the ones here (permission.ActedOnLater).
 	ActedOn []string
 	// SetAsideDir keeps what comes back's predecessors: a private folder of the session's.
@@ -129,7 +129,7 @@ type SSHOptions struct {
 // copy brought up to date first and what it changed brought back after.
 type SSH struct {
 	opts SSHOptions
-	// host is this Mac's side: the project's files, and the ssh processes. It has no
+	// host is this computer's side: the project's files, and the ssh processes. It has no
 	// variables of its own, so nothing of the session's reaches ssh's environment.
 	host *Local
 
@@ -209,7 +209,7 @@ func (s *SSH) Describe() string {
 // or a Host entry cannot turn them off.
 //
 // Host keys are never accepted here: an unknown or changed key refuses to connect, and
-// the user checks it in a terminal. Nothing of this Mac reaches the other machine: its
+// the user checks it in a terminal. Nothing of this computer reaches the other machine: its
 // agent, X, or ports either way. It cannot run a command here either.
 var sshOptions = []string{
 	"-T", "-a", "-x", "-e", "none",
@@ -443,7 +443,7 @@ func (s *SSH) connectError(res ExecResult) error {
 	said := strings.TrimSpace(res.Stderr + "\n" + res.Output)
 	switch {
 	case strings.Contains(said, "Host key verification failed"), strings.Contains(said, "REMOTE HOST IDENTIFICATION HAS CHANGED"), strings.Contains(said, "No ED25519 host key is known"), strings.Contains(said, "host key is known"):
-		return fmt.Errorf("%s has a host key this Mac does not know or that has changed, and Freeloop does not accept one by itself. Run ssh %s in a terminal, check the fingerprint it shows, then try again", s.opts.Host, s.opts.Host)
+		return fmt.Errorf("%s has a host key this computer does not know or that has changed, and Freeloop does not accept one by itself. Run ssh %s in a terminal, check the fingerprint it shows, then try again", s.opts.Host, s.opts.Host)
 	case strings.Contains(said, "Permission denied"):
 		return fmt.Errorf("%s refused the login. Freeloop signs in with no prompt, using your keys and ssh agent as ssh does: check that ssh %s works in a terminal without a password", s.opts.Host, s.opts.Host)
 	}
@@ -616,7 +616,7 @@ func (s *SSH) remoteCwd(cwd string) (string, error) {
 }
 
 // mapWork turns a path of the working copy into the same one here. Any other path
-// stays as it is, and is judged as a path of this Mac.
+// stays as it is, and is judged as a path of this computer.
 func (s *SSH) mapWork(p string) string {
 	w := s.published.Load()
 	if w == nil {
