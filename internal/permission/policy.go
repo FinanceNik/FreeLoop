@@ -2,6 +2,7 @@ package permission
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -80,12 +81,53 @@ func NewPolicy(home, appDataDir string) *Policy {
 		filepath.Join(home, ".config", "KeePassXC"),
 		appDataDir,
 	)
+	neverRead = append(neverRead, windowsSecrets(home, os.Getenv("APPDATA"), os.Getenv("LOCALAPPDATA"))...)
 	p := &Policy{shown: neverRead}
 	for _, d := range neverRead {
 		p.neverRead = append(p.neverRead, canonical(d)...)
 	}
 	p.neverWrite = p.neverRead
 	return p
+}
+
+// windowsSecrets are Windows' equivalents (NFR-XPLAT-003): the credential and vault
+// stores, DPAPI's master keys, which decrypt everything else DPAPI protects, the
+// certificates' private keys, the browsers' profiles under AppData, and the tools that
+// keep their sign-ins there rather than in a dot folder (.ssh, .aws, .azure, .docker
+// and the like are in the home folder on Windows too, and listed above). AppData is
+// below the home folder unless an administrator moved it, in which case roaming and
+// local, from %APPDATA% and %LOCALAPPDATA%, are added as well. Like Linux's, these are
+// in on every system.
+func windowsSecrets(home, roaming, local string) []string {
+	roamings := []string{filepath.Join(home, "AppData", "Roaming")}
+	if roaming != "" && filepath.IsAbs(roaming) && filepath.Clean(roaming) != roamings[0] {
+		roamings = append(roamings, filepath.Clean(roaming))
+	}
+	locals := []string{filepath.Join(home, "AppData", "Local")}
+	if local != "" && filepath.IsAbs(local) && filepath.Clean(local) != locals[0] {
+		locals = append(locals, filepath.Clean(local))
+	}
+	out := []string{filepath.Join(home, "_netrc")}
+	for _, r := range roamings {
+		for _, rel := range [][]string{
+			{"Microsoft", "Credentials"}, {"Microsoft", "Protect"}, {"Microsoft", "Vault"},
+			{"Microsoft", "Crypto"}, {"Microsoft", "SystemCertificates"},
+			{"Mozilla"}, {"Thunderbird"}, {"Opera Software"}, {"Bitwarden"}, {"KeePassXC"}, {"1Password"},
+			{"GitHub CLI"}, {"gcloud"}, {"rclone"},
+		} {
+			out = append(out, filepath.Join(append([]string{r}, rel...)...))
+		}
+	}
+	for _, l := range locals {
+		for _, rel := range [][]string{
+			{"Microsoft", "Credentials"}, {"Microsoft", "Vault"}, {"Microsoft", "Edge"},
+			{"Google", "Chrome"}, {"Chromium"}, {"BraveSoftware"}, {"Vivaldi"}, {"Mozilla"},
+			{"1Password"}, {"Bitwarden"},
+		} {
+			out = append(out, filepath.Join(append([]string{l}, rel...)...))
+		}
+	}
+	return out
 }
 
 // NeverRead lists the locations nothing may read, in all their spellings, for a

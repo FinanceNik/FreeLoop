@@ -33,6 +33,9 @@ func TestReadOnlyCommand(t *testing.T) {
 		// Git takes a unique start of a long option, so does this.
 		"git diff --outp=x": false, "git log --ext-di": false, "git show --textc": false,
 		"git log --oneline": true, "git diff --name-only": true, "git diff --": true,
+
+		// A Windows drive is outside the project, with or without a slash (NFR-XPLAT-003).
+		"cat C:/Users/a/.ssh/id": false, "cat c:secret": false, "git show HEAD:a.go": true,
 	} {
 		if got := ReadOnlyCommand(line); got != want {
 			t.Errorf("ReadOnlyCommand(%q) = %v", line, got)

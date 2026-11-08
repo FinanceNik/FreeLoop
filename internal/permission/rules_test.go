@@ -123,3 +123,23 @@ func TestRuleFor(t *testing.T) {
 		t.Errorf("tool rule = %+v, %v", r, ok)
 	}
 }
+
+// On Windows a backslash in a rule's path is a separator, so src\** is src/**; elsewhere
+// it escapes, as path.Match has it (NFR-XPLAT-003).
+func TestRulePathSeparators(t *testing.T) {
+	for _, c := range []struct {
+		goos, pattern string
+		literal       bool
+		want          string
+	}{
+		{"windows", `src\**`, false, "src/**"},
+		{"windows", `C:\Users\a\**`, false, "C:/Users/a/**"},
+		{"windows", `src\a.go`, true, `src\a.go`},
+		{"linux", `src\*`, false, `src\*`},
+		{"darwin", "src/**", false, "src/**"},
+	} {
+		if got := rulePath(c.goos, c.pattern, c.literal); got != c.want {
+			t.Errorf("rulePath(%s, %q, %v) = %q, want %q", c.goos, c.pattern, c.literal, got, c.want)
+		}
+	}
+}

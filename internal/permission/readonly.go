@@ -120,6 +120,10 @@ func leavesProject(word string) bool {
 	if strings.HasPrefix(word, "/") {
 		return true
 	}
+	// A drive on Windows, C:x as well as C:/x, which is C:'s current folder there.
+	if len(word) >= 2 && word[1] == ':' && (word[0]|0x20 >= 'a' && word[0]|0x20 <= 'z') {
+		return true
+	}
 	for _, sep := range []string{"=/", ":/", ",/", "@/", "%/", "+/"} {
 		if strings.Contains(word, sep) {
 			return true

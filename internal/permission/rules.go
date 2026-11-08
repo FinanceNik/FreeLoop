@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"unicode"
@@ -318,7 +319,7 @@ func (r Rule) matchCommand(cmd string) bool {
 }
 
 func (r Rule) matchPath(root, p string) bool {
-	pattern := r.Path
+	pattern := rulePath(goruntime.GOOS, r.Path, r.Literal)
 	if r.Literal {
 		if filepath.IsAbs(pattern) {
 			return environment.FoldPath(filepath.Clean(pattern)) == environment.FoldPath(p)
@@ -347,6 +348,17 @@ func (r Rule) matchPath(root, p string) bool {
 		}
 	}
 	return false
+}
+
+// rulePath is a rule's path as matching reads it on goos. On Windows a backslash
+// is a separator there, as a slash is, so src\** is src/** and matches src\a.go
+// (NFR-XPLAT-003); elsewhere a backslash in a glob escapes the next character. A
+// literal path is joined to the root as it is, which on Windows reads either.
+func rulePath(goos, pattern string, literal bool) string {
+	if goos == "windows" && !literal {
+		return strings.ReplaceAll(pattern, `\`, "/")
+	}
+	return pattern
 }
 
 // absSpellings returns an absolute pattern under each spelling of its
