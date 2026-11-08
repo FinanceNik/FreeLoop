@@ -40,7 +40,7 @@ blockedBy: [001-store-a-draft]
 
 The **Board** shows a **Backlog** column for each trusted project that has one: each issue is **Ready**, **Blocked** (with what it waits on) or **Done**. An issue the app can't read counts as one for a person.
 
-**Archive finished** moves done issues, and PRDs whose issues are all done, into Freeloop's data folder and commits their removal, so later agents aren't misled by stale docs. Git history keeps them too.
+**Archive finished** removes done issues, and PRDs whose issues are all done, in a commit of their own, so later agents aren't misled by stale docs. Git history keeps them: `git log -- backlog/` lists them and `git show` brings one back.
 
 ## Run the AFK issues
 

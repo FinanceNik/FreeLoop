@@ -233,7 +233,7 @@ A stage's prompt goes through `enqueue` as the user's message with `noMentions`,
 
 ### The backlog and the AFK run
 
-`internal/backlog` parses issue and PRD files and places each issue (done, ready, blocked by an open or missing issue or a cycle); a file it cannot read counts as open and for a person. `internal/engine/backlog.go` reads a backlog only in a trusted project, through `localEnv`, and archives what is finished (`ArchiveBacklog`: a copy under `archive/` in the data folder, then `git rm` and a commit of only those paths).
+`internal/backlog` parses issue and PRD files and places each issue (done, ready, blocked by an open or missing issue or a cycle); a file it cannot read counts as open and for a person. `internal/engine/backlog.go` reads a backlog only in a trusted project, through `localEnv`, and archives what is finished (`ArchiveBacklog`: `git rm` and a commit of only those paths that names them; git history is the archive).
 
 An AFK run (`internal/engine/afk.go`, `afkruns.json`) is a list of steps moved on by `runAFK`, which the schedule loop calls between two `runQueue` passes, at its tick and whenever a session's status changes (`KickRuns` from `observe`). Each issue is a queue task (`config.Task` with `RunID`, `Mode`, `EnvironmentID`, `Allow` and `ShareWorktreeOf`), so the queue's limits, slots and budgets apply; the first task makes the run's worktree and the rest share it. `Allow` becomes the session's own allow rules, and only commands `PrepareAFK` offered may be in it. Done is read from the issue file in the worktree after the session's turn ends, never from what the agent says. Keep the steps a list: parallel runs (WFL-007) will have several working at once.
 

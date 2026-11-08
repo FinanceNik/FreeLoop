@@ -519,7 +519,7 @@ Matt Pocock's way of working with agents, built into the app (WFL-001 to WFL-007
 4. **Review and "Ready for QA" (WFL-006).** *Built 2026-11-08.* The run commits what is left, reviews each issue with the review profile, and lists it in the attention view until the user marks it QA'd. A `make check-app` step runs the built-in workflow on the demo provider from `/slice` to two issues ready for QA.
 5. **Parallel runs (WFL-007), later.** *Not built.* One worktree per unblocked issue up to the queue's limit, then a merge session (OQ-042). It needs the run to track several steps at once and a merge step; the run's record is kept a list of steps so it can.
 
-Not in: GitHub issues as a source (OQ-038, an import later), a run continuing past a failed issue, the review's findings sent back to the issue's session without the user.
+Not in: GitHub issues as a source (OQ-038, not planned), a run continuing past a failed issue, the review's findings sent back to the issue's session without the user.
 
 Not tried yet: a real model on any stage, Claude Code or another external agent as the AFK or review profile (the code path is the same as for the built-in agent, since done is read from the issue file and the review is HRN-018's), and a run on a real project's tests under the sandbox. The skill texts are Freeloop's own, written after the talk; none of Matt Pocock's skill files were copied.
 

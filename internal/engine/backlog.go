@@ -8,7 +8,6 @@ import (
 	"path"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/backlog"
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -198,14 +197,15 @@ type ArchiveResult struct {
 	Moved []string `json:"moved"`
 	// Left are finished files it left, with why.
 	Left []string `json:"left"`
-	// To is where the copies are.
-	To string `json:"to"`
+	// Commit is the commit that removed them, where git history keeps them.
+	Commit string `json:"commit"`
 }
 
-// ArchiveBacklog moves a backlog's done issues, and PRDs whose issues are all done,
-// out of the project (WFL-004, OQ-041): a copy goes to the data folder and git removes
-// the file in a commit of its own, so later agents are not misled by stale docs and
-// git history keeps them. Only files committed as they are now move.
+// ArchiveBacklog takes a backlog's done issues, and PRDs whose issues are all done, out
+// of the project (WFL-004, OQ-041): git removes them in a commit of their own, which
+// names them, so later agents are not misled by stale docs and git history keeps them
+// (git log -- backlog/). No copy is kept elsewhere. Only files committed as they are
+// now are removed, so nothing unsaved is lost.
 func (e *Engine) ArchiveBacklog(ctx context.Context, root, workflowID string) (ArchiveResult, error) {
 	res := ArchiveResult{Moved: []string{}, Left: []string{}}
 	project, err := e.store.ProjectByRoot(ctx, environment.Canonical(root))
@@ -243,7 +243,6 @@ func (e *Engine) ArchiveBacklog(ctx context.Context, root, workflowID string) (A
 	if len(paths) == 0 {
 		return res, errors.New("nothing in the backlog is finished")
 	}
-	when := time.Now().Format("2006-01-02-150405")
 	var move []string
 	for _, p := range paths {
 		tracked, _ := git(ctx, env, "ls-files", "--", p)
@@ -251,14 +250,6 @@ func (e *Engine) ArchiveBacklog(ctx context.Context, root, workflowID string) (A
 		if strings.TrimSpace(tracked) == "" || strings.TrimSpace(changed) != "" {
 			res.Left = append(res.Left, p+": not committed as it is")
 			continue
-		}
-		b, err := env.FS().ReadFile(p)
-		if err != nil {
-			res.Left = append(res.Left, p+": "+err.Error())
-			continue
-		}
-		if err := config.ArchiveFile(e.dataDir, project.ID, when, p, b); err != nil {
-			return res, err
 		}
 		move = append(move, p)
 	}
@@ -268,12 +259,12 @@ func (e *Engine) ArchiveBacklog(ctx context.Context, root, workflowID string) (A
 	if _, err := gitOK(ctx, env, append([]string{"rm", "--quiet", "--"}, move...)...); err != nil {
 		return res, err
 	}
-	msg := fmt.Sprintf("Archive %d finished backlog files", len(move))
+	msg := fmt.Sprintf("Archive %d finished backlog files\n\nThey stay in git history:\n\n%s\n", len(move), strings.Join(move, "\n"))
 	if _, err := gitOK(ctx, env, append([]string{"commit", "--quiet", "-m", msg, "--"}, move...)...); err != nil {
 		return res, err
 	}
-	res.Moved = move
-	res.To = fmt.Sprintf("%s/%s/%s/%s", e.dataDir, config.ArchiveDir, project.ID, when)
+	head, _ := git(ctx, env, "rev-parse", "--short", "HEAD")
+	res.Moved, res.Commit = move, strings.TrimSpace(head)
 	return res, nil
 }
 
@@ -298,7 +289,7 @@ func (e *Engine) cleanupStage(ctx context.Context, ses session.Session, w config
 	if err != nil {
 		return StageResult{Kind: config.StageCleanup}, err
 	}
-	msg := fmt.Sprintf("Archived %d finished backlog files to %s, and committed their removal.", len(res.Moved), res.To)
+	msg := fmt.Sprintf("Archived %d finished backlog files: commit %s removed them, and git history keeps them.", len(res.Moved), res.Commit)
 	if len(res.Left) > 0 {
 		msg += " Left: " + strings.Join(res.Left, "; ") + "."
 	}

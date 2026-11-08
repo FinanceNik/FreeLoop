@@ -70,8 +70,8 @@ func TestBacklogNeedsTrust(t *testing.T) {
 	}
 }
 
-// WFL-004, OQ-041: "Archive finished" moves done issues and finished PRDs out of the
-// project into the data folder, in a commit of its own, and leaves the rest.
+// WFL-004, OQ-041: "Archive finished" removes done issues and finished PRDs from the
+// project in a commit of its own, which git history keeps, and leaves the rest.
 func TestArchiveBacklog(t *testing.T) {
 	ctx := context.Background()
 	e, _ := queueEngine(t)
@@ -96,8 +96,11 @@ func TestArchiveBacklog(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "backlog", "issues", "001-store.md")); !os.IsNotExist(err) {
 		t.Error("the done issue is still in the project")
 	}
-	if _, err := os.Stat(filepath.Join(res.To, "backlog", "issues", "001-store.md")); err != nil {
-		t.Errorf("no copy in the data folder: %v", err)
+	if got := gitIn(t, root, "show", res.Commit+"^:backlog/issues/001-store.md"); !strings.Contains(got, "status: done") {
+		t.Errorf("git history does not keep it: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(e.dataDir, "archive")); !os.IsNotExist(err) {
+		t.Error("a copy was kept in the data folder")
 	}
 	if st := gitIn(t, root, "status", "--porcelain"); strings.TrimSpace(st) != "" {
 		t.Errorf("the removal was not committed: %s", st)

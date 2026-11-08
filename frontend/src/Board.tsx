@@ -95,7 +95,7 @@ export default function Board<T extends Card>({
                     {(b.issues ?? []).length === 0 && <li className="muted board-empty">No issues yet</li>}
                   </ul>
                   {b.finished > 0 && onArchive && (
-                    <button className="link backlog-archive" onClick={() => onArchive(b)} title="Moves done issues, and PRDs whose issues are all done, out of the project into Freeloop's data folder, in a commit of their own.">
+                    <button className="link backlog-archive" onClick={() => onArchive(b)} title="Removes done issues, and PRDs whose issues are all done, from the project in a commit of their own. Git history keeps them.">
                       Archive finished ({b.finished})
                     </button>
                   )}

@@ -275,7 +275,7 @@ export default function App() {
     );
   };
   const archiveBacklog = async (b: BacklogInfo) => {
-    if (!(await ask(`Archive ${b.finished} finished backlog files of ${b.projectName}? They move to Freeloop's data folder, and their removal is committed.`))) return;
+    if (!(await ask(`Archive ${b.finished} finished backlog files of ${b.projectName}? They are removed in a commit of their own, and git history keeps them.`))) return;
     EngineService.ArchiveBacklog(b.projectRoot, b.workflowId)
       .then(refreshBacklogs)
       .catch(report);
