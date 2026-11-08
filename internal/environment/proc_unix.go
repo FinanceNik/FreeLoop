@@ -18,3 +18,10 @@ func killProcessGroup(cmd *exec.Cmd) {
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 }
+
+// joinGroup finishes putting a command started with setProcessGroup in its group.
+// On Unix the group exists from the start; Windows puts the process in a job here.
+func joinGroup(*exec.Cmd) error { return nil }
+
+// releaseGroup lets go of what holds an ended group; on Unix nothing does.
+func releaseGroup(int) {}

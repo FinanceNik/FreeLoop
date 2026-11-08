@@ -114,6 +114,11 @@ func (l *Local) Spawn(ctx context.Context, spec SpawnSpec) (Process, error) {
 	p := &proc{cmd: cmd, stdin: stdin, stdout: stdout, stderr: &tail{limit: 4096}, done: make(chan struct{})}
 	cmd.Stderr = p.stderr
 	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("environment: start %s: %w", spec.Argv[0], startHint(err))
+	}
+	if err := joinGroup(cmd); err != nil {
+		killProcessGroup(cmd)
+		cmd.Wait()
 		return nil, fmt.Errorf("environment: start %s: %w", spec.Argv[0], err)
 	}
 	started := track(cmd.Process.Pid, cmd.Path)

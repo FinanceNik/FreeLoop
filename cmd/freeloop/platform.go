@@ -9,7 +9,7 @@ import (
 
 // platform is what the system under the app provides: the one place main.go depends
 // on which system it is built for (NFR-XPLAT-002). thisPlatform is set in
-// platform_mac.go and platform_linux.go; each imports its own package under
+// platform_mac.go, platform_linux.go and platform_windows.go; each imports its own package under
 // internal/platform, and nothing else does.
 type platform struct {
 	// Keys is the system's keyring, the only place secrets are kept (SEC-004).

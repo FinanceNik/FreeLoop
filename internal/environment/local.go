@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -177,6 +178,11 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
+		return ExecResult{}, fmt.Errorf("environment: start %s: %w", cmd.Path, startHint(err))
+	}
+	if err := joinGroup(cmd); err != nil {
+		killProcessGroup(cmd)
+		cmd.Wait()
 		return ExecResult{}, fmt.Errorf("environment: start %s: %w", cmd.Path, err)
 	}
 	pgid := cmd.Process.Pid
@@ -253,11 +259,28 @@ var waitDelay = 2 * time.Second
 // Configured variables and secrets come on top (ENV-002, ENV-004).
 var baseVars = []string{"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "TERM", "TZ", "SSH_AUTH_SOCK"}
 
+// windowsVars are what a program on Windows needs besides: without SYSTEMROOT, for
+// one, the network does not work. Windows ignores the case of a variable's name.
+var windowsVars = []string{
+	"SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "USERNAME", "USERDOMAIN",
+	"HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
+	"PROGRAMW6432", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432", "TEMP", "TMP",
+	"COMPUTERNAME", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS",
+}
+
 func baseEnv() []string {
+	return inherited(runtime.GOOS, os.Environ())
+}
+
+// inherited picks from environ what a command on goos inherits.
+func inherited(goos string, environ []string) []string {
 	var env []string
-	for _, kv := range os.Environ() {
+	for _, kv := range environ {
 		k, _, _ := strings.Cut(kv, "=")
-		if slices.Contains(baseVars, k) || strings.HasPrefix(k, "LC_") {
+		switch {
+		case goos == "windows" && k != "" && (slices.Contains(baseVars, strings.ToUpper(k)) || slices.Contains(windowsVars, strings.ToUpper(k))):
+			env = append(env, kv)
+		case slices.Contains(baseVars, k) || strings.HasPrefix(k, "LC_"):
 			env = append(env, kv)
 		}
 	}

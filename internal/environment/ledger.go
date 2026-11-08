@@ -1,14 +1,10 @@
-//go:build unix
-
 package environment
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -80,6 +76,7 @@ func track(pid int, command string) time.Time {
 
 // untrack forgets a group once it has ended.
 func untrack(pid int, started time.Time) {
+	releaseGroup(pid)
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
 	if e, ok := ledger.running[pid]; ok && e.Started.Equal(started) && ledger.path != "" {
@@ -99,24 +96,6 @@ func linger(pid int, started time.Time) {
 	}
 }
 
-// groupAlive reports whether any process of group pgid still runs.
-func groupAlive(pgid int) bool {
-	return pgid > 1 && syscall.Kill(-pgid, 0) == nil
-}
-
-// stopGroup asks group pgid to end and kills what is left a moment later.
-func stopGroup(pgid int) {
-	if !groupAlive(pgid) {
-		return
-	}
-	syscall.Kill(-pgid, syscall.SIGTERM)
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) && groupAlive(pgid) {
-		time.Sleep(50 * time.Millisecond)
-	}
-	syscall.Kill(-pgid, syscall.SIGKILL)
-}
-
 // writeLedger replaces the file whole; called with ledger.mu held. A write that
 // fails leaves the last good file, which errs toward stopping too little.
 func writeLedger() {
@@ -131,9 +110,6 @@ func writeLedger() {
 	}
 }
 
-// ReapLeftovers stops the process groups path says were running when the app last
-// ended without stopping them, and returns what it stopped. Each is asked to end,
-// then killed if still there a moment later.
 // leftover reports whether group e.Pgid is still the one recorded: its first process
 // is the very one, or, for a lingering group, one of its processes started between
 // the group's start and when it was seen lingering. A number given to another process
@@ -151,37 +127,4 @@ func leftover(e ledgerEntry) bool {
 		}
 	}
 	return false
-}
-
-func ReapLeftovers(path string) ([]string, error) {
-	b, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var list []ledgerEntry
-	if err := json.Unmarshal(b, &list); err != nil {
-		return nil, fmt.Errorf("environment: %s: %w", filepath.Base(path), err)
-	}
-	var stopped []int
-	var names []string
-	for _, e := range list {
-		if e.Pgid <= 1 || ProcessStarted == nil || !leftover(e) {
-			continue
-		}
-		if syscall.Kill(-e.Pgid, syscall.SIGTERM) == nil {
-			stopped = append(stopped, e.Pgid)
-			names = append(names, e.Command)
-		}
-	}
-	deadline := time.Now().Add(2 * time.Second)
-	for _, pgid := range stopped {
-		for time.Now().Before(deadline) && syscall.Kill(-pgid, 0) == nil {
-			time.Sleep(50 * time.Millisecond)
-		}
-		syscall.Kill(-pgid, syscall.SIGKILL)
-	}
-	return names, nil
 }

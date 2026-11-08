@@ -505,6 +505,11 @@ func (s *SSH) streamRemote(ctx context.Context, stdin []byte, read func(io.Reade
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("environment: start %s: %w", cmd.Path, err)
 	}
+	if err := joinGroup(cmd); err != nil {
+		killProcessGroup(cmd)
+		cmd.Wait()
+		return fmt.Errorf("environment: start %s: %w", cmd.Path, err)
+	}
 	readDone := make(chan error, 1)
 	var flooded atomic.Bool
 	go func() {

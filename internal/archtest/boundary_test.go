@@ -19,22 +19,24 @@ import (
 const root = "../.."
 
 // Process launches are allowed only in the environment layer (ENV-001).
-var execAllowed = []string{"internal/environment"}
+// internal/platform/windows starts nothing, but reaches the Credential Manager and the
+// registry through golang.org/x/sys/windows, which can.
+var execAllowed = []string{"internal/environment", "internal/platform/windows"}
 
 // Direct file-system access is allowed in the environment layer and in the
 // app's own infrastructure: the store, config loading and the platform layers.
 // Everything else, the harnesses above all, goes through an Environment.
 // cmd/freeloop-sbom is a tool make release runs on the build machine, to read the
 // licenses of what went into the app; it is not part of the app.
-var fsAllowed = []string{"internal/environment", "internal/store", "internal/config", "internal/platform/darwin", "internal/platform/linux", "cmd/freeloop-sbom"}
+var fsAllowed = []string{"internal/environment", "internal/store", "internal/config", "internal/platform/darwin", "internal/platform/linux", "internal/platform/windows", "cmd/freeloop-sbom"}
 
 // Only the Wails adapter may depend on Wails; the engine stays
 // transport-agnostic.
 var wailsAllowed = []string{"cmd/freeloop"}
 
 // macOS-only code lives in one package (NFR-XPLAT-002), and Linux's platform code, cgo
-// included, in another. Only cmd/freeloop, which picks one for the system it runs on,
-// imports either.
+// included, in another, and Windows' in a third. Only cmd/freeloop, which picks one for
+// the system it runs on, imports any of them.
 var darwinAllowed = []string{"internal/platform/darwin"}
 var linuxAllowed = []string{"internal/platform/linux"}
 var platformImporters = []string{"cmd/freeloop"}
@@ -49,7 +51,7 @@ const devEnvPkg, devEnvFunc = "cmd/freeloop", "devEnv"
 var freeloopEnvAllowed = []string{"internal/store"}
 
 // Packages whose import alone means process control or raw file access.
-var execPackages = []string{"os/exec", "syscall", "golang.org/x/sys/unix"}
+var execPackages = []string{"os/exec", "syscall", "golang.org/x/sys/unix", "golang.org/x/sys/windows"}
 var fsPackages = []string{"io/ioutil"}
 
 // Functions in package os and path/filepath that touch the file system or
