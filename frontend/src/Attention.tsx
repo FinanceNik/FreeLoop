@@ -25,10 +25,13 @@ interface Props {
 export default function Attention({ items, onOpen, onContinued, onChanged, onError }: Props) {
   const waiting = items.reduce((n, it) => n + (it.requests?.length ?? 0), 0);
   const asking = items.filter((it) => (it.requests?.length ?? 0) > 0).length;
-  const failed = items.filter((it) => it.session.status === "error").length;
+  const failed = items.filter((it) => it.session.status === "error" && !it.qa).length;
+  // Issues an AFK run finished, waiting for the user's QA (WFL-006).
+  const qa = items.filter((it) => it.qa).length;
   const parts = [
     waiting > 0 && `${waiting} ${waiting === 1 ? "request" : "requests"} waiting in ${asking} ${asking === 1 ? "session" : "sessions"}`,
     failed > 0 && `${failed} ${failed === 1 ? "session" : "sessions"} in error`,
+    qa > 0 && `${qa} ${qa === 1 ? "issue" : "issues"} ready for QA`,
   ].filter(Boolean);
   // J and K, or the arrows, choose the request the approval keys act on. The keys
   // listen on the window, so answering one, which removes its buttons, loses nothing.
@@ -55,7 +58,42 @@ export default function Attention({ items, onOpen, onContinued, onChanged, onErr
           : `${parts.join("; ") || "A session is waiting for your reply"}.`}
         {queue.length > 1 && " J and K move between requests."}
       </p>
-      {items.map((it) => (
+      {items.map((it) =>
+        it.qa ? (
+          <section key={`${it.session.id}:qa:${it.qa.issue}`} className="card attention-item attention-qa" aria-label={`Ready for QA: ${it.qa.title}`}>
+            <header className="attention-head">
+              <div>
+                <span className="muted attention-project">{it.projectName || basename(it.session.projectRoot)}</span>
+                <h3>
+                  <span className="badge attention-qa-badge">Ready for QA</span> {it.qa.title}
+                </h3>
+              </div>
+              <button onClick={() => onOpen(it.session.id)}>Open session</button>
+            </header>
+            <p className="muted">
+              {it.qa.path}, done by an AFK run{it.qa.branch ? ` on the branch ${it.qa.branch}` : ""}. Try it, then merge the branch from the Diff tab when the run's issues pass.
+              {it.qa.note ? ` ${it.qa.note}` : ""}
+            </p>
+            {it.qa.reply && (
+              <blockquote className="attention-qa-review">
+                <span className="muted">The review:</span> {it.qa.reply}
+              </blockquote>
+            )}
+            <p className="row">
+              {it.qa.reviewId && <button onClick={() => onOpen(it.qa!.reviewId)}>Open the review</button>}
+              <button
+                className="primary"
+                onClick={() =>
+                  EngineService.QADone(it.qa!.runId, it.qa!.issue)
+                    .then(onChanged)
+                    .catch(onError)
+                }
+              >
+                QA done
+              </button>
+            </p>
+          </section>
+        ) : (
         <section key={it.session.id} className={`card attention-item attention-status-${it.session.status}`} aria-label={it.session.title}>
           <header className="attention-head">
             <div>
@@ -100,7 +138,8 @@ export default function Attention({ items, onOpen, onContinued, onChanged, onErr
           )}
           {it.session.status === "waiting_input" && (it.requests ?? []).length === 0 && <p className="muted">The agent is waiting for your reply.</p>}
         </section>
-      ))}
+        ),
+      )}
     </div>
   );
 }

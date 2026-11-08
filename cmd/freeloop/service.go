@@ -581,6 +581,32 @@ func (s *EngineService) ArchiveBacklog(ctx context.Context, root, workflowID str
 	return s.eng.ArchiveBacklog(ctx, root, workflowID)
 }
 
+// PrepareAFK says what an AFK run would do, StartAFK starts one, and the rest
+// follow, pause, stop and QA them (WFL-005, WFL-006).
+func (s *EngineService) PrepareAFK(ctx context.Context, root, workflowID string) (engine.AFKPlan, error) {
+	return s.eng.PrepareAFK(ctx, root, workflowID)
+}
+
+func (s *EngineService) StartAFK(ctx context.Context, req engine.AFKStart) (config.AFKRun, error) {
+	return s.eng.StartAFK(ctx, req)
+}
+
+func (s *EngineService) AFKRuns(ctx context.Context) ([]config.AFKRun, error) {
+	return s.eng.AFKRuns(ctx)
+}
+
+func (s *EngineService) PauseAFK(ctx context.Context, id string, paused bool) (config.AFKRun, error) {
+	return s.eng.PauseAFK(ctx, id, paused)
+}
+
+func (s *EngineService) StopAFK(ctx context.Context, id string) (config.AFKRun, error) {
+	return s.eng.StopAFK(ctx, id)
+}
+
+func (s *EngineService) QADone(ctx context.Context, runID, issue string) error {
+	return s.eng.QADone(ctx, runID, issue)
+}
+
 func (s *EngineService) RunStage(ctx context.Context, sessionID, command, input string) (engine.StageResult, error) {
 	return s.eng.RunStage(ctx, sessionID, command, input)
 }

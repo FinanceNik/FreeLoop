@@ -43,6 +43,10 @@ type Schedule struct {
 	At      string `json:"at"`
 	Weekday int    `json:"weekday,omitempty"`
 	Enabled bool   `json:"enabled"`
+	// AFK, when set, starts an AFK run of the project's backlog instead of a
+	// session (WFL-005), on ProfileID, with the commands the user allowed for its
+	// sessions when setting the schedule up.
+	AFK *ScheduleAFK `json:"afk,omitempty"`
 	// CreatedAt counts as the last run until there is one, so a new
 	// schedule waits for its first time.
 	CreatedAt   time.Time `json:"createdAt"`
@@ -51,12 +55,19 @@ type Schedule struct {
 	LastError   string    `json:"lastError,omitempty"`
 }
 
+// ScheduleAFK is the AFK run a schedule starts.
+type ScheduleAFK struct {
+	WorkflowID      string   `json:"workflowId,omitempty"`
+	ReviewProfileID string   `json:"reviewProfileId,omitempty"`
+	Allow           []string `json:"allow,omitempty"`
+}
+
 // Validate reports the first setting that cannot work.
 func (s Schedule) Validate() error {
 	switch {
 	case strings.TrimSpace(s.Name) == "":
 		return errors.New("a schedule needs a name")
-	case strings.TrimSpace(s.Prompt) == "":
+	case strings.TrimSpace(s.Prompt) == "" && s.AFK == nil:
 		return errors.New("a schedule needs a prompt")
 	case !filepath.IsAbs(s.ProjectRoot):
 		return errors.New("a schedule needs a project folder")

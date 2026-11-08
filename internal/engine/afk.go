@@ -1,0 +1,772 @@
+package engine
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/FinanceNik/Freeloop/internal/backlog"
+	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
+	"github.com/FinanceNik/Freeloop/internal/permission"
+	"github.com/FinanceNik/Freeloop/internal/session"
+)
+
+// The AFK run (WFL-005, WFL-006): a workflow's unattended issues done one at a time,
+// each by a fresh session queued through SES-025, so the queue's limit, provider
+// slots, account limits and budgets hold. The sessions share one worktree of the run
+// (OQ-040). Nothing is approved for them but the commands the user allowed when
+// starting it, as each session's own rules (SEC-003); every other request waits in
+// the attention view. An issue is done when its file says so in the worktree, for
+// every agent alike (HRN-001). Then the run commits what is left, has the review
+// profile review it, and lists it as ready for the user's QA.
+
+// AFKTag marks the sessions an AFK run starts.
+const AFKTag = "afk"
+
+// runs loads the runs.
+func (e *Engine) runs() (config.AFKRuns, error) {
+	e.afkMu.Lock()
+	defer e.afkMu.Unlock()
+	return config.LoadAFKRuns(e.dataDir)
+}
+
+// changeRun loads the runs, lets fn change the one with id and saves them.
+func (e *Engine) changeRun(id string, fn func(r *config.AFKRun) error) (config.AFKRun, error) {
+	e.afkMu.Lock()
+	defer e.afkMu.Unlock()
+	all, err := config.LoadAFKRuns(e.dataDir)
+	if err != nil {
+		return config.AFKRun{}, err
+	}
+	i := slices.IndexFunc(all.Runs, func(r config.AFKRun) bool { return r.ID == id })
+	if i < 0 {
+		return config.AFKRun{}, errors.New("no such run")
+	}
+	if err := fn(&all.Runs[i]); err != nil {
+		return all.Runs[i], err
+	}
+	if err := config.SaveAFKRuns(e.dataDir, all); err != nil {
+		return all.Runs[i], err
+	}
+	if e.onQueue != nil {
+		e.onQueue()
+	}
+	return all.Runs[i], nil
+}
+
+// AFKRuns lists the runs, newest first.
+func (e *Engine) AFKRuns(ctx context.Context) ([]config.AFKRun, error) {
+	all, err := e.runs()
+	if err != nil {
+		return nil, err
+	}
+	slices.Reverse(all.Runs)
+	return all.Runs, nil
+}
+
+// lastRun is a project's run going on, else its latest.
+func (e *Engine) lastRun(projectID string) *config.AFKRun {
+	all, err := e.runs()
+	if err != nil {
+		return nil
+	}
+	var last *config.AFKRun
+	for i := range all.Runs {
+		r := &all.Runs[i]
+		if r.ProjectID != projectID {
+			continue
+		}
+		if r.Active() {
+			return r
+		}
+		last = r
+	}
+	return last
+}
+
+// AFKCommand is a command an AFK run will want, and what the policy says of it now.
+type AFKCommand struct {
+	// Command is a shell rule pattern, as "git commit *".
+	Command string `json:"command"`
+	// From is "workflow" or "project": the workflow names it, or the project's
+	// files suggest it as its tests or checks.
+	From string `json:"from"`
+	// Outcome is allowed, ask or denied, for a session of the run as it would start.
+	Outcome string `json:"outcome"`
+	Reason  string `json:"reason"`
+}
+
+// AFKPlan is what starting a run would do, for the user to look at first.
+type AFKPlan struct {
+	ProjectRoot  string `json:"projectRoot"`
+	ProjectName  string `json:"projectName"`
+	WorkflowID   string `json:"workflowId"`
+	WorkflowName string `json:"workflowName"`
+	// Next is the issue it would do first; Ready counts the AFK issues ready now,
+	// Waiting those blocked, and Human the open issues for a person.
+	Next    *backlog.Item `json:"next"`
+	Ready   int           `json:"ready"`
+	Waiting int           `json:"waiting"`
+	Human   int           `json:"human"`
+	// Problem says why it cannot start; empty when it can.
+	Problem         string       `json:"problem"`
+	ProfileID       string       `json:"profileId"`
+	ReviewProfileID string       `json:"reviewProfileId"`
+	ReviewOff       bool         `json:"reviewOff"`
+	EnvironmentID   string       `json:"environmentId"`
+	EnvironmentNote string       `json:"environmentNote"`
+	Mode            string       `json:"mode"`
+	MaxIssues       int          `json:"maxIssues"`
+	Commands        []AFKCommand `json:"commands"`
+	// Running is the project's run going on, if any.
+	Running *config.AFKRun `json:"running"`
+}
+
+// projectChecks are the commands a project's files suggest for its tests and type
+// checks, as rule patterns. Only files at its top are read.
+func projectChecks(env environment.Environment) []string {
+	read := func(p string) string {
+		b, err := env.FS().ReadFile(p)
+		if err != nil || len(b) > 1<<20 {
+			return ""
+		}
+		return string(b)
+	}
+	has := func(p string) bool { _, err := env.FS().Stat(p); return err == nil }
+	var out []string
+	if mk := read("Makefile"); mk != "" {
+		for _, target := range []string{"test", "check", "lint", "typecheck"} {
+			if strings.HasPrefix(mk, target+":") || strings.Contains(mk, "\n"+target+":") {
+				out = append(out, "make "+target)
+			}
+		}
+	}
+	if pkg := read("package.json"); pkg != "" {
+		var p struct {
+			Scripts map[string]string `json:"scripts"`
+		}
+		json.Unmarshal([]byte(pkg), &p)
+		pm := "npm"
+		switch {
+		case has("pnpm-lock.yaml"):
+			pm = "pnpm"
+		case has("yarn.lock"):
+			pm = "yarn"
+		}
+		for _, s := range []string{"test", "typecheck", "lint", "check"} {
+			if p.Scripts[s] == "" {
+				continue
+			}
+			if s == "test" && pm != "yarn" {
+				out = append(out, pm+" test")
+			} else if pm == "yarn" {
+				out = append(out, "yarn "+s)
+			} else {
+				out = append(out, pm+" run "+s)
+			}
+		}
+	}
+	if has("go.mod") {
+		out = append(out, "go test *", "go vet *", "go build *")
+	}
+	if has("Cargo.toml") {
+		out = append(out, "cargo test *", "cargo check *")
+	}
+	if has("pyproject.toml") || has("pytest.ini") || has("setup.cfg") {
+		out = append(out, "pytest *")
+	}
+	return out
+}
+
+// example is a command a rule pattern matches: "git commit *" matches "git commit".
+func example(pattern string) string {
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(pattern), "*"))
+}
+
+// afkEnvironment is where a run's sessions go: the sandboxed environment when the
+// workflow asks for it and the project's sessions run locally, else the project's.
+func (e *Engine) afkEnvironment(project session.Project, w config.Workflow) (string, string) {
+	envID := cmp.Or(project.DefaultEnvironmentID, e.Config().Defaults.EnvironmentID, DefaultEnvironmentID)
+	if !w.AFK.Sandbox {
+		return envID, "Not sandboxed: the workflow does not ask for it."
+	}
+	if envID != DefaultEnvironmentID && envID != SandboxedEnvironmentID {
+		return envID, "Not sandboxed: the project's sessions run in " + envID + "."
+	}
+	if e.confiner == nil {
+		return envID, "Not sandboxed: this system has no sandbox Freeloop can use."
+	}
+	if _, err := e.usableEnvironment(SandboxedEnvironmentID); err != nil {
+		return envID, "Not sandboxed: " + err.Error()
+	}
+	return SandboxedEnvironmentID, "Sandboxed: commands write only in the run's worktree and reach no network."
+}
+
+// PrepareAFK says what a run of the project's backlog would do, without starting it.
+func (e *Engine) PrepareAFK(ctx context.Context, root, workflowID string) (AFKPlan, error) {
+	project, err := e.store.ProjectByRoot(ctx, environment.Canonical(root))
+	if err != nil {
+		project, err = e.projectOfWorktree(ctx, root)
+		if err != nil {
+			return AFKPlan{}, err
+		}
+	}
+	w, err := e.backlogWorkflow(project, workflowID)
+	if err != nil {
+		return AFKPlan{}, err
+	}
+	plan := AFKPlan{ProjectRoot: project.Root, ProjectName: project.Name, WorkflowID: w.ID, WorkflowName: w.Name, Mode: w.AFKMode(), MaxIssues: w.IssueCap(), Commands: []AFKCommand{}, ReviewOff: w.Review.Off}
+	if !slices.ContainsFunc(w.Stages, func(s config.WorkflowStage) bool { return s.StageKind() == config.StageAFK }) {
+		plan.Problem = w.Name + " has no AFK stage."
+		return plan, nil
+	}
+	plan.ProfileID = e.afkProfile(project, w.AFK.Profile)
+	plan.ReviewProfileID = e.afkProfile(project, cmp.Or(w.Review.Profile, plan.ProfileID))
+	plan.EnvironmentID, plan.EnvironmentNote = e.afkEnvironment(project, w)
+	if r := e.lastRun(project.ID); r != nil && r.Active() {
+		plan.Running = r
+		plan.Problem = "A run is going on in this project; pause or stop it first."
+	}
+	info, err := e.projectBacklog(ctx, project, project.Root, w)
+	if err != nil {
+		plan.Problem = cmp.Or(plan.Problem, err.Error())
+		return plan, nil
+	}
+	for _, it := range info.Issues {
+		switch {
+		case it.State == backlog.Done:
+		case it.Type != backlog.TypeAFK || it.Problem != "":
+			plan.Human++
+		case it.State == backlog.Ready:
+			plan.Ready++
+		default:
+			plan.Waiting++
+		}
+	}
+	if next, ok := backlog.NextAFK(info.Issues, nil); ok {
+		plan.Next = &next
+	}
+	switch {
+	case plan.Problem != "":
+	case info.Uncommitted:
+		plan.Problem = fmt.Sprintf("Commit %s first: the run works on a branch from the last commit, and would not see what is not committed.", w.BacklogDir())
+	case plan.Next == nil:
+		plan.Problem = "No AFK issue is ready: each is done, blocked, or for a person."
+	}
+	env, err := e.localEnv(project.Root, nil)
+	if err != nil {
+		return plan, nil
+	}
+	seen := map[string]bool{}
+	add := func(c, from string) {
+		if seen[c] {
+			return
+		}
+		seen[c] = true
+		cmd := AFKCommand{Command: c, From: from}
+		check, err := e.CheckPolicy(ctx, PolicyQuery{ProjectRoot: project.Root, ProfileID: plan.ProfileID, EnvironmentID: plan.EnvironmentID, Mode: plan.Mode, Tool: "shell", Command: example(c)})
+		if err == nil {
+			cmd.Outcome, cmd.Reason = check.Outcome, check.Reason
+		}
+		plan.Commands = append(plan.Commands, cmd)
+	}
+	for _, c := range w.AFK.Commands {
+		add(c, "workflow")
+	}
+	for _, c := range projectChecks(env) {
+		add(c, "project")
+	}
+	return plan, nil
+}
+
+// afkProfile is the profile a run's sessions use: id when it exists, else the
+// project's default, else the app's.
+func (e *Engine) afkProfile(project session.Project, id string) string {
+	if id != "" {
+		if _, err := e.profileFor(project, id); err == nil {
+			return id
+		}
+	}
+	return cmp.Or(project.DefaultProfileID, e.Config().Defaults.ProfileID, config.DefaultProfileID)
+}
+
+// AFKStart starts a run.
+type AFKStart struct {
+	ProjectRoot     string `json:"projectRoot"`
+	WorkflowID      string `json:"workflowId"`
+	ProfileID       string `json:"profileId"`
+	ReviewProfileID string `json:"reviewProfileId"`
+	// Allow are commands of the plan the user allows for the run's sessions.
+	Allow []string `json:"allow"`
+	// StartedBy says where it was started, for the record.
+	StartedBy string `json:"startedBy"`
+}
+
+// StartAFK starts a run of a project's backlog: its first issue is queued at once.
+func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, error) {
+	plan, err := e.PrepareAFK(ctx, req.ProjectRoot, req.WorkflowID)
+	if err != nil {
+		return config.AFKRun{}, err
+	}
+	if plan.Problem != "" {
+		return config.AFKRun{}, errors.New(plan.Problem)
+	}
+	project, err := e.store.ProjectByRoot(ctx, environment.Canonical(plan.ProjectRoot))
+	if err != nil {
+		return config.AFKRun{}, err
+	}
+	// Only what the plan offered can be allowed up front: it is what the user saw.
+	for _, c := range req.Allow {
+		if !slices.ContainsFunc(plan.Commands, func(x AFKCommand) bool { return x.Command == c }) {
+			return config.AFKRun{}, fmt.Errorf("%q is not among the commands the run offered to allow", c)
+		}
+	}
+	prof := plan.ProfileID
+	if req.ProfileID != "" {
+		if _, err := e.profileFor(project, req.ProfileID); err != nil {
+			return config.AFKRun{}, err
+		}
+		prof = req.ProfileID
+	}
+	review := plan.ReviewProfileID
+	if req.ReviewProfileID != "" {
+		if _, err := e.profileFor(project, req.ReviewProfileID); err != nil {
+			return config.AFKRun{}, err
+		}
+		review = req.ReviewProfileID
+	}
+	run := config.AFKRun{
+		ID: fmt.Sprintf("afk_%d", time.Now().UnixNano()), WorkflowID: plan.WorkflowID, ProjectID: project.ID, ProjectRoot: project.Root,
+		ProfileID: prof, ReviewProfileID: review, EnvironmentID: plan.EnvironmentID, Mode: plan.Mode, Allow: slices.Clone(req.Allow),
+		MaxIssues: plan.MaxIssues, State: config.RunRunning, Steps: []config.AFKStep{}, StartedBy: req.StartedBy, StartedAt: time.Now().UTC(),
+	}
+	w, _ := e.findWorkflow(plan.WorkflowID)
+	run.Backlog = w.BacklogDir()
+	e.afkMu.Lock()
+	all, err := config.LoadAFKRuns(e.dataDir)
+	if err == nil {
+		if slices.ContainsFunc(all.Runs, func(r config.AFKRun) bool { return r.ProjectID == project.ID && r.Active() }) {
+			err = errors.New("a run is going on in this project")
+		} else {
+			all.Runs = append(all.Runs, run)
+			err = config.SaveAFKRuns(e.dataDir, all)
+		}
+	}
+	e.afkMu.Unlock()
+	if err != nil {
+		return config.AFKRun{}, err
+	}
+	e.KickRuns()
+	return run, nil
+}
+
+// PauseAFK pauses a run, which then starts no further issue, or resumes it. The
+// issue being worked on goes on.
+func (e *Engine) PauseAFK(ctx context.Context, id string, paused bool) (config.AFKRun, error) {
+	r, err := e.changeRun(id, func(r *config.AFKRun) error {
+		if !r.Active() {
+			return errors.New("the run has ended")
+		}
+		r.State = config.RunRunning
+		if paused {
+			r.State = config.RunPaused
+		}
+		return nil
+	})
+	if err == nil && !paused {
+		e.KickRuns()
+	}
+	return r, err
+}
+
+// StopAFK ends a run: a queued issue that has not started is taken off the queue,
+// and a session already working goes on until its turn ends, unfollowed.
+func (e *Engine) StopAFK(ctx context.Context, id string) (config.AFKRun, error) {
+	var task string
+	r, err := e.changeRun(id, func(r *config.AFKRun) error {
+		if !r.Active() {
+			return errors.New("the run has ended")
+		}
+		if s := r.Current(); s != nil && s.SessionID == "" {
+			task = s.TaskID
+			s.State, s.Note, s.EndedAt = config.StepFailed, "the run was stopped before it started", time.Now().UTC()
+		}
+		endRun(r, config.RunStopped, "You stopped it.")
+		return nil
+	})
+	if err == nil && task != "" {
+		e.RemoveTask(task)
+	}
+	return r, err
+}
+
+// QADone marks a finished issue as checked by the user, which takes it out of the
+// attention view.
+func (e *Engine) QADone(ctx context.Context, runID, issue string) error {
+	_, err := e.changeRun(runID, func(r *config.AFKRun) error {
+		for i := range r.Steps {
+			if r.Steps[i].Issue == issue && r.Steps[i].State == config.StepQA {
+				r.Steps[i].State = config.StepQADone
+				return nil
+			}
+		}
+		return errors.New("that issue is not waiting for QA")
+	})
+	return err
+}
+
+func endRun(r *config.AFKRun, state, reason string) {
+	r.State, r.Reason, r.EndedAt = state, reason, time.Now().UTC()
+}
+
+// KickRuns has the schedule loop look at the queue and the runs now, rather than at
+// its next tick.
+func (e *Engine) KickRuns() {
+	select {
+	case e.afkKick <- struct{}{}:
+	default:
+	}
+}
+
+// runAFK moves every active run on: follows its issue's session, then its review,
+// then queues the next issue, or ends the run.
+func (e *Engine) runAFK(ctx context.Context, now time.Time) {
+	e.afkStep.Lock()
+	defer e.afkStep.Unlock()
+	all, err := e.runs()
+	if err != nil {
+		log.Printf("engine: afk runs: %v", err)
+		return
+	}
+	for _, r := range all.Runs {
+		if r.Active() {
+			e.stepRun(ctx, r.ID, now)
+		}
+	}
+}
+
+// stepRun moves one run on by what has happened since.
+func (e *Engine) stepRun(ctx context.Context, id string, now time.Time) {
+	all, err := e.runs()
+	if err != nil {
+		return
+	}
+	i := slices.IndexFunc(all.Runs, func(r config.AFKRun) bool { return r.ID == id })
+	if i < 0 {
+		return
+	}
+	r := all.Runs[i]
+	w, werr := e.usableWorkflow(r.WorkflowID)
+	if werr != nil {
+		e.changeRun(id, func(r *config.AFKRun) error { endRun(r, config.RunStopped, werr.Error()); return nil })
+		return
+	}
+	cur := r.Current()
+	switch {
+	case cur != nil && cur.State == config.StepWorking:
+		e.followIssue(ctx, r, *cur, w, now)
+	case cur != nil && cur.State == config.StepReviewing:
+		e.followReview(ctx, r, *cur)
+	case r.State == config.RunRunning:
+		e.nextIssue(ctx, r, w, now)
+	}
+}
+
+// setStep changes the run's current step.
+func (e *Engine) setStep(id string, fn func(r *config.AFKRun, s *config.AFKStep)) {
+	e.changeRun(id, func(r *config.AFKRun) error {
+		if s := r.Current(); s != nil {
+			fn(r, s)
+		}
+		return nil
+	})
+}
+
+// followIssue follows the session working on an issue, through the queue's task.
+func (e *Engine) followIssue(ctx context.Context, r config.AFKRun, s config.AFKStep, w config.Workflow, now time.Time) {
+	q, err := e.Queue()
+	if err != nil {
+		return
+	}
+	i := slices.IndexFunc(q.Tasks, func(t config.Task) bool { return t.ID == s.TaskID })
+	if i < 0 {
+		e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) {
+			st.State, st.Note, st.EndedAt = config.StepFailed, "its task left the queue", time.Now().UTC()
+			endRun(r, config.RunStopped, fmt.Sprintf("The task for %s was taken off the queue.", s.Issue))
+		})
+		return
+	}
+	t := q.Tasks[i]
+	switch t.State {
+	case config.TaskWaiting:
+		// A budget reached holds the task; the run stops rather than wait for a new
+		// period, which may be next month.
+		budgets, _ := e.budgetStates(ctx, now)
+		if note := budgetHeld(budgets, r.ProfileID); note != "" {
+			e.RemoveTask(t.ID)
+			e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) {
+				st.State, st.Note, st.EndedAt = config.StepFailed, "not started: "+note, time.Now().UTC()
+				endRun(r, config.RunStopped, "A budget is reached: "+note+".")
+			})
+		}
+	case config.TaskRunning:
+		if t.SessionID != "" && s.SessionID == "" {
+			e.adoptSession(ctx, r.ID, t.SessionID)
+		}
+	case config.TaskFailed:
+		e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) {
+			st.SessionID = cmp.Or(st.SessionID, t.SessionID)
+			st.State, st.Note, st.EndedAt = config.StepFailed, t.Note, time.Now().UTC()
+			endRun(r, config.RunStopped, fmt.Sprintf("The session for %s failed: %s", s.Issue, cmp.Or(t.Note, "see the session")))
+		})
+	case config.TaskDone:
+		if s.SessionID == "" {
+			e.adoptSession(ctx, r.ID, t.SessionID)
+		}
+		e.finishIssue(ctx, r.ID, t.SessionID, w)
+	}
+}
+
+// adoptSession records the session working on the current issue, and the first
+// one's worktree as the run's.
+func (e *Engine) adoptSession(ctx context.Context, id, sid string) {
+	ses, err := e.store.GetSession(ctx, sid)
+	if err != nil {
+		return
+	}
+	e.changeRun(id, func(r *config.AFKRun) error {
+		if s := r.Current(); s != nil {
+			s.SessionID = sid
+		}
+		if r.Anchor == "" && ses.Worktree != "" {
+			r.Anchor, r.Worktree, r.Branch = sid, ses.Worktree, ses.OwnBranch()
+		}
+		return nil
+	})
+}
+
+// finishIssue looks at an issue whose session has ended: done by its file, its
+// leftovers committed, then reviewed. A session that ended without marking it done
+// stops the run: the next issue may depend on it.
+func (e *Engine) finishIssue(ctx context.Context, id, sid string, w config.Workflow) {
+	all, _ := e.runs()
+	i := slices.IndexFunc(all.Runs, func(r config.AFKRun) bool { return r.ID == id })
+	if i < 0 {
+		return
+	}
+	r := all.Runs[i]
+	s := r.Current()
+	if s == nil {
+		return
+	}
+	stop := func(note, reason string) {
+		e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) {
+			st.State, st.Note, st.EndedAt = config.StepFailed, note, time.Now().UTC()
+			endRun(r, config.RunStopped, reason)
+		})
+	}
+	ses, err := e.store.GetSession(ctx, sid)
+	if err != nil {
+		stop(err.Error(), fmt.Sprintf("The session for %s is gone.", s.Issue))
+		return
+	}
+	env, err := e.localEnv(ses.WorkRoot(), nil)
+	if err != nil {
+		stop(err.Error(), fmt.Sprintf("The folder of %s cannot be read.", s.Issue))
+		return
+	}
+	b, err := env.FS().ReadFile(s.Path)
+	if err != nil {
+		stop("its file is gone", fmt.Sprintf("%s's file is gone from the run's worktree.", s.Issue))
+		return
+	}
+	if is := backlog.ParseIssue(s.Path, b); is.Status != backlog.StatusDone {
+		stop("its session ended without marking it done", fmt.Sprintf("%s's session ended without marking it done; see the session for why.", s.Issue))
+		return
+	}
+	commit, note := e.commitLeftovers(ctx, env, *s)
+	e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) {
+		st.Commit, st.Note, st.State, st.EndedAt = commit, note, config.StepQA, time.Now().UTC()
+	})
+	e.KickRuns()
+}
+
+// commitLeftovers commits what an issue's session left uncommitted and returns the
+// commit the issue ends at, with a note when it committed.
+func (e *Engine) commitLeftovers(ctx context.Context, env environment.Environment, s config.AFKStep) (string, string) {
+	note := ""
+	if blocked(ctx, env) == "" {
+		if out, ok := git(ctx, env, "status", "--porcelain"); ok && strings.TrimSpace(out) != "" {
+			msg := fmt.Sprintf("%s: %s", s.Issue, s.Title)
+			if _, err := gitOK(ctx, env, "add", "--all"); err == nil {
+				if _, err := gitOK(ctx, env, "commit", "--quiet", "-m", msg); err == nil {
+					note = "Its session left changes uncommitted; the run committed them."
+				}
+			}
+		}
+	}
+	head, _ := git(ctx, env, "rev-parse", "HEAD")
+	return strings.TrimSpace(head), note
+}
+
+// followReview follows the review of the current issue; once it has answered, or
+// failed, the issue waits for the user's QA.
+func (e *Engine) followReview(ctx context.Context, r config.AFKRun, s config.AFKStep) {
+	ses, err := e.store.GetSession(ctx, s.ReviewID)
+	note := ""
+	switch {
+	case err != nil:
+		note = "Its review session is gone."
+	case ses.Status == session.StatusError:
+		note = "Its review failed; see the review session."
+	case ses.Status == session.StatusIdle || ses.Status == session.StatusArchived:
+		if e.taskState(ctx, s.ReviewID) != config.TaskDone {
+			return
+		}
+	default:
+		return
+	}
+	e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) {
+		st.State, st.EndedAt = config.StepQA, time.Now().UTC()
+		st.Note = strings.TrimSpace(st.Note + " " + note)
+	})
+	e.KickRuns()
+}
+
+// nextIssue queues the next ready AFK issue, or ends the run.
+func (e *Engine) nextIssue(ctx context.Context, r config.AFKRun, w config.Workflow, now time.Time) {
+	end := func(state, reason string) {
+		e.changeRun(r.ID, func(r *config.AFKRun) error { endRun(r, state, reason); return nil })
+	}
+	if len(r.Steps) >= r.MaxIssues {
+		end(config.RunFinished, fmt.Sprintf("It did its cap of %d issues.", r.MaxIssues))
+		return
+	}
+	project, err := e.store.GetProject(ctx, r.ProjectID)
+	if err != nil {
+		end(config.RunStopped, "Its project is gone.")
+		return
+	}
+	root := project.Root
+	if r.Anchor != "" {
+		anchor, err := e.store.GetSession(ctx, r.Anchor)
+		if err != nil || anchor.Worktree == "" || !environment.IsDir(anchor.Worktree) {
+			end(config.RunStopped, "Its worktree is gone.")
+			return
+		}
+		root = anchor.Worktree
+	}
+	info, err := e.projectBacklog(ctx, project, root, w)
+	if err != nil {
+		end(config.RunStopped, "Its backlog cannot be read: "+err.Error())
+		return
+	}
+	tried := func(id string) bool {
+		return slices.ContainsFunc(r.Steps, func(s config.AFKStep) bool { return s.Issue == id })
+	}
+	next, ok := backlog.NextAFK(info.Issues, tried)
+	if !ok {
+		left := 0
+		for _, it := range info.Issues {
+			if it.State != backlog.Done {
+				left++
+			}
+		}
+		reason := "Every AFK issue is done."
+		if left > 0 {
+			reason = fmt.Sprintf("No AFK issue is ready; %d open issues are blocked or for a person.", left)
+		}
+		end(config.RunFinished, reason)
+		return
+	}
+	budgets, _ := e.budgetStates(ctx, now)
+	if note := budgetHeld(budgets, r.ProfileID); note != "" {
+		end(config.RunStopped, "A budget is reached: "+note+".")
+		return
+	}
+	env, err := e.localEnv(root, nil)
+	if err != nil {
+		end(config.RunStopped, err.Error())
+		return
+	}
+	b, _ := env.FS().ReadFile(next.Path)
+	commits := cmp.Or(recentCommits(ctx, env), "(none)")
+	prompt := config.Render(w.AFK.Prompt, map[string]string{
+		"input": "", "backlog": w.BacklogDir(), "issues": backlog.Summary(info.Issues), "commits": commits,
+		"issue": next.Path, "issueText": strings.TrimSpace(backlog.Body(b)),
+	})
+	task := config.Task{
+		Title: fmt.Sprintf("AFK %s: %s", next.ID, next.Title), Prompt: strings.TrimSpace(prompt), ProjectRoot: project.Root, ProfileID: r.ProfileID,
+		Mode: r.Mode, EnvironmentID: r.EnvironmentID, Workflow: r.WorkflowID, Allow: slices.Clone(r.Allow), RunID: r.ID, Tags: []string{AFKTag},
+	}
+	if r.Anchor != "" {
+		task.ShareWorktreeOf = r.Anchor
+	} else {
+		task.Worktree = true
+	}
+	q, err := e.AddTask(task)
+	if err != nil {
+		end(config.RunStopped, "Its next issue could not be queued: "+err.Error())
+		return
+	}
+	added := q.Tasks[len(q.Tasks)-1]
+	e.changeRun(r.ID, func(r *config.AFKRun) error {
+		r.Steps = append(r.Steps, config.AFKStep{Issue: next.ID, Path: next.Path, Title: next.Title, TaskID: added.ID, State: config.StepWorking, StartedAt: now.UTC()})
+		return nil
+	})
+}
+
+// sessionRules are a run's commands as a session's allow rules.
+func sessionRules(allow []string) []permission.Rule {
+	var out []permission.Rule
+	for _, c := range allow {
+		out = append(out, permission.Rule{Tool: "shell", Command: c, Effect: permission.Allow, Scope: permission.ScopeSession})
+	}
+	return out
+}
+
+// afkAttention lists the issues waiting for the user's QA, for the attention view.
+func (e *Engine) afkAttention(ctx context.Context, names map[string]string) []AttentionItem {
+	all, err := e.runs()
+	if err != nil {
+		return nil
+	}
+	var out []AttentionItem
+	for _, r := range all.Runs {
+		for _, s := range r.Steps {
+			if s.State != config.StepQA || s.SessionID == "" {
+				continue
+			}
+			ses, err := e.store.GetSession(ctx, s.SessionID)
+			if err != nil {
+				continue
+			}
+			qa := &QAItem{RunID: r.ID, Issue: s.Issue, Title: s.Title, Path: s.Path, ReviewID: s.ReviewID, Branch: r.Branch, Note: s.Note}
+			if s.ReviewID != "" {
+				qa.Reply = e.lastReply(ctx, s.ReviewID)
+			}
+			out = append(out, AttentionItem{Session: ses, ProjectName: names[ses.ProjectID], QA: qa})
+		}
+	}
+	return out
+}
+
+// QAItem is an issue an AFK run finished, waiting for the user's QA (WFL-006).
+type QAItem struct {
+	RunID    string `json:"runId"`
+	Issue    string `json:"issue"`
+	Title    string `json:"title"`
+	Path     string `json:"path"`
+	ReviewID string `json:"reviewId"`
+	Branch   string `json:"branch"`
+	Note     string `json:"note"`
+	// Reply is the start of the review's answer.
+	Reply string `json:"reply"`
+}

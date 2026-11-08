@@ -121,10 +121,15 @@ type Engine struct {
 	// optimizers are the token optimizers sessions can choose (HRN-019).
 	optimizers []config.Optimizer
 	workflows  []config.Workflow
-	dataDir    string
-	home       string
-	confiner   environment.Confiner
-	dev        bool
+	// afkMu guards afkruns.json, afkStep keeps one pass over the AFK runs at a time,
+	// and afkKick asks the schedule loop for one now (WFL-005).
+	afkMu    sync.Mutex
+	afkStep  sync.Mutex
+	afkKick  chan struct{}
+	dataDir  string
+	home     string
+	confiner environment.Confiner
+	dev      bool
 	// gh is the GitHub CLI pull requests are opened with (SES-011); tests
 	// point it at a fake.
 	gh      string
@@ -255,6 +260,7 @@ func Open(opts Options) (*Engine, error) {
 		onChange:      opts.OnConfigChange,
 		quit:          make(chan struct{}),
 		stopSchedules: make(chan struct{}),
+		afkKick:       make(chan struct{}, 1),
 		runtimes:      map[string]*runtime{},
 		starting:      map[string]*runtime{},
 		streams:       map[string]*streamBuf{},

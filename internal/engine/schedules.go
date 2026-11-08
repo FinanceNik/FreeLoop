@@ -150,6 +150,16 @@ func (e *Engine) runDue(ctx context.Context, now time.Time) {
 // start is recorded too, so it is not retried every check.
 func (e *Engine) runSchedule(ctx context.Context, s *config.Schedule, now time.Time) (string, error) {
 	s.LastRun, s.LastError = now.UTC(), ""
+	if a := s.AFK; a != nil {
+		// An AFK run, with what the user allowed when setting it up (WFL-005). It
+		// refuses as from the dialog: a run going on, nothing ready, an uncommitted
+		// backlog.
+		_, err := e.StartAFK(ctx, AFKStart{ProjectRoot: s.ProjectRoot, WorkflowID: a.WorkflowID, ProfileID: s.ProfileID, ReviewProfileID: a.ReviewProfileID, Allow: a.Allow, StartedBy: fmt.Sprintf("the schedule %q", s.Name)})
+		if err != nil {
+			s.LastError = err.Error()
+		}
+		return "", err
+	}
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{
 		Title:       fmt.Sprintf("%s · %s", s.Name, now.Format("Jan 2 15:04")),
 		ProjectRoot: s.ProjectRoot,
@@ -172,6 +182,14 @@ func (e *Engine) runSchedule(ctx context.Context, s *config.Schedule, now time.T
 	return ses.ID, nil
 }
 
+// moveQueue brings the queue up to date, moves the AFK runs on, and starts what
+// they queued.
+func (e *Engine) moveQueue() {
+	e.runQueue(e.scheduleCtx, time.Now())
+	e.runAFK(e.scheduleCtx, time.Now())
+	e.runQueue(e.scheduleCtx, time.Now())
+}
+
 // scheduleLoop checks for due schedules until Close, which waits for it
 // before stopping sessions, so no run starts while the app quits.
 func (e *Engine) scheduleLoop(interval time.Duration) {
@@ -181,12 +199,18 @@ func (e *Engine) scheduleLoop(interval time.Duration) {
 	for {
 		// A first check right away runs what was missed while closed.
 		e.runDue(e.scheduleCtx, time.Now())
-		e.runQueue(e.scheduleCtx, time.Now())
+		e.moveQueue()
 		e.checkBudgets(e.scheduleCtx, time.Now())
-		select {
-		case <-e.stopSchedules:
-			return
-		case <-t.C:
+		for kicked := true; kicked; {
+			select {
+			case <-e.stopSchedules:
+				return
+			case <-t.C:
+				kicked = false
+			case <-e.afkKick:
+				// A session of the queue's ended: move the queue and the runs on now.
+				e.moveQueue()
+			}
 		}
 	}
 }

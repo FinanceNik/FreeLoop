@@ -42,9 +42,19 @@ type Task struct {
 	ProfileID   string `json:"profileId,omitempty"`
 	// Worktree gives the task's session its own worktree, so tasks in one repository
 	// do not edit the same files.
-	Worktree bool      `json:"worktree"`
-	State    string    `json:"state"`
-	AddedAt  time.Time `json:"addedAt"`
+	Worktree bool `json:"worktree"`
+	// Set by an AFK run (WFL-005): the session's mode, environment and workflow,
+	// shell commands allowed for it as session rules, tags beside "queued", the
+	// session whose worktree it shares, and the run.
+	Mode            string    `json:"mode,omitempty"`
+	EnvironmentID   string    `json:"environmentId,omitempty"`
+	Workflow        string    `json:"workflow,omitempty"`
+	Allow           []string  `json:"allow,omitempty"`
+	Tags            []string  `json:"tags,omitempty"`
+	ShareWorktreeOf string    `json:"shareWorktreeOf,omitempty"`
+	RunID           string    `json:"runId,omitempty"`
+	State           string    `json:"state"`
+	AddedAt         time.Time `json:"addedAt"`
 	// Set once it started: its session, and what holds it back or went wrong.
 	SessionID string    `json:"sessionId,omitempty"`
 	StartedAt time.Time `json:"startedAt,omitempty"`

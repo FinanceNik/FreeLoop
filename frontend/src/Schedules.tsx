@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
-import { EngineService, STARTING_MODES, type Defaults, type HarnessInfo, type Profile, type ProjectInfo, type ProviderInfo, type Schedule, type ScheduleInfo } from "./api.ts";
+import { commandOutcome, defaultAllow } from "./afk.ts";
+import { EngineService, STARTING_MODES, type AFKPlan, type Defaults, type HarnessInfo, type Profile, type ProjectInfo, type ProviderInfo, type Schedule, type ScheduleInfo } from "./api.ts";
 import { describe, REPEATS, WEEKDAYS, when } from "./schedules.ts";
 
 // Schedules lists scheduled and recurring sessions (SES-012) and edits
@@ -49,6 +50,22 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
     return () => clearInterval(t);
   }, []);
 
+  // A schedule can start an AFK run instead (WFL-005): its commands are allowed
+  // here, once, as in the run's own dialog.
+  const [plan, setPlan] = useState<AFKPlan | null>(null);
+  const afk = !!form?.afk;
+  useEffect(() => {
+    setPlan(null);
+    if (!afk || !form?.projectRoot) return;
+    EngineService.PrepareAFK(form.projectRoot, form.afk?.workflowId ?? "")
+      .then((p) => {
+        setPlan(p);
+        if (!form.id && (form.afk?.allow ?? []).length === 0) setForm((f) => f && { ...f, afk: { ...f.afk, allow: defaultAllow(p.commands ?? []) } });
+      })
+      .catch(() => setPlan(null));
+  }, [afk, form?.projectRoot]);
+  const setAllow = (c: string, on: boolean) =>
+    form && setForm({ ...form, afk: { ...form.afk, allow: on ? [...(form.afk?.allow ?? []), c] : (form.afk?.allow ?? []).filter((x) => x !== c) } });
   const profile = profiles.find((p) => p.id === form?.profileId);
   const harness = harnesses.find((h) => h.id === (profile?.harness || "builtin"));
   const usesProvider = !harness || harness.usesProvider;
@@ -56,7 +73,7 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
   const save = (e: FormEvent) => {
     e.preventDefault();
     if (!form) return;
-    const s = { ...form, providerId: usesProvider ? form.providerId : "", model: usesProvider ? form.model : "" };
+    const s = { ...form, providerId: usesProvider && !afk ? form.providerId : "", model: usesProvider && !afk ? form.model : "" };
     EngineService.SaveSchedule(s)
       .then(() => {
         setForm(null);
@@ -100,6 +117,7 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
             <div>
               <strong>{s.name}</strong> <span className="muted">{projectName(s.projectRoot)}</span>
               <div className="muted">
+                {s.afk ? "AFK run · " : ""}
                 {describe(s)}
                 {s.enabled ? (s.next ? ` · next ${when(s.next)}` : "") : " · off"}
                 {when(s.lastRun) && ` · last ${when(s.lastRun)}`}
@@ -153,9 +171,33 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
             </select>
           </label>
           <label>
-            Prompt
-            <textarea rows={4} value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} placeholder="Run the tests and summarise any failures." required />
+            It starts
+            <select value={afk ? "afk" : "session"} onChange={(e) => setForm({ ...form, afk: e.target.value === "afk" ? { allow: [] } : undefined })}>
+              <option value="session">A session with a prompt</option>
+              <option value="afk">An AFK run of the backlog</option>
+            </select>
           </label>
+          {!afk && (
+            <label>
+              Prompt
+              <textarea rows={4} value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} placeholder="Run the tests and summarise any failures." required />
+            </label>
+          )}
+          {afk && (
+            <fieldset className="afk-commands">
+              <legend>Allow for the run's sessions</legend>
+              <p className="muted">The run does the backlog's ready AFK issues, one fresh session each, in a worktree of its own, on the profile below. Commands you allow here hold for its sessions only; anything else waits in Needs attention.</p>
+              {!form.projectRoot && <p className="muted">Choose a project to see what it will want.</p>}
+              {plan?.problem && <p className="muted">Now: {plan.problem}</p>}
+              {(plan?.commands ?? []).map((c) => (
+                <label key={c.command} className="row">
+                  <input type="checkbox" checked={(form.afk?.allow ?? []).includes(c.command)} disabled={c.outcome === "denied"} onChange={(e) => setAllow(c.command, e.target.checked)} />
+                  <code>{c.command}</code>
+                  <span className="muted">{commandOutcome(c)}</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
           <div className="row wrap">
             <label>
               Repeat
@@ -195,7 +237,7 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
                 ))}
               </select>
             </label>
-            {usesProvider && (
+            {usesProvider && !afk && (
               <label>
                 Provider
                 <select value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value, model: "" })}>
@@ -207,13 +249,13 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
                 </select>
               </label>
             )}
-            {usesProvider && (
+            {usesProvider && !afk && (
               <label>
                 Model <span className="muted">(empty for the default)</span>
                 <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
               </label>
             )}
-            <label>
+            <label hidden={afk}>
               Mode
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
                 {STARTING_MODES.map((m) => (

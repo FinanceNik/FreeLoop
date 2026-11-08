@@ -22,6 +22,8 @@ type AttentionItem struct {
 	Error string `json:"error,omitempty"`
 	// Stuck says why the session is not getting on and where it could continue (HRN-020).
 	Stuck *event.StuckData `json:"stuck,omitempty"`
+	// QA is an issue an AFK run finished, waiting for the user's QA (WFL-006).
+	QA *QAItem `json:"qa,omitempty"`
 }
 
 // Attention lists every session that needs the user, across projects,
@@ -72,6 +74,13 @@ func (e *Engine) Attention(ctx context.Context) ([]AttentionItem, error) {
 		}
 		return b.Session.UpdatedAt.Compare(a.Session.UpdatedAt)
 	})
+	// Then what waits for the user's QA, after what blocks a session.
+	for _, it := range e.afkAttention(ctx, names) {
+		if it.Requests == nil {
+			it.Requests = []permission.Request{}
+		}
+		out = append(out, it)
+	}
 	return out, nil
 }
 

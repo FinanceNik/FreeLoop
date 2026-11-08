@@ -67,6 +67,10 @@ func (w *stuckWatch) state(sid string) *stuckState {
 // observe follows every event saved. It runs inside the store's append, so anything it
 // emits goes out on its own goroutine.
 func (e *Engine) observe(ev event.Event) {
+	// A session settling may be an AFK run's issue or review ending (WFL-005).
+	if ev.Type == event.SessionStatus {
+		e.KickRuns()
+	}
 	var data map[string]any
 	json.Unmarshal(ev.Data, &data)
 	str := func(k string) string { v, _ := data[k].(string); return v }

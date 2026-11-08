@@ -2171,6 +2171,65 @@ details.choice[open] > summary h3::after {
   white-space: nowrap;
 }
 
+.backlog-run-line {
+  margin: 0 4px 6px;
+  font-size: calc(12rem / 14);
+}
+
+.backlog-run .row {
+  margin: 0 4px 8px;
+}
+
+.attention-qa-badge {
+  margin-right: 4px;
+}
+
+.attention-qa-review {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--border-strong);
+  white-space: pre-wrap;
+}
+
+.afk-dialog {
+  width: min(620px, 100%);
+  max-height: min(720px, 86vh);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 16px 18px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+}
+
+.afk-dialog p {
+  margin: 0;
+}
+
+.afk-dialog h2 {
+  margin: 0;
+  font-size: calc(16rem / 14);
+}
+
+.afk-dialog .afk-profiles {
+  display: grid;
+  gap: 8px;
+}
+
+.afk-commands {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+}
+
+.afk-commands label.row {
+  gap: 8px;
+  align-items: center;
+}
+
 .backlog-project + .backlog-project {
   margin-top: 14px;
 }

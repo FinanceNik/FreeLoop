@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -108,6 +109,9 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 		step = s
 	}
 	if s, ok := askStep(req.Messages); ok {
+		step = s
+	}
+	if s, ok := workflowStep(req.Messages); ok {
 		step = s
 	}
 	input := inputTokens(req.Messages)
@@ -228,6 +232,78 @@ func planStep(msgs []provider.Message) (Step, bool) {
 	}
 	b.WriteString("\n## Checks\n\nThe tests pass.")
 	return Step{Calls: []Call{{Name: "present_plan", Input: map[string]any{"plan": b.String()}}}}, true
+}
+
+// lastPrompt is the text of the latest user prompt, not a tool's result, and how many
+// tool results came after it.
+func lastPrompt(msgs []provider.Message) (string, int) {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		m := msgs[i]
+		if m.Role == provider.RoleUser && len(m.Parts) > 0 && m.Parts[0].Type == provider.PartText {
+			return m.Parts[0].Text, position(msgs)
+		}
+	}
+	return "", 0
+}
+
+var issueIn = regexp.MustCompile(`Your issue is (\S+?):`)
+
+// workflowStep plays the built-in workflow's stages (WFL-002 to WFL-006), recognised by
+// their prompts' first line, so the app check can run the workflow end to end: slicing
+// writes two issues, the second blocked by the first, and commits them; an AFK session
+// marks its issue done, writes a file and commits; a review finds nothing wrong.
+func workflowStep(msgs []provider.Message) (Step, bool) {
+	prompt, pos := lastPrompt(msgs)
+	issue := func(id, title, blocked string) map[string]any {
+		return map[string]any{"path": "backlog/issues/" + id + ".md", "content": fmt.Sprintf("---\ntitle: %s\nstatus: open\ntype: afk\nblockedBy: [%s]\nprd: demo\n---\n\n## What\n%s, end to end.\n\n## Acceptance\n- It works.\n", title, blocked, title)}
+	}
+	plays := map[string][]Step{
+		"# Workflow stage: grill": {{Text: "First question: who is this for? I suggest: the people already using the app, who asked for it."}},
+		"# Workflow stage: prd": {
+			{Text: "I'll write the PRD.", Calls: []Call{{Name: "write_file", Input: map[string]any{"path": "backlog/prds/demo.md", "content": "---\ntitle: Demo\nstatus: open\n---\n\n## Problem\nA demo.\n"}}}},
+			{Text: "The PRD is in backlog/prds/demo.md."},
+		},
+		"# Workflow stage: slice": {
+			{Text: "Two vertical slices, the second after the first.", Calls: []Call{{Name: "write_file", Input: issue("001-first-slice", "First slice", "")}, {Name: "write_file", Input: issue("002-second-slice", "Second slice", "001-first-slice")}}},
+			{Text: "Committing the backlog.", Calls: []Call{{Name: "shell", Input: map[string]any{"command": "git add backlog"}}}},
+			{Calls: []Call{{Name: "shell", Input: map[string]any{"command": "git commit -q -m 'Slice the demo into issues'"}}}},
+			{Text: "Sliced into backlog/issues/001-first-slice.md, then 002-second-slice.md, which waits on it. Both are AFK."},
+		},
+	}
+	// A workflow's review of an issue (WFL-006), told what to look at by the workflow.
+	if strings.HasPrefix(prompt, "Review the changes below") && strings.Contains(prompt, "whether the changes do what the issue") {
+		return Step{Text: "Reviewed: the change does what the issue asks, and I found nothing wrong."}, true
+	}
+	for marker, steps := range plays {
+		if strings.HasPrefix(prompt, marker) {
+			if pos < len(steps) {
+				return steps[pos], true
+			}
+			return Step{Text: "Done."}, true
+		}
+	}
+	if !strings.HasPrefix(prompt, "# Workflow stage: afk") {
+		return Step{}, false
+	}
+	m := issueIn.FindStringSubmatch(prompt)
+	if m == nil {
+		return Step{Text: "I cannot tell which issue is mine."}, true
+	}
+	path := m[1]
+	id := strings.TrimSuffix(path[strings.LastIndex(path, "/")+1:], ".md")
+	steps := []Step{
+		{Text: "Test first, then the change; then I mark the issue done.", Calls: []Call{
+			{Name: "write_file", Input: map[string]any{"path": "work/" + id + ".txt", "content": "Done by an AFK session: " + id + "\n"}},
+			{Name: "edit_file", Input: map[string]any{"path": path, "old_string": "status: open", "new_string": "status: done"}},
+		}},
+		{Calls: []Call{{Name: "shell", Input: map[string]any{"command": "git add -A"}}}},
+		{Calls: []Call{{Name: "shell", Input: map[string]any{"command": "git commit -q -m '" + id + ": done'"}}}},
+		{Text: "Done: " + id + " is committed and marked done."},
+	}
+	if pos < len(steps) {
+		return steps[pos], true
+	}
+	return Step{Text: "Done."}, true
 }
 
 // asksNoSteps reports whether the latest message starts with NoSteps.

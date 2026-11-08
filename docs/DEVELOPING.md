@@ -231,6 +231,12 @@ A file's workflow is used only after the user approves it on the Settings page (
 
 A stage's prompt goes through `enqueue` as the user's message with `noMentions`, so its `@` words attach nothing, and it is the same for every harness: no stage may need a harness of its own (HRN-001). The engine's side is `internal/engine/workflows.go`; the composer's is `frontend/src/workflows.ts`.
 
+### The backlog and the AFK run
+
+`internal/backlog` parses issue and PRD files and places each issue (done, ready, blocked by an open or missing issue or a cycle); a file it cannot read counts as open and for a person. `internal/engine/backlog.go` reads a backlog only in a trusted project, through `localEnv`, and archives what is finished (`ArchiveBacklog`: a copy under `archive/` in the data folder, then `git rm` and a commit of only those paths).
+
+An AFK run (`internal/engine/afk.go`, `afkruns.json`) is a list of steps moved on by `runAFK`, which the schedule loop calls between two `runQueue` passes, at its tick and whenever a session's status changes (`KickRuns` from `observe`). Each issue is a queue task (`config.Task` with `RunID`, `Mode`, `EnvironmentID`, `Allow` and `ShareWorktreeOf`), so the queue's limits, slots and budgets apply; the first task makes the run's worktree and the rest share it. `Allow` becomes the session's own allow rules, and only commands `PrepareAFK` offered may be in it. Done is read from the issue file in the worktree after the session's turn ends, never from what the agent says. Keep the steps a list: parallel runs (WFL-007) will have several working at once.
+
 ## A stuck session (HRN-020)
 
 `internal/engine/stuck.go` follows every saved event through the store's `OnAppend` and says a session is stuck, once a turn, when its account limit is rejected, its turn limit is reached, one tool fails three times in a row (refusals do not count), two rewinds happen in a turn, or two turns in a row end in an error. Anything it emits goes out on its own goroutine, since it runs inside the store's append. `HandOff` stops the old turn, ends its pending requests (`Broker.CancelSession`), continues with HRN-012's `SwitchProfile`, records `handed_off` in the old session, and returns the message that carries the last request over; with a profile's `onLimit` it sends that message itself when the turn ends.

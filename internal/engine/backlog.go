@@ -44,6 +44,8 @@ type BacklogInfo struct {
 	// Uncommitted says the backlog has changes git has not committed, which a run,
 	// working from the last commit, would not see.
 	Uncommitted bool `json:"uncommitted"`
+	// Run is the project's AFK run going on, or its last one (WFL-005).
+	Run *config.AFKRun `json:"run"`
 }
 
 // readBacklog reads a backlog folder through env. A missing folder is an empty
@@ -160,7 +162,9 @@ func (e *Engine) Backlog(ctx context.Context, root, workflowID string) (BacklogI
 	if err != nil {
 		return BacklogInfo{}, err
 	}
-	return e.projectBacklog(ctx, project, project.Root, w)
+	info, err := e.projectBacklog(ctx, project, project.Root, w)
+	info.Run = e.lastRun(project.ID)
+	return info, err
 }
 
 // Backlogs lists the backlogs of trusted projects that have one, for the Board.
@@ -182,6 +186,7 @@ func (e *Engine) Backlogs(ctx context.Context) ([]BacklogInfo, error) {
 		if err != nil {
 			continue
 		}
+		info.Run = e.lastRun(p.ID)
 		out = append(out, info)
 	}
 	slices.SortFunc(out, func(a, b BacklogInfo) int { return strings.Compare(a.ProjectName, b.ProjectName) })

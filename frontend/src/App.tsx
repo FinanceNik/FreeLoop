@@ -36,6 +36,8 @@ import Board from "./Board.tsx";
 import Schedules from "./Schedules.tsx";
 import Optimizers from "./Optimizers.tsx";
 import Workflows from "./Workflows.tsx";
+import AFKDialog from "./AFKDialog.tsx";
+import { runLine } from "./afk.ts";
 import Usage from "./Usage.tsx";
 import Compare from "./Compare.tsx";
 import Providers from "./Providers.tsx";
@@ -246,6 +248,32 @@ export default function App() {
     const t = setInterval(refreshBacklogs, 5000);
     return () => clearInterval(t);
   }, [screen.kind]);
+  // The AFK run's dialog (WFL-005), for a project's backlog.
+  const [afkFor, setAfkFor] = useState<{ root: string; workflowId?: string; startedBy: string } | null>(null);
+  const backlogActions = (b: BacklogInfo) => {
+    const r = b.run;
+    const going = r && (r.state === "running" || r.state === "paused");
+    return (
+      <div className="backlog-run">
+        {r && <p className="muted backlog-run-line">{runLine(r)}</p>}
+        <p className="row">
+          {!going && (
+            <button className="primary" onClick={() => setAfkFor({ root: b.projectRoot, workflowId: b.workflowId, startedBy: "the Board" })}>
+              Run AFK issues…
+            </button>
+          )}
+          {going && (
+            <button onClick={() => EngineService.PauseAFK(r.id, r.state === "running").then(refreshBacklogs).catch(report)}>{r.state === "running" ? "Pause" : "Resume"}</button>
+          )}
+          {going && (
+            <button onClick={() => EngineService.StopAFK(r.id).then(refreshBacklogs).catch(report)}>
+              Stop
+            </button>
+          )}
+        </p>
+      </div>
+    );
+  };
   const archiveBacklog = async (b: BacklogInfo) => {
     if (!(await ask(`Archive ${b.finished} finished backlog files of ${b.projectName}? They move to Freeloop's data folder, and their removal is committed.`))) return;
     EngineService.ArchiveBacklog(b.projectRoot, b.workflowId)
@@ -866,6 +894,16 @@ export default function App() {
         detail: "a new session with a workflow, at its first stage",
         run: () => setScreen({ kind: "new", workflow: config?.defaults.workflow || "plan-slice-afk" }),
       },
+      ...projects
+        .filter((p) => p.trusted && !p.missing)
+        .map((p) => ({
+          id: `app:afk:${p.id}`,
+          title: `Run AFK issues: ${p.name}`,
+          group: "Action",
+          keywords: "afk workflow backlog issues run unattended",
+          detail: "one fresh session per ready AFK issue in its backlog",
+          run: () => setAfkFor({ root: p.root, startedBy: "the palette" }),
+        })),
       { id: "app:demo", title: "Try the demo", group: "Action", keywords: "tour example scripted no key policy", run: () => startDemo() },
       page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: keyLabel(bindingOf("attention")), detail: attentionCount ? `${attentionCount} waiting` : undefined }),
       ...(STANDALONE
@@ -1089,6 +1127,7 @@ export default function App() {
         openSession(sid);
       }}
       prices={prices}
+      onRunAFK={(root, workflowId) => setAfkFor({ root, workflowId, startedBy: "/afk" })}
       knownTags={tagsInUse}
       onOpenCompare={(tag) => setScreen({ kind: "compare", tag })}
       events={transcripts[s.id]?.events ?? []}
@@ -1700,6 +1739,7 @@ export default function App() {
             onQueue={() => setScreen({ kind: "queue" })}
             backlogs={backlogs}
             onArchive={archiveBacklog}
+            backlogActions={backlogActions}
             activityOf={(s) => <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
             markOf={(s) => <SourceMark source={sourceOf(s)} detail={s.model || undefined} />}
             sessions={visible.filter((s) => s.status !== "archived")}
@@ -1738,6 +1778,21 @@ export default function App() {
         )}
       </main>
       {palette && <Palette items={palette} onClose={() => setPalette(null)} />}
+      {afkFor && (
+        <AFKDialog
+          root={afkFor.root}
+          workflowId={afkFor.workflowId}
+          profiles={profiles}
+          startedBy={afkFor.startedBy}
+          onClose={() => setAfkFor(null)}
+          onStarted={() => {
+            setAfkFor(null);
+            refreshBacklogs();
+            refreshSessions();
+          }}
+          onError={report}
+        />
+      )}
     </div>
     </PaletteContext.Provider>
   );

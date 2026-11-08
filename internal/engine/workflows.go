@@ -321,7 +321,9 @@ func (e *Engine) RunStage(ctx context.Context, sid, command, input string) (Stag
 	res := StageResult{Kind: stage.StageKind()}
 	switch stage.StageKind() {
 	case config.StageAFK:
-		return res, errors.New("AFK runs are not built yet")
+		// It starts from its dialog, where the user sees what it will do and allows its
+		// commands (PrepareAFK, StartAFK).
+		return res, errors.New("an AFK run starts from its dialog: open the Board's backlog, or type /afk in the app")
 	case config.StageReview:
 		return res, errors.New("reviews from a workflow are not built yet")
 	case config.StageCleanup:

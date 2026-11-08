@@ -59,6 +59,8 @@ interface Props {
   focus?: { seq: number; n: number };
   // The price table for cost estimates (PRV-008).
   prices: PriceEntry[];
+  // Opens the AFK run's dialog for a project's backlog (WFL-005), for /afk.
+  onRunAFK?: (root: string, workflowId: string) => void;
   // Text for the composer, as after a fork (SES-009).
   initialDraft?: string;
   // Profiles to continue the session with (HRN-012).
@@ -117,7 +119,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source, onRunAFK }: Props) {
   // Beside other panes the panel starts closed and only the active pane shows
   // it; the remembered choice is for a session alone in the window.
   const split = !!onClosePane;
@@ -577,6 +579,13 @@ export default function SessionView({ session, events, focus, prices, initialDra
     }
     // A workflow's stage goes to the engine, with what follows its command.
     const call = stageCall(text, workflow);
+    // An AFK run starts from its dialog, which shows what it will do first.
+    if (call && workflow && (workflow.stages ?? []).find((s) => s.command === call.command)?.kind === "afk") {
+      setDraft("");
+      forgetDraft(session.id);
+      onRunAFK?.(session.projectRoot, workflow.id);
+      return;
+    }
     if (call) {
       holdBottom.current = false;
       setAccepting(true);

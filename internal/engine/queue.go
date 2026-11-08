@@ -245,13 +245,32 @@ func (e *Engine) agentsAtLimit(ctx context.Context, now time.Time) map[string]ti
 
 // startTask starts a task's session and sends its prompt.
 func (e *Engine) startTask(ctx context.Context, t config.Task) (string, error) {
-	ses, err := e.CreateSession(ctx, CreateSessionRequest{Title: t.Title, ProjectRoot: t.ProjectRoot, ProfileID: t.ProfileID, Worktree: t.Worktree})
+	req := CreateSessionRequest{Title: t.Title, ProjectRoot: t.ProjectRoot, ProfileID: t.ProfileID, Worktree: t.Worktree, Mode: t.Mode, EnvironmentID: t.EnvironmentID, Workflow: t.Workflow}
+	if t.ShareWorktreeOf != "" {
+		anchor, err := e.store.GetSession(ctx, t.ShareWorktreeOf)
+		if err != nil || anchor.Worktree == "" || !environment.IsDir(anchor.Worktree) {
+			return "", errors.New("the worktree it was to share is gone")
+		}
+		req.shareWorktree, req.Worktree = &anchor, false
+	}
+	ses, err := e.CreateSession(ctx, req)
 	if err != nil {
 		return "", err
 	}
-	e.SetTags(ctx, ses.ID, []string{QueuedTag})
-	e.emit(ses.ID, event.Notice, event.NoticeData{Message: "Started from the queue."})
-	if _, err := e.Prompt(ctx, ses.ID, t.Prompt); err != nil {
+	e.SetTags(ctx, ses.ID, append([]string{QueuedTag}, t.Tags...))
+	// What the user allowed for an AFK run's sessions when starting it (WFL-005).
+	for _, r := range sessionRules(t.Allow) {
+		if err := e.AddSessionRule(ses.ID, r); err != nil {
+			return ses.ID, err
+		}
+	}
+	note := "Started from the queue."
+	if t.RunID != "" {
+		note = "Started by an AFK run: it works on one issue unattended. Requests wait for you in Needs attention."
+	}
+	e.emit(ses.ID, event.Notice, event.NoticeData{Message: note})
+	// A run's prompt quotes the backlog, which agents wrote: its @ words attach nothing.
+	if _, err := e.enqueue(ctx, ses.ID, queued{text: t.Prompt, noMentions: t.RunID != ""}); err != nil {
 		return ses.ID, err
 	}
 	return ses.ID, nil
