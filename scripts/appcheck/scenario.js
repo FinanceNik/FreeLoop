@@ -1,62 +1,4 @@
-// The body of an async function run in the page; it returns one result per step.
-const results = [];
-const check = (name, ok, detail = "") => {
-  results.push({ name, ok: !!ok, detail: String(detail) });
-  // A picture of what failed, for a run no one watched (scripts/appcheck/drive.swift).
-  if (!ok) window.webkit.messageHandlers.snap?.postMessage(name)?.catch(() => {});
-};
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = async (what, fn, ms = 15000) => {
-  const end = Date.now() + ms;
-  for (;;) {
-    const v = fn();
-    if (v) return v;
-    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
-    await sleep(50);
-  }
-};
-const all = (sel, root = document) => [...root.querySelectorAll(sel)];
-const withText = (sel, text, root = document) => all(sel, root).find((e) => e.textContent.includes(text));
-// Icon-only controls are found by their accessible name, as VoiceOver finds them (GUI-041).
-const named = (sel, name, root = document) => all(sel, root).find((e) => e.getAttribute("aria-label") === name);
-const openSession = (title) => withText(".session-row", title).click();
-const type = (box, text) => {
-  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, text);
-  box.dispatchEvent(new Event("input", { bubbles: true }));
-};
-const activePane = () => document.querySelector(".pane-active") ?? document;
-const toTheEnd = (el) => el.scrollHeight - el.scrollTop - el.clientHeight;
-const step = async (name, fn) => {
-  try {
-    await fn();
-  } catch (e) {
-    check(name, false, e.message);
-  }
-};
-// One turn of the demo, approving whatever it asks. Returns what the sidebar said while
-// a request waited.
-const turn = async (title, afterSend = () => {}) => {
-  const pane = activePane();
-  const ended = () => all(".turn-end", pane).length;
-  const before = ended();
-  const box = await until("the message box", () => pane.querySelector(".composer textarea"));
-  box.focus();
-  type(box, "go");
-  await sleep(50);
-  (await until("Send to be enabled", () => { const b = named(".composer-actions button.primary", "Send", pane); return b && !b.disabled && b; })).click();
-  afterSend();
-  let waitingLine = "";
-  await until("the turn to end", () => {
-    const allow = pane.querySelector(".approval-buttons button.primary");
-    if (allow) {
-      waitingLine = waitingLine || withText(".session-row", title)?.title || "";
-      allow.click();
-    }
-    return ended() > before;
-  }, 30000);
-  return waitingLine;
-};
-
+// The app check on fresh scratch data (scripts/appcheck.sh); helpers are in lib.js.
 await until("the session list", () => withText(".session-row", "Check alpha"));
 check("the sidebar shows the mark", all(".sidebar h1 svg.logo circle").length === 3);
 
@@ -757,6 +699,25 @@ await step("the app's settings are seven short pages", async () => {
   check("an unsaved budget survives another page", !!document.querySelector(".budget-row") && !!document.querySelector(".settings-save"));
   withText(".settings-save button", "Revert")?.click();
   await until("reverted", () => !document.querySelector(".budget-row"), 4000).catch(() => {});
+  document.querySelector(".settings-nav .settings-back").click();
+  await sleep(100);
+});
+
+await step("a problem report says what an issue needs", async () => {
+  // Shown, not copied: a copy here would replace the clipboard of whoever runs the check.
+  document.querySelector(".settings-link").click();
+  await until("Settings", () => document.querySelector(".settings-nav"));
+  withText(".settings-nav button", "Data").click();
+  await until("the Data page", () => document.querySelector(".settings-page h2")?.textContent === "Data");
+  check("the Data page offers a report", !!withText(".settings-page h3", "Report a problem") && !!withText("button", "Copy a report"));
+  withText("button", "Show what is copied").click();
+  const pre = await until("the report", () => document.querySelector(".report-preview"), 5000);
+  const text = pre.textContent;
+  check("the report has the version and the Mac", /^Freeloop \d+\.\d+\.\d+/.test(text) && /System: macOS \d+/.test(text), text.split("\n").slice(0, 3).join(" | "));
+  check("the report has the log's end", /The log's last \d+ lines:/.test(text));
+  check("the report has no home folder path", !/\/Users\/[^/\s]+\//.test(text), (text.match(/\/Users\/[^/\s]+\//) ?? [""])[0]);
+  withText("button", "Hide what is copied").click();
+  await until("the report hidden", () => !document.querySelector(".report-preview"), 4000);
   document.querySelector(".settings-nav .settings-back").click();
   await sleep(100);
 });

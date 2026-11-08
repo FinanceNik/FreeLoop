@@ -3,7 +3,9 @@
 # with the demo provider: what the unit tests cannot see. Bugs it was written for lived
 # only in WebKit or between the page and the engine: confirm() answering no, the view
 # no longer following an agent, a setting that never saved. The scenario is in
-# appcheck/scenario.js. Needs no key and leaves the login keychain alone.
+# appcheck/scenario.js. A second pass runs appcheck/lived-in.js on a data folder set up
+# as a user's is after weeks (appcheck/lived-in.sh), since some bugs show only there.
+# Both share appcheck/lib.js. Needs no key and leaves the login keychain alone.
 #
 # It runs the served build, since a packaged app cannot be scripted, so a native dialog
 # is the one thing not covered: the scenario answers that call itself.
@@ -29,6 +31,8 @@ providers:
     type: scripted
 YAML
 
+. "$HERE/appcheck/lived-in.sh"
+
 pid=
 # What a run leaves to read afterwards: the app's log, the scenario's lines and a picture
 # of each failed check. CI uploads it when the check fails.
@@ -39,6 +43,7 @@ export APPCHECK_SHOTS="$OUT/shots"
 cleanup() {
   [ -z "$pid" ] || kill "$pid" 2>/dev/null || true
   cp "$DATA/app.log" "$OUT/app.log" 2>/dev/null || true
+  cp "$DATA/lived-in.log" "$OUT/app-lived-in.log" 2>/dev/null || true
   rm -rf "$DATA"
 }
 trap cleanup EXIT INT TERM
@@ -48,14 +53,18 @@ trap cleanup EXIT INT TERM
 swiftc -O "$HERE/appcheck/drive.swift" -o "$DATA/drive" 2>&1 | grep -v warning || true
 
 APP="$DATA/freeloop"
-"$APP" >"$DATA/app.log" 2>&1 &
-pid=$!
-i=0
-until "$APP" sessions >/dev/null 2>&1; do
-  i=$((i + 1))
-  [ $i -lt 100 ] || { echo "the app did not start:" >&2; tail -5 "$DATA/app.log" >&2; exit 2; }
-  sleep 0.2
-done
+# start_app starts the app on $FREELOOP_HOME, logging to $1, and waits for it.
+start_app() {
+  "$APP" >"$1" 2>&1 &
+  pid=$!
+  i=0
+  until "$APP" sessions >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ $i -lt 100 ] || { echo "the app did not start:" >&2; tail -5 "$1" >&2; exit 2; }
+    sleep 0.2
+  done
+}
+start_app "$DATA/app.log"
 
 for name in alpha beta menu full plan; do
   mkdir -p "$DATA/projects/$name"
@@ -107,7 +116,8 @@ while [ $n -lt "${APPCHECK_TURNS:-25}" ]; do
 done
 
 status=0
-"$DATA/drive" "http://localhost:$PORT/" "$HERE/appcheck/scenario.js" > "$OUT/results.txt" || status=$?
+cat "$HERE/appcheck/lib.js" "$HERE/appcheck/scenario.js" > "$DATA/fresh.js"
+"$DATA/drive" "http://localhost:$PORT/" "$DATA/fresh.js" > "$OUT/results.txt" || status=$?
 cat "$OUT/results.txt"
 
 # What the page says it saved has to be in the file.
@@ -117,5 +127,19 @@ if ! grep -q 'allowBypass: true' "$FREELOOP_HOME/config.yaml"; then
 else
   echo "ok    bypass is in config.yaml"
 fi
+
+# The second pass: the same app on a lived-in data folder.
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+pid=
+export FREELOOP_HOME="$DATA/lived-in/home"
+lived_in_files "$FREELOOP_HOME"
+start_app "$DATA/lived-in.log"
+lived_in_sessions "$APP" "$DATA/lived-in"
+echo "-- lived-in"
+cat "$HERE/appcheck/lib.js" "$HERE/appcheck/lived-in.js" > "$DATA/lived-in.js"
+"$DATA/drive" "http://localhost:$PORT/" "$DATA/lived-in.js" > "$OUT/results-lived-in.txt" || status=1
+cat "$OUT/results-lived-in.txt"
+
 [ "$status" -eq 0 ] && echo "appcheck passed" || echo "appcheck FAILED"
 exit "$status"
