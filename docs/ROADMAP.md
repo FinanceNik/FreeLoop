@@ -523,9 +523,24 @@ Not in: GitHub issues as a source (OQ-038, not planned), a run continuing past a
 
 Not tried yet: a real model on any stage, Claude Code or another external agent as the AFK or review profile (the code path is the same as for the built-in agent, since done is read from the issue file and the review is HRN-018's), and a run on a real project's tests under the sandbox. The skill texts are Freeloop's own, written after the talk; none of Matt Pocock's skill files were copied.
 
+## Windows and Linux (planned 2026-11-08, at the user's request before going public)
+
+The user wants the app on macOS, Windows and Linux, working essentially the same, before the repository goes public (NFR-XPLAT-003, OQ-045). Linux was begun the same day (bubblewrap, the Secret Service, the platform layer); Windows starts from nothing but the interfaces NFR-XPLAT-002 kept. Branch `cross-platform`.
+
+1. **The process and file layer on Windows.** *Built 2026-11-08; cross-compiled and vetted on a Mac, not yet run on Windows.* `internal/environment`: commands in job objects that end with the app (`proc_windows.go`), so a crash leaves nothing running without a ledger; Git Bash as the shell (OQ-043); Windows' system variables passed on; reads and writes that check where the opened file really is (`nofollow_windows.go`); the terminal on ConPTY (`terminal_windows.go`); the data folder lock; Docker Desktop with Windows paths mounted at `/c/...`; SSH through Windows' OpenSSH, a connection per command.
+2. **The Windows platform.** *Built 2026-11-08, not yet run on Windows.* `internal/platform/windows`: the Credential Manager, long values in parts; Notepad for a file to edit, the PDF viewer for a PDF, File Explorer for a folder, never a file opened by its type otherwise; system details for a problem report. No sandbox (OQ-044).
+3. **The engine on Windows.** Paths with backslashes and drive letters, Windows' protected paths, line endings, files Windows will not rename while open, install hints, and the system prompt telling the model it writes bash.
+4. **The interface on each system.** *Built 2026-11-08.* Ctrl as the primary shortcut key on Windows and Linux, per-system names (File Explorer, Credential Manager), paths with either separator, help per system.
+5. **Packages and CI.** A Windows installer and portable zip, an AppImage and a .deb, each for x64 and arm64; `make release` gathering them with their SBOMs and checksums; a Windows job on every push beside the Linux one.
+6. **Linux's remaining parts**, from the first commit: `pasta` and the listed-hosts network.
+
+*Done when:* the Go tests pass on the Windows and Linux runners, the packages build, and the user has run a session on each system.
+
+Not in: a native Windows sandbox (OQ-044), signing for Windows (SmartScreen warns once, as macOS does for an unsigned app), the Microsoft Store, Flatpak and Snap.
+
 ## Later (unscheduled)
 
-PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.
+PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.
 
 ## Cut order
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Freeloop is an open-source macOS desktop app for running AI coding agents with the user's own models, switchable harnesses, Agent Skills, MCP servers and custom environments, built for someone who runs many sessions across many repos at once. Claude Code is the UX inspiration, not the base: the built-in harness is the product, and Claude Code is one external harness among several.
+Freeloop is an open-source desktop app for macOS, Windows and Linux for running AI coding agents with the user's own models, switchable harnesses, Agent Skills, MCP servers and custom environments, built for someone who runs many sessions across many repos at once. Claude Code is the UX inspiration, not the base: the built-in harness is the product, and Claude Code is one external harness among several.
 
 Status: M0 to M2 and nearly all of v1 are built; real-provider runs and a first release are what remain open. `docs/ROADMAP.md` lists what each milestone covers, where each feature lives and what is next. The documents in `docs/` are the specification. When this file and a document disagree, the document wins; fix this file.
 
@@ -19,9 +19,9 @@ Status: M0 to M2 and nearly all of v1 are built; real-provider runs and a first 
 
 ## Settled decisions (do not reopen without the user)
 
-- Go core; Wails v3 (pinned to v3.0.0 in `go.mod` and `WAILS_VERSION` in the Makefile); React + TypeScript frontend built with Vite, npm as the package manager; macOS 14 minimum (OQ-021); macOS only for now.
+- Go core; Wails v3 (pinned to v3.0.0 in `go.mod` and `WAILS_VERSION` in the Makefile); React + TypeScript frontend built with Vite, npm as the package manager; macOS 14 on Apple Silicon (OQ-021), Windows 10 1809+ and Linux with WebKitGTK 4.1, both on x64 and arm64, working essentially the same (OQ-045, NFR-XPLAT-003). Commands run through zsh on a Mac, the login shell on Linux and Git Bash on Windows (OQ-019, OQ-043); Windows has no native sandbox yet (OQ-044).
 - The engine runs in-process behind a transport-agnostic API until v1; the daemon split is EXT-004.
-- SQLite through a pure-Go driver for index and metadata, one append-only JSONL file per session for transcripts, YAML for config, secrets only in the macOS Keychain behind the `Secrets` interface.
+- SQLite through a pure-Go driver for index and metadata, one append-only JSONL file per session for transcripts, YAML for config, secrets only in the system keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service) behind the `Secrets` interface.
 - ACP (Agent Client Protocol over stdio) is the harness protocol. MCP goes through the official Go SDK targeting the 2026-07-28 revision. Skills use the Agent Skills `SKILL.md` format. Project instructions come from `AGENTS.md` first, `CLAUDE.md` as fallback, both read-only.
 - Apache-2.0. No telemetry; the only outbound traffic is to user-configured endpoints plus an opt-in update check, a pinned token optimizer download the user clicks, and the MCP registry when the user browses it.
 
@@ -32,7 +32,7 @@ Status: M0 to M2 and nearly all of v1 are built; real-provider runs and a first 
 - **Everything through `Environment` (ENV-001).** No `os/exec` and no direct file I/O in the engine outside `internal/environment`; a lint rule enforces it. External agents' `fs/*` and `terminal/*` protocol requests go through the same layer, so protected paths hold for them too.
 - **The GUI never special-cases a harness (HRN-001).** If a feature seems to need harness-specific UI, the `Harness` interface is wrong; fix the interface.
 - **No in-process plugins.** Extension points are files (profiles, rules, presets, skills) and processes (ACP harnesses, MCP servers, hooks).
-- **No macOS-only code outside `internal/platform/darwin`** (NFR-XPLAT-002).
+- **No system-specific code outside `internal/platform/{darwin,linux,windows}`** and the per-system files of `internal/environment` (NFR-XPLAT-002). The engine runs on all three systems; a feature that works on one must work on the others, or say why it cannot.
 - **Never write into `~/.claude` or a project's `.claude/`.** Imports from Claude Code are one-way copies with provenance recorded.
 
 ## Architecture in brief
@@ -47,7 +47,7 @@ Prerequisites: Go (Homebrew), Node with npm, Xcode command line tools, and `make
 - `make build` / `make package` / `make dmg`: production binary in `bin/` / ad-hoc signed `bin/Freeloop.app` / `bin/Freeloop.dmg` holding the app and a link to Applications.
 - `make test`: Go tests under `internal/` and `cmd/` with the race detector, then frontend tests (`node --test`, no test framework). One Go test: `go test ./internal/<pkg>/ -run '^TestName$'`.
 - `make check-app`: drive the real interface on the real engine in a real WebKit view, on scratch data with the demo provider (`scripts/appcheck.sh`, the steps in `scripts/appcheck/scenario.js`), then again on a lived-in data folder (`lived-in.sh`, `lived-in.js`); helpers in `lib.js`. Needs no key. Run it after a change to the interface.
-- `make lint`: gofmt, `go vet`, the architecture boundary test (`internal/archtest`: ENV-001, Wails only in `cmd/freeloop`, macOS code only in `internal/platform/darwin`) and `tsc`.
+- `make lint`: gofmt, `go vet`, the architecture boundary test (`internal/archtest`: ENV-001, Wails only in `cmd/freeloop`, macOS code only in `internal/platform/darwin`) and `tsc`. `GOOS=windows CGO_ENABLED=0 go vet ./internal/... ./cmd/...` checks the Windows build from any machine.
 - `make release`: `bin/release` with the DMG, its SBOM (`internal/sbom`, `cmd/freeloop-sbom`), build information and checksums (SEC-012). `make verify-repro` builds a commit twice from clean clones and compares every file (NFR-SEC-004; `REF=<tag>`). `make verify-deps` checks modules against `go.sum` and that `go.mod` is tidy; a build no longer tidies it.
 - `make memcheck`: package the app, run ten demo sessions in it on scratch data and check the idle footprint against 300 MB (NFR-PERF-004; the app's window opens while it runs).
 - `make verify-agents`: run the HRN-005 scenario with each preset's real agent at its pinned version on a local stand-in model (HRN-007; downloads the agents, needs no key).

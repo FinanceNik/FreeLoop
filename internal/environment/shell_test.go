@@ -56,7 +56,7 @@ func TestShellOfPasswd(t *testing.T) {
 }
 
 // Git Bash is found beside the git on PATH, then in the usual install folders, and
-// WSL's bash.exe in System32 is never taken for it (OQ-038).
+// WSL's bash.exe in System32 is never taken for it (OQ-043).
 func TestGitBash(t *testing.T) {
 	files := func(paths ...string) func(string) bool {
 		return func(p string) bool { return slices.Contains(paths, p) }

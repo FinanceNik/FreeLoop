@@ -15,7 +15,7 @@ import (
 // Shell is the shell this machine's commands run through (OQ-019). Commands
 // are written for a POSIX shell, so it is always one that takes -c.
 type Shell struct {
-	// Path is the program: "zsh" on a Mac, Git Bash on Windows (OQ-038), the user's
+	// Path is the program: "zsh" on a Mac, Git Bash on Windows (OQ-043), the user's
 	// login shell or a stand-in elsewhere.
 	Path string
 	// Login is the argv prefix that runs a command line in a login shell, so the
@@ -60,7 +60,7 @@ func ShellFor(goos, passwd, envShell string, exists func(string) bool) Shell {
 }
 
 // GitBash finds Git for Windows' bash.exe, the shell commands run through on
-// Windows (OQ-038): beside the git on PATH, then in the usual install folders.
+// Windows (OQ-043): beside the git on PATH, then in the usual install folders.
 // System32's bash.exe is WSL's launcher, not Git Bash, and is never chosen.
 // lookPath is exec.LookPath, getenv os.Getenv and exists reports a file; the
 // path is Windows', joined with backslashes whatever system runs the test.
@@ -104,7 +104,7 @@ func winDir(p string) string {
 }
 
 // startHint explains a program that would not start for want of the shell: on
-// Windows, that Git for Windows has to be installed (OQ-038).
+// Windows, that Git for Windows has to be installed (OQ-043).
 func startHint(err error) error {
 	if runtime.GOOS == "windows" && errors.Is(err, exec.ErrNotFound) && LoginShell().Path == "bash.exe" {
 		return fmt.Errorf("%w: Freeloop runs commands through Git Bash; install Git for Windows from https://git-scm.com/download/win and restart Freeloop", err)
