@@ -3,6 +3,7 @@ import { ask } from "./ask.ts";
 import { Browser } from "@wailsio/runtime";
 import { EngineService, type MCPServer, type MCPServerInfo, type RegistryOption, type RegistryServer } from "./api.ts";
 import McpRegistry from "./McpRegistry.tsx";
+import { added as alreadyAdded, MCP_SUGGESTIONS, type McpSuggestion } from "./mcpSuggestions.ts";
 
 // MCP servers (MCP-001, MCP-005): stdio commands and Streamable HTTP
 // endpoints in mcp.yaml. A server runs only after the user approves exactly
@@ -30,7 +31,7 @@ interface Form {
   enabled: boolean;
   secretNames: string[];
   remove: string[];
-  added: { name: string; value: string }[];
+  added: { name: string; value: string; hint?: string }[];
 }
 
 function toForm(s?: MCPServerInfo): Form {
@@ -73,6 +74,21 @@ export function registryForm(server: RegistryServer, option: RegistryOption): Fo
     env: option.transport === "http" ? "" : plain.map((v) => `${v.name}${sep}${v.default}`).join("\n"),
     headers: option.transport === "http" ? plain.map((v) => `${v.name}${sep}${v.default}`).join("\n") : "",
     added: secret.map((v) => ({ name: v.name, value: "" })),
+  };
+}
+
+// suggestionForm fills in the add-server form from a suggested server (MCP-010): the
+// user sees exactly what it runs or reaches, and saves it as any other.
+export function suggestionForm(s: McpSuggestion): Form {
+  return {
+    ...toForm(),
+    id: s.id,
+    name: s.name,
+    transport: s.transport,
+    command: s.command ?? "",
+    args: (s.args ?? []).join("\n"),
+    url: s.url ?? "",
+    added: s.secretHeader ? [{ name: s.secretHeader.name, value: "", hint: s.secretHeader.hint }] : [],
   };
 }
 
@@ -254,7 +270,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
                 />
                 <input
                   type="password"
-                  placeholder="value"
+                  placeholder={s.hint ?? "value"}
                   value={s.value}
                   onChange={(e) => set("added", form.added.map((x, n) => (n === i ? { ...x, value: e.target.value } : x)))}
                   aria-label="Secret value"
@@ -396,6 +412,35 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
         <button onClick={() => setBrowsing(true)}>Browse a registry…</button>
         <button onClick={onImport}>Import from Claude Code…</button>
       </div>
+
+      <h3>Suggested</h3>
+      <p className="muted">
+        Common servers, built into the app. Nothing runs or connects until you add one, save it and approve it, as any other server.
+      </p>
+      <ul className="mcp-suggestions">
+        {MCP_SUGGESTIONS.map((s) => {
+          const there = alreadyAdded(s, servers);
+          return (
+            <li key={s.id} className="card mcp-suggestion">
+              <div className="row mcp-suggestion-head">
+                <strong>{s.name}</strong>
+                <span className="badge">{s.transport === "http" ? "remote" : "runs locally"}</span>
+                <span className="muted">{s.signIn === "oauth" ? "signs in with OAuth" : s.signIn === "token" ? "needs a token" : "no sign-in"}</span>
+              </div>
+              <p>{s.description}</p>
+              <p className="muted">{s.reach}</p>
+              <div className="row">
+                <button onClick={() => setForm(suggestionForm(s))} disabled={there} aria-label={there ? `${s.name} is added` : `Add ${s.name}`}>
+                  {there ? "Added" : "Add…"}
+                </button>
+                <button className="link" onClick={() => Browser.OpenURL(s.docs)}>
+                  About {s.name}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

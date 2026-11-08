@@ -1143,6 +1143,35 @@ await step("the help is a book of topics, searchable, leading into the app", asy
   await until("the palette to close", () => !document.querySelector(".palette"), 4000);
 });
 
+await step("suggested MCP servers are added through the usual form", async () => {
+  await openPalette("MCP servers");
+  (await until("the entry", () => all(".palette-item").find((i) => i.querySelector(".palette-title")?.textContent === "MCP servers"), 4000)).click();
+  await until("the suggestions", () => all(".mcp-suggestion").length > 0, 8000);
+  const names = all(".mcp-suggestion strong").map((e) => e.textContent);
+  check("six servers are suggested", names.join(",") === "GitHub,Linear,Sentry,Notion,Context7,Playwright", names.join(","));
+  check("each says where it runs", all(".mcp-suggestion").every((c) => /remote|runs locally/.test(c.textContent)));
+  named("button", "Add Context7").click();
+  const url = await until("the form", () => withText("label", "URL")?.querySelector("input"), 4000);
+  check("the form is filled in", url.value === "https://mcp.context7.com/mcp", url.value);
+  document.querySelector("form button.primary[type=submit]").click();
+  const row = await until("the server", () => all(".mcp-server").find((r) => r.textContent.includes("Context7")), 8000);
+  check("it waits for approval like any server", /needs approval/.test(row.textContent), row.textContent.slice(0, 80));
+  await until("the suggestion marked", () => named("button", "Context7 is added"), 4000);
+  check("the suggestion shows as added", named("button", "Context7 is added").disabled);
+  // Leave nothing behind: a served build has no dialogs, so this answers that one.
+  const real = window.fetch;
+  window.fetch = (u, o) =>
+    decodeURIComponent(`${u}${o?.body ?? ""}`).includes("Delete Context7?")
+      ? Promise.resolve(new Response(JSON.stringify("OK"), { status: 200, headers: { "Content-Type": "application/json" } }))
+      : real(u, o);
+  try {
+    withText("button", "Delete", row).click();
+    await until("the server gone", () => !all(".mcp-server").some((r) => r.textContent.includes("Context7")), 8000);
+  } finally {
+    window.fetch = real;
+  }
+});
+
 await step("the palette is short, grouped and one line a result", async () => {
   const open = async (query) => {
     if (!document.querySelector(".palette")) window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));

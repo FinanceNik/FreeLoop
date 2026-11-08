@@ -2902,6 +2902,26 @@ ul.unpriced {
   word-break: break-all;
 }
 
+/* Suggested MCP servers (MCP-010). */
+.mcp-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.mcp-suggestion p {
+  margin: 6px 0;
+}
+
+.mcp-suggestion-head {
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
 /* Help (GUI-047): its topics beside the page being read. */
 .help {
   display: grid;

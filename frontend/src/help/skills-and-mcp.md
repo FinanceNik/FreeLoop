@@ -39,6 +39,8 @@ MCP servers give an agent extra tools. They run as a command on your Mac or are 
 | Secrets | Kept in the macOS Keychain, passed as variables or sent as headers. |
 | Offer its tools in every session | Turns the server on for everyone. A profile can add servers that are off. |
 
+The quickest start is **Suggested**, further down the same page: GitHub, Linear, Sentry, Notion, Context7 and Playwright. **Add…** fills in the form, and you save and approve it like any other server. Each card says where the server runs and what it can reach.
+
 **Browse a registry…** fills in the form from the official MCP registry or an address of your own. **Import from Claude Code…** copies servers from Claude Code's settings.
 
 ## Approve and sign in
