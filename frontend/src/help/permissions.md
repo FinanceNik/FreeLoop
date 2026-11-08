@@ -38,7 +38,7 @@ On an approval card, **Allow always** saves a rule for exactly that command or p
 
 ## Protected paths and secret files
 
-Some places are never read or written, in any mode, whatever a rule says. They include `~/.ssh`, `~/.aws`, your keychain files, browser data, other tools' sign-in files and Freeloop's data folder. Settings → Policy lists them under **Protected paths**.
+Some places are never read or written, in any mode, whatever a rule says. They include `~/.ssh`, `~/.aws`, your {{keychain files|credential files|keyring files}}, browser data, other tools' sign-in files and Freeloop's data folder. Settings → Policy lists them under **Protected paths**.
 
 In a project:
 

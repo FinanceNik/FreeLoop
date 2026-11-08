@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { secretStore } from "./platform.ts";
 import { EngineService, type ClaudeImport as Preview, type SkillCandidate } from "./api.ts";
 
 // ClaudeImport is the one-way import from Claude Code (MCP-002, SKL-003,
@@ -93,7 +94,7 @@ export default function ClaudeImport({ onDone, onError }: Props) {
                     <div className="import-detail">
                       {it.kind === "mcp" && <code>{it.detail}</code>}
                       {it.destination !== "none" && <div className="muted">→ {it.destination}</div>}
-                      {(it.secrets ?? []).length > 0 && <div className="muted">Moved to the Keychain: {(it.secrets ?? []).join(", ")}</div>}
+                      {(it.secrets ?? []).length > 0 && <div className="muted">Moved to {secretStore()}: {(it.secrets ?? []).join(", ")}</div>}
                       {it.note && <div className="muted">{it.note}</div>}
                     </div>
                   </li>

@@ -83,8 +83,8 @@ export default function WorktreeScripts({ projectId, onError }: { projectId: str
         <div className="worktree-scripts-form">
           <p className="muted">
             Values here override the project's <code>.freeloop/worktree.yaml</code>; leave one empty to use the file's. Commands run in the worktree with the environment's variables and <code>FREELOOP_PORT</code>,{" "}
-            <code>FREELOOP_ROOT_PATH</code> and <code>FREELOOP_WORKTREE</code>: on this Mac, or in the session's container in a Docker environment, where the main checkout's files are not
-            available. Copies always come from the main checkout on this Mac.
+            <code>FREELOOP_ROOT_PATH</code> and <code>FREELOOP_WORKTREE</code>: on this computer, or in the session's container in a Docker environment, where the main checkout's files are not
+            available. Copies always come from the main checkout on this computer.
           </p>
           <label>
             Copy from the main checkout <span className="muted">(one path a line, such as .env)</span>

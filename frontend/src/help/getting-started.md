@@ -29,7 +29,7 @@ A provider is a model service the built-in agent talks to. You don't need one fo
 - Pick the Kind, check the Name and Base URL, and paste the API key. Local servers don't need one.
 - Optionally set a Default model, then choose **Save**.
 
-Saving tests the connection and lists the models. Keys go to the macOS Keychain, not to a file. See Providers for more.
+Saving tests the connection and lists the models. Keys go to {{the macOS Keychain|Windows Credential Manager|the system keyring}}, not to a file. See Providers for more.
 
 ## Start your first session
 

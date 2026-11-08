@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { secretStore } from "./platform.ts";
 import { ask } from "./ask.ts";
 import { keyMoves, plainRemote } from "./addresses.ts";
 import { EngineService, errorText, type HarnessInfo, type ModelInfo, type PresetInfo, type ProviderInfo } from "./api.ts";
@@ -97,7 +98,7 @@ export default function Providers({ providers, onChanged, onError, agents, defau
   };
 
   const remove = async (p: ProviderInfo) => {
-    if (!(await ask(`Delete ${p.name}? Its API key is removed from the Keychain.`))) return;
+    if (!(await ask(`Delete ${p.name}? Its API key is removed from ${secretStore()}.`))) return;
     EngineService.DeleteProvider(p.id).then(onChanged).catch(onError);
   };
 
@@ -112,7 +113,7 @@ export default function Providers({ providers, onChanged, onError, agents, defau
       {agents && agents.length > 0 && (
         <section className="choice" aria-labelledby="signed-in-agents">
           <h3 id="signed-in-agents">Agents you're signed in to</h3>
-          <p className="muted">These need no key here: Freeloop starts the agent on your Mac and it uses its own account. There is nothing to add.</p>
+          <p className="muted">These need no key here: Freeloop starts the agent on your computer and it uses its own account. There is nothing to add.</p>
           <ul className="agent-choices">
             {agents.map((h) => (
               <li key={h.id} className="agent-choice">
@@ -135,7 +136,7 @@ export default function Providers({ providers, onChanged, onError, agents, defau
       )}
       {agents && agents.length > 0 && <h3>API keys and local models</h3>}
       <p className="muted">
-        API keys are stored in the macOS Keychain. Freeloop never shows a saved key again and only connects to the endpoints you add here.
+        API keys are stored in {secretStore()}. Freeloop never shows a saved key again and only connects to the endpoints you add here.
       </p>
       <ul className="provider-list">
         {providers.map((p) => (
@@ -150,7 +151,7 @@ export default function Providers({ providers, onChanged, onError, agents, defau
               {p.addressChanged && (
                 <div className="banner warn row" role="alert">
                   <span>
-                    This address was changed outside Freeloop, so the API key is not being sent. If you did not change it, something on this Mac may be trying to get your key.
+                    This address was changed outside Freeloop, so the API key is not being sent. If you did not change it, something on this computer may be trying to get your key.
                   </span>
                   <button
                     onClick={async () => {

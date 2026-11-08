@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { secretStore } from "./platform.ts";
 import { EngineService, type Config, type HarnessInfo, type ProviderInfo } from "./api.ts";
 import Providers from "./Providers.tsx";
 import ClaudeImport from "./ClaudeImport.tsx";
@@ -99,7 +100,7 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
           {agents.length > 0 && (
             <section className="choice" aria-labelledby="choice-agent">
               <h3 id="choice-agent">Use an agent you're signed in to</h3>
-              <p className="muted">It runs with its own account. Freeloop starts it on your Mac and never sees the login.</p>
+              <p className="muted">It runs with its own account. Freeloop starts it on your computer and never sees the login.</p>
               <ul className="agent-choices">
                 {agents.map((h) => (
                   <li key={h.id} className="agent-choice">
@@ -123,7 +124,7 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
           <details className="choice" open={hasProvider || agents.length === 0}>
             <summary>
               <h3>Use an API key or a local model</h3>
-              <span className="muted">Anthropic, OpenAI, Google Gemini, OpenRouter, or a server on this Mac such as Ollama or LM Studio. Keys go to the macOS Keychain.</span>
+              <span className="muted">Anthropic, OpenAI, Google Gemini, OpenRouter, or a server on this computer such as Ollama or LM Studio. Keys go to {secretStore()}.</span>
             </summary>
             <Providers providers={providers} onChanged={onProvidersChanged} onError={onError} />
           </details>

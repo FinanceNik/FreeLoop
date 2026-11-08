@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { secretStore } from "./platform.ts";
 import { ask } from "./ask.ts";
 import { EngineService, MODES, STARTING_MODES, type EnvironmentInfo } from "./api.ts";
 
@@ -150,7 +151,7 @@ export default function Environments({ environments, onChanged, onError }: Props
 
   const remove = async (env: EnvironmentInfo) => {
     const what = env.builtin ? `Reset ${env.name}` : `Delete ${env.name}`;
-    if (!(await ask(`${what}? Its secrets are removed from the Keychain.`))) return;
+    if (!(await ask(`${what}? Its secrets are removed from ${secretStore()}.`))) return;
     EngineService.DeleteEnvironment(env.id).then(onChanged).catch(onError);
   };
 
@@ -161,7 +162,7 @@ export default function Environments({ environments, onChanged, onError }: Props
       <h2>Environments</h2>
       <p className="muted">
         An environment is what a session's commands run with: variables, secrets, the tools the agent may use and the mode new
-        sessions start in. Commands run on this Mac in the session's project folder, in a sandbox if the environment has one. Secrets are stored in the macOS Keychain,
+        sessions start in. Commands run on this computer in the session's project folder, in a sandbox if the environment has one. Secrets are stored in {secretStore()},
         handed to commands as variables when they start, and redacted from transcripts.
       </p>
       <ul className="provider-list">
@@ -254,7 +255,7 @@ export default function Environments({ environments, onChanged, onError }: Props
           <label>
             Runs
             <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-              <option value="local">On this Mac, in the project folder</option>
+              <option value="local">On this computer, in the project folder</option>
               <option value="docker">In a Docker container per session</option>
               <option value="ssh">On another machine, over SSH</option>
             </select>
@@ -286,8 +287,8 @@ export default function Environments({ environments, onChanged, onError }: Props
                   <label>
                     Network
                     <select value={form.sandboxNetwork} onChange={(e) => setForm({ ...form, sandboxNetwork: e.target.value })}>
-                      <option value="localhost">This Mac only: tests and dev servers work, and so does anything else listening here</option>
-                      <option value="hosts">This Mac and the hosts listed here</option>
+                      <option value="localhost">This computer only: tests and dev servers work, and so does anything else listening here</option>
+                      <option value="hosts">This computer and the hosts listed here</option>
                       <option value="none">None</option>
                     </select>
                   </label>
@@ -346,10 +347,10 @@ export default function Environments({ environments, onChanged, onError }: Props
             <fieldset>
               <legend>Machine</legend>
               <p className="muted">
-                Commands run on that machine, in a working copy kept in sync with the project here. Your files, keys and network on this Mac are out of their reach. Use a machine you can afford to lose, not a server that matters: an agent can do anything on it, and your code and this environment's variables and secrets go there.
+                Commands run on that machine, in a working copy kept in sync with the project here. Your files, keys and network on this computer are out of their reach. Use a machine you can afford to lose, not a server that matters: an agent can do anything on it, and your code and this environment's variables and secrets go there.
               </p>
               <p className="muted">
-                Secrets, files a deny rule covers and what the project ignores are not copied. Settings this Mac or an agent would act on, such as <code>.git</code>, <code>.claude</code> and <code>AGENTS.md</code>, do not come back. Other changes do, so read the diff. So far this works with the built-in agent only.
+                Secrets, files a deny rule covers and what the project ignores are not copied. Settings this computer or an agent would act on, such as <code>.git</code>, <code>.claude</code> and <code>AGENTS.md</code>, do not come back. Other changes do, so read the diff. So far this works with the built-in agent only.
               </p>
               <label>
                 Host <span className="muted">(a name from ~/.ssh/config, or user@host)</span>

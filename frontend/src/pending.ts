@@ -52,5 +52,5 @@ export function groupPending<T extends { kind: string }>(items: T[]): { title: s
 // approveAllQuestion is what the user agrees to: how many, of what.
 export function approveAllQuestion(items: { kind: string }[]): string {
   const counts = groupPending(items).map((g) => `${g.title}: ${g.items.length}`);
-  return `Approve all ${items.length}?\n\n${counts.join("\n")}\n\nThey take effect at once, and a backup can hold anything. Approve all only if you know where these came from, such as your own backup from another Mac.`;
+  return `Approve all ${items.length}?\n\n${counts.join("\n")}\n\nThey take effect at once, and a backup can hold anything. Approve all only if you know where these came from, such as your own backup from another computer.`;
 }

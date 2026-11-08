@@ -6,8 +6,9 @@ export interface FontChoice {
   codeFont: string;
 }
 
-// What the editor offers, as far as they are on this Mac: what macOS comes with,
-// then fonts people commonly install. Any other name can be typed.
+// What the editor offers, as far as they are on this computer: what macOS, Windows
+// and the common Linux desktops come with, then fonts people commonly install. Any
+// other name can be typed.
 export const TEXT_FONTS = [
   "Helvetica Neue",
   "Avenir Next",
@@ -19,6 +20,12 @@ export const TEXT_FONTS = [
   "Georgia",
   "Iowan Old Style",
   "Palatino",
+  "Segoe UI",
+  "Calibri",
+  "Ubuntu",
+  "Cantarell",
+  "Noto Sans",
+  "DejaVu Sans",
   "Inter",
   "IBM Plex Sans",
   "Manrope",
@@ -34,6 +41,11 @@ export const CODE_FONTS = [
   "Courier New",
   "Andale Mono",
   "PT Mono",
+  "Consolas",
+  "Cascadia Mono",
+  "DejaVu Sans Mono",
+  "Liberation Mono",
+  "Noto Sans Mono",
   "Cascadia Code",
   "Fira Code",
   "Hack",
@@ -53,7 +65,7 @@ export function isFontName(v: string): boolean {
 }
 
 // fontStack is the value for a font's variable: the name, then the app's own
-// fonts for a Mac without it. Null when there is no name to use.
+// fonts for a computer without it. Null when there is no name to use.
 export function fontStack(name: string | undefined, fallback: string): string | null {
   return name && isFontName(name) ? `"${name}", var(--${fallback})` : null;
 }
@@ -73,7 +85,7 @@ export function applyFonts(style: Pick<CSSStyleDeclaration, "setProperty" | "rem
 
 const GENERIC = ["monospace", "serif", "sans-serif"];
 
-// fontPresent tells whether a family is on this Mac: a page cannot list fonts
+// fontPresent tells whether a family is on this computer: a page cannot list fonts
 // or ask, but text in a missing family measures the same as its fallback, for
 // every fallback. measure gives the width of a sample in a CSS font. It says
 // yes when nothing can be measured, so a name is never held back on a guess.

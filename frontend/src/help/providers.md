@@ -4,7 +4,7 @@ Connect the built-in agent to a model, then choose and change the model for a se
 
 ## Add a provider
 
-A provider is where the built-in agent sends its model calls: an API key for a hosted service, or the address of a model on your Mac.
+A provider is where the built-in agent sends its model calls: an API key for a hosted service, or the address of a model on your computer.
 
 - Open **Settings → Providers** and click **Add provider**.
 - Choose the Kind and give it a Name.
@@ -35,7 +35,7 @@ Choosing a kind fills in the Base URL, and for Anthropic, OpenAI (Responses API)
 
 ## Keys and addresses
 
-API keys are stored in the macOS Keychain, and Freeloop never shows a saved key again. When you edit a provider, leave the key empty to keep it. **Delete** removes the provider and its key.
+API keys are stored in {{the macOS Keychain|Windows Credential Manager|the system keyring}}, and Freeloop never shows a saved key again. When you edit a provider, leave the key empty to keep it. **Delete** removes the provider and its key.
 
 > Freeloop connects only to the endpoints you add. If a provider's address is changed outside the app, the key isn't sent and the provider shows a warning. Click **Use this address** only if you made that change.
 

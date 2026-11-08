@@ -17,7 +17,7 @@ export function keyMoves(before: string, after: string): boolean {
   return !a || !b || a.origin !== b.origin;
 }
 
-// plainRemote reports an unencrypted address off this Mac.
+// plainRemote reports an unencrypted address off this computer.
 export function plainRemote(raw: string): boolean {
   const u = parse(raw);
   if (!u || u.protocol !== "http:") return false;

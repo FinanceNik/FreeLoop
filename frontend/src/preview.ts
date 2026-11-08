@@ -1,4 +1,4 @@
-// The app preview's address (GUI-020). Only this Mac's own addresses load,
+// The app preview's address (GUI-020). Only this computer's own addresses load,
 // never the app's own page. Pure, so preview.test.ts covers it.
 
 const LOCAL = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -21,7 +21,7 @@ export function parseAddress(input: string, appOrigin: string): PreviewAddress |
     return { error: `"${text}" is not an address.` };
   }
   if (u.protocol !== "http:" && u.protocol !== "https:") return { error: "Only http and https addresses load." };
-  if (!LOCAL.has(u.hostname)) return { error: "The preview shows this Mac's own servers only; open anything else in your browser." };
+  if (!LOCAL.has(u.hostname)) return { error: "The preview shows this computer's own servers only; open anything else in your browser." };
   if (u.username || u.password) return { error: "An address with a user name or password does not load." };
   if (u.origin === appOrigin) return { error: "That is Freeloop's own page." };
   const port = u.port ? Number(u.port) : u.protocol === "https:" ? 443 : 80;

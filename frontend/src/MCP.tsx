@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { secretStore } from "./platform.ts";
 import { ask } from "./ask.ts";
 import { Browser } from "@wailsio/runtime";
 import { EngineService, type MCPServer, type MCPServerInfo, type RegistryOption, type RegistryServer } from "./api.ts";
@@ -7,7 +8,7 @@ import { added as alreadyAdded, MCP_SUGGESTIONS, type McpSuggestion } from "./mc
 
 // MCP servers (MCP-001, MCP-005): stdio commands and Streamable HTTP
 // endpoints in mcp.yaml. A server runs only after the user approves exactly
-// what it runs; any change asks again. Secrets go to the Keychain. A remote
+// what it runs; any change asks again. Secrets go to the system's secret store. A remote
 // server that wants OAuth waits for "Sign in", which opens the server's
 // sign-in page in the browser (MCP-006).
 
@@ -58,7 +59,7 @@ function toForm(s?: MCPServerInfo): Form {
 }
 
 // registryForm fills in the add-server form from a registry's listing. Values it
-// marks secret become secrets to fill in, which go to the Keychain.
+// marks secret become secrets to fill in, which go to the system's secret store.
 export function registryForm(server: RegistryServer, option: RegistryOption): Form {
   const plain = (option.transport === "http" ? (option.headers ?? []) : (option.variables ?? [])).filter((v) => !v.secret && (v.required || v.default));
   const secret = (option.transport === "http" ? (option.headers ?? []) : (option.variables ?? [])).filter((v) => v.secret);
@@ -254,7 +255,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
               .filter((n) => !form.remove.includes(n))
               .map((n) => (
                 <div key={n} className="row">
-                  <code>{n}</code> <span className="muted">stored in the Keychain</span>
+                  <code>{n}</code> <span className="muted">stored in {secretStore()}</span>
                   <button type="button" onClick={() => set("remove", [...form.remove, n])}>
                     Remove
                   </button>
@@ -381,7 +382,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
               )}
               {s.signedIn && (
                 <button
-                  onClick={async () => (await ask(`Sign out of ${s.name || s.id}? Its tokens are removed from the Keychain.`)) && run(s.id, EngineService.SignOutMCPServer(s.id))}
+                  onClick={async () => (await ask(`Sign out of ${s.name || s.id}? Its tokens are removed from ${secretStore()}.`)) && run(s.id, EngineService.SignOutMCPServer(s.id))}
                 >
                   Sign out
                 </button>
@@ -397,7 +398,7 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
               <button onClick={() => setForm(toForm(s))}>Edit</button>
               <button
                 className="danger"
-                onClick={async () => (await ask(`Delete ${s.name || s.id}? Its secrets are removed from the Keychain.`)) && run(s.id, EngineService.DeleteMCPServer(s.id))}
+                onClick={async () => (await ask(`Delete ${s.name || s.id}? Its secrets are removed from ${secretStore()}.`)) && run(s.id, EngineService.DeleteMCPServer(s.id))}
               >
                 Delete
               </button>

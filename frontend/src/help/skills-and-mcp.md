@@ -28,7 +28,7 @@ A git skill offers **Check for updates**, then **Update**, and **Roll back** res
 
 ## Add an MCP server
 
-MCP servers give an agent extra tools. They run as a command on your Mac or are reached over HTTP. Click **Add a server** in **Settings → MCP servers** and fill in the form.
+MCP servers give an agent extra tools. They run as a command on your computer or are reached over HTTP. Click **Add a server** in **Settings → MCP servers** and fill in the form.
 
 | Field | Meaning |
 | --- | --- |
@@ -36,7 +36,7 @@ MCP servers give an agent extra tools. They run as a command on your Mac or are 
 | Transport | Command (stdio) or Remote (Streamable HTTP). |
 | Command, Arguments, Variables | For a command server. Arguments go one per line. |
 | URL, Headers | For a remote server. |
-| Secrets | Kept in the macOS Keychain, passed as variables or sent as headers. |
+| Secrets | Kept in {{the macOS Keychain|Windows Credential Manager|the system keyring}}, passed as variables or sent as headers. |
 | Offer its tools in every session | Turns the server on for everyone. A profile can add servers that are off. |
 
 The quickest start is **Suggested**, further down the same page: GitHub, Linear, Sentry, Notion, Context7 and Playwright. **Add…** fills in the form, and you save and approve it like any other server. Each card says where the server runs and what it can reach.
@@ -47,7 +47,7 @@ The quickest start is **Suggested**, further down the same page: GitHub, Linear,
 
 A new server shows **needs approval** and the exact command or URL it would run. Click **Approve and start**. A later change to what it runs or where it connects, including variables, headers or secret names, asks again.
 
-A remote server that wants OAuth shows **needs sign-in**. Click **Sign in…** and finish in your browser. Tokens stay in the Keychain, and **Sign out** removes them.
+A remote server that wants OAuth shows **needs sign-in**. Click **Sign in…** and finish in your browser. Tokens stay in {{the macOS Keychain|Windows Credential Manager|the system keyring}}, and **Sign out** removes them.
 
 > Servers run with your privileges. Commands that fetch packages, such as `npx`, carry a warning, so pin a version where you can.
 

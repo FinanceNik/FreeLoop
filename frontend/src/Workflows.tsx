@@ -136,7 +136,7 @@ export default function Workflows({ config, version, onSaved, onError }: Props) 
               <h4>AFK run</h4>
               <p className="muted">
                 One fresh session per unblocked AFK issue, one at a time, in a worktree of the run's own, in {modeName(w.afk.mode || "accept_edits")} mode
-                {w.afk.sandbox ? ", sandboxed where your Mac offers it" : ""}, at most {w.afk.maxIssues || 10} issues a run. {w.review.off ? "Finished issues are not reviewed." : "Each finished issue is reviewed by a second agent before it waits for your QA."}
+                {w.afk.sandbox ? ", sandboxed where your system offers it" : ""}, at most {w.afk.maxIssues || 10} issues a run. {w.review.off ? "Finished issues are not reviewed." : "Each finished issue is reviewed by a second agent before it waits for your QA."}
               </p>
               {(w.afk.commands ?? []).length > 0 && (
                 <p className="muted">

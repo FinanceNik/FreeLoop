@@ -95,7 +95,7 @@ function FontRow({ label, hint, choices, value, onSet }: RowProps) {
       )}
       <span className="muted">{hint}</span>
       {bad && <span role="status" className="font-note">A font name has only letters, digits, spaces and . _ + -, up to 64 characters.</span>}
-      {missing && <span role="status" className="font-note">{value} is not on this Mac, so the app's own font shows.</span>}
+      {missing && <span role="status" className="font-note">{value} is not on this computer, so the app's own font shows.</span>}
     </div>
   );
 }

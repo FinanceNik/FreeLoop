@@ -4,9 +4,13 @@ Fixes for an app that won't open, an agent or provider that fails, a stuck sessi
 
 ## The app won't open
 
-Freeloop releases aren't signed or notarized, so macOS blocks a downloaded copy the first time. Try to open it, then go to System Settings → Privacy & Security and choose **Open Anyway**. An app you built yourself opens normally.
+{{Freeloop releases aren't signed or notarized, so macOS blocks a downloaded copy the first time. Try to open it, then go to System Settings → Privacy & Security and choose **Open Anyway**. An app you built yourself opens normally.
 
-The app needs a Mac with Apple Silicon and macOS 14 or later. After each update the Keychain asks again for access to the keys the app stored. That's expected: the signature changes with every build.
+The app needs a Mac with Apple Silicon and macOS 14 or later. After each update the Keychain asks again for access to the keys the app stored. That's expected: the signature changes with every build.|Freeloop releases aren't signed, so Windows SmartScreen may stop a downloaded copy the first time. Choose **More info**, then **Run anyway**. An app you built yourself opens normally.
+
+The app needs Windows 10 or later with the Microsoft Edge WebView2 Runtime, which Windows 11 includes.|The app needs WebKitGTK and GTK from your distribution. If it won't start, run it from a terminal to see what is missing, and install your distribution's WebKitGTK package.
+
+Keys go to the system keyring through the Secret Service, such as GNOME Keyring or KWallet, so one needs to be running to save a key.}}
 
 ## An agent won't start
 
@@ -62,13 +66,13 @@ Then load it with `sudo apparmor_parser -r /etc/apparmor.d/bwrap` and start the 
 
 If a settings file can't be read, a banner appears: "Configuration problems; using defaults where needed." Each line names the file, line and field. Fix it and save. Freeloop picks up edits within a second, and the banner clears when the problem is gone. Items waiting for your approval aren't problems.
 
-The app's log is `~/Library/Application Support/freeloop/logs/freeloop.log`. It stays on your Mac. In Settings → Data, **Show logs in Finder** opens the folder.
+The app's log is {{`~/Library/Application Support/freeloop/logs/freeloop.log`|`%AppData%\freeloop\logs\freeloop.log`|`~/.config/freeloop/logs/freeloop.log`}}. It stays on your computer. In Settings → Data, **Show logs {{in the Finder|in File Explorer|in the file manager}}** opens the folder.
 
 ## Report a problem
 
 In Settings → Data, under **Report a problem**, **Copy a report** puts a short diagnostic on your clipboard. **Show what is copied** displays it first.
 
-The report holds Freeloop's version, this Mac's macOS version, model, chip and memory, the agent, provider, model, mode and status of the open session (or the session last open), and the log's last 200 lines. It leaves out your conversation, your files, session titles and your keys. Secrets the app knows are removed, and your home folder's path is written as `~`.
+The report holds Freeloop's version, this computer's system version, model, chip and memory, the agent, provider, model, mode and status of the open session (or the session last open), and the log's last 200 lines. It leaves out your conversation, your files, session titles and your keys. Secrets the app knows are removed, and your home folder's path is written as `~`.
 
 > Log lines can still name your projects, so read the report before you share it.
 
