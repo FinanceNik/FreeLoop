@@ -30,6 +30,7 @@ var ColorTokens = []string{
 	"text", "muted", "faint",
 	"accent", "accent-hover", "accent-soft", "accent-text", "link", "focus",
 	"ok", "warn", "danger", "danger-soft", "add", "del",
+	"git",
 	"series-1", "series-2", "series-3", "series-4", "series-5", "series-other",
 }
 

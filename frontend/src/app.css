@@ -30,6 +30,8 @@
   --ok: #18794e;
   --warn: #955600;
   --danger: #c42b1c;
+  /* The git branch mark (GUI-044): a vibrant purple. */
+  --git: #9333ea;
   --danger-soft: rgba(196, 43, 28, 0.08);
   --add: rgba(24, 121, 78, 0.12);
   --del: rgba(196, 43, 28, 0.1);
@@ -96,6 +98,7 @@
     --ok: #a6e3a1;
     --warn: #f9e2af;
     --danger: #f38ba8;
+    --git: #a855f7;
     --danger-soft: rgba(243, 139, 168, 0.12);
     --add: rgba(166, 227, 161, 0.14);
     --del: rgba(243, 139, 168, 0.14);
@@ -141,6 +144,7 @@
   --ok: #a6e3a1;
   --warn: #f9e2af;
   --danger: #f38ba8;
+  --git: #a855f7;
   --danger-soft: rgba(243, 139, 168, 0.12);
   --add: rgba(166, 227, 161, 0.14);
   --del: rgba(243, 139, 168, 0.14);
@@ -5616,7 +5620,7 @@ table.hooks .hook-command {
   display: inline-flex;
   flex: none;
   align-items: center;
-  color: var(--muted);
+  color: var(--git);
   line-height: 0;
 }
 .session-line .git-mark {

@@ -10,6 +10,12 @@ await step("a session shows what it runs on", async () => {
   // A session in a git repository says so, and on which branch (GUI-044).
   const git = withText(".session-row", "Check alpha")?.querySelector(".git-mark");
   check("a row in a repository has the git mark", git && /^Git repository, on \S+/.test(git.getAttribute("aria-label")), git?.getAttribute("aria-label"));
+  // In its own colour, the --git token Settings → Appearance can change.
+  const probe = document.body.appendChild(document.createElement("span"));
+  probe.style.color = "var(--git)";
+  const gitColour = getComputedStyle(probe).color;
+  probe.remove();
+  check("the git mark has its own colour", git && getComputedStyle(git).color === gitColour && gitColour !== getComputedStyle(withText(".session-row", "Check alpha").querySelector(".session-title")).color, `${git && getComputedStyle(git).color} and ${gitColour}`);
   const title = withText(".session-row", "Check alpha").querySelector(".session-title");
   const gap = title.getBoundingClientRect().left - demo.getBoundingClientRect().right;
   const inner = document.createRange();

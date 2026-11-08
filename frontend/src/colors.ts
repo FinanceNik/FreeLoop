@@ -49,6 +49,10 @@ export const COLOR_GROUPS: { title: string; tokens: { id: string; label: string 
       { id: "danger", label: "Danger" },
     ],
   },
+  {
+    title: "Marks",
+    tokens: [{ id: "git", label: "Git branch mark" }],
+  },
 ];
 
 // The same check as config.ValidColor. A value only reaches the style sheet
