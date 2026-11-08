@@ -2176,6 +2176,17 @@ details.choice[open] > summary h3::after {
   font-size: calc(12rem / 14);
 }
 
+/* A run whose issue has not started, and that issue's card, say so in the
+   warning colour: until it starts, nothing else moves. */
+.backlog-run-waiting,
+.backlog-step-waiting {
+  color: var(--warn);
+}
+
+.backlog-step {
+  font-size: calc(12rem / 14);
+}
+
 .backlog-run .row {
   margin: 0 4px 8px;
 }

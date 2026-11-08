@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { columns, since } from "./board.ts";
+import { issueStep, stepLabel } from "./afk.ts";
 import { counts, relations, stateLabel, typeLabel } from "./backlog.ts";
 import type { BacklogInfo } from "./api.ts";
 
@@ -79,7 +80,9 @@ export default function Board<T extends Card>({
                   </div>
                   {backlogActions?.(b)}
                   <ul>
-                    {(b.issues ?? []).map((it) => (
+                    {(b.issues ?? []).map((it) => {
+                      const step = issueStep(b.run, it.id);
+                      return (
                       <li key={it.id}>
                         <div className={`board-card backlog-card backlog-${it.state}`} aria-label={`${it.id}: ${it.title}`}>
                           <span className="board-card-title">{it.title}</span>
@@ -89,9 +92,23 @@ export default function Board<T extends Card>({
                             <span className={`tag backlog-type-${it.type}`}>{typeLabel(it)}</span>
                           </span>
                           {relations(it) && <span className="muted backlog-relations">{relations(it)}</span>}
+                          {step && (
+                            <span className={step.waiting && step.state === "working" ? "backlog-step backlog-step-waiting" : "muted backlog-step"}>
+                              AFK run: {stepLabel(step)}
+                              {step.sessionId && (
+                                <>
+                                  {" · "}
+                                  <button className="link" onClick={() => onOpen(step.sessionId!)}>
+                                    Open its session
+                                  </button>
+                                </>
+                              )}
+                            </span>
+                          )}
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                     {(b.issues ?? []).length === 0 && <li className="muted board-empty">No issues yet</li>}
                   </ul>
                   {b.finished > 0 && onArchive && (

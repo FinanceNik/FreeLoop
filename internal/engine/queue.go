@@ -143,8 +143,8 @@ func (e *Engine) runQueue(ctx context.Context, now time.Time) {
 				continue
 			}
 			agent := e.taskAgent(ctx, *t)
-			if until, ok := held[agent]; ok {
-				note := fmt.Sprintf("%s is at its limit until %s", agent, until.Local().Format("Mon 15:04"))
+			if h, ok := held[agent]; ok {
+				note := h.note(agent)
 				if t.Note != note {
 					t.Note, changed = note, true
 				}
@@ -224,23 +224,71 @@ func (e *Engine) taskProfile(ctx context.Context, t config.Task) config.Profile 
 	return prof
 }
 
-// agentsAtLimit names the agents whose account limit is at a warning or reached, with
-// when it resets (GUI-028).
-func (e *Engine) agentsAtLimit(ctx context.Context, now time.Time) map[string]time.Time {
-	out := map[string]time.Time{}
+// weeklyHoldPercent is how full a weekly limit gets before the queue holds its
+// agent's tasks. A weekly warning comes days before the reset, and holding from it
+// would leave most of the week's allowance unused; a shorter window's warning holds
+// at once, since its reset is hours away (SES-025).
+const weeklyHoldPercent = 95
+
+// limitHold is why an agent's tasks wait: the limit holding them and its reset.
+type limitHold struct {
+	Label string
+	Used  float64
+	Until time.Time
+}
+
+// note says it in words for the queue and the AFK run.
+func (h limitHold) note(agent string) string {
+	return fmt.Sprintf("%s's %s is at %.0f %% until %s", agent, strings.ToLower(cmp.Or(h.Label, "limit")), h.Used, h.Until.Local().Format("Mon 15:04"))
+}
+
+// weeklyLimit reports a limit window that runs for a week.
+func weeklyLimit(p LimitPeriod) bool {
+	return p.Window == "seven_day" || strings.Contains(strings.ToLower(p.Label), "week")
+}
+
+// holds reports whether a limit period holds its agent's tasks now: once refused,
+// or at a warning, which for a weekly limit counts only from weeklyHoldPercent.
+func (p LimitPeriod) holds(now time.Time) bool {
+	switch {
+	case !p.ResetsAt.After(now):
+		return false
+	case p.Refused > 0:
+		return true
+	case p.Warned == 0:
+		return false
+	case weeklyLimit(p):
+		return p.Used >= weeklyHoldPercent
+	}
+	return true
+}
+
+// agentsAtLimit names the agents whose account limit holds their tasks, with the
+// limit and when it resets (GUI-028). The one resetting last wins.
+func (e *Engine) agentsAtLimit(ctx context.Context, now time.Time) map[string]limitHold {
+	out := map[string]limitHold{}
 	periods, err := e.Limits(ctx)
 	if err != nil {
 		return out
 	}
 	for _, p := range periods {
-		if !p.ResetsAt.After(now) || (p.Warned == 0 && p.Refused == 0) {
+		if !p.holds(now) {
 			continue
 		}
-		if until, ok := out[p.Source]; !ok || p.ResetsAt.After(until) {
-			out[p.Source] = p.ResetsAt
+		if h, ok := out[p.Source]; !ok || p.ResetsAt.After(h.Until) {
+			out[p.Source] = limitHold{Label: p.Label, Used: p.Used, Until: p.ResetsAt}
 		}
 	}
 	return out
+}
+
+// limitNote says why a profile's tasks would wait for its agent's limit now, or "".
+func (e *Engine) limitNote(ctx context.Context, root, profileID string) string {
+	agent := e.taskAgent(ctx, config.Task{ProjectRoot: root, ProfileID: profileID})
+	if h, ok := e.agentsAtLimit(ctx, time.Now())[agent]; ok && agent != "" {
+		return h.note(agent)
+	}
+	return ""
 }
 
 // startTask starts a task's session and sends its prompt.

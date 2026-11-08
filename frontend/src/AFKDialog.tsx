@@ -73,6 +73,11 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                 {plan.problem}
               </p>
             )}
+            {plan.held && profileId === plan.profileId && (
+              <p className="error-text" role="status">
+                Its first issue would wait: {plan.held}. Pick a profile on another agent to start now.
+              </p>
+            )}
             {plan.queuePaused && (
               <p className="error-text" role="status">
                 The queue is paused: the run's issues wait until you resume it on the Queue page.

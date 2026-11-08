@@ -293,6 +293,18 @@ func TestAFKRunStop(t *testing.T) {
 	if plan, _ := e.PrepareAFK(ctx, root, ""); !plan.QueuePaused {
 		t.Error("the plan does not say the queue is paused")
 	}
+	// The run says why its issue has not started, for the Board.
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		runs, _ := e.AFKRuns(ctx)
+		if runs[0].Steps[0].Waiting == "the queue is paused" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("waiting = %q", runs[0].Steps[0].Waiting)
+		}
+		e.KickRuns()
+		time.Sleep(20 * time.Millisecond)
+	}
 	if q, _ := e.Queue(); len(q.Tasks) != 1 || q.Tasks[0].RunID != run.ID {
 		t.Fatalf("queue = %+v", q.Tasks)
 	}

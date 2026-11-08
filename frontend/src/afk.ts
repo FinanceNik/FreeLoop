@@ -12,6 +12,9 @@ export interface StepLike {
   issue: string;
   title: string;
   state: string;
+  // Why its session has not started yet, such as an agent's limit.
+  waiting?: string;
+  sessionId?: string;
 }
 
 export interface RunLike {
@@ -50,7 +53,19 @@ const STEP: Record<string, string> = {
 };
 
 export function stepLabel(s: StepLike): string {
+  if (s.state === "working" && s.waiting) return `waiting to start: ${s.waiting}`;
   return STEP[s.state] ?? s.state;
+}
+
+// waitingStep is the run's issue whose session has not started, if any.
+export function waitingStep(r: RunLike): StepLike | undefined {
+  if (r.state !== "running" && r.state !== "paused") return undefined;
+  return (r.steps ?? []).find((s) => s.state === "working" && !!s.waiting);
+}
+
+// issueStep is what the run has done with an issue, for its card on the Board.
+export function issueStep(r: RunLike | null | undefined, issue: string): StepLike | undefined {
+  return (r?.steps ?? []).filter((s) => s.issue === issue).pop();
 }
 
 // runLine sums a run up in one line.

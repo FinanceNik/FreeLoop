@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,6 +136,34 @@ func TestQueueWaitsForAnAgentsLimit(t *testing.T) {
 	e.runQueue(ctx, resets.Add(time.Minute))
 	if q, _ := e.Queue(); q.Tasks[0].State == "waiting" && q.Tasks[0].Note == "" {
 		t.Errorf("after the reset: %v", states(q))
+	}
+}
+
+// SES-025: a weekly limit's warning holds only from 95 %; a shorter window's
+// warning holds at once, and a refusal always does.
+func TestLimitHolds(t *testing.T) {
+	now := time.Now()
+	later := now.Add(30 * time.Hour)
+	for _, c := range []struct {
+		name string
+		p    LimitPeriod
+		want bool
+	}{
+		{"weekly warning at 86 %", LimitPeriod{Window: "seven_day", Label: "Weekly limit", Used: 86, Warned: 3, ResetsAt: later}, false},
+		{"weekly warning at 95 %", LimitPeriod{Window: "seven_day", Label: "Weekly limit", Used: 95, Warned: 3, ResetsAt: later}, true},
+		{"weekly by its label", LimitPeriod{Window: "w", Label: "Weekly limit", Used: 90, Warned: 1, ResetsAt: later}, false},
+		{"weekly refused", LimitPeriod{Window: "seven_day", Used: 80, Refused: 1, ResetsAt: later}, true},
+		{"5-hour warning", LimitPeriod{Window: "five_hour", Label: "5-hour limit", Used: 80, Warned: 1, ResetsAt: later}, true},
+		{"no warning", LimitPeriod{Window: "five_hour", Used: 99, ResetsAt: later}, false},
+		{"reset already", LimitPeriod{Window: "five_hour", Used: 99, Refused: 1, ResetsAt: now.Add(-time.Minute)}, false},
+	} {
+		if got := c.p.holds(now); got != c.want {
+			t.Errorf("%s: holds = %v", c.name, got)
+		}
+	}
+	h := limitHold{Label: "Weekly limit", Used: 96, Until: later}
+	if note := h.note("Claude Code"); !strings.Contains(note, "Claude Code's weekly limit is at 96 % until") {
+		t.Errorf("note = %q", note)
 	}
 }
 

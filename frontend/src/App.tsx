@@ -38,7 +38,7 @@ import Schedules from "./Schedules.tsx";
 import Optimizers from "./Optimizers.tsx";
 import Workflows from "./Workflows.tsx";
 import AFKDialog from "./AFKDialog.tsx";
-import { runLine } from "./afk.ts";
+import { runLine, waitingStep } from "./afk.ts";
 import Usage from "./Usage.tsx";
 import Compare from "./Compare.tsx";
 import Providers from "./Providers.tsx";
@@ -256,7 +256,12 @@ export default function App() {
     const going = r && (r.state === "running" || r.state === "paused");
     return (
       <div className="backlog-run">
-        {r && <p className="muted backlog-run-line">{runLine(r)}</p>}
+        {r && (
+          // A run whose issue waits says so plainly: until it starts, nothing else moves.
+          <p className={waitingStep(r) ? "backlog-run-line backlog-run-waiting" : "muted backlog-run-line"} role="status">
+            {runLine(r)}
+          </p>
+        )}
         <p className="row">
           {!going && (
             <button className="primary" onClick={() => setAfkFor({ root: b.projectRoot, workflowId: b.workflowId, startedBy: "the Board" })}>
@@ -1793,6 +1798,8 @@ export default function App() {
             setAfkFor(null);
             refreshBacklogs();
             refreshSessions();
+            // The run is followed on the Board, so show it there, whatever started it.
+            setScreen({ kind: "board" });
           }}
           onError={report}
         />
