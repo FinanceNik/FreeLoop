@@ -3,6 +3,7 @@ package rpc
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -25,8 +26,12 @@ func TestHeadless(t *testing.T) {
 	}
 	defer e.Close()
 	// Socket paths are short on macOS (104 bytes); the test's temp folder
-	// can be longer.
-	dir, err := os.MkdirTemp("/tmp", "fl")
+	// can be longer. Windows has no /tmp, and its temporary folder is short.
+	base := "/tmp"
+	if runtime.GOOS == "windows" {
+		base = os.TempDir()
+	}
+	dir, err := os.MkdirTemp(base, "fl")
 	if err != nil {
 		t.Fatal(err)
 	}

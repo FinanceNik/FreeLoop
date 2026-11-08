@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -69,7 +70,7 @@ func TestImportAndInstallSkills(t *testing.T) {
 		t.Error("an invalid skill installed")
 	}
 	installed := filepath.Join(dir, SkillsDir, "commit-msg")
-	if fi, err := os.Stat(filepath.Join(installed, "scripts", "x.sh")); err != nil || fi.Mode()&0o100 == 0 {
+	if fi, err := os.Stat(filepath.Join(installed, "scripts", "x.sh")); err != nil || goruntime.GOOS != "windows" && fi.Mode()&0o100 == 0 {
 		t.Errorf("script = %v, %v", fi, err)
 	}
 	prov, ok := config.ReadSkillProvenance(dir, "commit-msg")

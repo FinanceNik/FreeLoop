@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -19,7 +20,8 @@ func TestProvidersRoundTrip(t *testing.T) {
 		t.Fatalf("LoadProviders = %+v, %v, %v", out, issues, err)
 	}
 	fi, _ := os.Stat(filepath.Join(dir, ProvidersFileName))
-	if fi.Mode().Perm() != 0o600 {
+	// Windows has no such modes; the user's own folder keeps others out there.
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v", fi.Mode().Perm())
 	}
 }

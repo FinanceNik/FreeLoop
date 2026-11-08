@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -64,7 +65,8 @@ func TestInstallOptimizerChecksTheDownload(t *testing.T) {
 	ctx := context.Background()
 	e := openTest(t, t.TempDir())
 	defer e.Close()
-	archive := tarGz(t, map[string]string{"freeloop-test-tool": "#!/bin/sh\necho hi\n"})
+	// On Windows the archive holds the program with its .exe.
+	archive := tarGz(t, map[string]string{exeName(goruntime.GOOS, "freeloop-test-tool"): "#!/bin/sh\necho hi\n"})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(archive) }))
 	defer srv.Close()
 	sum := sha256.Sum256(archive)
@@ -87,8 +89,9 @@ func TestInstallOptimizerChecksTheDownload(t *testing.T) {
 	if !strings.HasPrefix(program, e.appCache("tools")) {
 		t.Errorf("installed at %s", program)
 	}
+	// Windows has no execute bit to check.
 	info, err := os.Stat(program)
-	if err != nil || info.Mode()&0o100 == 0 {
+	if err != nil || goruntime.GOOS != "windows" && info.Mode()&0o100 == 0 {
 		t.Fatalf("installed program: %+v, %v", info, err)
 	}
 	env := mustLocal(t, e)

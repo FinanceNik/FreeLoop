@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -142,6 +143,9 @@ func TestRewritable(t *testing.T) {
 // badly on purpose, and logs its environment.
 func fakeOptimizer(t *testing.T, e *Engine) (logFile string) {
 	t.Helper()
+	if goruntime.GOOS == "windows" {
+		t.Skip("the stand-in optimizer is a shell script, and Windows runs one only through a shell; the app runs the optimizer directly")
+	}
 	dir := t.TempDir()
 	logFile = filepath.Join(dir, "log")
 	script := `#!/bin/sh
@@ -329,7 +333,7 @@ func TestOptimizerRewritesApprovedCommands(t *testing.T) {
 	// What it keeps is the session's alone, and goes with the session.
 	ses, _ := e.store.GetSession(ctx, sid)
 	dir := e.optimizerDir(ses, false)
-	if fi, err := os.Stat(dir); err != nil || fi.Mode().Perm() != 0o700 {
+	if fi, err := os.Stat(dir); err != nil || goruntime.GOOS != "windows" && fi.Mode().Perm() != 0o700 {
 		t.Errorf("data folder: %v, %v", fi, err)
 	}
 

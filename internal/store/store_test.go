@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -230,7 +231,8 @@ func TestFilePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi.Mode().Perm() != 0o600 {
+	// Windows has no such modes; the user's own folder keeps others out there.
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Errorf("transcript mode = %v, want 0600", fi.Mode().Perm())
 	}
 }
@@ -298,7 +300,7 @@ func TestDatabaseFilesArePrivate(t *testing.T) {
 	}
 	defer s.Close()
 	for _, name := range []string{"freeloop.db", "freeloop.db-wal", "freeloop.db-shm"} {
-		if fi, err := os.Stat(filepath.Join(dir, name)); err == nil && fi.Mode().Perm() != 0o600 {
+		if fi, err := os.Stat(filepath.Join(dir, name)); err == nil && runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 			t.Errorf("%s has mode %o", name, fi.Mode().Perm())
 		}
 	}

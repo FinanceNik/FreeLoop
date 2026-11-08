@@ -2,13 +2,20 @@ package permission
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestRuleMatching(t *testing.T) {
-	root := "/work/repo"
+	// Paths in the system's spelling: \work\repo\src on Windows.
+	root := filepath.FromSlash("/work/repo")
 	shell := func(cmd string) Request { return Request{Tool: "shell", Kind: KindExecute, Command: cmd} }
-	edit := func(paths ...string) Request { return Request{Tool: "write_file", Kind: KindEdit, Paths: paths} }
+	edit := func(paths ...string) Request {
+		for i, p := range paths {
+			paths[i] = filepath.FromSlash(p)
+		}
+		return Request{Tool: "write_file", Kind: KindEdit, Paths: paths}
+	}
 
 	for _, c := range []struct {
 		name string
@@ -46,8 +53,8 @@ func TestRuleMatching(t *testing.T) {
 		{"relative path miss", Rule{Effect: Allow, Tool: "write_file", Path: "src/**"}, edit("/work/repo/docs/x.md"), false},
 		{"allow needs every path", Rule{Effect: Allow, Tool: "write_file", Path: "src/**"}, edit("/work/repo/src/a.go", "/work/repo/b.go"), false},
 		{"deny needs any path", Rule{Effect: Deny, Tool: "write_file", Path: "**/*.lock"}, edit("/work/repo/a.go", "/work/repo/go.lock"), true},
-		{"relative rule never matches outside root", Rule{Effect: Allow, Tool: "read_file", Path: "**"}, Request{Tool: "read_file", Paths: []string{"/etc/hosts"}}, false},
-		{"absolute path", Rule{Effect: Allow, Tool: "read_file", Path: "/etc/*"}, Request{Tool: "read_file", Paths: []string{"/etc/hosts"}}, true},
+		{"relative rule never matches outside root", Rule{Effect: Allow, Tool: "read_file", Path: "**"}, Request{Tool: "read_file", Paths: []string{filepath.FromSlash("/etc/hosts")}}, false},
+		{"absolute path", Rule{Effect: Allow, Tool: "read_file", Path: "/etc/*"}, Request{Tool: "read_file", Paths: []string{filepath.FromSlash("/etc/hosts")}}, true},
 		{"exact allow does not collapse whitespace", Rule{Effect: Allow, Tool: "shell", Command: "git status"}, shell("git\nstatus"), false},
 		{"literal allow is not a prefix", Rule{Effect: Allow, Tool: "shell", Command: "rm -rf *", Literal: true}, shell("rm -rf ~"), false},
 		{"literal allow matches itself", Rule{Effect: Allow, Tool: "shell", Command: "rm -rf *", Literal: true}, shell("rm -rf *"), true},
@@ -75,6 +82,9 @@ func TestRuleMatching(t *testing.T) {
 		{"git options do not widen an allow", Rule{Effect: Allow, Tool: "shell", Command: "git status *"}, shell("git -C /elsewhere status"), false},
 		{"command rule ignores file calls", Rule{Effect: Allow, Tool: "*", Command: "ls"}, edit("/work/repo/a"), false},
 	} {
+		if c.name == "absolute path" && runtime.GOOS == "windows" {
+			continue // /etc/* names no drive, so it is not absolute on Windows
+		}
 		if got := c.rule.Matches(c.req, root); got != c.want {
 			t.Errorf("%s: %s on %+v = %v", c.name, c.rule, c.req, got)
 		}

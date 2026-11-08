@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -302,7 +303,7 @@ func TestWorktreeCopyStaysInside(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dst, "dir", "link.txt")); err == nil {
 		t.Error("a link inside a copied folder was followed out of the project")
 	}
-	if fi, err := os.Stat(filepath.Join(dst, "dir", "own.txt")); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(filepath.Join(dst, "dir", "own.txt")); err != nil || goruntime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Errorf("own.txt: %v, %v", fi, err)
 	}
 }

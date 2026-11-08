@@ -75,7 +75,7 @@ func TestOpenProjectFolderUsesTheSessionsFolder(t *testing.T) {
 	}
 	marker := filepath.Join(t.TempDir(), "opened")
 	e.folderArgv = func(path string) []string {
-		return []string{"/bin/sh", "-c", `printf %s "$1" > "$2"`, "sh", path, marker}
+		return []string{"sh", "-c", `printf %s "$1" > "$2"`, "sh", path, marker}
 	}
 	if err := e.OpenProjectFolder(ctx, sid); err != nil {
 		t.Fatal(err)

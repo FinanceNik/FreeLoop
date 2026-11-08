@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -111,7 +112,7 @@ func TestExternalAgentSkills(t *testing.T) {
 	if json.Unmarshal(b, &manifest); manifest["name"] != "freeloop" {
 		t.Errorf("plugin.json = %s", b)
 	}
-	if fi, err := os.Stat(filepath.Join(plugin, "skills", "release-notes", "scripts", "collect.sh")); err != nil || fi.Mode()&0o100 == 0 {
+	if fi, err := os.Stat(filepath.Join(plugin, "skills", "release-notes", "scripts", "collect.sh")); err != nil || goruntime.GOOS != "windows" && fi.Mode()&0o100 == 0 {
 		t.Errorf("the script = %v, %v", fi, err)
 	}
 	if _, err := os.Stat(filepath.Join(plugin, "skills", "lint", "ref.md")); err == nil {
