@@ -1,5 +1,6 @@
 import { Browser, Clipboard } from "@wailsio/runtime";
 import { ask as askUser } from "./ask.ts";
+import { isDemo } from "./demo.ts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
@@ -219,6 +220,16 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const remove = async () => {
     if (!(await askUser(`Delete "${session.title}"? Its transcript is removed from disk. This cannot be undone.`))) return;
     EngineService.DeleteSession(session.id).then(onDeleted).catch(onError);
+  };
+  const demo = isDemo(session);
+  const removeDemo = async () => {
+    if (!(await askUser("Remove the demo? Its session, its scratch project folder and its project entry are deleted. Nothing else is touched."))) return;
+    EngineService.RemoveDemo(session.id)
+      .then(() => {
+        onProjectsChanged();
+        onDeleted();
+      })
+      .catch(onError);
   };
   const view = useMemo(() => buildView(events), [events]);
   // Estimated cost of the session and of each turn, by turn_end key.
@@ -1001,6 +1012,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
               Cancel
             </button>
           </form>
+        )}
+        {demo && (
+          <div className="banner banner-slim demo-banner" role="status">
+            <span>This is the demo: a scripted agent in a scratch project. Nothing outside it is touched.</span>
+            <button onClick={removeDemo}>Remove demo</button>
+          </div>
         )}
         {untrusted && (
           <div className="banner warn row" role="status">

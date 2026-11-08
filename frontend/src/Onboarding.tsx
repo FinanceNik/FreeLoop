@@ -18,13 +18,15 @@ interface Props {
   // Called with the chosen folder ("" when skipped); the app then opens the
   // new-session form.
   onDone: (root: string) => void;
+  // Called with the demo session (GUI-045) once it exists and the guide is done.
+  onDemo: (sessionId: string) => void;
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
 }
 
 type Step = "provider" | "import" | "project";
 
-export default function Onboarding({ config, providers, harnesses, onProvidersChanged, onProjectsChanged, onDone, onSaved, onError }: Props) {
+export default function Onboarding({ config, providers, harnesses, onProvidersChanged, onProjectsChanged, onDone, onDemo, onSaved, onError }: Props) {
   const [step, setStep] = useState<Step>("provider");
   const [root, setRoot] = useState("");
   const [trust, setTrust] = useState(false);
@@ -60,6 +62,21 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
         setBusy(false);
         onError(err);
       });
+  };
+
+  // The demo needs no setup, so it ends the guide as finishing does.
+  const tryDemo = () => {
+    setBusy(true);
+    EngineService.StartDemo()
+      .then((s) => {
+        onProjectsChanged();
+        return EngineService.SaveSettings({ ...config, ui: { ...config.ui, onboarded: true } }).then((c) => {
+          onSaved(c);
+          onDemo(s.id);
+        });
+      })
+      .catch(onError)
+      .finally(() => setBusy(false));
   };
 
   const choose = () =>
@@ -118,6 +135,12 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
             <button className="link" onClick={() => finish("")} disabled={busy}>
               Skip the guide
             </button>
+          </div>
+          <div className="demo-offer">
+            <button onClick={tryDemo} disabled={busy}>
+              Try it with a demo
+            </button>
+            <p className="muted">A scripted agent shows what Freeloop allows, asks about and refuses, in a scratch project. No key needed.</p>
           </div>
         </>
       )}

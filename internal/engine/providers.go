@@ -25,6 +25,10 @@ import (
 // DemoProviderID is the scripted provider offered in development builds.
 const DemoProviderID = "demo"
 
+// TourProviderID is the scripted provider behind the in-app demo (GUI-045). It exists
+// in every build, is not listed and is not saved, so no picker offers it.
+const TourProviderID = "freeloop-tour"
+
 type providerRegistry struct {
 	configs []config.Provider
 	built   map[string]*configuredProvider
@@ -119,6 +123,10 @@ func (e *Engine) demoConfig() config.Provider {
 	return config.Provider{ID: DemoProviderID, Name: "Scripted demo", Type: string(provider.TypeScripted), DefaultModel: "scripted"}
 }
 
+func (e *Engine) tourConfig() config.Provider {
+	return config.Provider{ID: TourProviderID, Name: "Freeloop tour", Type: string(provider.TypeScripted), DefaultModel: "tour"}
+}
+
 // ListProviders returns the configured providers.
 func (e *Engine) ListProviders() []ProviderInfo {
 	e.mu.Lock()
@@ -148,6 +156,8 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 	i := slices.IndexFunc(e.providers.configs, func(c config.Provider) bool { return c.ID == id })
 	var cfg config.Provider
 	switch {
+	case id == TourProviderID:
+		cfg = e.tourConfig()
 	case i >= 0:
 		cfg = e.providers.configs[i]
 	case e.dev && id == DemoProviderID:
@@ -183,7 +193,11 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 	case ollama.Type:
 		p = ollama.New(ollama.Options{ID: cfg.ID, BaseURL: cfg.BaseURL})
 	case provider.TypeScripted:
-		p = scripted.Demo(cfg.ID)
+		if cfg.ID == TourProviderID {
+			p = scripted.Tour(cfg.ID)
+		} else {
+			p = scripted.Demo(cfg.ID)
+		}
 	default:
 		return nil, fmt.Errorf("provider %s: type %q is not supported", cfg.Name, cfg.Type)
 	}
@@ -246,7 +260,7 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 		}
 	} else {
 		base := strings.Trim(slugChars.ReplaceAllString(strings.ToLower(req.Name), "-"), "-")
-		if base == "" || base == DemoProviderID {
+		if base == "" || base == DemoProviderID || base == TourProviderID {
 			base = "provider"
 		}
 		req.ID = base

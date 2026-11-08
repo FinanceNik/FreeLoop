@@ -824,6 +824,7 @@ export default function App() {
     const items: PaletteItem[] = [
       ...collect(),
       { id: "app:new", title: "New session", group: "Action", keywords: "create start", run: () => setScreen({ kind: "new" }) },
+      { id: "app:demo", title: "Try the demo", group: "Action", keywords: "tour example scripted no key policy", run: () => startDemo() },
       page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: keyLabel(bindingOf("attention")), detail: attentionCount ? `${attentionCount} waiting` : undefined }),
       ...(STANDALONE
         ? []
@@ -957,6 +958,16 @@ export default function App() {
       window.removeEventListener("blur", blur);
     };
   }, []);
+
+  // The demo (GUI-045) opens its session, which is new on the first call.
+  const startDemo = () =>
+    EngineService.StartDemo()
+      .then((s) => {
+        setSessions((list) => (list.some((x) => x.id === s.id) ? list : [s, ...list]));
+        refreshProjects();
+        openSession(s.id);
+      })
+      .catch(report);
 
   const sessionDeleted = (sid: string) => {
     forgetDraft(sid);
@@ -1542,6 +1553,10 @@ export default function App() {
             onProvidersChanged={refreshProviders}
             onProjectsChanged={refreshProjects}
             onSaved={setConfig}
+            onDemo={(sid) => {
+              refreshSessions();
+              openSession(sid);
+            }}
             onDone={(root) => setScreen({ kind: "new", root })}
             onError={report}
           />

@@ -1133,6 +1133,104 @@ await step("the usage pane cycles through its views", async () => {
   await sleep(200);
 });
 
+// The in-app demo (GUI-045): started from the palette, one scripted turn that meets each
+// answer of the policy, one demo at a time, and "Remove demo" leaves nothing behind. It
+// runs before the bypass step and removes what it made, so later steps find the app as
+// it was.
+await step("the demo runs a tour and removes itself", async () => {
+  const TITLE = "Demo: your policy at work";
+  const demoRows = () => all(".session-row").filter((r) => r.textContent.includes(TITLE));
+  const demoGroups = () => all(".project-name").filter((h) => (h.title ?? "").endsWith("-demo"));
+  const palette = async (query) => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    const box = await until("the palette", () => document.querySelector(".palette input"), 4000);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(box, query);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    return box;
+  };
+  const runDemo = async () => {
+    await palette("Try the demo");
+    (await until("the palette entry", () => withText(".palette-item", "Try the demo"), 4000)).click();
+    await until("the palette to close", () => !document.querySelector(".palette"), 4000);
+  };
+  const projectEntries = async () => {
+    const box = await palette("New session in");
+    await sleep(100);
+    const found = all(".palette-item").filter((i) => i.textContent.includes("New session in") && (i.querySelector(".palette-detail")?.textContent ?? "").endsWith("-demo"));
+    box.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    await until("the palette to close", () => !document.querySelector(".palette"), 4000);
+    return found.length;
+  };
+
+  check("no demo to begin with", demoRows().length === 0 && demoGroups().length === 0);
+  await runDemo();
+  const banner = await until("the demo banner", () => withText(".demo-banner", "This is the demo: a scripted agent in a scratch project."), 20000);
+  check("the demo says what it is", banner.textContent.includes("Nothing outside it is touched.") && withText("button", "Remove demo", banner));
+  await until("the demo's title", () => activePane().querySelector(".session-titleline h2")?.textContent === TITLE, 5000);
+  check("the demo is one session in the sidebar", demoRows().length === 1, `${demoRows().length} rows`);
+  check("the demo has a project of its own", demoGroups().length === 1, `${demoGroups().length} groups`);
+
+  // The tour asks about notes.md and .env; the rest the policy answers itself.
+  const pane = activePane();
+  const asked = [];
+  await until("the closing message", () => {
+    for (const b of all(".approval-buttons button", pane)) {
+      if (b.textContent.includes("Allow once")) {
+        asked.push(b.closest(".approval").textContent);
+        b.click();
+      }
+    }
+    return withText(".msg-agent, .md", "That is the tour", pane);
+  }, 45000);
+  check("the tour asks twice", asked.length === 2, `${asked.length} requests`);
+  check("it asks about notes.md and .env", asked.some((t) => t.includes("notes.md")) && asked.some((t) => t.includes(".env")), asked.map((t) => t.slice(0, 60)).join(" | "));
+  const refused = all(".conversation .decision-denied", pane).map((d) => d.textContent.trim());
+  check("the git push is refused by the rule", refused.includes("denied by rule"), refused.join(", "));
+  check("the hook is refused as a protected path", refused.includes("denied by protected_path"), refused.join(", "));
+  check("nothing else is refused", refused.length === 2, refused.join(", "));
+
+  // A second start opens the same session.
+  await runDemo();
+  await sleep(500);
+  check("a second start opens the same demo", demoRows().length === 1 && !!withText(".demo-banner", "This is the demo"), `${demoRows().length} rows`);
+  check("the demo project is listed", (await projectEntries()) === 1);
+
+  // Removing asks first, then deletes the session and the project. A served build has no
+  // native dialogs, so this answers that call.
+  let answer = "Cancel";
+  let asks = 0;
+  const real = window.fetch;
+  window.fetch = (u, o) => {
+    if (decodeURIComponent(`${u}${o?.body ?? ""}`).includes("Remove the demo?")) {
+      asks++;
+      return Promise.resolve(new Response(JSON.stringify(answer), { status: 200, headers: { "Content-Type": "application/json" } }));
+    }
+    return real(u, o);
+  };
+  try {
+    withText(".demo-banner button", "Remove demo").click();
+    await until("the question", () => asks === 1, 4000);
+    await sleep(500);
+    check("removing asks first", asks === 1, `asked ${asks} times`);
+    check("declining keeps the demo", demoRows().length === 1);
+    answer = "OK";
+    withText(".demo-banner button", "Remove demo").click();
+    await until("the demo to go", () => demoRows().length === 0, 8000);
+    check("removing takes the session out of the sidebar", true);
+    await until("the project to go", () => demoGroups().length === 0, 5000);
+    check("removing takes the project out of the sidebar", true);
+    // The list is read again after the removal answers, so it may take a moment.
+    let left = await projectEntries();
+    for (let i = 0; i < 20 && left !== 0; i++) {
+      await sleep(250);
+      left = await projectEntries();
+    }
+    check("the demo project is not listed", left === 0, `${left} entries`);
+  } finally {
+    window.fetch = real;
+  }
+});
+
 await step("the bypass setting", async () => {
   document.querySelector(".settings-link").click();
   (await until("the Permissions page", () => withText(".settings-nav button", "Permissions"))).click();

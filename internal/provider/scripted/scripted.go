@@ -264,5 +264,25 @@ func Demo(id string) *Provider {
 	)
 }
 
+// Tour is the in-app demo (GUI-045): one turn that meets each answer the permission
+// policy gives, in order: allowed without asking, asks, refused by a rule, refused as
+// a protected path, and asks because a file's name says it holds secrets. It needs
+// the session to carry the rule shell(git push *), which the engine adds.
+func Tour(id string) *Provider {
+	return New(id,
+		Step{Text: "This is a demo of what Freeloop does when an agent acts. Nothing here touches your own files; the project is a scratch folder. First I will read README.md. Reading a file inside the project is allowed without asking.",
+			Calls: []Call{{Name: "read_file", Input: map[string]any{"path": "README.md"}}}},
+		Step{Text: "That went ahead without a prompt. Next I will write notes.md. Changing a file asks you first, because this session is in ask mode. Allow or deny it below.",
+			Calls: []Call{{Name: "write_file", Input: map[string]any{"path": "notes.md", "content": "Notes from the Freeloop demo.\n"}}}},
+		Step{Text: "Now I will run `git push origin main`. This session has a rule that denies `shell(git push *)`. A deny rule holds in every mode, bypass included, so you are not asked and the command does not run.",
+			Calls: []Call{{Name: "shell", Input: map[string]any{"command": "git push origin main"}}}},
+		Step{Text: "Next I will write a git hook, .git/hooks/pre-commit. Hooks run code on every commit, so Freeloop protects the .git folder. No mode or rule can unlock a protected path.",
+			Calls: []Call{{Name: "write_file", Input: map[string]any{"path": ".git/hooks/pre-commit", "content": "#!/bin/sh\necho hooked\n"}}}},
+		Step{Text: "Last I will read .env. The file's name says it holds secrets, so Freeloop asks even though it is inside the project. Here the value is fake.",
+			Calls: []Call{{Name: "read_file", Input: map[string]any{"path": ".env"}}}},
+		Step{Text: "That is the tour. Allowed: reading README.md. Asked: writing notes.md and reading .env. Refused: git push, by a rule, and the hook, as a protected path. To see why for any call, open Settings, Policy and use \"Would this be allowed?\". To see what was sent to the model, open this session's Info tab and \"What the model sees\". \"Remove demo\" deletes the session and the scratch project."},
+	)
+}
+
 // Steps returns the script.
 func (p *Provider) Steps() []Step { return append([]Step{}, p.steps...) }

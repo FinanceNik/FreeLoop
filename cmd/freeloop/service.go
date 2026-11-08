@@ -744,6 +744,22 @@ func (s *EngineService) DeleteSession(ctx context.Context, sessionID string) err
 	return err
 }
 
+// StartDemo opens the in-app demo (GUI-045): the existing one, or a new one that
+// starts its scripted turn at once.
+func (s *EngineService) StartDemo(ctx context.Context) (session.Session, error) {
+	return s.eng.StartDemo(ctx)
+}
+
+// RemoveDemo deletes the demo session, its scratch project and the project record.
+func (s *EngineService) RemoveDemo(ctx context.Context, sessionID string) error {
+	err := s.eng.RemoveDemo(ctx, sessionID)
+	s.desk.closeGone(func(sid string) bool {
+		_, err := s.eng.GetSession(context.Background(), sid)
+		return err == nil
+	})
+	return err
+}
+
 // BuiltinPrices are the vendors' list prices, after the user's own (PRV-008).
 func (s *EngineService) BuiltinPrices() BuiltinPriceList {
 	return BuiltinPriceList{AsOf: config.PricesAsOf, Prices: config.BuiltinPrices()}

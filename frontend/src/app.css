@@ -2394,6 +2394,16 @@ details.choice[open] > summary h3::after {
   align-items: center;
 }
 
+.demo-offer {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.demo-offer p {
+  margin: 6px 0 0;
+}
+
 /* Skills (SKL-002) */
 .skill-switches {
   display: flex;
@@ -5080,6 +5090,10 @@ table.hooks .hook-command {
   gap: 8px;
   padding: 5px 12px;
   font-size: calc(12rem / 14);
+}
+
+.banner.demo-banner {
+  justify-content: space-between;
 }
 
 .banner.banner-slim svg {

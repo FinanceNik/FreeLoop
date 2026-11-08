@@ -220,6 +220,18 @@ func RemoveCache(dir string) error {
 	return os.RemoveAll(dir)
 }
 
+// RemoveOwned deletes dir, a folder the app made for itself, and refuses any path
+// that is not inside root (the app's data folder) or is root itself.
+func RemoveOwned(root, dir string) error {
+	if _, err := os.Lstat(dir); os.IsNotExist(err) {
+		return nil
+	}
+	if root == "" || dir == "" || Canonical(root) == Canonical(dir) || !Within(dir, root) {
+		return fmt.Errorf("environment: %s is not a folder the app made under %s", dir, root)
+	}
+	return os.RemoveAll(dir)
+}
+
 // SandboxCaches makes the folders a project's confined commands keep caches and
 // temp files in, and returns the variables that send them there. They are used
 // only inside the sandbox: a command in it could poison a cache the user's own

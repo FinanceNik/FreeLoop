@@ -49,6 +49,8 @@ Move `bin/Freeloop.app` to Applications, or open the DMG and drag it there. A bu
 
 ## First run
 
+Want to see it first? "Try it with a demo" on the first-run screen, or "Try the demo" in the command palette later, runs a scripted agent in a scratch project with no key and no network. In one turn you see a read allowed, a write and a secret file asked about, a `git push` refused by a rule and a git hook refused as a protected path. "Remove demo" deletes it all.
+
 1. **Add a provider.** The guide opens on a fresh install: pick a kind (Anthropic, OpenAI, OpenRouter, Ollama…), paste an API key or a local URL, and test it. If you only want Claude Code, skip this: it brings its own model access and needs Node.js and one sign-in with `claude` in a terminal.
 2. **Import from Claude Code (optional).** MCP servers, permission rules and skills are listed with where each goes; nothing is written back to Claude Code's files. Existing sessions can be imported later from the same page, and continue here: the agent copies each one, so the original stays as it is.
 3. **Choose a project** and decide whether to trust it.

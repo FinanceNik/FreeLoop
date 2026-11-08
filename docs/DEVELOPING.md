@@ -55,6 +55,8 @@ While the app runs, the same binary is a command line for it (EXT-004): `Freeloo
 
 `anthropic`, `openairesponses` and `gemini` are the adapters on official SDKs to copy from. Then give it a `provider.Type`, build it in `Engine.provider` and accept the type in `SaveProvider` (`internal/engine/providers.go`), offer it in `ProviderPresets`, and add the form fields it needs to `Providers.tsx`. Test against an `httptest` server: streaming, tool calls, errors and model listing.
 
+The in-app demo (GUI-045) runs on `scripted.Tour`, as the provider `freeloop-tour`: it exists in every build, unlike `demo`, which `FREELOOP_DEV=1` adds, and it is never listed or saved, so no picker offers it. Its steps are the demo's script; changing one means updating `internal/engine/demo_test.go` and the "the demo runs a tour and removes itself" step in `scripts/appcheck/scenario.js`.
+
 ## Adding a harness preset
 
 An external agent that speaks ACP over stdio is a preset, not code (HRN-005). Save a YAML file as `presets/harnesses/<id>.yaml` in the data folder:

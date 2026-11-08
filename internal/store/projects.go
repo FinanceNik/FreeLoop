@@ -104,6 +104,21 @@ func (s *Store) UpdateProject(ctx context.Context, p session.Project) error {
 	return tx.Commit()
 }
 
+// DeleteProject forgets a project that no session belongs to any more.
+func (s *Store) DeleteProject(ctx context.Context, id string) error {
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM sessions WHERE project_id = ?`, id).Scan(&n); err != nil {
+		return fmt.Errorf("store: delete project: %w", err)
+	}
+	if n > 0 {
+		return fmt.Errorf("store: project %s still has %d sessions", id, n)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("store: delete project: %w", err)
+	}
+	return nil
+}
+
 // ProjectScripts returns the worktree scripts set in the app for a
 // project, as JSON, "" when none (SES-016).
 func (s *Store) ProjectScripts(ctx context.Context, id string) (string, error) {
