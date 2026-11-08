@@ -260,7 +260,7 @@ func (e *Engine) CreatePullRequest(ctx context.Context, req CreatePullRequestReq
 		Argv:           argv,
 		LoginShell:     true,
 		Stdin:          []byte(req.Body),
-		Env:            pushEnv(),
+		Env:            pushEnv(env),
 		SeparateStderr: true,
 		MaxOutput:      64 << 10,
 		Timeout:        prTimeout,
@@ -315,10 +315,12 @@ func pushBlocked(ctx context.Context, env environment.Environment) string {
 	return ""
 }
 
-// pushEnv is gh's environment for a call that pushes: ghEnv, and no system
-// git config.
-func pushEnv() map[string]string {
-	env := maps.Clone(ghEnv)
-	env["GIT_CONFIG_NOSYSTEM"] = "1"
-	return env
+// pushEnv is gh's environment for a call that pushes in env: ghEnv, and no system
+// git config, except on Windows (see gitEnvOn).
+func pushEnv(env environment.Environment) map[string]string {
+	vars := maps.Clone(ghEnv)
+	if !localWindows(env) {
+		vars["GIT_CONFIG_NOSYSTEM"] = "1"
+	}
+	return vars
 }

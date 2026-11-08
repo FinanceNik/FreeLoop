@@ -9,6 +9,7 @@ import (
 	"maps"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -495,17 +496,16 @@ type optimizerProbe struct {
 // locateProgram finds a program the way a command would, without running it;
 // "" when there is none.
 func locateProgram(ctx context.Context, env environment.Environment, program string) string {
-	res, err := env.Exec(ctx, environment.ExecSpec{Command: "command -v " + shellQuote(program), Cwd: neutralDir, Timeout: probeTimeout, MaxOutput: 4096, ReadOnly: true})
+	goos := "linux" // a container or another machine
+	if env.Kind() == environment.KindLocal {
+		goos = goruntime.GOOS
+	}
+	res, err := env.Exec(ctx, environment.ExecSpec{Command: locateCommand(goos, program), Cwd: neutralDirFor(env), Timeout: probeTimeout, MaxOutput: 4096, ReadOnly: true})
 	if err != nil || res.ExitCode != 0 {
 		return ""
 	}
-	// Startup files can print before the answer.
-	lines := strings.Split(strings.TrimSpace(res.Output), "\n")
-	path := strings.TrimSpace(lines[len(lines)-1])
-	if !strings.HasPrefix(path, "/") {
-		return "" // an alias or a function, which the rewrite could not run
-	}
-	return path
+	// Not an alias or a function, which the rewrite could not run.
+	return locatedPath(goos, res.Output)
 }
 
 // probeOptimizer finds the program the way the session's commands will and
@@ -534,7 +534,7 @@ func (e *Engine) probeOptimizer(ctx context.Context, env environment.Environment
 	}
 	p.path = path
 	if len(o.Version) > 0 {
-		if res, err := env.Exec(ctx, environment.ExecSpec{Argv: append([]string{path}, o.Version...), Env: o.Env, Cwd: neutralDir, Timeout: probeTimeout, MaxOutput: 4096, ReadOnly: true}); err == nil && res.ExitCode == 0 {
+		if res, err := env.Exec(ctx, environment.ExecSpec{Argv: append([]string{path}, o.Version...), Env: o.Env, Cwd: neutralDirFor(env), Timeout: probeTimeout, MaxOutput: 4096, ReadOnly: true}); err == nil && res.ExitCode == 0 {
 			p.version = strings.TrimSpace(res.Output)
 		}
 	}
@@ -549,7 +549,7 @@ func runRewrite(ctx context.Context, env environment.Environment, o config.Optim
 	// business.
 	vars := map[string]string{}
 	maps.Copy(vars, o.Env)
-	cwd := neutralDir
+	cwd := neutralDirFor(env)
 	if forAgent {
 		// An agent's own deny rules are the program's to read and honour: a rewrite
 		// goes before the agent decides, and would otherwise slip past them. The
@@ -617,7 +617,7 @@ func (s *sessionOptimizer) forAgent(ctx context.Context, command string) string 
 		return ""
 	}
 	p := s.probe(ctx, o, false)
-	exports := []string{"PATH=" + shellQuote(filepath.Dir(p.path)) + `:"$PATH"`}
+	exports := []string{"PATH=" + shellQuote(s.bashPath(filepath.Dir(p.path))) + `:"$PATH"`}
 	for _, name := range slices.Sorted(maps.Keys(rw.Env)) {
 		exports = append(exports, name+"="+shellQuote(rw.Env[name]))
 	}
@@ -629,6 +629,15 @@ func (s *sessionOptimizer) forAgent(ctx context.Context, command string) string 
 	s.made[made] = madeCommand{original: command, via: rw.Via}
 	s.mu.Unlock()
 	return made
+}
+
+// bashPath spells a path on this machine for the session's shell (Git Bash on
+// Windows).
+func (s *sessionOptimizer) bashPath(p string) string {
+	if localWindows(s.env) {
+		return bashPath("windows", p)
+	}
+	return p
 }
 
 // mustSession is the optimizer the session has now.
@@ -759,7 +768,7 @@ func (s *sessionOptimizer) Rewrite(ctx context.Context, command string, raw bool
 		out.Command, out.Via, out.Shown = rewritten, o.Name, rewritten
 		// The app's own copy is on no PATH, so the command brings it.
 		if p.path == s.e.downloadedProgram(o) {
-			out.Command = "export PATH=" + shellQuote(filepath.Dir(p.path)) + `:"$PATH"; ` + rewritten
+			out.Command = "export PATH=" + shellQuote(s.bashPath(filepath.Dir(p.path))) + `:"$PATH"; ` + rewritten
 		}
 	}
 	return out

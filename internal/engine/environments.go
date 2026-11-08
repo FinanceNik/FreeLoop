@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	goruntime "runtime"
 	"slices"
 	"strings"
 
@@ -76,6 +77,16 @@ func envInfo(c config.Environment) EnvironmentInfo {
 	return info
 }
 
+// envInfo is envInfo for this engine: a sandboxed local environment on a system
+// with no sandbox says why it cannot run, as a docker one without Docker does.
+func (e *Engine) envInfo(c config.Environment) EnvironmentInfo {
+	info := envInfo(c)
+	if c.Sandbox != nil && c.Sandbox.Enabled && (c.Kind == "" || c.Kind == string(environment.KindLocal)) && e.confiner == nil {
+		info.Missing = noSandboxReason(goruntime.GOOS)
+	}
+	return info
+}
+
 func (e *Engine) loadEnvironments() {
 	envs, issues, err := config.LoadEnvironments(e.dataDir)
 	if err != nil {
@@ -121,7 +132,7 @@ func (e *Engine) ListEnvironments() []EnvironmentInfo {
 	e.mu.Unlock()
 	out := make([]EnvironmentInfo, 0, len(envs))
 	for _, c := range envs {
-		out = append(out, envInfo(c))
+		out = append(out, e.envInfo(c))
 	}
 	return out
 }
@@ -203,6 +214,9 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 		next.Setup, next.Health = strings.TrimSpace(req.Setup), strings.TrimSpace(req.Health)
 	} else {
 		if req.Sandbox != nil && req.Sandbox.Enabled {
+			if why := sandboxRefusal(goruntime.GOOS, e.confiner != nil); why != "" {
+				return EnvironmentInfo{}, errors.New(why)
+			}
 			next.Sandbox = req.Sandbox
 		}
 		if req.SSHAgent != nil && !*req.SSHAgent {
@@ -266,7 +280,7 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 		}
 	}
 	e.loadEnvironments()
-	return envInfo(next), nil
+	return e.envInfo(next), nil
 }
 
 // DeleteEnvironment removes an environment and its secrets. Deleting the

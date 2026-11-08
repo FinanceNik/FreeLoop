@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"regexp"
 	goruntime "runtime"
 	"strings"
 
@@ -69,8 +70,29 @@ func (e *Engine) providerName(id string) string {
 
 // anonymize writes the home folder as ~, so the user's account name stays out.
 func (e *Engine) anonymize(s string) string {
-	if e.home == "" || e.home == "/" {
+	return anonymizeHome(goruntime.GOOS, e.home, s)
+}
+
+// anonymizeHome writes home in s as ~. On Windows the folder appears in several
+// spellings, C:\Users\a, C:/Users/a from git, /c/Users/a from Git Bash and
+// C:\\Users\\a in JSON, in any case, since the file system ignores it
+// (NFR-XPLAT-003).
+func anonymizeHome(goos, home, s string) string {
+	if goos != "windows" {
+		if home == "" || home == "/" {
+			return s
+		}
+		return strings.ReplaceAll(s, strings.TrimRight(home, "/"), "~")
+	}
+	home = strings.TrimRight(home, `\/`)
+	if len(home) < 3 {
 		return s
 	}
-	return strings.ReplaceAll(s, strings.TrimRight(e.home, "/"), "~")
+	slashed := strings.ReplaceAll(home, `\`, "/")
+	spellings := []string{strings.ReplaceAll(home, `\`, `\\`), home, slashed, bashPath("windows", home)}
+	var alts []string
+	for _, sp := range spellings {
+		alts = append(alts, regexp.QuoteMeta(sp))
+	}
+	return regexp.MustCompile("(?i)"+strings.Join(alts, "|")).ReplaceAllString(s, "~")
 }

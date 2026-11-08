@@ -3,8 +3,10 @@ package engine
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
@@ -50,11 +52,45 @@ var sandboxTools = []string{
 // appCache is the app's folder in the user's caches, or a folder in it: where a
 // sandboxed command, a downloaded optimizer and SSH's sockets go.
 func (e *Engine) appCache(parts ...string) string {
-	base := filepath.Join(environment.Canonical(e.home), "Library", "Caches", "Freeloop")
-	if goruntime.GOOS == "linux" {
-		base = filepath.Join(environment.Canonical(e.home), ".cache", "freeloop")
-	}
+	base := appCacheBase(goruntime.GOOS, environment.Canonical(e.home), os.Getenv("LOCALAPPDATA"))
 	return filepath.Join(append([]string{base}, parts...)...)
+}
+
+// appCacheBase is the app's caches folder on goos for the home folder home:
+// ~/Library/Caches/Freeloop on a Mac, %LOCALAPPDATA%\freeloop on Windows
+// (localAppData, or AppData\Local in home when it is not set), and
+// ~/.cache/freeloop elsewhere.
+func appCacheBase(goos, home, localAppData string) string {
+	switch goos {
+	case "darwin":
+		return filepath.Join(home, "Library", "Caches", "Freeloop")
+	case "windows":
+		if localAppData == "" {
+			localAppData = filepath.Join(home, "AppData", "Local")
+		}
+		return filepath.Join(localAppData, "freeloop")
+	}
+	return filepath.Join(home, ".cache", "freeloop")
+}
+
+// noSandboxReason says why goos has no native sandbox, for a system whose
+// platform layer offers no Confiner (OQ-044).
+func noSandboxReason(goos string) string {
+	if goos == "windows" {
+		return "Windows has no native sandbox yet; use the Docker environment for a confined one"
+	}
+	return "this system has no sandbox Freeloop can use; use the Docker environment for a confined one"
+}
+
+// sandboxRefusal says why a sandboxed local environment cannot be saved on goos,
+// or "". Windows has no sandbox at all (OQ-044), so the form says so when one is
+// saved rather than when a session first fails; elsewhere a missing sandbox is a
+// fault the session's own check reports.
+func sandboxRefusal(goos string, haveConfiner bool) string {
+	if goos == "windows" && !haveConfiner {
+		return noSandboxReason(goos)
+	}
+	return ""
 }
 
 // sandboxProtected are the project's files that something outside the sandbox
@@ -70,6 +106,12 @@ func (e *Engine) projectCache(projectID string) string {
 
 // sandboxEnv returns the session's environment confined as its settings say.
 func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config.Environment, vars map[string]string) (*environment.Local, func(), error) {
+	if e.confiner == nil {
+		// Said where the sandbox's own check would say it fails (OQ-044).
+		why := noSandboxReason(goruntime.GOOS) + "; commands will not run"
+		e.emit(ses.ID, event.EnvHealth, map[string]string{"status": "unhealthy", "detail": why})
+		return nil, nil, errors.New(why)
+	}
 	root := ses.WorkRoot()
 	host, err := e.localEnv(root, nil)
 	if err != nil {

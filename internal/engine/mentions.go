@@ -123,7 +123,7 @@ func readMention(env environment.Environment, rel string) (harness.Resource, err
 	}
 	return harness.Resource{
 		Path: filepath.ToSlash(fi.Path),
-		URI:  (&url.URL{Scheme: "file", Path: abs}).String(),
+		URI:  (&url.URL{Scheme: "file", Path: fileURIPath(filepath.ToSlash(abs))}).String(),
 		Text: string(b),
 	}, nil
 }

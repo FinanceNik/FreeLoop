@@ -2,6 +2,7 @@ package engine
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -42,7 +43,7 @@ func (e *Engine) downloadedProgram(o config.Optimizer) string {
 	if o.Download == nil {
 		return ""
 	}
-	return filepath.Join(e.toolsDir(), o.ID+"-"+o.Download.Version, o.Program)
+	return filepath.Join(e.toolsDir(), o.ID+"-"+o.Download.Version, exeName(goruntime.GOOS, o.Program))
 }
 
 // findProgram finds an optimizer's program: on the PATH commands see, else what
@@ -71,7 +72,7 @@ func (e *Engine) InstallOptimizer(ctx context.Context, id string) (OptimizerStat
 	}
 	asset, ok := o.Download.Assets[config.AssetKey()]
 	if !ok {
-		return OptimizerStatus{}, fmt.Errorf("%s has no build for this Mac (%s)", o.Name, goruntime.GOARCH)
+		return OptimizerStatus{}, fmt.Errorf("%s has no build Freeloop can install for this system (%s); install it yourself if it has one", o.Name, config.AssetKey())
 	}
 	ctx, cancel := context.WithTimeout(ctx, toolDownloadFor)
 	defer cancel()
@@ -83,7 +84,7 @@ func (e *Engine) InstallOptimizer(ctx context.Context, id string) (OptimizerStat
 	if hex.EncodeToString(sum[:]) != asset.SHA256 {
 		return OptimizerStatus{}, fmt.Errorf("the download of %s is not the build Freeloop knows, so it was not kept", o.Name)
 	}
-	program, err := programFromArchive(archive, o.Program)
+	program, err := programFromArchive(archive, exeName(goruntime.GOOS, o.Program))
 	if err != nil {
 		return OptimizerStatus{}, fmt.Errorf("unpack %s: %w", o.Name, err)
 	}
@@ -130,8 +131,12 @@ func fetchTool(ctx context.Context, url string) ([]byte, error) {
 	return b, nil
 }
 
-// programFromArchive returns the file named program from a .tar.gz.
+// programFromArchive returns the file named program from a .tar.gz, or from a
+// .zip, as Windows builds come (NFR-XPLAT-003).
 func programFromArchive(archive []byte, program string) ([]byte, error) {
+	if bytes.HasPrefix(archive, []byte("PK\x03\x04")) {
+		return programFromZip(archive, program)
+	}
 	gz, err := gzip.NewReader(bytes.NewReader(archive))
 	if err != nil {
 		return nil, err
@@ -156,4 +161,34 @@ func programFromArchive(archive []byte, program string) ([]byte, error) {
 			return b, nil
 		}
 	}
+}
+
+// programFromZip returns the regular file named program from a zip archive.
+func programFromZip(archive []byte, program string) ([]byte, error) {
+	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range zr.File {
+		if !f.Mode().IsRegular() || path.Base(strings.ReplaceAll(f.Name, `\`, "/")) != program {
+			continue
+		}
+		if f.UncompressedSize64 > maxToolDownload {
+			return nil, errors.New("it is larger than expected")
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer rc.Close()
+		b, err := io.ReadAll(io.LimitReader(rc, maxToolDownload+1))
+		if err != nil {
+			return nil, err
+		}
+		if len(b) > maxToolDownload {
+			return nil, errors.New("it is larger than expected")
+		}
+		return b, nil
+	}
+	return nil, fmt.Errorf("it does not hold %s", program)
 }

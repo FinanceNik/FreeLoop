@@ -38,9 +38,11 @@ func (e *Engine) checkpointStore(sid string) string {
 	return filepath.Join(e.dataDir, "sessions", sid, "checkpoints.git")
 }
 
-// shadowBase is the start of a git command on the session's checkpoint store.
+// shadowBase is the start of a git command on the session's checkpoint store. A
+// snapshot holds the files as they are: core.autocrlf, which Git for Windows turns
+// on, would store \r\n as \n and give a rewind back \r\n where there was none.
 func (e *Engine) shadowBase(sid string, host *environment.Local) []string {
-	return []string{"--git-dir=" + e.checkpointStore(sid), "--work-tree=" + host.Root(), "-c", "user.name=Freeloop", "-c", "user.email=freeloop@localhost", "-c", "commit.gpgsign=false"}
+	return []string{"--git-dir=" + e.checkpointStore(sid), "--work-tree=" + host.Root(), "-c", "user.name=Freeloop", "-c", "user.email=freeloop@localhost", "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"}
 }
 
 // shadowGit runs git on the session's checkpoint store with its folder as
@@ -121,8 +123,8 @@ func (e *Engine) dropNested(ctx context.Context, host *environment.Local, sid st
 	defer cancel()
 	store := "--git-dir=" + e.checkpointStore(sid)
 	res, err := host.Exec(ctx, environment.ExecSpec{
-		Argv: append(slices.Clone(safeGit), store, "--work-tree="+host.Root(), "ls-files", "--stage", "-z"),
-		Env:  gitEnv(nil), MaxOutput: 64 << 20, Timeout: checkpointTimeout,
+		Argv: gitArgv(host, store, "--work-tree="+host.Root(), "ls-files", "--stage", "-z"),
+		Env:  gitEnvFor(host, nil), MaxOutput: 64 << 20, Timeout: checkpointTimeout,
 	})
 	if err != nil {
 		return err

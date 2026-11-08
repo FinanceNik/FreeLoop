@@ -117,6 +117,8 @@ func inSessionFolder(env environment.Environment, rel string) (string, error) {
 
 // cleanRel checks a path relative to the session's folder.
 func cleanRel(rel string) (string, error) {
+	// A backslash is a separator on Windows, and filepath.ToSlash makes it one.
+	rel = filepath.ToSlash(rel)
 	rel = path.Clean("/" + strings.TrimPrefix(rel, "/"))[1:]
 	if strings.HasPrefix(rel, "../") || rel == ".." {
 		return "", errors.New("the path is outside the session's folder")

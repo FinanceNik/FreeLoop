@@ -111,13 +111,9 @@ func (e *Engine) missingCommand(cmd string) string {
 			missing = fmt.Sprintf("%s is not on your login PATH", cmd)
 			switch filepath.Base(cmd) {
 			case "npx", "node", "npm":
-				if goruntime.GOOS == "darwin" {
-					missing += "; install Node.js (for example with Homebrew: brew install node)"
-				} else {
-					missing += "; install Node.js " + environment.InstallHint("node")
-				}
+				missing += "; " + nodeHint(goruntime.GOOS)
 			case "uvx", "uv":
-				missing += "; install uv (" + environment.InstallHint("uv") + ")"
+				missing += "; " + uvHint(goruntime.GOOS)
 			}
 		}
 	}
@@ -128,6 +124,29 @@ func (e *Engine) missingCommand(cmd string) string {
 	e.commands.seen[cmd] = commandSeen{missing: missing, at: time.Now()}
 	e.commands.mu.Unlock()
 	return missing
+}
+
+// nodeHint says how to install Node.js on goos: Homebrew on a Mac, winget on
+// Windows, the system's packages elsewhere.
+func nodeHint(goos string) string {
+	switch goos {
+	case "darwin":
+		return "install Node.js (for example with Homebrew: brew install node)"
+	case "windows":
+		return "install Node.js (for example with winget install OpenJS.NodeJS.LTS) and restart Freeloop"
+	}
+	return "install Node.js with your package manager"
+}
+
+// uvHint says how to install uv on goos.
+func uvHint(goos string) string {
+	switch goos {
+	case "darwin":
+		return "install uv (brew install uv)"
+	case "windows":
+		return "install uv (winget install astral-sh.uv) and restart Freeloop"
+	}
+	return "install uv (with your package manager)"
 }
 
 // shellQuote quotes s for a POSIX shell.

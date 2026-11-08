@@ -79,8 +79,8 @@ type Optimizer struct {
 type OptimizerDownload struct {
 	Version string
 	License string
-	// Assets are .tar.gz builds by Go's names for the system and the architecture,
-	// as "linux/amd64" (AssetKey).
+	// Assets are .tar.gz builds, or .zip ones for Windows, by Go's names for the
+	// system and the architecture, as "linux/amd64" (AssetKey).
 	Assets map[string]OptimizerAsset
 }
 
@@ -125,6 +125,8 @@ func BuiltinOptimizers() []Optimizer {
 			"darwin/amd64": {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-x86_64-apple-darwin.tar.gz", SHA256: "559156238dd3e148c84c88c3a62a7594b874f68793208994e1b02e77a9d9abf9"},
 			"linux/arm64":  {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-aarch64-unknown-linux-gnu.tar.gz", SHA256: "57a4fac13d18da77f0577ea8b68def7934b934bf76d0a6e161f0bfd06b1e1078"},
 			"linux/amd64":  {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-x86_64-unknown-linux-musl.tar.gz", SHA256: "4dec94a64035e08189ae82fd5408fe4ae9ae27a665fc07e3e3ec3c4c2d8e8a3e"},
+			// A .zip holding rtk.exe (NFR-XPLAT-003); there is no Windows build for arm64.
+			"windows/amd64": {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-x86_64-pc-windows-msvc.zip", SHA256: "9b076379be9d86011ca3f3a0264d0be4851da5535453a47f67fa46b4e893fbb2"},
 		}},
 	}}
 }

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -30,6 +31,35 @@ import (
 // Only the push, which has to, gets its own list of transports.
 var safeGit = []string{"git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "diff.ignoreSubmodules=dirty"}
 
+// gitArgv is safeGit followed by args, for git in env. On Windows /dev/null is no
+// file to Git for Windows' hook lookup but \dev\null on the current drive, a
+// folder anyone may make; hooks are looked for in System32 instead, which only an
+// administrator can write (NFR-XPLAT-003).
+func gitArgv(env environment.Environment, args ...string) []string {
+	base := safeGit
+	if localWindows(env) {
+		base = safeGitOn("windows", os.Getenv("SystemRoot"))
+	}
+	return append(slices.Clone(base), args...)
+}
+
+// safeGitOn is safeGit for a git running on goos.
+func safeGitOn(goos, systemRoot string) []string {
+	out := slices.Clone(safeGit)
+	if goos != "windows" {
+		return out
+	}
+	if systemRoot == "" || !strings.Contains(systemRoot, `:\`) {
+		systemRoot = `C:\Windows`
+	}
+	for i, a := range out {
+		if a == "core.hooksPath=/dev/null" {
+			out[i] = "core.hooksPath=" + strings.TrimRight(systemRoot, `\`) + `\System32\freeloop-no-hooks`
+		}
+	}
+	return out
+}
+
 // gitEnv is the environment of the app's git commands, with more added.
 func gitEnv(more map[string]string) map[string]string {
 	out := map[string]string{"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_NO_LAZY_FETCH": "1", "GIT_ALLOW_PROTOCOL": ""}
@@ -37,12 +67,33 @@ func gitEnv(more map[string]string) map[string]string {
 	return out
 }
 
+// gitEnvFor is gitEnv for git in env.
+func gitEnvFor(env environment.Environment, more map[string]string) map[string]string {
+	if localWindows(env) {
+		return gitEnvOn("windows", more)
+	}
+	return gitEnv(more)
+}
+
+// gitEnvOn is gitEnv for a git running on goos. Git for Windows keeps in its system
+// config, under Program Files where only an administrator writes, what makes it work
+// there: core.autocrlf, without which every file checked out with \r\n shows as
+// changed, the credential manager a push signs in with, and its certificates. So on
+// Windows the system config is read (NFR-XPLAT-003).
+func gitEnvOn(goos string, more map[string]string) map[string]string {
+	out := gitEnv(more)
+	if goos == "windows" {
+		delete(out, "GIT_CONFIG_NOSYSTEM")
+	}
+	return out
+}
+
 func git(ctx context.Context, env environment.Environment, args ...string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	res, err := env.Exec(ctx, environment.ExecSpec{
-		Argv:      append(slices.Clone(safeGit), args...),
-		Env:       gitEnv(nil),
+		Argv:      gitArgv(env, args...),
+		Env:       gitEnvFor(env, nil),
 		MaxOutput: 1 << 20,
 	})
 	if err != nil || res.ExitCode != 0 || res.TimedOut {
@@ -107,8 +158,8 @@ func gitCode(ctx context.Context, env environment.Environment, args ...string) (
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	res, err := env.Exec(ctx, environment.ExecSpec{
-		Argv: append(slices.Clone(safeGit), args...),
-		Env:  gitEnv(nil),
+		Argv: gitArgv(env, args...),
+		Env:  gitEnvFor(env, nil),
 	})
 	if err != nil || res.TimedOut {
 		return "", 0, false

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -140,7 +141,7 @@ func (e *Engine) backlogWorkflow(project session.Project, id string) (config.Wor
 		if first.ID == "" {
 			first = w
 		}
-		if environment.IsDir(project.Root + "/" + w.BacklogDir()) {
+		if environment.IsDir(filepath.Join(project.Root, filepath.FromSlash(w.BacklogDir()))) {
 			return w, nil
 		}
 	}
@@ -178,7 +179,7 @@ func (e *Engine) Backlogs(ctx context.Context) ([]BacklogInfo, error) {
 			continue
 		}
 		w, err := e.backlogWorkflow(p, "")
-		if err != nil || !environment.IsDir(p.Root+"/"+w.BacklogDir()) {
+		if err != nil || !environment.IsDir(filepath.Join(p.Root, filepath.FromSlash(w.BacklogDir()))) {
 			continue
 		}
 		info, err := e.projectBacklog(ctx, p, p.Root, w)

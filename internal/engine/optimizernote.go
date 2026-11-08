@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"path/filepath"
 
 	"github.com/FinanceNik/Freeloop/internal/environment"
 )
@@ -72,9 +73,9 @@ func (s *sessionOptimizer) savings(ctx context.Context) (*OptimizerSavings, erro
 	maps.Copy(vars, o.Env)
 	dir := s.e.optimizerDir(ses, environment.IsSandboxed(s.env))
 	for name, file := range o.DataEnv {
-		vars[name] = dir + "/" + file
+		vars[name] = filepath.Join(dir, file)
 	}
-	res, err := s.env.Exec(ctx, environment.ExecSpec{Argv: append([]string{p.path}, o.Gain...), Env: vars, Cwd: neutralDir, Timeout: rewriteTimeout, MaxOutput: 1 << 16})
+	res, err := s.env.Exec(ctx, environment.ExecSpec{Argv: append([]string{p.path}, o.Gain...), Env: vars, Cwd: neutralDirFor(s.env), Timeout: rewriteTimeout, MaxOutput: 1 << 16})
 	if err != nil {
 		return nil, err
 	}

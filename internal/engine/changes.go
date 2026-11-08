@@ -62,8 +62,8 @@ func gitRunOver(ctx context.Context, env environment.Environment, timeout time.D
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	res, err := env.Exec(ctx, environment.ExecSpec{
-		Argv:      append(slices.Clone(safeGit), args...),
-		Env:       gitEnv(map[string]string{"GIT_EDITOR": "true", "GIT_ALLOW_PROTOCOL": transports}),
+		Argv:      gitArgv(env, args...),
+		Env:       gitEnvFor(env, map[string]string{"GIT_EDITOR": "true", "GIT_ALLOW_PROTOCOL": transports}),
 		MaxOutput: 1 << 20,
 		Timeout:   timeout,
 	})

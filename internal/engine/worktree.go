@@ -215,11 +215,12 @@ func mergeRisks(ctx context.Context, main environment.Environment, into, branch 
 // outside a session acts on, spelled however the file system would still open it:
 // .FREELOOP/hooks.yaml is .freeloop/hooks.yaml on APFS. HEAD is on the list since
 // a commit can carry a repository in the checkout as well as a command can make
-// one (see bareRepositoryPatterns).
+// one (see bareRepositoryPatterns). Windows also drops the dots and spaces that end
+// a name, so .freeloop./hooks.yaml is written as .freeloop\hooks.yaml there.
 func actedOnFile(name string) bool {
 	names := append([]string{ProjectDir, ".gitattributes", ".gitmodules", "HEAD"}, permission.ActedOnLater...)
-	for _, part := range strings.Split(name, "/") {
-		f := environment.FoldPath(part)
+	for _, part := range strings.Split(strings.ReplaceAll(name, `\`, "/"), "/") {
+		f := environment.FoldPath(strings.TrimRight(part, ". "))
 		if slices.ContainsFunc(names, func(n string) bool { return environment.FoldPath(n) == f }) {
 			return true
 		}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"time"
@@ -204,7 +205,7 @@ func (e *Engine) afkEnvironment(project session.Project, w config.Workflow) (str
 		return envID, "Not sandboxed: the project's sessions run in " + envID + "."
 	}
 	if e.confiner == nil {
-		return envID, "Not sandboxed: this system has no sandbox Freeloop can use."
+		return envID, "Not sandboxed: " + noSandboxReason(goruntime.GOOS) + "."
 	}
 	if _, err := e.usableEnvironment(SandboxedEnvironmentID); err != nil {
 		return envID, "Not sandboxed: " + err.Error()

@@ -150,8 +150,8 @@ func projectFiles(ctx context.Context, host *environment.Local) ([]string, error
 	}
 	// A repository git cannot read is not a folder of files: everything it ignores would
 	// go with them.
-	argv := append(append([]string{}, safeGit...), "ls-files", "-z", "--cached", "--others", "--exclude-standard")
-	res, err := host.Exec(ctx, environment.ExecSpec{Argv: argv, Env: gitEnv(nil), Timeout: 2 * time.Minute, MaxOutput: 128 << 20, SeparateStderr: true})
+	argv := gitArgv(host, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+	res, err := host.Exec(ctx, environment.ExecSpec{Argv: argv, Env: gitEnvFor(host, nil), Timeout: 2 * time.Minute, MaxOutput: 128 << 20, SeparateStderr: true})
 	switch {
 	case err != nil:
 		return nil, err
@@ -166,8 +166,8 @@ func projectFiles(ctx context.Context, host *environment.Local) ([]string, error
 // inRepository says whether a folder is in a git repository. Only git saying it is not
 // counts as no: any other failure is an error, and nothing is decided on it.
 func inRepository(ctx context.Context, host *environment.Local) (bool, error) {
-	argv := append(append([]string{}, safeGit...), "rev-parse", "--is-inside-work-tree")
-	res, err := host.Exec(ctx, environment.ExecSpec{Argv: argv, Env: gitEnv(nil), Timeout: time.Minute, SeparateStderr: true})
+	argv := gitArgv(host, "rev-parse", "--is-inside-work-tree")
+	res, err := host.Exec(ctx, environment.ExecSpec{Argv: argv, Env: gitEnvFor(host, nil), Timeout: time.Minute, SeparateStderr: true})
 	if err != nil {
 		return false, err
 	}
@@ -198,8 +198,8 @@ func ignoredFiles(ctx context.Context, host *environment.Local, paths []string) 
 	for _, p := range paths {
 		names.WriteString("./" + p + "\x00")
 	}
-	argv := append(append([]string{}, safeGit...), "check-ignore", "-z", "--stdin")
-	res, err := host.Exec(ctx, environment.ExecSpec{Argv: argv, Env: gitEnv(nil), Timeout: time.Minute, MaxOutput: 128 << 20, Stdin: []byte(names.String()), SeparateStderr: true})
+	argv := gitArgv(host, "check-ignore", "-z", "--stdin")
+	res, err := host.Exec(ctx, environment.ExecSpec{Argv: argv, Env: gitEnvFor(host, nil), Timeout: time.Minute, MaxOutput: 128 << 20, Stdin: []byte(names.String()), SeparateStderr: true})
 	switch {
 	case err != nil:
 		return nil, err
