@@ -11,6 +11,8 @@ export interface SlashCommand {
   // Set for an MCP server's prompt (MCP-007), which runs through the
   // engine with a form for its arguments.
   prompt?: { server: string; name: string; arguments: PromptArgument[] };
+  // Set for a stage of the session's workflow (WFL-002), which the engine runs.
+  stage?: boolean;
 }
 
 export interface PromptArgument {

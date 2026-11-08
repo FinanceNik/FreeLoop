@@ -539,6 +539,38 @@ func (s *EngineService) TypeOptimizerInstall(ctx context.Context, sessionID, id 
 	return s.eng.TypeOptimizerInstall(ctx, sessionID, id)
 }
 
+// ListWorkflows, ApproveWorkflow, InstallWorkflowSkills and SetDefaultWorkflow
+// back the Workflows page in Settings (WFL-001, WFL-003).
+func (s *EngineService) ListWorkflows(ctx context.Context) []engine.WorkflowStatus {
+	return s.eng.ListWorkflows(ctx)
+}
+
+func (s *EngineService) ApproveWorkflow(ctx context.Context, id, fingerprint string) (config.Config, error) {
+	return s.eng.ApproveWorkflow(ctx, id, fingerprint)
+}
+
+func (s *EngineService) InstallWorkflowSkills(ctx context.Context, id string) ([]string, error) {
+	return s.eng.InstallWorkflowSkills(ctx, id)
+}
+
+func (s *EngineService) SetDefaultWorkflow(ctx context.Context, id string) (config.Config, error) {
+	return s.eng.SetDefaultWorkflow(ctx, id)
+}
+
+// Workflows lists the workflows a session can choose, SetWorkflow chooses one and
+// RunStage invokes one of its stages (WFL-002).
+func (s *EngineService) Workflows(ctx context.Context) []engine.WorkflowInfo {
+	return s.eng.Workflows(ctx)
+}
+
+func (s *EngineService) SetWorkflow(ctx context.Context, sessionID, workflowID string) error {
+	return s.eng.SetWorkflow(ctx, sessionID, workflowID)
+}
+
+func (s *EngineService) RunStage(ctx context.Context, sessionID, command, input string) (engine.StageResult, error) {
+	return s.eng.RunStage(ctx, sessionID, command, input)
+}
+
 // SetOptimizer switches a session's token optimizer (HRN-019).
 // OptimizerSavings says what a session's optimizer reports having saved, or nil.
 func (s *EngineService) OptimizerSavings(ctx context.Context, sessionID string) (*engine.OptimizerSavings, error) {

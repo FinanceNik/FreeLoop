@@ -34,6 +34,7 @@ import { OPEN_SESSION_DOM_EVENT } from "./ToolView.tsx";
 import Board from "./Board.tsx";
 import Schedules from "./Schedules.tsx";
 import Optimizers from "./Optimizers.tsx";
+import Workflows from "./Workflows.tsx";
 import Usage from "./Usage.tsx";
 import Compare from "./Compare.tsx";
 import Providers from "./Providers.tsx";
@@ -76,7 +77,7 @@ import Queue from "./Queue.tsx";
 
 type Screen =
   | { kind: "session"; id: string; focus?: { seq: number; n: number } }
-  | { kind: "new"; root?: string }
+  | { kind: "new"; root?: string; workflow?: string }
   | { kind: "onboarding" }
   | { kind: "providers" }
   | { kind: "rules" }
@@ -87,6 +88,7 @@ type Screen =
   | { kind: "queue" }
   | { kind: "schedules" }
   | { kind: "optimizers" }
+  | { kind: "workflows" }
   | { kind: "usage" }
   | { kind: "compare"; tag: string }
   | { kind: "profiles" }
@@ -442,6 +444,7 @@ export default function App() {
         }
         if (ev.type === "session_info_update" && d.title) s.title = d.title;
         if (ev.type === "optimizer_changed") s.optimizer = d.optimizer ?? "";
+        if (ev.type === "workflow_changed") s.workflow = (ev.data as { workflow?: string }).workflow ?? "";
         if (ev.type === "tags_changed") s.tags = (ev.data as { tags?: string[] }).tags ?? [];
         return [s, ...list.slice(0, i), ...list.slice(i + 1)];
       });
@@ -836,6 +839,14 @@ export default function App() {
     const items: PaletteItem[] = [
       ...collect(),
       { id: "app:new", title: "New session", group: "Action", keywords: "create start", run: () => setScreen({ kind: "new" }) },
+      {
+        id: "app:workflow",
+        title: "Start a workflow…",
+        group: "Action",
+        keywords: "workflow plan prd slice afk issues backlog grill",
+        detail: "a new session with a workflow, at its first stage",
+        run: () => setScreen({ kind: "new", workflow: config?.defaults.workflow || "plan-slice-afk" }),
+      },
       { id: "app:demo", title: "Try the demo", group: "Action", keywords: "tour example scripted no key policy", run: () => startDemo() },
       page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: keyLabel(bindingOf("attention")), detail: attentionCount ? `${attentionCount} waiting` : undefined }),
       ...(STANDALONE
@@ -850,6 +861,7 @@ export default function App() {
       page("skills", "Skills", () => setScreen({ kind: "skills" })),
       page("mcp", "MCP servers", () => setScreen({ kind: "mcp" }), { keywords: "tools" }),
       page("optimizers", "Token optimizers", () => setScreen({ kind: "optimizers" }), { keywords: "rtk tokens compress output default" }),
+      page("workflows", "Workflows", () => setScreen({ kind: "workflows" }), { keywords: "workflow prd slice afk backlog skills" }),
       page("schedules", "Schedules", () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
       page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
       page("rules", "Policy", () => setScreen({ kind: "rules" }), { keywords: "permission rules allow deny would this be allowed check" }),
@@ -1535,7 +1547,7 @@ export default function App() {
         )}
         {screen.kind === "new" && (
           <NewSession
-            key={screen.root ?? ""}
+            key={`${screen.root ?? ""}|${screen.workflow ?? ""}`}
             providers={providers}
             projects={projects}
             environments={environments}
@@ -1544,6 +1556,7 @@ export default function App() {
             sessions={sessions}
             defaults={config?.defaults}
             initialRoot={screen.root}
+            initialWorkflow={screen.workflow}
             onManageProviders={() => setScreen({ kind: "providers" })}
             onProvidersChanged={refreshProviders}
             onProjectsChanged={refreshProjects}
@@ -1620,6 +1633,7 @@ export default function App() {
               )}
               {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
               {screen.kind === "optimizers" && config && <Optimizers config={config} version={configVersion} onSaved={setConfig} onError={report} />}
+              {screen.kind === "workflows" && config && <Workflows config={config} version={configVersion} onSaved={setConfig} onError={report} />}
               {screen.kind === "schedules" && (
                 <Schedules projects={projects} profiles={profiles} providers={providers} harnesses={harnesses} defaults={config?.defaults} onOpenSession={(id) => openSession(id)} onError={report} />
               )}

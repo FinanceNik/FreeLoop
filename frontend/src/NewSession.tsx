@@ -18,6 +18,7 @@ import {
   type ProviderInfo,
   type Session,
   type OptimizerStatus,
+  type WorkflowInfo,
   type StartWaits,
 } from "./api.ts";
 import { inheritedLabel, OPTIMIZER_OFF } from "./optimizers.ts";
@@ -35,6 +36,9 @@ interface Props {
   defaults?: Defaults;
   // A folder chosen beforehand, by the first-run guide (GUI-010).
   initialRoot?: string;
+  // A workflow chosen beforehand, from "Start a workflow…" (WFL-002): the new
+  // session's box then holds its first stage's command.
+  initialWorkflow?: string;
   // draft is the first message to put in the session's box, from an
   // issue (SES-017).
   onCreated: (s: Session, draft?: string) => void;
@@ -54,7 +58,7 @@ const SOURCE: Record<string, string> = {
   override: "set by you",
 };
 
-export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, onCreated, onCompare, onProjectsChanged, onImport, onManageProviders, onProvidersChanged, onError }: Props) {
+export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, initialWorkflow, onCreated, onCompare, onProjectsChanged, onImport, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
   const initial = providers.find((p) => p.id === defaults?.providerId) ?? providers.find((p) => !p.builtin) ?? providers[0];
   // An agent that signs in by itself (Claude Code with a subscription)
@@ -92,6 +96,14 @@ export default function NewSession({ providers, projects, environments, profiles
   useEffect(() => {
     EngineService.ListOptimizers()
       .then((l) => setOptimizers(l ?? []))
+      .catch(onError);
+  }, []);
+  // The workflow (WFL-002): empty takes the profile's or the default.
+  const [workflow, setWorkflow] = useState(initialWorkflow ?? "");
+  const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
+  useEffect(() => {
+    EngineService.Workflows()
+      .then((l) => setWorkflows(l ?? []))
       .catch(onError);
   }, []);
 
@@ -233,12 +245,13 @@ export default function NewSession({ providers, projects, environments, profiles
     if (extra.length > 0) return compare();
     setBusy(true);
     const own = worktree && !!settings?.trusted;
-    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode, worktree: own, optimizer: usesProvider || harness?.takesOptimizer ? optimizer : "" })
+    EngineService.CreateSession({ title, projectRoot: root, environmentId, profileId, providerId: usesProvider ? providerId : "", model: usesProvider ? model.trim() : "", mode, worktree: own, optimizer: usesProvider || harness?.takesOptimizer ? optimizer : "", workflow })
       .then(async (s) => {
         if (rememberWorktree && s.projectId) await EngineService.SetProjectWorktreeDefault(s.projectId, own ? "always" : "never").catch(onError);
         if (makeDefault && s.projectId) await EngineService.SetProjectProfile(s.projectId, profileId).catch(onError);
         if (issue) await EngineService.SetTags(s.id, [issue.tag]).catch(onError);
-        onCreated(s, issue?.text);
+        const first = (workflows.find((w) => w.id === s.workflow)?.stages ?? [])[0];
+        onCreated(s, issue?.text ?? (initialWorkflow && first ? `/${first.command} ` : undefined));
       })
       .catch(onError)
       .finally(() => setBusy(false));
@@ -599,6 +612,21 @@ export default function NewSession({ providers, projects, environments, profiles
                 </option>
               ))}
             </select>
+          </label>
+        )}
+        {workflows.length > 0 && (
+          <label>
+            Workflow
+            <select value={workflow} onChange={(e) => setWorkflow(e.target.value)}>
+              <option value="">{inheritedLabel(profile?.workflow, defaults?.workflow, workflows)}</option>
+              <option value={OPTIMIZER_OFF}>Off</option>
+              {workflows.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.reason ? `${w.name} (not approved)` : w.name}
+                </option>
+              ))}
+            </select>
+            <span className="muted">Its stages are slash commands in the session: type / to see them.</span>
           </label>
         )}
         <label>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
-import { EngineService, STARTING_MODES, type Command, type HarnessInfo, type Issue, type OptimizerStatus, type Profile, type ProviderInfo } from "./api.ts";
+import { EngineService, STARTING_MODES, type Command, type HarnessInfo, type Issue, type OptimizerStatus, type Profile, type ProviderInfo, type WorkflowInfo } from "./api.ts";
 import { OPTIMIZER_OFF } from "./optimizers.ts";
 
 // Profiles (HRN-003): one YAML file each in profiles/. The form covers the
@@ -39,6 +39,7 @@ function blank(): Profile {
     hooks: [],
     fallback: null,
     optimizer: "",
+    workflow: "",
     source: "",
   };
 }
@@ -49,6 +50,13 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
   useEffect(() => {
     EngineService.ListOptimizers()
       .then((l) => setOptimizers(l ?? []))
+      .catch(onError);
+  }, []);
+  // Workflows to choose from (WFL-002).
+  const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
+  useEffect(() => {
+    EngineService.Workflows()
+      .then((l) => setWorkflows(l ?? []))
       .catch(onError);
   }, []);
   // A custom harness from a template (HRN-011).
@@ -270,6 +278,19 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                   </option>
                 ))}
                 {form.optimizer && form.optimizer !== OPTIMIZER_OFF && !optimizers.some((o) => o.id === form.optimizer) && <option value={form.optimizer}>{form.optimizer}</option>}
+              </select>
+            </label>
+            <label>
+              Workflow
+              <select value={form.workflow} onChange={(e) => set("workflow", e.target.value)}>
+                <option value="">From Settings</option>
+                <option value={OPTIMIZER_OFF}>Off</option>
+                {workflows.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+                {form.workflow && form.workflow !== OPTIMIZER_OFF && !workflows.some((w) => w.id === form.workflow) && <option value={form.workflow}>{form.workflow}</option>}
               </select>
             </label>
             <label>

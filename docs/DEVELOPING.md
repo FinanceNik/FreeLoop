@@ -194,6 +194,43 @@ Only a built-in can offer a one-click install, through `Download` in `config.Bui
 
 A file runs only after the user approves it on the Settings page, and any change ends that. For the built-in agent Freeloop asks from `/` with `HOME` set to nothing, so the program reads no project's or agent's settings; for an agent's hook it asks from the project with the real `HOME`, so the agent's deny rules count. Only plain lines are asked about, and a rewrite must be `program` and the same command. Before listing a tool in `rewrites`, try it raw and rewritten in identical repositories, and with a copy of the tool planted in the repository, since a program may prefer that copy; that is how the `--output` and `tsc` problems were found. Run the program with what you add through `internal/engine/optimizers.go` before trusting it, under the sandbox too: check that exit codes survive, that refusals stay visible, and where it writes. A variable that stops it reporting home belongs in `Env`. Never use a program's own agent hook: RTK's answers "allow" when a repository's settings say so (OQ-029).
 
+## Adding a workflow
+
+A workflow (WFL-001) is a file `workflows/<id>.yaml` in the data folder, or an entry in `config.BuiltinWorkflows` to ship it; a file with a built-in's ID replaces it. Unknown fields are refused, and so is any mode that asks less than accept edits:
+
+```yaml
+name: Plan, slice, run AFK
+description: One line for Settings.
+backlog: backlog              # optional: the project folder with prds/ and issues/; never .freeloop, .git or a folder other tools act on
+skills: [grill-the-brief]     # the skills its stages use, for Settings to show
+stages:
+  - command: grill            # the slash command; not one of the app's own (ReservedCommands)
+    title: Grill the brief
+    description: One line for the palette.
+    mode: plan                # optional: ask, plan or accept_edits, switched to before the prompt
+    skill: grill-the-brief    # optional: must be installed and on, or the stage refuses
+    prompt: "Use the skill grill-the-brief... The brief: {{input}}"
+  - command: afk
+    title: Run the AFK issues
+    kind: afk                 # prompt (default), afk, review or cleanup; one of each but prompt
+afk:
+  mode: accept_edits          # ask or accept_edits
+  sandbox: true               # the sandboxed environment where there is one
+  maxIssues: 10
+  commands: ["git commit *"]  # shell rule patterns offered to allow up front for the run's sessions
+  skill: work-an-issue
+  prompt: "Your issue is {{issue}}: {{issueText}} ..."
+review:
+  profile: reviewer           # optional; the run's profile when empty
+  focus: "whether it does what {{issue}} asks"
+```
+
+A stage's prompt may use `{{input}}` (what followed the command), `{{backlog}}`, `{{issues}}` (the backlog's issues with their state) and `{{commits}}` (the last ten); the AFK prompt and the review's focus also `{{issue}}` and `{{issueText}}`. Anything else is refused when the file loads, so a typo shows in Settings and not in a prompt.
+
+A file's workflow is used only after the user approves it on the Settings page (`ApproveWorkflow`, a mark in `workflowApprovals`), and any change to the file ends that, because its stages switch modes and its run asks for commands to be allowed. Only a built-in workflow ships skills (`internal/config/workflowskills/`, embedded); "Install skills" copies them into the app's store with `freeloop:workflows/<id>` as their source (`InstallWorkflowSkills`), never over a skill of the same name from elsewhere or one the user edited. A file's workflow names skills the user installs from the Skills page.
+
+A stage's prompt goes through `enqueue` as the user's message with `noMentions`, so its `@` words attach nothing, and it is the same for every harness: no stage may need a harness of its own (HRN-001). The engine's side is `internal/engine/workflows.go`; the composer's is `frontend/src/workflows.ts`.
+
 ## A stuck session (HRN-020)
 
 `internal/engine/stuck.go` follows every saved event through the store's `OnAppend` and says a session is stuck, once a turn, when its account limit is rejected, its turn limit is reached, one tool fails three times in a row (refusals do not count), two rewinds happen in a turn, or two turns in a row end in an error. Anything it emits goes out on its own goroutine, since it runs inside the store's append. `HandOff` stops the old turn, ends its pending requests (`Broker.CancelSession`), continues with HRN-012's `SwitchProfile`, records `handed_off` in the old session, and returns the message that carries the last request over; with a profile's `onLimit` it sends that message itself when the turn ends.

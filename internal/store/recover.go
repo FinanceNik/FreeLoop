@@ -232,13 +232,13 @@ func (s *Store) rebuildSession(ctx context.Context, sid string) error {
 		}
 	}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, optimizer, effort, port_base, last_seq, created_at, updated_at, imported_from)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, optimizer, effort, port_base, last_seq, created_at, updated_at, imported_from, workflow)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, branch = excluded.branch, provider_id = excluded.provider_id,
-		   model = excluded.model, mode = excluded.mode, tags = excluded.tags, optimizer = excluded.optimizer, effort = excluded.effort, last_seq = excluded.last_seq, updated_at = excluded.updated_at, imported_from = excluded.imported_from`,
+		   model = excluded.model, mode = excluded.mode, tags = excluded.tags, optimizer = excluded.optimizer, workflow = excluded.workflow, effort = excluded.effort, last_seq = excluded.last_seq, updated_at = excluded.updated_at, imported_from = excluded.imported_from`,
 		ses.ID, ses.Title, ses.Status, ses.HarnessID, ses.ProjectID, ses.ProjectRoot, ses.EnvironmentID, ses.BaseCommit, ses.Branch,
 		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.ExternalID, ses.Worktree, ses.WorktreeBranch, ses.ParentID, strings.Join(ses.Tags, " "), ses.Optimizer, ses.Effort, ses.PortBase,
-		ses.LastSeq, ses.CreatedAt.UnixMilli(), ses.UpdatedAt.UnixMilli(), ses.ImportedFrom)
+		ses.LastSeq, ses.CreatedAt.UnixMilli(), ses.UpdatedAt.UnixMilli(), ses.ImportedFrom, ses.Workflow)
 	return err
 }
 
@@ -256,6 +256,7 @@ func foldEvents(ses *session.Session, events []event.Event) {
 			Title         string   `json:"title"`
 			Tags          []string `json:"tags"`
 			Optimizer     string   `json:"optimizer"`
+			Workflow      string   `json:"workflow"`
 			Effort        string   `json:"effort"`
 			Harness       string   `json:"harness"`
 			Source        string   `json:"source"`
@@ -292,6 +293,8 @@ func foldEvents(ses *session.Session, events []event.Event) {
 			ses.Tags = d.Tags
 		case event.OptimizerChanged:
 			ses.Optimizer = d.Optimizer
+		case event.WorkflowChanged:
+			ses.Workflow = d.Workflow
 		case event.EffortChanged:
 			ses.Effort = d.Effort
 		case event.SessionImported:

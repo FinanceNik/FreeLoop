@@ -84,6 +84,8 @@ func (e *Engine) reload(changed []string) {
 			profiles = true
 		case strings.HasPrefix(f, config.OptimizersDir+string(filepath.Separator)):
 			e.loadOptimizers()
+		case strings.HasPrefix(f, config.WorkflowsDir+string(filepath.Separator)):
+			e.loadWorkflows()
 		case strings.HasPrefix(f, config.PresetsDir+string(filepath.Separator)):
 			e.loadPresets()
 			profiles = true

@@ -67,6 +67,9 @@ type Profile struct {
 	// none whatever the global default is (HRN-019); the global default when
 	// empty.
 	Optimizer string `yaml:"optimizer,omitempty" json:"optimizer"`
+	// Workflow is the workflow of the profile's sessions, or off for none whatever
+	// the default is (WFL-002); the default when empty.
+	Workflow string `yaml:"workflow,omitempty" json:"workflow"`
 	// OnLimit is a profile to continue on, without asking, when the session's account
 	// limit is reached (HRN-020). Every tool call there still asks as usual.
 	OnLimit string `yaml:"onLimit,omitempty" json:"onLimit"`
@@ -149,6 +152,8 @@ func (p Profile) Validate() error {
 		return fieldErr("instructions", "%q must be project or none", p.Instructions)
 	case p.Optimizer != "" && !idPattern.MatchString(p.Optimizer):
 		return fieldErr("optimizer", "%q must be off or the ID of a token optimizer", p.Optimizer)
+	case p.Workflow != "" && !idPattern.MatchString(p.Workflow):
+		return fieldErr("workflow", "%q must be off or the ID of a workflow", p.Workflow)
 	}
 	for i, r := range p.Rules {
 		if err := r.Validate(); err != nil {

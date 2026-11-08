@@ -211,6 +211,12 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 			} else {
 				note("Token optimizer turned off.")
 			}
+		case event.WorkflowChanged:
+			if name := str("name"); name != "" {
+				note("Workflow set to " + name + ".")
+			} else {
+				note("Workflow turned off.")
+			}
 		case event.Rewind:
 			note("Rewound to an earlier checkpoint; the turns after it were undone.")
 		case event.PullRequest:

@@ -22,7 +22,7 @@ func Fingerprint(dir string) map[string]string {
 	add(RulesFileName)
 	add(MCPFileName)
 	add(ColorsFileName)
-	for _, sub := range []string{EnvironmentsDir, ProfilesDir, PresetsDir, OptimizersDir} {
+	for _, sub := range []string{EnvironmentsDir, ProfilesDir, PresetsDir, OptimizersDir, WorkflowsDir} {
 		if entries, err := os.ReadDir(filepath.Join(dir, sub)); err == nil {
 			for _, e := range entries {
 				if strings.HasSuffix(e.Name(), ".yaml") {

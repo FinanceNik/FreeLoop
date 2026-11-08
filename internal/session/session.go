@@ -64,6 +64,9 @@ type Session struct {
 	// Optimizer is the token optimizer the session's shell commands go
 	// through (HRN-019), set by optimizer_changed events; empty for none.
 	Optimizer string `json:"optimizer"`
+	// Workflow is the session's workflow (WFL-002), set by workflow_changed
+	// events; empty for none.
+	Workflow string `json:"workflow"`
 	// Effort is what the user chose for this session (PRV-014), set by
 	// effort_changed events; empty takes the profile's.
 	Effort string `json:"effort"`

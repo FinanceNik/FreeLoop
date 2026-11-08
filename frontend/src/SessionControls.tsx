@@ -21,6 +21,8 @@ interface Props {
   onRules: () => void;
   // The session's token optimizer, shown with the rest.
   optimizer: ReactNode;
+  // The session's workflow (WFL-002), shown before it.
+  workflow?: ReactNode;
   onError: (err: unknown) => void;
 }
 
@@ -41,7 +43,7 @@ const OTHER = "\u0000other";
 // The permissions menu's way to the session's rules.
 const RULES = "\u0000rules";
 
-export default function SessionControls({ sessionId, mode, canBypass, offersAuto, canAuto, bypassOn, version, onMode, onOtherModel, onRules, optimizer, onError }: Props) {
+export default function SessionControls({ sessionId, mode, canBypass, offersAuto, canAuto, bypassOn, version, onMode, onOtherModel, onRules, optimizer, workflow, onError }: Props) {
   const [report, setReport] = useState<SessionOptionsReport | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -102,6 +104,7 @@ export default function SessionControls({ sessionId, mode, canBypass, offersAuto
         </button>
       )}
       {report?.note && <span className="muted session-control-note">{report.note}</span>}
+      {workflow}
       {optimizer}
       <label className="session-control" data-mode={mode} title={hint}>
         <span className="sr-only">Permissions</span>

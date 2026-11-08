@@ -4,7 +4,7 @@ import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, inSettings, isGeneral, s
 
 test("every configuration page is listed once", () => {
   const ids = SETTINGS_GROUPS.flatMap((g) => g.pages.map((p) => p.id));
-  assert.deepEqual([...ids].sort(), ["appearance", "costs", "data", "environments", "keyboard", "mcp", "network", "optimizers", "permissions", "profiles", "providers", "rules", "schedules", "sessions", "skills"]);
+  assert.deepEqual([...ids].sort(), ["appearance", "costs", "data", "environments", "keyboard", "mcp", "network", "optimizers", "permissions", "profiles", "providers", "rules", "schedules", "sessions", "skills", "workflows"]);
   assert.equal(new Set(ids).size, ids.length);
 });
 

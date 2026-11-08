@@ -4,11 +4,13 @@ import { isDemo } from "./demo.ts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
+import { stageCall, stageCommands } from "./workflows.ts";
 import {
   EngineService,
   MODES,
   type EnvironmentInfo,
   type OptimizerInfo,
+  type WorkflowInfo,
   type HarnessInfo,
   type ProjectInfo,
   type ProviderInfo,
@@ -334,9 +336,21 @@ export default function SessionView({ session, events, focus, prices, initialDra
   useEffect(() => {
     if (slash !== null) refreshMcp();
   }, [slash === null]);
+  // Workflows (WFL-002): the session's workflow's stages are slash commands.
+  const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
+  const loadWorkflows = () =>
+    EngineService.Workflows()
+      .then((list) => setWorkflows(list ?? []))
+      .catch(onError);
+  useEffect(() => {
+    loadWorkflows();
+  }, [session.id]);
+  const workflow = workflows.find((w) => w.id === session.workflow);
+  const setWorkflow = (id: string) => EngineService.SetWorkflow(session.id, id).catch(onError);
   const commands = useMemo<SlashCommand[]>(
     () => [
       ...MODE_COMMANDS.filter((c) => modeAllowed(c.mode ?? "")),
+      ...stageCommands(workflow),
       ...view.commands.map((c) => ({ name: c.name, description: c.description })),
       ...(mcp?.prompts ?? []).map((p) => ({
         name: p.command,
@@ -344,7 +358,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         prompt: { server: p.server, name: p.name, arguments: p.arguments ?? [] },
       })),
     ],
-    [view.commands, canBypass, canAuto, mcp],
+    [view.commands, canBypass, canAuto, mcp, workflow],
   );
   // Resources attached to the next message, and the open prompt form.
   const keptExtras = extrasOf<ComposerExtras>(session.id);
@@ -559,6 +573,20 @@ export default function SessionView({ session, events, focus, prices, initialDra
     if (m && modeAllowed(m)) {
       setDraft("");
       setMode(m);
+      return;
+    }
+    // A workflow's stage goes to the engine, with what follows its command.
+    const call = stageCall(text, workflow);
+    if (call) {
+      holdBottom.current = false;
+      setAccepting(true);
+      EngineService.RunStage(session.id, call.command, call.input)
+        .then(() => {
+          forgetDraft(session.id);
+          setDraft("");
+        })
+        .catch(onError)
+        .finally(() => setAccepting(false));
       return;
     }
     // A message that is just an MCP prompt's command runs the prompt.
@@ -786,6 +814,21 @@ export default function SessionView({ session, events, focus, prices, initialDra
       ),
     ...MODES.filter((m) => m.id !== mode && modeAllowed(m.id)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
     ...(session.providerId ? [act("model", "Switch model…", () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
+    ...workflows
+      .filter((w) => w.id !== session.workflow)
+      .map((w) =>
+        act(
+          `workflow:${w.id}`,
+          `Start a workflow: ${w.name}`,
+          () => {
+            setWorkflow(w.id);
+            const first = (w.stages ?? [])[0];
+            if (first) chooseCommand({ name: first.command, description: first.title, stage: true });
+          },
+          { keywords: "workflow plan prd slice afk issues backlog", detail: w.reason || (w.stages ?? []).map((s) => `/${s.command}`).join(" ") },
+        ),
+      ),
+    ...(session.workflow ? [act("workflow:off", "Workflow: Off", () => setWorkflow(""), { keywords: "workflow" })] : []),
     ...[{ id: "", name: "Off" }, ...optimizers]
       .filter((o) => o.id !== session.optimizer)
       .map((o) => act(`optimizer:${o.id}`, `Token optimizer: ${o.name}`, () => setOptimizer(o.id), { keywords: "tokens rtk compress output" })),
@@ -1360,6 +1403,20 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 </button>
               )}
               <SessionControls
+                workflow={
+                  <label className="session-control" title="A workflow's stages are slash commands in this session: type / to see them.">
+                    <span className="sr-only">Workflow</span>
+                    <select value={session.workflow ?? ""} onChange={(e) => setWorkflow(e.target.value)} onFocus={loadWorkflows}>
+                      <option value="">Workflow off</option>
+                      {workflows.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.reason ? `${w.name} (not approved)` : w.name}
+                        </option>
+                      ))}
+                      {session.workflow && !workflows.some((w) => w.id === session.workflow) && <option value={session.workflow}>{session.workflow} (no such workflow)</option>}
+                    </select>
+                  </label>
+                }
                 optimizer={
                   <label className="session-control" title="Runs this session's shell commands through a program that shortens their output, to spend fewer tokens. You still approve the command as the model wrote it.">
                     <span className="sr-only">Optimizer</span>

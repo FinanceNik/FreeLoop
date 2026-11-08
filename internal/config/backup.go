@@ -51,7 +51,7 @@ func backedUp(rel string) bool {
 		return false
 	}
 	dir = strings.TrimSuffix(dir, "/")
-	return dir == EnvironmentsDir || dir == ProfilesDir || dir == PresetsDir || dir == OptimizersDir
+	return dir == EnvironmentsDir || dir == ProfilesDir || dir == PresetsDir || dir == OptimizersDir || dir == WorkflowsDir
 }
 
 // ExportBundle collects the data folder's config files.

@@ -52,7 +52,8 @@
         "mode_refused",
         "stuck",
         "handed_off",
-        "model_context"
+        "model_context",
+        "workflow_changed"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -117,6 +118,10 @@
     {
       "if": { "properties": { "type": { "const": "optimizer_changed" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/optimizerChanged" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "workflow_changed" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/workflowChanged" } } }
     },
     {
       "if": { "properties": { "type": { "const": "effort_changed" } } },
@@ -255,6 +260,12 @@
       "description": "The session's token optimizer (HRN-019); an empty optimizer means off.",
       "required": ["optimizer"],
       "properties": { "optimizer": { "type": "string" }, "name": { "type": "string" } }
+    },
+    "workflowChanged": {
+      "type": "object",
+      "description": "The session's workflow (WFL-002); an empty workflow means none.",
+      "required": ["workflow"],
+      "properties": { "workflow": { "type": "string" }, "name": { "type": "string" } }
     },
     "worktreeSetup": {
       "type": "object",

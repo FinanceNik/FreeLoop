@@ -7,7 +7,7 @@ import { pressed, type Keys } from "./shortcuts.ts";
 // The app's own settings, once one long General page, are pages of their own.
 export type GeneralPage = "appearance" | "keyboard" | "sessions" | "costs" | "permissions" | "network" | "data";
 
-export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "optimizers" | "rules" | "environments" | "schedules" | GeneralPage;
+export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "optimizers" | "workflows" | "rules" | "environments" | "schedules" | GeneralPage;
 
 export interface SettingsGroup {
   title: string;
@@ -28,6 +28,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: "skills", label: "Skills", icon: "skills" },
       { id: "mcp", label: "MCP servers", icon: "mcp" },
       { id: "optimizers", label: "Token optimizers", icon: "optimizers" },
+      { id: "workflows", label: "Workflows", icon: "workflows" },
       { id: "rules", label: "Policy", icon: "rules" },
     ],
   },

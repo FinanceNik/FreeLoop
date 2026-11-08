@@ -75,6 +75,8 @@ const (
 	WorktreeSetup Type = "worktree_setup"
 	// OptimizerChanged records the session's token optimizer (HRN-019).
 	OptimizerChanged Type = "optimizer_changed"
+	// WorkflowChanged records the session's workflow (WFL-002).
+	WorkflowChanged Type = "workflow_changed"
 	// EffortChanged records the effort a session's model calls ask for (PRV-014).
 	EffortChanged Type = "effort_changed"
 	// SessionRuleChanged records a rule the user added to or removed from a session.
@@ -96,7 +98,7 @@ var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
 	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged, SessionImported,
-	LimitUpdate, ModeRefused, Stuck, HandedOff, ModelContext,
+	LimitUpdate, ModeRefused, Stuck, HandedOff, ModelContext, WorkflowChanged,
 }
 
 // AllTypes returns every known variant.
@@ -337,6 +339,13 @@ type SessionImportedData struct {
 type OptimizerChangedData struct {
 	Optimizer string `json:"optimizer"`
 	Name      string `json:"name"`
+}
+
+// WorkflowChangedData is the payload of workflow_changed (WFL-002); an empty
+// Workflow means none.
+type WorkflowChangedData struct {
+	Workflow string `json:"workflow"`
+	Name     string `json:"name"`
 }
 
 // AvailableCommandsData is the payload of available_commands_update: the

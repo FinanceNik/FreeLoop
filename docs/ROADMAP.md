@@ -509,6 +509,18 @@ Order: the handoff first, since it needs no new data and a reached limit is toda
 
 Open for the user: the queue's default limit of 3 sessions at once; whether a queued task gets its own worktree by default (the plan: yes, so tasks in one repository do not edit the same files); whether `onLimit` may continue without asking (the plan: only if the profile says so).
 
+## Workflows (planned 2026-11-08, at the user's request ahead of the release)
+
+Matt Pocock's way of working with agents, built into the app (WFL-001 to WFL-007): grill the brief, write a PRD, slice it into issues, run the unattended ones, review them, QA by hand, clean up. Packaged like the token optimizers: a file per workflow, one built in, nothing run or installed until the user asks. It is built on what exists: the queue (SES-025) runs the AFK sessions, the review by a second agent (HRN-018) reviews them, the attention view (GUI-002) holds what waits for the user, and the broker asks as always (SEC-003). No new dependency.
+
+1. **Workflow files, the built-in workflow and how to invoke it (WFL-001 to WFL-003).** `internal/config/workflows.go` (format, validation, fingerprint, the built-in workflow and its skill texts), `internal/workflow` (templates; pure), `internal/engine/workflows.go` (listing, approval, choosing, running a stage, installing skills), `workflow_changed`, a `workflow` column on sessions, `workflow:` on profiles and `defaults.workflow`; the Workflows page in Settings, the picker beside the optimizer, stage commands in the composer and the palette.
+2. **The backlog (WFL-004).** `internal/workflow/backlog.go` (frontmatter, ready and blocked, cycles), `internal/engine/backlog.go` (reading through the environment in trusted projects, archiving), the Backlog column on the Board.
+3. **The AFK run (WFL-005).** `internal/engine/afk.go` and `afkruns.json`: one run per project at a time, its worktree shared by its sessions through queue tasks, the commands allowed up front as session rules, the stop conditions, started from the Board, the palette, `/afk` and a schedule.
+4. **Review and "Ready for QA" (WFL-006).** The run commits what is left, reviews each issue with the review profile, and lists it in the attention view until the user marks it QA'd. A `make check-app` step runs the built-in workflow on the demo provider from `/slice` to two issues ready for QA.
+5. **Parallel runs (WFL-007), later.** One worktree per unblocked issue up to the queue's limit, then a merge session (OQ-042). It needs the run to track several steps at once and a merge step; the run's record is kept a list of steps so it can.
+
+Not in: GitHub issues as a source (OQ-038, an import later), a run continuing past a failed issue, the review's findings sent back to the issue's session without the user.
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, NFR-XPLAT-003 (Linux, then Windows), general work agents beyond coding, team features.

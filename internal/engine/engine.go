@@ -120,6 +120,7 @@ type Engine struct {
 	storageStopped map[string]bool
 	// optimizers are the token optimizers sessions can choose (HRN-019).
 	optimizers []config.Optimizer
+	workflows  []config.Workflow
 	dataDir    string
 	home       string
 	confiner   environment.Confiner
@@ -291,6 +292,7 @@ func Open(opts Options) (*Engine, error) {
 	e.loadEnvironments()
 	e.loadPresets()
 	e.loadOptimizers()
+	e.loadWorkflows()
 	if why := e.store.Rebuilt(); why != "" {
 		e.issues[issueRebuilt] = []config.Issue{{File: "freeloop.db", Message: why + " Sessions without their settings can be read but not continued, and projects need trusting again."}}
 	}
@@ -472,13 +474,14 @@ const (
 	issueMCP          = "mcp"
 	issuePresets      = "presets"
 	issueOptimizers   = "optimizers"
+	issueWorkflows    = "workflows"
 	issueStorage      = "storage"
 	issueRebuilt      = "rebuilt"
 	issueColors       = "colors"
 	issueAddresses    = "addresses"
 )
 
-var issueOrder = []string{issueStorage, issueRebuilt, issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueAddresses}
+var issueOrder = []string{issueStorage, issueRebuilt, issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueWorkflows, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueAddresses}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()
@@ -834,6 +837,9 @@ type CreateSessionRequest struct {
 	// without that.
 	Optimizer string `json:"optimizer"`
 	optimizer string
+	// Workflow is the session's workflow, or off for none; empty takes the
+	// profile's, then the default (WFL-002).
+	Workflow string `json:"workflow"`
 }
 
 // CreateSession creates an idle session and records its initial status as
@@ -949,7 +955,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	}
 	git.BaseCommit = git.Head
 	ses, err := e.store.CreateSession(ctx, session.Session{
-		Optimizer: optimizer, Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
+		Optimizer: optimizer, Workflow: e.chooseWorkflow(req, prof), Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
 		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
 		Worktree: worktree, WorktreeBranch: worktreeBranch, ParentID: req.parent, PortBase: portBase,
 	})
@@ -970,6 +976,13 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if git.Repo {
 		data, _ = json.Marshal(git)
 		if ev, err = e.store.Append(ctx, ses.ID, event.GitState, data); err != nil {
+			return session.Session{}, err
+		}
+	}
+	if ses.Workflow != "" {
+		w, _ := e.findWorkflow(ses.Workflow)
+		data, _ = json.Marshal(event.WorkflowChangedData{Workflow: w.ID, Name: w.Name})
+		if ev, err = e.store.Append(ctx, ses.ID, event.WorkflowChanged, data); err != nil {
 			return session.Session{}, err
 		}
 	}

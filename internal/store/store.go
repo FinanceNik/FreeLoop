@@ -156,10 +156,10 @@ func (s *Store) CreateSession(ctx context.Context, tmpl session.Session) (sessio
 		return session.Session{}, fmt.Errorf("store: %w", err)
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, worktree, worktree_branch, parent_id, optimizer, effort, port_base, last_seq, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+		`INSERT INTO sessions (id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, worktree, worktree_branch, parent_id, optimizer, effort, port_base, workflow, last_seq, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 		ses.ID, ses.Title, ses.Status, ses.HarnessID, ses.ProjectID, ses.ProjectRoot, ses.EnvironmentID, ses.BaseCommit, ses.Branch,
-		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.Worktree, ses.WorktreeBranch, ses.ParentID, ses.Optimizer, ses.Effort, ses.PortBase, now.UnixMilli(), now.UnixMilli())
+		ses.ProviderID, ses.Model, ses.Mode, ses.ProfileID, ses.Worktree, ses.WorktreeBranch, ses.ParentID, ses.Optimizer, ses.Effort, ses.PortBase, ses.Workflow, now.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return session.Session{}, fmt.Errorf("store: insert session: %w", err)
 	}
@@ -305,6 +305,7 @@ func sessionFields(typ event.Type, data []byte) []sessionField {
 		Title         string   `json:"title"`
 		Tags          []string `json:"tags"`
 		Optimizer     string   `json:"optimizer"`
+		Workflow      string   `json:"workflow"`
 		Effort        string   `json:"effort"`
 		Harness       string   `json:"harness"`
 		Source        string   `json:"source"`
@@ -328,6 +329,8 @@ func sessionFields(typ event.Type, data []byte) []sessionField {
 		return []sessionField{{"tags", strings.Join(d.Tags, " ")}}
 	case typ == event.OptimizerChanged:
 		return []sessionField{{"optimizer", d.Optimizer}}
+	case typ == event.WorkflowChanged:
+		return []sessionField{{"workflow", d.Workflow}}
 	case typ == event.EffortChanged:
 		return []sessionField{{"effort", d.Effort}}
 	case typ == event.SessionImported:
@@ -488,7 +491,7 @@ func (s *Store) syncLoop(interval time.Duration) {
 	}
 }
 
-const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, optimizer, effort, port_base, last_seq, created_at, updated_at, imported_from`
+const sessionColumns = `id, title, status, harness_id, project_id, project_root, environment_id, base_commit, branch, provider_id, model, mode, profile_id, external_id, worktree, worktree_branch, parent_id, tags, optimizer, effort, port_base, last_seq, created_at, updated_at, imported_from, workflow`
 
 type scanner interface{ Scan(...any) error }
 
@@ -497,7 +500,7 @@ func scanSession(r scanner) (session.Session, error) {
 	var created, updated int64
 	var tags string
 	if err := r.Scan(&ses.ID, &ses.Title, &ses.Status, &ses.HarnessID, &ses.ProjectID, &ses.ProjectRoot, &ses.EnvironmentID,
-		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.Optimizer, &ses.Effort, &ses.PortBase, &ses.LastSeq, &created, &updated, &ses.ImportedFrom); err != nil {
+		&ses.BaseCommit, &ses.Branch, &ses.ProviderID, &ses.Model, &ses.Mode, &ses.ProfileID, &ses.ExternalID, &ses.Worktree, &ses.WorktreeBranch, &ses.ParentID, &tags, &ses.Optimizer, &ses.Effort, &ses.PortBase, &ses.LastSeq, &created, &updated, &ses.ImportedFrom, &ses.Workflow); err != nil {
 		return session.Session{}, err
 	}
 	ses.Tags = strings.Fields(tags)
@@ -611,6 +614,8 @@ var migrations = []string{
 	`ALTER TABLE sessions ADD COLUMN effort TEXT NOT NULL DEFAULT '';`,
 	// The agent's session an imported one came from (SES-020).
 	`ALTER TABLE sessions ADD COLUMN imported_from TEXT NOT NULL DEFAULT '';`,
+	// A session's workflow (WFL-002).
+	`ALTER TABLE sessions ADD COLUMN workflow TEXT NOT NULL DEFAULT '';`,
 }
 
 // addedColumns are columns that older builds can live with: they name the columns

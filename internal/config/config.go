@@ -74,6 +74,9 @@ type Config struct {
 	// OptimizerApprovals record the token optimizer files the user approved, by
 	// ID, with a mark only the app can compute (HRN-019).
 	OptimizerApprovals map[string]string `yaml:"optimizerApprovals,omitempty" json:"optimizerApprovals"`
+	// WorkflowApprovals record the workflow files the user approved, by ID, with a
+	// mark only the app can compute (WFL-001).
+	WorkflowApprovals map[string]string `yaml:"workflowApprovals,omitempty" json:"workflowApprovals"`
 	// CommandApprovals record what the user approved in the app's files, with
 	// marks only the app can compute (SET-005): hooks, agent presets, allow rules,
 	// environments, permissions.allowBypass and a profile's mode.
@@ -153,6 +156,9 @@ type Defaults struct {
 	// Optimizer is the token optimizer of new built-in sessions whose profile
 	// does not name one (HRN-019); none when empty.
 	Optimizer string `yaml:"optimizer,omitempty" json:"optimizer"`
+	// Workflow is the workflow of new sessions whose profile does not name one
+	// (WFL-002); none when empty.
+	Workflow string `yaml:"workflow,omitempty" json:"workflow"`
 }
 
 // Permissions holds global permission settings.
