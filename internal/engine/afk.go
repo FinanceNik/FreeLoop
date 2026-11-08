@@ -130,6 +130,9 @@ type AFKPlan struct {
 	// QueuePaused says the queue is paused, so the run's issues wait until it is
 	// resumed (SES-025).
 	QueuePaused bool `json:"queuePaused"`
+	// Held says why the run's first issue would wait now, such as its agent's
+	// limit (SES-025); empty when it would start.
+	Held string `json:"held"`
 }
 
 // projectChecks are the commands a project's files suggest for its tests and type
@@ -236,6 +239,7 @@ func (e *Engine) PrepareAFK(ctx context.Context, root, workflowID string) (AFKPl
 	if q, err := e.Queue(); err == nil {
 		plan.QueuePaused = q.Paused
 	}
+	plan.Held = e.limitNote(ctx, project.Root, plan.ProfileID)
 	if r := e.lastRun(project.ID); r != nil && r.Active() {
 		plan.Running = r
 		plan.Problem = "A run is going on in this project; pause or stop it first."
@@ -510,6 +514,18 @@ func (e *Engine) followIssue(ctx context.Context, r config.AFKRun, s config.AFKS
 		return
 	}
 	t := q.Tasks[i]
+	if t.State == config.TaskWaiting {
+		// Why it has not started, on the run where the Board shows it.
+		waiting := cmp.Or(t.Note, "waiting for room in the queue")
+		if q.Paused {
+			waiting = "the queue is paused"
+		}
+		if waiting != s.Waiting {
+			e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) { st.Waiting = waiting })
+		}
+	} else if s.Waiting != "" {
+		e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) { st.Waiting = "" })
+	}
 	switch t.State {
 	case config.TaskWaiting:
 		// A budget reached holds the task; the run stops rather than wait for a new

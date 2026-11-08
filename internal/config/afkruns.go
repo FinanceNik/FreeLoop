@@ -64,14 +64,17 @@ type AFKRun struct {
 
 // AFKStep is one issue of a run.
 type AFKStep struct {
-	Issue     string    `json:"issue"`
-	Path      string    `json:"path"`
-	Title     string    `json:"title"`
-	TaskID    string    `json:"taskId"`
-	SessionID string    `json:"sessionId,omitempty"`
-	ReviewID  string    `json:"reviewId,omitempty"`
-	State     string    `json:"state"`
-	Note      string    `json:"note,omitempty"`
+	Issue     string `json:"issue"`
+	Path      string `json:"path"`
+	Title     string `json:"title"`
+	TaskID    string `json:"taskId"`
+	SessionID string `json:"sessionId,omitempty"`
+	ReviewID  string `json:"reviewId,omitempty"`
+	State     string `json:"state"`
+	Note      string `json:"note,omitempty"`
+	// Waiting says why its session has not started yet: the queue's reason, such
+	// as an agent's limit, while its task waits.
+	Waiting   string    `json:"waiting,omitempty"`
 	Commit    string    `json:"commit,omitempty"`
 	StartedAt time.Time `json:"startedAt"`
 	EndedAt   time.Time `json:"endedAt,omitzero"`

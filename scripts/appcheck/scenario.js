@@ -1382,6 +1382,11 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   // The queue step above left the queue paused, which holds the run's issues: the
   // dialog said so, and the Queue page resumes it.
   if (queuePaused) {
+    // Starting shows the Board, where the run and its first issue say why nothing moves.
+    const waiting = await until("the run waiting", () => document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-waiting')?.textContent, 10000);
+    check("the run says its issue waits for the paused queue", waiting.includes("001-first-slice waiting to start: the queue is paused"), waiting);
+    const firstCard = document.querySelector('[aria-label="Backlog of workflow"] .backlog-card');
+    check("the issue's card says so too", firstCard?.querySelector(".backlog-step-waiting")?.textContent.includes("AFK run: waiting to start"), firstCard?.textContent);
     document.querySelector(".board-queue").click();
     const page = await until("the queue page", () => [...document.querySelectorAll(".page h2")].find((h) => h.textContent === "Queue")?.closest(".page"), 8000);
     (await until("Resume", () => withText("button", "Resume", page), 4000)).click();
