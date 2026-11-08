@@ -891,6 +891,12 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 			return session.Session{}, err
 		}
 		harnessID, req.ProviderID = prof.Harness, ""
+		// The model it runs on, as the profile names it, prices the turns of an
+		// agent that does not say (PRV-008).
+		model = strings.TrimSpace(req.Model)
+		if model == "" {
+			model = strings.TrimSpace(prof.Model)
+		}
 	} else {
 		if req.ProviderID == "" {
 			req.ProviderID = prof.Provider

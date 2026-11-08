@@ -32,6 +32,7 @@ Some usage cannot be priced or counted:
 
 * Calls to a model with no price count as no cost. The page says how many tokens that is and offers **Add prices**.
 * Some agents report no tokens for a turn, or only a total for the turn. A note on the page says which, and the cost leaves those turns out.
+* An agent that reports tokens but not its model, such as Gemini CLI, can be priced anyway: set **Model it runs on** in its profile on the Profiles page. The agent is not told; a model it reports wins.
 * A figure that leaves something out ends in **+**. The sidebar's cost and the **Recent hours** cost both do this.
 
 If nothing in the range is priced, the **Cost** choice on the **Tokens and cost** tab is disabled until you add a price.

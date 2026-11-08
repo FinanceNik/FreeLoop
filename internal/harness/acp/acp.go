@@ -218,7 +218,9 @@ func (s *session) currentModel() string {
 			return o.Current
 		}
 	}
-	return ""
+	// An agent that names no model is on the one its profile says, which prices its
+	// turns (PRV-008); the agent is not told, so it is the user's word for it.
+	return s.p.Model
 }
 
 func (s *session) Options() []harness.Option {

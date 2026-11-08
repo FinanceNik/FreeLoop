@@ -389,3 +389,56 @@ func TestAnExternalAgentAsks(t *testing.T) {
 		t.Errorf("the agent heard: %s", said.String())
 	}
 }
+
+// PRV-008: a profile names the model an external agent runs on when the agent does
+// not say, and its turns are priced by it.
+func TestAnAgentsProfileNamesItsModel(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	exe, _ := os.Executable()
+	os.MkdirAll(filepath.Join(dir, config.PresetsDir), 0o700)
+	os.WriteFile(filepath.Join(dir, config.PresetsDir, "ref.yaml"),
+		[]byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n"), 0o600)
+	e.loadPresets()
+	e.loadProfiles()
+	approvePending(t, e)
+	if _, err := e.SaveProfile(config.Profile{ID: "gem", Name: "Gem", Harness: "ref", Model: "gemini-2.5-pro"}); err != nil {
+		t.Fatal(err)
+	}
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "notes.txt"), []byte("hello"), 0o644)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "gem"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ses.HarnessID != "ref" || ses.ProviderID != "" || ses.Model != "gemini-2.5-pro" {
+		t.Fatalf("session = harness %q, provider %q, model %q", ses.HarnessID, ses.ProviderID, ses.Model)
+	}
+	if _, err := e.Prompt(ctx, ses.ID, "edit the notes"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.PermissionRequested && ev.SID == ses.ID })
+	for _, r := range e.PendingPermissions() {
+		e.Decide(DecideRequest{RequestID: r.ID, OptionID: "yes"})
+	}
+	waitIdle(t, ch, ses.ID)
+	evs, err := e.Events(ctx, ses.ID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var models []string
+	for _, ev := range evs {
+		if ev.Type == event.UsageUpdate {
+			var d event.UsageData
+			json.Unmarshal(ev.Data, &d)
+			models = append(models, d.Model)
+		}
+	}
+	if len(models) == 0 || models[len(models)-1] != "gemini-2.5-pro" {
+		t.Errorf("usage models = %v", models)
+	}
+}

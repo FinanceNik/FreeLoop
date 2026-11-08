@@ -194,11 +194,16 @@ func TestUsagePerTurn(t *testing.T) {
 	for _, c := range []struct {
 		name, prompt string
 		model        bool
+		stated       string
 		want         event.UsageData
 	}{
-		{"no model setting", "go", false, event.UsageData{InputTokens: 10, OutputTokens: 5, Measured: event.MeasuredTurn}},
-		{"a model setting", "go", true, event.UsageData{InputTokens: 10, OutputTokens: 5, Measured: event.MeasuredTurn, Model: "agent-model"}},
-		{"nothing reported", "silent", true, event.UsageData{Measured: event.MeasuredNone}},
+		{"no model setting", "go", false, "", event.UsageData{InputTokens: 10, OutputTokens: 5, Measured: event.MeasuredTurn}},
+		{"a model setting", "go", true, "", event.UsageData{InputTokens: 10, OutputTokens: 5, Measured: event.MeasuredTurn, Model: "agent-model"}},
+		// A profile names the model an agent that says none runs on, for its price;
+		// what an agent says wins.
+		{"the profile's model", "go", false, "gemini-2.5-pro", event.UsageData{InputTokens: 10, OutputTokens: 5, Measured: event.MeasuredTurn, Model: "gemini-2.5-pro"}},
+		{"the agent's model over the profile's", "go", true, "gemini-2.5-pro", event.UsageData{InputTokens: 10, OutputTokens: 5, Measured: event.MeasuredTurn, Model: "agent-model"}},
+		{"nothing reported", "silent", true, "", event.UsageData{Measured: event.MeasuredNone}},
 	} {
 		rec := &recorder{}
 		broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
@@ -207,7 +212,7 @@ func TestUsagePerTurn(t *testing.T) {
 			vars[acptest.ModelVar] = "1"
 		}
 		h := Harness{Preset: config.HarnessPreset{ID: "ref", Name: "Reference", Command: exe, Env: vars}}
-		s, err := h.NewSession(context.Background(), harness.Params{SessionID: "ses", Env: env, Broker: broker, Mode: permission.ModeBypass, Emit: rec.emit})
+		s, err := h.NewSession(context.Background(), harness.Params{SessionID: "ses", Env: env, Broker: broker, Mode: permission.ModeBypass, Emit: rec.emit, Model: c.stated})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -192,6 +192,15 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
               ))}
             </select>
           </label>
+          {!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider ?? true) && (
+            <label>
+              Model it runs on
+              <input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="For example gemini-2.5-pro" aria-describedby="agent-model-note" />
+              <span id="agent-model-note" className="muted">
+                Prices the turns of an agent that does not say which model it is on. The agent is not told; a model it reports wins.
+              </span>
+            </label>
+          )}
           <div className="row wrap" hidden={!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider ?? true)}>
             <label>
               Provider
