@@ -55,16 +55,16 @@ func createNoFollow(real string, newMode os.FileMode) (*os.File, error) {
 	if err != nil {
 		return nil, &fs.PathError{Op: "open", Path: real, Err: err}
 	}
-	const access = windows.GENERIC_WRITE | windows.DELETE
 	const share = windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE
 	created := false
-	h, err := windows.CreateFile(name, access, share, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	h, err := windows.CreateFile(name, windows.GENERIC_WRITE, share, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
 	if errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
 		attrs := uint32(windows.FILE_ATTRIBUTE_NORMAL)
 		if newMode.Perm()&0o200 == 0 {
 			attrs = windows.FILE_ATTRIBUTE_READONLY
 		}
-		h, err = windows.CreateFile(name, access, share, nil, windows.CREATE_NEW, attrs, 0)
+		// A file made here may have to be deleted again, if it was made through a link.
+		h, err = windows.CreateFile(name, windows.GENERIC_WRITE|windows.DELETE, share, nil, windows.CREATE_NEW, attrs, 0)
 		created = err == nil
 	}
 	if err != nil {
@@ -94,13 +94,16 @@ func createNoFollow(real string, newMode os.FileMode) (*os.File, error) {
 	return file, nil
 }
 
-// sameFinalPath fails unless the open file h is at want, letter case aside.
+// sameFinalPath fails unless the open file h is at want, letter case aside. A drive
+// mapped to a network share or made with subst has a final path on the share or
+// folder it stands for, so want is also tried with its drive spelled that way.
 func sameFinalPath(h windows.Handle, want string) error {
 	got, err := finalPath(h)
 	if err != nil {
 		return &fs.PathError{Op: "open", Path: want, Err: err}
 	}
-	if !strings.EqualFold(got, want) && FoldPath(got) != FoldPath(want) {
+	same := func(w string) bool { return strings.EqualFold(got, w) || FoldPath(got) == FoldPath(w) }
+	if !same(want) && !same(onVolume(want)) {
 		return fmt.Errorf("%s leads through a symbolic link or junction the check did not see, such as one put there since, to %s; it is not followed", want, got)
 	}
 	return nil
@@ -125,6 +128,29 @@ func finalPath(h windows.Handle) (string, error) {
 		}
 		buf = make([]uint16, n)
 	}
+}
+
+// onVolume spells p with its drive replaced by where the drive really is: Z:\a on a
+// drive mapped to \\server\share is \\server\share\a. p itself when that cannot be told.
+func onVolume(p string) string {
+	vol := filepath.VolumeName(p)
+	if vol == "" {
+		return p
+	}
+	name, err := windows.UTF16PtrFromString(vol + `\`)
+	if err != nil {
+		return p
+	}
+	h, err := windows.CreateFile(name, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		return p
+	}
+	defer windows.CloseHandle(h)
+	root, err := finalPath(h)
+	if err != nil {
+		return p
+	}
+	return strings.TrimRight(root, `\`) + p[len(vol):]
 }
 
 // trimLongPrefix turns \\?\C:\a into C:\a and \\?\UNC\host\share into \\host\share.
