@@ -9,6 +9,7 @@ import {
   OPEN_SESSION_EVENT_NAME,
   errorText,
   type AttentionItem,
+  type BacklogInfo,
   type Config,
   type BudgetState, type DayCost,
   type EnvironmentInfo,
@@ -233,6 +234,24 @@ export default function App() {
   const [found, setFound] = useState<{ query: string; results: SessionHits[] } | null>(null);
   // Sessions that need the user (GUI-002).
   const [attention, setAttention] = useState<AttentionItem[]>([]);
+  // Trusted projects' workflow backlogs, for the Board (WFL-004), read while it shows.
+  const [backlogs, setBacklogs] = useState<BacklogInfo[]>([]);
+  const refreshBacklogs = () =>
+    EngineService.Backlogs()
+      .then((l) => setBacklogs(l ?? []))
+      .catch(() => setBacklogs([]));
+  useEffect(() => {
+    if (screen.kind !== "board") return;
+    refreshBacklogs();
+    const t = setInterval(refreshBacklogs, 5000);
+    return () => clearInterval(t);
+  }, [screen.kind]);
+  const archiveBacklog = async (b: BacklogInfo) => {
+    if (!(await ask(`Archive ${b.finished} finished backlog files of ${b.projectName}? They move to Freeloop's data folder, and their removal is committed.`))) return;
+    EngineService.ArchiveBacklog(b.projectRoot, b.workflowId)
+      .then(refreshBacklogs)
+      .catch(report);
+  };
   // Today's model calls and their estimated cost (PRV-008).
   const [today, setToday] = useState<DayCost | null>(null);
   // The budgets, for the sidebar's cost (PRV-017).
@@ -1679,6 +1698,8 @@ export default function App() {
         {screen.kind === "board" && (
           <Board
             onQueue={() => setScreen({ kind: "queue" })}
+            backlogs={backlogs}
+            onArchive={archiveBacklog}
             activityOf={(s) => <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
             markOf={(s) => <SourceMark source={sourceOf(s)} detail={s.model || undefined} />}
             sessions={visible.filter((s) => s.status !== "archived")}

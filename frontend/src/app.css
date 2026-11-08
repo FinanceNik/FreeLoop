@@ -2171,6 +2171,37 @@ details.choice[open] > summary h3::after {
   white-space: nowrap;
 }
 
+.backlog-project + .backlog-project {
+  margin-top: 14px;
+}
+
+.backlog-project-head {
+  margin: 0 4px 8px;
+  font-size: calc(12rem / 14);
+  overflow-wrap: anywhere;
+}
+
+.backlog-card {
+  cursor: default;
+}
+
+.backlog-done {
+  opacity: 0.65;
+}
+
+.backlog-state-ready {
+  background: var(--accent-soft, var(--surface));
+}
+
+.backlog-relations,
+.backlog-archive {
+  font-size: calc(12rem / 14);
+}
+
+.backlog-archive {
+  margin: 8px 4px 0;
+}
+
 .board-empty {
   padding: 4px;
   font-size: calc(12rem / 14);

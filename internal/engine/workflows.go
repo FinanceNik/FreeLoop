@@ -325,7 +325,7 @@ func (e *Engine) RunStage(ctx context.Context, sid, command, input string) (Stag
 	case config.StageReview:
 		return res, errors.New("reviews from a workflow are not built yet")
 	case config.StageCleanup:
-		return res, errors.New("archiving the backlog is not built yet")
+		return e.cleanupStage(ctx, ses, w)
 	}
 	if err := e.skillsReady(ctx, ses, w, stage.Skill); err != nil {
 		return res, err
@@ -373,6 +373,7 @@ func (e *Engine) stageVars(ctx context.Context, ses session.Session, w config.Wo
 	if log := recentCommits(ctx, env); log != "" {
 		vars["commits"] = log
 	}
+	vars["issues"] = e.backlogSummary(ctx, ses, w)
 	return vars
 }
 

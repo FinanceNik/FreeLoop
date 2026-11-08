@@ -567,6 +567,20 @@ func (s *EngineService) SetWorkflow(ctx context.Context, sessionID, workflowID s
 	return s.eng.SetWorkflow(ctx, sessionID, workflowID)
 }
 
+// Backlogs lists trusted projects' backlogs for the Board, Backlog reads one and
+// ArchiveBacklog moves what is finished out of it (WFL-004).
+func (s *EngineService) Backlogs(ctx context.Context) ([]engine.BacklogInfo, error) {
+	return s.eng.Backlogs(ctx)
+}
+
+func (s *EngineService) Backlog(ctx context.Context, root, workflowID string) (engine.BacklogInfo, error) {
+	return s.eng.Backlog(ctx, root, workflowID)
+}
+
+func (s *EngineService) ArchiveBacklog(ctx context.Context, root, workflowID string) (engine.ArchiveResult, error) {
+	return s.eng.ArchiveBacklog(ctx, root, workflowID)
+}
+
 func (s *EngineService) RunStage(ctx context.Context, sessionID, command, input string) (engine.StageResult, error) {
 	return s.eng.RunStage(ctx, sessionID, command, input)
 }
