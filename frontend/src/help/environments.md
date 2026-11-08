@@ -24,7 +24,7 @@ To prevent it, clear **Commands and agents can use my SSH agent** in the environ
 
 ## Local, sandboxed
 
-Commands run under {{the macOS sandbox|a sandbox, where Windows offers one Freeloop can use|bubblewrap (see Troubleshooting if it won't start)}}. They can only write in the project and read little outside it, so the built-in agent's commands run without asking, and deny rules still win. Leaving the sandbox asks every time. If the sandbox can't be applied, the command doesn't run.
+Commands run under {{the macOS sandbox|a sandbox, which Windows doesn't have yet: on Windows this environment says so and runs nothing, so use a Docker environment for confined commands|bubblewrap (see Troubleshooting if it won't start)}}. They can only write in the project and read little outside it, so the built-in agent's commands run without asking, and deny rules still win. Leaving the sandbox asks every time. If the sandbox can't be applied, the command doesn't run.
 
 Inside it, commands:
 

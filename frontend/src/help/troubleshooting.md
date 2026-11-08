@@ -8,7 +8,7 @@ Fixes for an app that won't open, an agent or provider that fails, a stuck sessi
 
 The app needs a Mac with Apple Silicon and macOS 14 or later. After each update the Keychain asks again for access to the keys the app stored. That's expected: the signature changes with every build.|Freeloop releases aren't signed, so Windows SmartScreen may stop a downloaded copy the first time. Choose **More info**, then **Run anyway**. An app you built yourself opens normally.
 
-The app needs Windows 10 or later with the Microsoft Edge WebView2 Runtime, which Windows 11 includes.|The app needs WebKitGTK and GTK from your distribution. If it won't start, run it from a terminal to see what is missing, and install your distribution's WebKitGTK package.
+The app needs Windows 10 version 1809 or later with the Microsoft Edge WebView2 Runtime, which Windows 11 includes and the installer offers otherwise. Commands, hooks and the terminal run through Git Bash: install Git for Windows from git-scm.com if a command says it is missing, then restart Freeloop.|The app needs WebKitGTK and GTK from your distribution. If it won't start, run it from a terminal to see what is missing, and install your distribution's WebKitGTK package.
 
 Keys go to the system keyring through the Secret Service, such as GNOME Keyring or KWallet, so one needs to be running to save a key.}}
 
