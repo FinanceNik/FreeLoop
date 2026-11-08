@@ -53,17 +53,39 @@ func NewLogFile(dir string, f *os.File) *LogFile {
 	return l
 }
 
+// Close closes the current file.
+func (l *LogFile) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.f == nil {
+		return nil
+	}
+	err := l.f.Close()
+	l.f = nil
+	return err
+}
+
 func (l *LogFile) Write(b []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.size > maxLogSize {
-		// If it cannot move on, the old file is still better than no log.
-		if next, err := OpenLog(l.dir); err == nil {
+	if l.size > maxLogSize || l.f == nil {
+		// Windows moves no file that is open, so the old one is closed first
+		// (NFR-XPLAT-003). If it cannot move on, the old file is still better
+		// than no log.
+		if l.f != nil {
 			l.f.Close()
-			l.f, l.size = next, 0
-			if l.OnRotate != nil {
-				l.OnRotate(next)
-			}
+		}
+		next, err := OpenLog(l.dir)
+		if err != nil {
+			next, err = os.OpenFile(LogPath(l.dir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		}
+		if err != nil {
+			l.f = nil
+			return 0, fmt.Errorf("config: %w", err)
+		}
+		l.f, l.size = next, 0
+		if l.OnRotate != nil {
+			l.OnRotate(next)
 		}
 	}
 	n, err := l.f.Write(b)

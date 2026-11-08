@@ -14,6 +14,8 @@ func TestLogFileMovesOnWhileRunning(t *testing.T) {
 		t.Fatal(err)
 	}
 	l := NewLogFile(dir, f)
+	// Windows deletes no open file, so the folder could not be cleaned up.
+	t.Cleanup(func() { l.Close() })
 	rotated := 0
 	l.OnRotate = func(*os.File) { rotated++ }
 	line := strings.Repeat("x", 1<<20)

@@ -40,7 +40,8 @@ func backedUp(rel string) bool {
 	if rel == ColorsFileName {
 		return true
 	}
-	if strings.Contains(rel, "..") || strings.HasPrefix(rel, "/") || !strings.HasSuffix(rel, ".yaml") {
+	// A backslash or a drive's colon would be a separator or a drive on Windows.
+	if strings.Contains(rel, "..") || strings.HasPrefix(rel, "/") || strings.ContainsAny(rel, `\:`) || !strings.HasSuffix(rel, ".yaml") {
 		return false
 	}
 	if slices.Contains([]string{FileName, ProvidersFileName, RulesFileName, MCPFileName, CapabilitiesFileName}, rel) {

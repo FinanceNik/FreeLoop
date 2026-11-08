@@ -702,10 +702,23 @@ func (s *Store) DeleteSession(ctx context.Context, sid string) error {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM activity WHERE session_id = ? AND kind = 'asked'`, sid); err != nil {
 		return fmt.Errorf("store: delete asked commands: %w", err)
 	}
-	if err := os.RemoveAll(s.sessionDir(sid)); err != nil {
+	if err := removeAll(s.sessionDir(sid)); err != nil {
 		return fmt.Errorf("store: remove transcript: %w", err)
 	}
 	return nil
+}
+
+// removeAll is os.RemoveAll, tried again for a second. Windows deletes no file
+// another handle has open without sharing deletion, and a search indexer, a virus
+// scanner or a reader of the transcript may have one open for a moment
+// (NFR-XPLAT-003).
+func removeAll(dir string) error {
+	err := os.RemoveAll(dir)
+	for i := 0; err != nil && i < 10; i++ {
+		time.Sleep(100 * time.Millisecond)
+		err = os.RemoveAll(dir)
+	}
+	return err
 }
 
 // SetExternalID records the harness-side ID of a session, for loading it

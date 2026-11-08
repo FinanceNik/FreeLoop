@@ -56,7 +56,7 @@ func openDB(dbPath string) (*sql.DB, error) {
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		os.Chmod(dbPath+suffix, 0o600)
 	}
-	dsn := "file:" + dbPath +
+	dsn := "file:" + uriPath(dbPath) +
 		"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -76,6 +76,13 @@ func openDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("store: integrity check failed: %s", check)
 	}
 	return db, nil
+}
+
+// uriPath writes a file's path for an SQLite URI, in which % starts an escape, ?
+// the parameters and # a fragment. A Windows user's folder can have # in its name
+// (NFR-XPLAT-003); backslashes and drive letters SQLite takes as they are.
+func uriPath(p string) string {
+	return strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23").Replace(p)
 }
 
 // openOrRestore opens the database. It reports why it had to rebuild, if it did.

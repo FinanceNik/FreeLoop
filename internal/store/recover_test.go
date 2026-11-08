@@ -164,3 +164,27 @@ func TestAFailedWriteLeavesWholeLines(t *testing.T) {
 }
 
 func isWriteErr(err error) bool { return errors.Is(err, ErrWrite) }
+
+// A folder name with # or ? in it, which a Windows user's can have, is a path to
+// SQLite, not a fragment or parameters (NFR-XPLAT-003).
+func TestURIPath(t *testing.T) {
+	for in, want := range map[string]string{
+		`C:\Users\a#b\AppData\Roaming\freeloop\freeloop.db`: `C:\Users\a%23b\AppData\Roaming\freeloop\freeloop.db`,
+		"/Users/a/100%/x?.db":                               "/Users/a/100%25/x%3f.db",
+		"/plain/path.db":                                    "/plain/path.db",
+	} {
+		if got := uriPath(in); got != want {
+			t.Errorf("uriPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The database opens in a folder whose name has a #.
+func TestOpenInFolderWithHash(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "a#b")
+	s, err := Open(Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+}
