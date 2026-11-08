@@ -5,19 +5,37 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
+	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
+	"github.com/FinanceNik/Freeloop/internal/store"
 )
 
 // The in-app demo (GUI-045): a scratch git project beside the app's data folder and a
 // session on the scripted tour, which meets each answer of the permission policy in
 // one turn. No key and no network are needed.
 
-// demoTag marks the demo session.
+// demoTag marks the demo session for the eye. Which session is the demo is told by
+// its provider, which no other session can have: a tag is the user's to set.
 const demoTag = "demo"
+
+// TourProfileID is the demo's own profile: the built-in agent on the tour, with
+// nothing from the user's default profile, which may name another agent, a token
+// optimizer, MCP servers or instructions. It is never listed and cannot be saved.
+const TourProfileID = "freeloop-tour"
+
+func tourProfile() config.Profile {
+	return config.Profile{ID: TourProfileID, Name: "Demo", Description: "The scripted tour behind the in-app demo.",
+		Harness: builtin.ID, Provider: TourProviderID, Model: "tour", Optimizer: config.OptimizerOff}
+}
+
+// isDemo reports whether ses is the demo session.
+func isDemo(ses session.Session) bool {
+	return ses.ProviderID == TourProviderID && ses.HarnessID == builtin.ID
+}
 
 const demoPrompt = "Show me what Freeloop does."
 
@@ -38,7 +56,7 @@ func (e *Engine) demoSession(ctx context.Context) (session.Session, bool) {
 		return session.Session{}, false
 	}
 	for _, s := range list {
-		if slices.Contains(s.Tags, demoTag) {
+		if isDemo(s) {
 			return s, true
 		}
 	}
@@ -62,8 +80,8 @@ func (e *Engine) StartDemo(ctx context.Context) (session.Session, error) {
 		return session.Session{}, err
 	}
 	ses, err := e.CreateSession(ctx, CreateSessionRequest{
-		Title: "Demo: your policy at work", ProjectRoot: root,
-		ProviderID: TourProviderID, Model: "tour", Mode: string(permission.ModeAsk),
+		Title: "Demo: your policy at work", ProjectRoot: root, ProfileID: TourProfileID,
+		ProviderID: TourProviderID, Model: "tour", Mode: string(permission.ModeAsk), Optimizer: config.OptimizerOff,
 	})
 	if err != nil {
 		return session.Session{}, err
@@ -125,7 +143,7 @@ func (e *Engine) RemoveDemo(ctx context.Context, sid string) error {
 	if err != nil {
 		return err
 	}
-	if !slices.Contains(ses.Tags, demoTag) {
+	if !isDemo(ses) {
 		return errors.New("that is not the demo session")
 	}
 	if err := e.DeleteSession(ctx, sid); err != nil {
@@ -136,8 +154,9 @@ func (e *Engine) RemoveDemo(ctx context.Context, sid string) error {
 	}
 	// By the session's own record: a project's root is stored with symlinks resolved,
 	// which the data folder's path may not be (a temporary folder on macOS).
+	// A session the user started in the demo's folder keeps the record.
 	if ses.ProjectID != "" {
-		if err := e.store.DeleteProject(ctx, ses.ProjectID); err != nil {
+		if err := e.store.DeleteProject(ctx, ses.ProjectID); err != nil && !errors.Is(err, store.ErrProjectInUse) {
 			return err
 		}
 	}

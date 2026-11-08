@@ -9,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -122,16 +124,22 @@ func checkTour(t *testing.T, e *Engine, dataDir string) {
 		t.Errorf("%d requests pending after a second start", got)
 	}
 
-	// Only the demo session can be removed this way.
-	other, err := e.CreateSession(context.Background(), CreateSessionRequest{Title: "other", ProjectRoot: t.TempDir(), ProviderID: TourProviderID, Mode: "ask"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := e.RemoveDemo(context.Background(), other.ID); err == nil {
-		t.Error("RemoveDemo removed a session that is not the demo")
-	}
-	if _, err := e.store.GetSession(context.Background(), other.ID); err != nil {
-		t.Errorf("the other session is gone: %v", err)
+	// Only the demo session can be removed this way: the user's own tag "demo"
+	// does not make a session the demo.
+	if e.dev {
+		other, _ := demoSession(t, e, "other", "ask")
+		if _, err := e.SetTags(context.Background(), other.ID, []string{demoTag}); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.RemoveDemo(context.Background(), other.ID); err == nil {
+			t.Error("RemoveDemo removed a session that is not the demo")
+		}
+		if _, err := e.store.GetSession(context.Background(), other.ID); err != nil {
+			t.Errorf("the other session is gone: %v", err)
+		}
+		if again, err := e.StartDemo(context.Background()); err != nil || again.ID != sid {
+			t.Errorf("StartDemo with a session tagged demo = %s, %v; want %s", again.ID, err, sid)
+		}
 	}
 	demo, err := e.store.GetSession(context.Background(), sid)
 	if err != nil || demo.ProjectID == "" {
@@ -179,6 +187,39 @@ func TestDemoTourWorksInReleaseBuildsAndStaysOutOfPickers(t *testing.T) {
 	for _, p := range e.ListProviders() {
 		if p.ID == TourProviderID {
 			t.Errorf("provider %s is listed after the tour", p.ID)
+		}
+	}
+}
+
+// The demo is the built-in agent on the tour whatever the user's defaults say: a
+// default profile on an external agent once ran the demo's prompt on that agent.
+func TestDemoIgnoresTheDefaultProfile(t *testing.T) {
+	dir := t.TempDir()
+	e := openTest(t, dir)
+	defer e.Close()
+	if _, err := e.SaveProfile(config.Profile{ID: config.DefaultProfileID, Name: "Default", Harness: "opencode"}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := e.profile(""); p.Harness != "opencode" {
+		t.Fatalf("default profile = %+v", p)
+	}
+	ses, err := e.StartDemo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ses.HarnessID != builtin.ID || ses.ProviderID != TourProviderID || ses.ProfileID != TourProfileID || (ses.Optimizer != "" && ses.Optimizer != config.OptimizerOff) {
+		t.Errorf("demo session = harness %q, provider %q, profile %q, optimizer %q", ses.HarnessID, ses.ProviderID, ses.ProfileID, ses.Optimizer)
+	}
+	if err := e.RemoveDemo(context.Background(), ses.ID); err != nil {
+		t.Fatal(err)
+	}
+	checkTour(t, e, dir)
+	if _, err := e.SaveProfile(tourProfile()); err == nil {
+		t.Error("the demo's profile could be saved over")
+	}
+	for _, p := range e.ListProfiles() {
+		if p.ID == TourProfileID {
+			t.Error("the demo's profile is listed")
 		}
 	}
 }

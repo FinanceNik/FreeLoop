@@ -2,15 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isDemo } from "./demo.ts";
 
-test("a session tagged demo is the demo", () => {
-  assert.equal(isDemo({ tags: ["demo"] }), true);
-  assert.equal(isDemo({ tags: ["work", "demo"] }), true);
+test("the session on the tour provider is the demo", () => {
+  assert.equal(isDemo({ providerId: "freeloop-tour", harnessId: "builtin" }), true);
 });
 
-test("any other session is not", () => {
-  assert.equal(isDemo({ tags: [] }), false);
-  assert.equal(isDemo({ tags: ["demos", "Demo"] }), false);
+test("a session the user tagged demo is not", () => {
+  assert.equal(isDemo({ providerId: "anthropic", harnessId: "builtin" }), false);
+  assert.equal(isDemo({ providerId: "", harnessId: "opencode" }), false);
+  assert.equal(isDemo({ providerId: "freeloop-tour", harnessId: "opencode" }), false);
   assert.equal(isDemo({}), false);
-  assert.equal(isDemo({ tags: null }), false);
   assert.equal(isDemo(undefined), false);
 });

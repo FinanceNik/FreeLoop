@@ -14,6 +14,9 @@ import (
 // ErrProjectNotFound is returned for an unknown project.
 var ErrProjectNotFound = errors.New("store: project not found")
 
+// ErrProjectInUse is returned for deleting a project that sessions still belong to.
+var ErrProjectInUse = errors.New("store: project still has sessions")
+
 const projectColumns = `id, name, root, first_commit, remote, default_env, default_profile, trusted, muted, disabled_skills, worktree_default, created_at`
 
 func scanProject(r scanner) (session.Project, error) {
@@ -111,7 +114,7 @@ func (s *Store) DeleteProject(ctx context.Context, id string) error {
 		return fmt.Errorf("store: delete project: %w", err)
 	}
 	if n > 0 {
-		return fmt.Errorf("store: project %s still has %d sessions", id, n)
+		return fmt.Errorf("%w (%s, %d)", ErrProjectInUse, id, n)
 	}
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("store: delete project: %w", err)

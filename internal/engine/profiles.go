@@ -60,6 +60,9 @@ func (e *Engine) profile(id string) (config.Profile, error) {
 	if id == "" {
 		id = config.DefaultProfileID
 	}
+	if id == TourProfileID {
+		return tourProfile(), nil
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, p := range e.profiles {
@@ -72,6 +75,9 @@ func (e *Engine) profile(id string) (config.Profile, error) {
 
 // SaveProfile writes a profile and reloads the list.
 func (e *Engine) SaveProfile(p config.Profile) (config.Profile, error) {
+	if p.ID == TourProfileID {
+		return config.Profile{}, fmt.Errorf("%q is the demo's own profile; choose another ID", p.ID)
+	}
 	for i, t := range p.Tools {
 		if !slices.Contains(builtin.ToolNames(), t) {
 			return config.Profile{}, fmt.Errorf("tools[%d]: unknown tool %q", i, t)
