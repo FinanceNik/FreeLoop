@@ -73,12 +73,16 @@ windows: windows-tools windows-exe ## Build the Windows installers and portable 
 	for arch in $(WINDOWS_ARCHS); do ARCH=$$arch $(WAILS) task windows:package:files || exit 1; done
 
 # Linux packages build per architecture in the image from build/linux/Dockerfile
-# (cgo with GTK 3 and WebKitGTK 4.1): arm64 natively on Apple Silicon, amd64
-# emulated through --platform (Colima and Docker Desktop use Rosetta or QEMU;
-# slower, same result). build/linux/package.sh runs inside and writes into bin/.
-LINUX_ARCHS := amd64 arm64
+# (cgo with GTK 3 and WebKitGTK 4.1), natively: by default only the Docker
+# machine's own architecture. LINUX_ARCHS="amd64 arm64" adds the other one,
+# emulated through --platform. Under QEMU that is slow but works; under Rosetta
+# (Colima's vz with rosetta: true, Docker Desktop's default) Go itself crashes
+# with heap errors, so on Apple Silicon amd64 comes from CI's amd64 runner or a
+# QEMU-only Docker. build/linux/package.sh runs inside and writes into bin/.
+LINUX_ARCHS ?= $(subst aarch64,arm64,$(subst x86_64,amd64,$(shell docker info --format '{{.Architecture}}' 2>/dev/null)))
 
-linux-package: frontend/node_modules bindings ## Build the Linux AppImages and .debs (amd64, arm64) into bin/ (needs Docker)
+linux-package: frontend/node_modules bindings ## Build the Linux AppImage and .deb for LINUX_ARCHS (default: Docker's own) into bin/
+	@test -n "$(LINUX_ARCHS)" || { echo "Docker is not running (Colima: colima start); Linux packages build in it"; exit 1; }
 	cd frontend && npm run build
 	for arch in $(LINUX_ARCHS); do $(MAKE) linux-package-arch LINUX_ARCH=$$arch || exit 1; done
 
