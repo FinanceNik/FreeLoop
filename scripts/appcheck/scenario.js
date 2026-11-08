@@ -1087,6 +1087,12 @@ await step("the usage pane cycles through its views", async () => {
   // label is drawn inside the chart.
   const card = usage.querySelector(".usage-card");
   check("the pane and its chart fit their width", usage.scrollWidth <= usage.clientWidth + 1 && card.scrollWidth <= card.clientWidth + 1, `pane ${usage.scrollWidth}/${usage.clientWidth}, card ${card.scrollWidth}/${card.clientWidth}`);
+  check("the chart card cuts nothing off", getComputedStyle(card).overflowX === "visible", getComputedStyle(card).overflowX);
+  // The controls, the totals and the chart's heading are evenly spaced.
+  const strip = usage.querySelector(".live-usage-strip").getBoundingClientRect();
+  const above = strip.top - bar.getBoundingClientRect().bottom;
+  const below = card.getBoundingClientRect().top - strip.bottom;
+  check("the totals sit evenly between the controls and the chart", Math.abs(above - below) <= 1, `${Math.round(above)} px above, ${Math.round(below)} px below`);
   const plot = usage.querySelector(".usage-chart svg").getBoundingClientRect();
   const out = axis.filter((r) => r.left < plot.left - 1 || r.right > plot.right + 1);
   check("the chart's labels are inside it", !out.length, out.map((r) => `${Math.round(r.left)}-${Math.round(r.right)} of ${Math.round(plot.left)}-${Math.round(plot.right)}`).join(" "));

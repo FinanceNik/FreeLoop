@@ -4986,7 +4986,10 @@ table.hooks .hook-command {
   flex: 1;
   flex-direction: column;
   min-height: 170px;
-  margin-top: 4px;
+  /* The same 8 px as between the controls and the totals; and no clipping, which cut
+     the heading's first letter at the card's unpadded edge. The chart fits the pane. */
+  margin-top: 0;
+  overflow: visible;
   padding: 0;
   border: none;
   background: none;
