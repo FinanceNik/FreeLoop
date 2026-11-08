@@ -27,6 +27,8 @@ interface Props {
 const DEFAULT_HEIGHT = 220;
 const MIN_HEIGHT = 120;
 const PAD = { top: 10, right: 8, bottom: 26, left: 48 };
+const MIN_WIDTH = 120;
+const TIP_HALF = 130; // half of the readout's widest
 const GAP = 2; // the surface gap between stacked segments
 const MAX_BAR = 24;
 
@@ -39,7 +41,8 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
     const el = box.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      setWidth(Math.max(280, el.clientWidth));
+      // Never wider than its box, so a narrow pane neither clips it nor scrolls.
+      setWidth(Math.max(MIN_WIDTH, el.clientWidth));
       if (fill) setHeight(Math.max(MIN_HEIGHT, el.clientHeight));
     });
     ro.observe(el);
@@ -49,7 +52,10 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
   const max = Math.max(0, ...data.map((d) => d.total));
   const ticks = niceTicks(max);
   const top = ticks[ticks.length - 1] || 1;
-  const plotW = width - PAD.left - PAD.right;
+  // The value labels get the room the widest needs, so "$1,250" is not cut off.
+  const font = box.current ? axisFont(box.current) : "";
+  const left = Math.max(PAD.left, Math.ceil(Math.max(0, ...ticks.map((t) => labelWidth(format(t), font)))) + 14);
+  const plotW = Math.max(1, width - left - PAD.right);
   const plotH = height - PAD.top - PAD.bottom;
   const slot = plotW / Math.max(1, data.length);
   const bar = Math.max(2, Math.min(MAX_BAR, slot * 0.68));
@@ -58,7 +64,7 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
   const every = Math.max(1, Math.ceil(data.length / Math.max(1, Math.floor(plotW / 72))));
 
   const columns = data.map((d, i) => {
-    const x = PAD.left + i * slot + (slot - bar) / 2;
+    const x = left + i * slot + (slot - bar) / 2;
     let base = PAD.top + plotH;
     const parts: { key: string; y: number; h: number; color: string }[] = [];
     d.values.forEach((v, s) => {
@@ -81,15 +87,17 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
     e.currentTarget.querySelectorAll<SVGRectElement>(".usage-hit")[next]?.focus();
   };
   const tip = hover !== null ? data[hover] : null;
-  const tipLeft = hover !== null ? Math.min(Math.max(PAD.left + hover * slot + slot / 2, 90), width - 90) : 0;
+  // The readout stays inside the chart: past its edge it would make the card scroll.
+  const tipHalf = Math.min(TIP_HALF, width / 2);
+  const tipLeft = hover !== null ? Math.min(Math.max(left + hover * slot + slot / 2, tipHalf), width - tipHalf) : 0;
 
   return (
     <div className={fill ? "usage-chart usage-chart-fill" : "usage-chart"} ref={box}>
       <svg width={width} height={height} role="group" aria-label={label} onPointerLeave={() => setHover(null)} onKeyDown={onKey}>
         {ticks.map((t) => (
           <g key={t}>
-            <line className="usage-grid" x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)} />
-            <text className="usage-axis" x={PAD.left - 8} y={y(t)} dy="0.32em" textAnchor="end">
+            <line className="usage-grid" x1={left} x2={width - PAD.right} y1={y(t)} y2={y(t)} />
+            <text className="usage-axis" x={left - 8} y={y(t)} dy="0.32em" textAnchor="end">
               {format(t)}
             </text>
           </g>
@@ -105,13 +113,13 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
               return <path key={p.key} d={column(x, p.y + (isTop ? 0 : GAP), bar, h, r)} fill={p.color} />;
             })}
             {(data.length - 1 - i) % every === 0 && (
-              <text className="usage-axis" x={x + bar / 2} y={height - 8} textAnchor="middle">
+              <text className="usage-axis" x={inside(x + bar / 2, labelWidth(axisLabel(d.day), font), width)} y={height - 8} textAnchor="middle">
                 {axisLabel(d.day)}
               </text>
             )}
             <rect
               className="usage-hit"
-              x={PAD.left + i * slot}
+              x={left + i * slot}
               y={PAD.top}
               width={slot}
               height={plotH}
@@ -128,7 +136,7 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
             />
           </g>
         ))}
-        <line className="usage-baseline" x1={PAD.left} x2={width - PAD.right} y1={PAD.top + plotH} y2={PAD.top + plotH} />
+        <line className="usage-baseline" x1={left} x2={width - PAD.right} y1={PAD.top + plotH} y2={PAD.top + plotH} />
       </svg>
       {tip && (
         <div className="usage-tip" style={{ left: tipLeft }} aria-hidden="true">
@@ -148,6 +156,27 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
       )}
     </div>
   );
+}
+
+// axisFont is the font the axis labels are drawn in (.usage-axis), for measuring them.
+function axisFont(el: HTMLElement): string {
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 14;
+  return `${(rem * 11) / 14}px ${getComputedStyle(el).fontFamily}`;
+}
+
+let pen: CanvasRenderingContext2D | null | undefined;
+
+// labelWidth is how wide text is in font; an estimate until the chart has a box.
+function labelWidth(text: string, font: string): number {
+  if (pen === undefined) pen = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+  if (!pen || !font) return text.length * 6.6;
+  pen.font = font;
+  return pen.measureText(text).width;
+}
+
+// inside moves a label's centre so the whole label stays within 0 and width.
+function inside(centre: number, w: number, width: number): number {
+  return Math.min(Math.max(centre, w / 2 + 1), width - w / 2 - 1);
 }
 
 // column is a bar from (x, y) of width w and height h whose top corners are

@@ -1069,6 +1069,13 @@ await step("the usage pane cycles through its views", async () => {
   const bottom = Math.max(...axis.map((r) => r.top));
   const labels = axis.filter((r) => Math.abs(r.top - bottom) < 2).sort((x, y) => x.left - y.left);
   check("the pane's times do not touch", labels.length > 1 && labels.every((r, i) => i === 0 || r.left >= labels[i - 1].right + 4), labels.map((r) => `${Math.round(r.left)}-${Math.round(r.right)}`).join(" "));
+  // Nothing is cut off: the pane and its chart card never scroll sideways, and every
+  // label is drawn inside the chart.
+  const card = usage.querySelector(".usage-card");
+  check("the pane and its chart fit their width", usage.scrollWidth <= usage.clientWidth + 1 && card.scrollWidth <= card.clientWidth + 1, `pane ${usage.scrollWidth}/${usage.clientWidth}, card ${card.scrollWidth}/${card.clientWidth}`);
+  const plot = usage.querySelector(".usage-chart svg").getBoundingClientRect();
+  const out = axis.filter((r) => r.left < plot.left - 1 || r.right > plot.right + 1);
+  check("the chart's labels are inside it", !out.length, out.map((r) => `${Math.round(r.left)}-${Math.round(r.right)} of ${Math.round(plot.left)}-${Math.round(plot.right)}`).join(" "));
   const menu = bar.querySelector(".usage-filter-menu");
   menu.querySelector("summary").click();
   await until("the filter menu", () => menu.open);
@@ -1099,6 +1106,12 @@ await step("the usage pane cycles through its views", async () => {
 // runs before the bypass step and removes what it made, so later steps find the app as
 // it was.
 await step("the help is a book of topics, searchable, leading into the app", async () => {
+  // The sidebar's icon buttons, Help among them, are easy targets.
+  const small = all(".footer-links .icon-button, .footer-row .settings-link, .layout-switch button").filter((b) => {
+    const r = b.getBoundingClientRect();
+    return r.width < 32 || r.height < 32;
+  });
+  check("the sidebar's icon buttons are at least 32 px", !small.length, small.map((b) => `${b.getAttribute("aria-label")} ${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`).join(", "));
   named("button", "Help").click();
   const nav = await until("the help", () => document.querySelector(".help-nav"), 5000);
   const topics = all(".help-topic", nav).map((b) => b.textContent);

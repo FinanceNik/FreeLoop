@@ -1922,7 +1922,7 @@ button.ghost[aria-pressed="true"] {
 
 .layout-switch button {
   display: flex;
-  padding: 3px 5px;
+  padding: 7px;
   color: var(--muted);
   background: transparent;
   border-color: transparent;
@@ -3795,8 +3795,9 @@ table.hooks .hook-command {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  min-width: 150px;
-  max-width: 260px;
+  box-sizing: border-box;
+  min-width: min(150px, 100%);
+  max-width: min(260px, 100%);
   padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -5200,12 +5201,20 @@ table.hooks .hook-command {
   text-align: center;
 }
 
-/* Icon-only actions (GUI-041): one size, and the footer's sit closer together. */
+/* Icon-only actions (GUI-041): one size. The footer's are larger, with a 32 px
+   target, since they are the sidebar's only way to the pages they open. */
 .footer-links .icon-button,
 .footer-row .settings-link.icon-button {
   flex: none;
   width: auto;
-  padding: 5px 7px;
+  padding: 7px;
+}
+
+.footer-links .icon-button svg,
+.footer-row .settings-link.icon-button svg,
+.layout-switch button svg {
+  width: 18px;
+  height: 18px;
 }
 
 .icon-button[aria-pressed="true"] {
@@ -5546,8 +5555,10 @@ table.hooks .hook-command {
 
 /* The usage pane's one row of controls (GUI-042): range, measure, and the rest behind
    the filter button, whose count says how much is set. */
+/* One row in any usual pane; a second only when the pane is too narrow for one, since
+   a row wider than the pane makes it scroll sideways and cut its text off. */
 .live-usage-bar {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 .usage-filter-menu {
   position: relative;
