@@ -52,12 +52,15 @@ const turn = async (title, afterSend = () => {}) => {
     const allow = pane.querySelector(".approval-buttons button.primary");
     if (allow) {
       waitingLine = waitingLine || withText(".session-row", title)?.title || "";
+      waitingDot = waitingDot || withText(".session-row", title)?.querySelector(".status-dot")?.getAttribute("aria-label") || "";
       allow.click();
     }
     return ended() > before;
   }, 30000);
   return waitingLine;
 };
+// The status dot a session's row showed while it waited for an approval, from the last turn.
+let waitingDot = "";
 // openPalette opens the command palette, or keeps it open, and types query into it.
 const openPalette = async (query) => {
   if (!document.querySelector(".palette")) window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));

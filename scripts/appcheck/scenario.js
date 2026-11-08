@@ -349,8 +349,15 @@ await step("subagents are indented under their parent", async () => {
   const style = getComputedStyle(list);
   check("subagents are indented under their parent", parseInt(style.marginLeft) + parseInt(style.paddingLeft) >= 20, `${style.marginLeft} and ${style.paddingLeft}`);
   list.remove();
-  const outline = getComputedStyle(document.querySelector(".session-row")).borderTopWidth;
-  check("a chat has an outline", outline === "1px", outline);
+  // Rows are flat: no outline, a background only on the open one, the agent's mark
+  // quiet until its row is open, and no status pill or line of tags.
+  const flat = getComputedStyle(document.querySelector(".session-row:not([aria-current]):not(:hover)"));
+  check("rows have no outline", flat.borderTopColor === "rgba(0, 0, 0, 0)" && flat.backgroundColor === "rgba(0, 0, 0, 0)", `${flat.borderTopColor}, ${flat.backgroundColor}`);
+  const open = document.querySelector('.session-row[aria-current="true"]');
+  check("the open session's row stands out", open && getComputedStyle(open).backgroundColor !== "rgba(0, 0, 0, 0)");
+  const quiet = document.querySelector(".session-row:not([aria-current]):not(:hover) .source-mark");
+  check("other rows' marks are quiet, the open one's in colour", quiet && getComputedStyle(quiet).filter !== "none" && getComputedStyle(open.querySelector(".source-mark")).filter === "none", quiet && getComputedStyle(quiet).filter);
+  check("no row has a status pill or a line of tags", !document.querySelector(".session-row .badge-running, .session-row .badge-waiting_permission, .session-row .tag, .session-row .session-meta"));
 });
 
 await step("a draft stays until sent or deleted", async () => {
@@ -436,6 +443,7 @@ await step("a turn runs to its end, with approvals", async () => {
   const line = await turn("Check alpha");
   check("a turn runs to its end, with approvals", true);
   check("the sidebar names what a waiting session asks", line.startsWith("Needs you: "), `it said "${line}"`);
+  check("a waiting session's row has a dot saying so", waitingDot === "Needs you", `it said "${waitingDot}"`);
 });
 
 await step("the view follows a running agent", async () => {

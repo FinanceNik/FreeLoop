@@ -134,17 +134,26 @@ function readCollapsedProjects(): string[] {
 const STANDALONE = windowSession(window.location.search);
 
 // Without project headings, a row says which project it belongs to, and a
-// project that needs something still shows it.
+// project that needs something still shows it: an untrusted one by the same
+// ring as its heading, named in the tooltip.
 function RowProject({ session, project }: { session: Session; project?: ProjectInfo }) {
   if (project?.missing) return <span className="badge badge-error">missing</span>;
   const name = project?.name ?? basename(session.projectRoot);
   const untrusted = project && !project.trusted;
   return (
     <span className="muted session-project" title={`${project?.root ?? session.projectRoot}${untrusted ? " (untrusted: global settings only)" : ""}`}>
-      {name}
-      {untrusted ? " · untrusted" : ""}
+      {untrusted && <span className="untrusted" role="img" aria-label="Untrusted" />}
+      <span className="session-project-name">{name}</span>
     </span>
   );
+}
+
+// StatusDot is a session's status as a small dot before its title, named for the
+// tooltip and screen readers; an idle session has none.
+function StatusDot({ status }: { status: string }) {
+  const label = STATUS_LABEL[status] ?? status;
+  if (status === "idle") return <span className="sr-only">{label}</span>;
+  return <span className={`status-dot status-${status}`} role="img" aria-label={label} title={label} />;
 }
 
 export default function App() {
@@ -1280,7 +1289,7 @@ export default function App() {
                         aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
                         aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
                         data-shown={!STANDALONE && screen.kind === "session" && work.panes.includes(s.id) ? "" : undefined}
-                        title={[describeActivity(s.status, activities[s.id], rootsOf(s), new Date()), s.branch, "⌘-click or drag to open it beside what is open"].filter(Boolean).join(" · ")}
+                        title={[describeActivity(s.status, activities[s.id], rootsOf(s), new Date()), s.branch, (s.tags ?? []).map((t) => `#${t}`).join(" "), "⌘-click or drag to open it beside what is open"].filter(Boolean).join(" · ")}
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData(SESSION_DRAG_TYPE, s.id);
@@ -1290,6 +1299,7 @@ export default function App() {
                       >
                         <span className="session-line">
                           <SourceMark source={sourceOf(s)} detail={s.model || undefined} />
+                          <StatusDot status={s.status} />
                           {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" title="Finished while you were away" />}
                           <span className="session-title">{s.title}</span>
                           {s.branch && <GitMark branch={s.branch} />}
@@ -1299,17 +1309,9 @@ export default function App() {
                             </span>
                           )}
                           {groupBy === "date" && <RowProject session={s} project={projects.find((p) => p.id === s.projectId)} />}
-                          {s.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${s.status}`}>{STATUS_LABEL[s.status] ?? s.status}</span>}
                         </span>
-                        {(s.tags ?? []).length > 0 && (
-                          <span className="session-meta">
-                            {(s.tags ?? []).map((t) => (
-                              <span key={t} className="tag">
-                                #{t}
-                              </span>
-                            ))}
-                          </span>
-                        )}
+                        {/* Tags are in the tooltip, the filter menu and the palette, not on a line of their own. */}
+                        {(s.tags ?? []).length > 0 && <span className="sr-only">{(s.tags ?? []).map((t) => `#${t}`).join(" ")}</span>}
                       </button>
                       )}
                       {subagents(s.id).length > 0 && (
@@ -1322,8 +1324,8 @@ export default function App() {
                                 onClick={() => openSession(c.id)}
                               >
                                 <SourceMark source={sourceOf(c)} detail={c.model || undefined} />
+                                <StatusDot status={c.status} />
                                 <span className="session-title">{c.title.replace(/^Subagent: /, "")}</span>
-                                {c.status === "idle" ? <span className="sr-only">Idle</span> : <span className={`badge badge-${c.status}`}>{STATUS_LABEL[c.status] ?? c.status}</span>}
                               </button>
                             </li>
                           ))}
