@@ -350,6 +350,10 @@ Every risk the reviews above had accepted as low or left open is fixed, each wit
 
 Also on 2026-11-08: the app is built for Apple Silicon only (NFR-XPLAT-001), and the app check's driver holds off App Nap, the likeliest cause of the session that took over 30 s to open on CI in about one run in four. Four runs here under load did not reproduce it, so that cause is not proven.
 
+## The SSH agent, 2026-11-08
+
+Commands, agents and terminals inherit a short list of the app's variables (`baseVars` in `internal/environment/local.go`), and `SSH_AUTH_SOCK` is on it, so git over SSH works. An approved command can therefore use the user's SSH keys through the agent: to push, or to log in to any machine the keys open. The keys themselves stay in the agent. Found while checking a Claude Code session from inside the app; it was deliberate but not written down. A local environment can now keep it out (`sshAgent: false`, "Commands and agents can use my SSH agent" on the Environments page); the default is unchanged. Only taking access away, the setting is not part of what an environment's approval covers. SSH environments never forward the agent to the other machine (`ForwardAgent=no`), and the app's own `ssh` and `docker` calls keep it, since they need it to reach the user's machines.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

@@ -136,7 +136,7 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 	}
 	maps.Copy(allVars, vars)
 	env, err := environment.NewLocal(environment.LocalOptions{
-		ID: cfg.ID, Root: root, Env: allVars, Guard: e.broker.Policy().Guard(root),
+		ID: cfg.ID, Root: root, Env: allVars, Guard: e.broker.Policy().Guard(root), NoSSHAgent: !cfg.ShareSSHAgent(),
 		// No startup files: they may hold keys, so they are closed, and what they
 		// set came through loginVars.
 		Shell: []string{"zsh", "-fc"},

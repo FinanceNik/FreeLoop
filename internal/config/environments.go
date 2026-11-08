@@ -54,7 +54,15 @@ type Environment struct {
 	// session's working copy; Setup and Health run there too (ENV-008).
 	Host      string `yaml:"host,omitempty" json:"host"`
 	RemoteDir string `yaml:"remoteDir,omitempty" json:"remoteDir"`
+	// SSHAgent false keeps SSH_AUTH_SOCK from the commands, agents and terminals of
+	// a local environment, so they cannot use the user's SSH keys (git over SSH
+	// then needs another way in). Unset is true. Only taking access away, it is not
+	// part of what an approval covers.
+	SSHAgent *bool `yaml:"sshAgent,omitempty" json:"sshAgent"`
 }
+
+// ShareSSHAgent reports whether commands may use the user's SSH agent.
+func (e Environment) ShareSSHAgent() bool { return e.SSHAgent == nil || *e.SSHAgent }
 
 // Fingerprint identifies what the environment runs and lets commands reach. Its
 // name and disabled tools change neither, and each of its rules has its own.

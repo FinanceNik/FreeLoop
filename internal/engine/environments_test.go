@@ -300,3 +300,35 @@ func TestEnvironmentScopeRules(t *testing.T) {
 		t.Error("saving from the form dropped the rules")
 	}
 }
+
+// A local environment can keep the user's SSH agent from what it runs; the setting
+// is saved and read back, and is left out when it is the default.
+func TestAnEnvironmentCanKeepTheSSHAgentOut(t *testing.T) {
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	off := false
+	nokeys, err := e.SaveEnvironment(SaveEnvironmentRequest{Name: "No keys", SSHAgent: &off})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, err := e.SaveEnvironment(SaveEnvironmentRequest{Name: "Keys"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, env := range e.ListEnvironments() {
+		switch env.ID {
+		case nokeys.ID:
+			if env.SSHAgent == nil || *env.SSHAgent {
+				t.Errorf("nokeys shares the agent: %+v", env.SSHAgent)
+			}
+		case keys.ID:
+			if env.SSHAgent != nil {
+				t.Errorf("keys stores the default: %v", *env.SSHAgent)
+			}
+		}
+	}
+	cfg, err := e.usableEnvironment(nokeys.ID)
+	if err != nil || cfg.ShareSSHAgent() {
+		t.Errorf("nokeys = %+v, %v", cfg, err)
+	}
+}

@@ -8,6 +8,10 @@ An environment is what a session's commands run with: variables, secrets, the to
 
 Commands run on this Mac, in the project folder, with your full access. Nothing confines them. The permission check still asks before a command runs, but an approved command can read and change anything you can. Local is not a sandbox.
 
+## SSH keys
+
+By default, the commands, agents and terminals of a local environment can use your SSH agent, so `git push` and `git pull` over SSH work. That also means an approved command can use your SSH keys for anything else, such as logging in to a server. To prevent it, open the environment on the Environments page and clear **Commands and agents can use my SSH agent**. Git over SSH then needs another way in, such as HTTPS.
+
 ## Local, sandboxed
 
 Commands run under the macOS sandbox. Because they can only write in the project and read little outside it, the built-in agent's commands run without asking, and deny rules still win. Leaving the sandbox asks every time. If the sandbox cannot be applied, the command does not run.

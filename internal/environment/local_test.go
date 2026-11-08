@@ -438,3 +438,32 @@ func (g rootOnlyGuard) CheckRead(p string) error {
 	return nil
 }
 func (g rootOnlyGuard) CheckWrite(p string) error { return g.CheckRead(p) }
+
+// An environment can keep the user's SSH agent from what it runs: commands and agents
+// alike. By default they get it, for git over SSH.
+func TestTheSSHAgentCanBeKeptOut(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "/tmp/agent.sock")
+	for _, keep := range []bool{false, true} {
+		l, err := NewLocal(LocalOptions{Root: t.TempDir(), Guard: denyGuard{}, Shell: []string{"sh", "-c"}, NoSSHAgent: keep})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "/tmp/agent.sock"
+		if keep {
+			want = "none"
+		}
+		res, err := l.Exec(context.Background(), ExecSpec{Command: `echo "${SSH_AUTH_SOCK:-none}"`})
+		if err != nil || strings.TrimSpace(res.Output) != want {
+			t.Errorf("NoSSHAgent %v: a command sees %q, %v; want %q", keep, res.Output, err, want)
+		}
+		p, err := l.Spawn(context.Background(), SpawnSpec{Argv: []string{"sh", "-c", `echo "${SSH_AUTH_SOCK:-none}"`}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, _ := io.ReadAll(p.Stdout())
+		p.Wait()
+		if strings.TrimSpace(string(out)) != want {
+			t.Errorf("NoSSHAgent %v: an agent sees %q; want %q", keep, out, want)
+		}
+	}
+}

@@ -25,6 +25,8 @@ interface Form {
   devcontainer: boolean;
   setup: string;
   health: string;
+  // Whether commands may use the user's SSH agent (SSH_AUTH_SOCK).
+  sshAgent: boolean;
   // The native sandbox (ENV-009).
   sandbox: boolean;
   sandboxNetwork: string;
@@ -53,6 +55,7 @@ function toForm(e?: EnvironmentInfo): Form {
     devcontainer: e?.devcontainer ?? false,
     setup: e?.setup ?? "",
     health: e?.health ?? "",
+    sshAgent: e?.sshAgent ?? true,
     sandbox: e?.sandbox?.enabled ?? false,
     sandboxNetwork: e?.sandbox?.network || "localhost",
     sandboxRead: (e?.sandbox?.read ?? []).join("\n"),
@@ -134,6 +137,7 @@ export default function Environments({ environments, onChanged, onError }: Props
       health: form.health,
       host: form.host,
       remoteDir: form.remoteDir,
+      sshAgent: form.kind === "local" && !form.sshAgent ? false : null,
       sandbox: form.kind === "local" && form.sandbox ? { enabled: true, network: form.sandboxNetwork, read: lines(form.sandboxRead), write: lines(form.sandboxWrite), hosts: form.sandboxNetwork === "hosts" ? lines(form.sandboxHosts) : [] } : null,
     })
       .then(() => {
@@ -255,6 +259,18 @@ export default function Environments({ environments, onChanged, onError }: Props
               <option value="ssh">On another machine, over SSH</option>
             </select>
           </label>
+          {form.kind === "local" && (
+            <fieldset>
+              <legend>SSH keys</legend>
+              <label className="row">
+                <input type="checkbox" checked={form.sshAgent} onChange={(e) => setForm({ ...form, sshAgent: e.target.checked })} /> Commands and agents can use my SSH agent
+              </label>
+              <p className="muted">
+                With it, an approved command can use your SSH keys, for example to <code>git push</code> or log in to a server. Without it, git over SSH needs
+                another way in, such as HTTPS.
+              </p>
+            </fieldset>
+          )}
           {form.kind === "local" && (
             <fieldset>
               <legend>Sandbox</legend>

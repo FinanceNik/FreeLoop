@@ -32,6 +32,9 @@ type LocalOptions struct {
 	Guard Guard
 	// Sandbox, when set, confines every Exec (ENV-009).
 	Sandbox *SandboxOptions
+	// NoSSHAgent leaves SSH_AUTH_SOCK out of what commands, agents and terminals
+	// inherit, so they cannot use the user's SSH keys.
+	NoSSHAgent bool
 }
 
 // Local is a folder on this machine.
@@ -48,6 +51,8 @@ type Local struct {
 	fs    *localFS
 	// sandbox, when set, confines every Exec.
 	sandbox *SandboxOptions
+	// noSSHAgent leaves SSH_AUTH_SOCK out of what the environment's processes get.
+	noSSHAgent bool
 }
 
 // NewLocal returns a local environment rooted at opts.Root, which must be an
@@ -74,7 +79,7 @@ func NewLocal(opts LocalOptions) (*Local, error) {
 	if len(shell) == 0 {
 		shell = []string{"zsh", "-lc"}
 	}
-	l := &Local{id: opts.ID, root: root, shell: shell, env: opts.Env, sandbox: opts.Sandbox}
+	l := &Local{id: opts.ID, root: root, shell: shell, env: opts.Env, sandbox: opts.Sandbox, noSSHAgent: opts.NoSSHAgent}
 	l.fs = &localFS{env: l, guard: opts.Guard}
 	return l, nil
 }
@@ -146,7 +151,7 @@ func (l *Local) Exec(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 	}
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cwd
-	cmd.Env = baseEnv()
+	cmd.Env = l.baseEnv()
 	for k, v := range l.env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -255,6 +260,16 @@ func baseEnv() []string {
 		if slices.Contains(baseVars, k) || strings.HasPrefix(k, "LC_") {
 			env = append(env, kv)
 		}
+	}
+	return env
+}
+
+// baseEnv is what a process the environment starts inherits from the app: without
+// SSH_AUTH_SOCK when the environment keeps the SSH agent from them.
+func (l *Local) baseEnv() []string {
+	env := baseEnv()
+	if l.noSSHAgent {
+		env = slices.DeleteFunc(env, func(kv string) bool { return strings.HasPrefix(kv, "SSH_AUTH_SOCK=") })
 	}
 	return env
 }

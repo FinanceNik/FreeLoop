@@ -43,6 +43,8 @@ type EnvironmentInfo struct {
 	// The machine and folder of an SSH environment (ENV-008).
 	Host      string `json:"host"`
 	RemoteDir string `json:"remoteDir"`
+	// SSHAgent false keeps the user's SSH agent from what a local environment runs.
+	SSHAgent *bool `json:"sshAgent"`
 	// Builtin is an environment every install has; deleting it only resets it.
 	Builtin bool `json:"builtin"`
 	// Missing says why a docker environment cannot run here.
@@ -64,7 +66,7 @@ func envInfo(c config.Environment) EnvironmentInfo {
 		rules = []permission.Rule{}
 	}
 	info := EnvironmentInfo{ID: c.ID, Name: c.Name, Kind: c.Kind, Env: env, SecretNames: names, DisabledTools: tools, DefaultMode: c.DefaultMode, Rules: rules,
-		Image: c.Image, Devcontainer: c.Devcontainer, Setup: c.Setup, Health: c.Health, Sandbox: c.Sandbox, Host: c.Host, RemoteDir: c.RemoteDir,
+		Image: c.Image, Devcontainer: c.Devcontainer, Setup: c.Setup, Health: c.Health, Sandbox: c.Sandbox, Host: c.Host, RemoteDir: c.RemoteDir, SSHAgent: c.SSHAgent,
 		Builtin: c.ID == DefaultEnvironmentID || c.ID == SandboxedEnvironmentID}
 	if c.Kind == string(environment.KindDocker) {
 		if _, err := environment.FindDocker(); err != nil {
@@ -136,10 +138,13 @@ type SaveEnvironmentRequest struct {
 	DisabledTools []string          `json:"disabledTools"`
 	DefaultMode   string            `json:"defaultMode"`
 	// Docker settings (ENV-005); Kind is local or docker.
-	Kind         string `json:"kind"`
-	Image        string `json:"image"`
-	Host         string `json:"host"`
-	RemoteDir    string `json:"remoteDir"`
+	Kind      string `json:"kind"`
+	Image     string `json:"image"`
+	Host      string `json:"host"`
+	RemoteDir string `json:"remoteDir"`
+	// SSHAgent false keeps the user's SSH agent from what a local environment runs;
+	// nil leaves it to them.
+	SSHAgent     *bool  `json:"sshAgent"`
 	Devcontainer bool   `json:"devcontainer"`
 	Setup        string `json:"setup"`
 	Health       string `json:"health"`
@@ -196,8 +201,13 @@ func (e *Engine) SaveEnvironment(req SaveEnvironmentRequest) (EnvironmentInfo, e
 	} else if kind == string(environment.KindSSH) {
 		next.Host, next.RemoteDir = strings.TrimSpace(req.Host), strings.TrimSpace(req.RemoteDir)
 		next.Setup, next.Health = strings.TrimSpace(req.Setup), strings.TrimSpace(req.Health)
-	} else if req.Sandbox != nil && req.Sandbox.Enabled {
-		next.Sandbox = req.Sandbox
+	} else {
+		if req.Sandbox != nil && req.Sandbox.Enabled {
+			next.Sandbox = req.Sandbox
+		}
+		if req.SSHAgent != nil && !*req.SSHAgent {
+			next.SSHAgent = req.SSHAgent
+		}
 	}
 	if len(req.Env) > 0 {
 		next.Env = map[string]string{}

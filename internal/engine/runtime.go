@@ -200,7 +200,10 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	if !environment.IsDir(ses.WorkRoot()) {
 		return nil, missingRoot(ses)
 	}
-	host, err := e.localEnv(ses.WorkRoot(), vars)
+	host, err := environment.NewLocal(environment.LocalOptions{
+		ID: "local", Root: ses.WorkRoot(), Env: vars, Guard: e.broker.Policy().Guard(ses.WorkRoot()),
+		NoSSHAgent: !envCfg.ShareSSHAgent(),
+	})
 	if err != nil {
 		return nil, err
 	}

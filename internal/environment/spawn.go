@@ -95,7 +95,7 @@ func (l *Local) Spawn(ctx context.Context, spec SpawnSpec) (Process, error) {
 	if spec.Cwd != "" {
 		cmd.Dir = l.Resolve(spec.Cwd)
 	}
-	cmd.Env = baseEnv()
+	cmd.Env = l.baseEnv()
 	for k, v := range l.env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

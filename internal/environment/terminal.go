@@ -77,7 +77,7 @@ func (l *Local) OpenTerminal(ctx context.Context, spec TerminalSpec) (Terminal, 
 	if spec.Cwd != "" {
 		cmd.Dir = l.Resolve(spec.Cwd)
 	}
-	cmd.Env = append(baseEnv(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	cmd.Env = append(l.baseEnv(), "TERM=xterm-256color", "COLORTERM=truecolor")
 	for k, v := range l.env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
