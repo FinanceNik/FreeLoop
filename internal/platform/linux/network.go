@@ -5,6 +5,7 @@ package linux
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -70,10 +71,23 @@ func (b Bubblewrap) network(c environment.Confinement) (netPlan, error) {
 	if err != nil {
 		return netPlan{}, errors.New("the sandbox cannot find the app's own program, which bridges to the egress proxy")
 	}
+	mounts, exe := bridgeMounts(self, os.Getenv("APPDIR"))
 	return netPlan{
-		mounts: []string{"--ro-bind", self, bridgeExe, "--bind", c.ProxySocket, bridgeSocket},
-		bridge: []string{bridgeExe, environment.SandboxBridgeArg, "-listen", "127.0.0.1:" + strconv.Itoa(c.ProxyPort), "-socket", bridgeSocket, "--"},
+		mounts: append(mounts, "--bind", c.ProxySocket, bridgeSocket),
+		bridge: []string{exe, environment.SandboxBridgeArg, "-listen", "127.0.0.1:" + strconv.Itoa(c.ProxyPort), "-socket", bridgeSocket, "--"},
 	}, nil
+}
+
+// bridgeMounts mounts the app's program for the bridge and says where it runs from.
+// From an AppImage the program needs the libraries beside it, under a /tmp the
+// sandbox replaces, so the AppImage's whole folder (appDir) is mounted read-only at
+// its own path and the program runs from there; elsewhere the program alone is
+// mounted at bridgeExe.
+func bridgeMounts(self, appDir string) ([]string, string) {
+	if appDir != "" && filepath.IsAbs(appDir) && within(self, appDir) {
+		return []string{"--ro-bind", appDir, appDir}, self
+	}
+	return []string{"--ro-bind", self, bridgeExe}, bridgeExe
 }
 
 // pastaArgs runs a command in a namespace whose loopback has the host's listening

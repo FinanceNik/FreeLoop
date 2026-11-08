@@ -444,3 +444,19 @@ func TestASandboxNeedsAProject(t *testing.T) {
 		t.Error("a sandbox without a project was made")
 	}
 }
+
+// From an AppImage the bridge runs from the AppImage's folder, mounted whole, so it
+// finds the libraries beside it; elsewhere the program alone is mounted.
+func TestBridgeMounts(t *testing.T) {
+	m, exe := bridgeMounts("/tmp/.mount_FreeXY/usr/bin/freeloop", "/tmp/.mount_FreeXY")
+	if exe != "/tmp/.mount_FreeXY/usr/bin/freeloop" || !slices.Equal(m, []string{"--ro-bind", "/tmp/.mount_FreeXY", "/tmp/.mount_FreeXY"}) {
+		t.Errorf("AppImage: %q, %q", m, exe)
+	}
+	m, exe = bridgeMounts("/usr/bin/freeloop", "")
+	if exe != bridgeExe || !slices.Equal(m, []string{"--ro-bind", "/usr/bin/freeloop", bridgeExe}) {
+		t.Errorf("installed: %q, %q", m, exe)
+	}
+	if _, exe := bridgeMounts("/usr/bin/freeloop", "/tmp/.mount_other"); exe != bridgeExe {
+		t.Errorf("an APPDIR the program is not in was used: %q", exe)
+	}
+}
