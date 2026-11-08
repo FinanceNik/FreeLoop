@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { contrast, pickLabel, quietCommand, screenName, tabAfterKey, toolStatusLabel, visibleCommand } from "./a11y.ts";
+import { contrast, editMark, pickLabel, quietCommand, screenName, tabAfterKey, toolStatusLabel, visibleCommand } from "./a11y.ts";
 
 test("a screen has a name, and a session goes by its title", () => {
   assert.equal(screenName("board"), "Board");
@@ -118,4 +118,11 @@ test("an icon is never the name of its button", () => {
   for (const svg of svgs) {
     assert.match(svg, /aria-hidden="true"/, svg);
   }
+});
+
+test("a completed file edit gets a pen", () => {
+  assert.equal(editMark("edit", "completed"), "Edited a file");
+  assert.equal(editMark("edit", "failed"), null);
+  assert.equal(editMark("edit", "in_progress"), null);
+  assert.equal(editMark("read", "completed"), null);
 });

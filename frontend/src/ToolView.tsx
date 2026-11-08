@@ -1,6 +1,6 @@
-import { AllowedIcon, RuleIcon } from "./icons.tsx";
+import { AllowedIcon, PenIcon, RuleIcon } from "./icons.tsx";
 import { useEffect, useRef, useState } from "react";
-import { quietCommand, toolStatusLabel, visibleCommand } from "./a11y.ts";
+import { editMark, quietCommand, toolStatusLabel, visibleCommand } from "./a11y.ts";
 import { EngineService } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import { APPROVAL_GRACE_MS, approvalHint, approvalShortcut, formLabel, isTextField, optionKind, optionLabel } from "./shortcuts.ts";
@@ -18,6 +18,7 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
   const [scope, setScope] = useState("session");
   const decided = item.permission?.decided;
   const shownDecision = decided && decided.actor !== "policy" && !(decided.actor === "mode" && decided.outcome === "allowed");
+  const edited = editMark(item.toolKind, item.status);
 
   const form = item.permission?.form;
   const decide = (optionId: string, answers?: Record<string, unknown>) =>
@@ -81,6 +82,12 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
               {decided.actor === "sandbox" ? "sandboxed" : `${decided.outcome} by ${decided.actor}`}
             </span>
           ))}
+        {edited && (
+          // A file edit that went through gets a pen, whatever allowed it.
+          <span className="decision decision-allowed decision-icon edit-mark" role="img" aria-label={edited} title={edited}>
+            <PenIcon />
+          </span>
+        )}
       </summary>
       {plan !== null ? (
         <PlanCard text={plan} />

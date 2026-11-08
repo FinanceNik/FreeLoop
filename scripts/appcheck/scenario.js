@@ -1356,6 +1356,8 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   }, 45000);
   const sent = await until("the stage's prompt", () => all(".msg-user").find((m) => m.textContent.includes("Workflow stage: slice")), 5000).catch(() => null);
   check("the stage's prompt was sent", !!sent, all(".msg-user").map((m) => m.textContent.slice(0, 60)).join(" | "));
+  const writes = all(".tool.tool-completed", activePane()).filter((t) => t.querySelector("summary")?.textContent.includes("write_file"));
+  check("a file written has a pen beside it", writes.length > 0 && writes.every((t) => t.querySelector('.edit-mark[aria-label="Edited a file"] svg')), `${writes.length} writes`);
 
   // The Board's backlog: two issues, the second waiting on the first.
   named(".footer-links button", "Board").click();

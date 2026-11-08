@@ -67,6 +67,13 @@ export function toolStatusLabel(status: string, waiting: boolean): string {
   return "";
 }
 
+// editMark says what the pen beside a file edit that went through means, or null
+// for any other call. It comes from the agent's tool kind, so every harness gets
+// it alike (HRN-001); a decision mark, when there is one, shows beside it.
+export function editMark(toolKind: string, status: string): string | null {
+  return toolKind === "edit" && status === "completed" ? "Edited a file" : null;
+}
+
 // pickLabel announces the highlighted entry of a picker whose focus stays in
 // the message box, where a screen reader would not hear it change.
 export function pickLabel(name: string, index: number, count: number): string {
