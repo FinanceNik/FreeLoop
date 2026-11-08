@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
+import { basename } from "./paths.ts";
 import { commandOutcome, defaultAllow } from "./afk.ts";
 import { EngineService, STARTING_MODES, type AFKPlan, type Defaults, type HarnessInfo, type Profile, type ProjectInfo, type ProviderInfo, type Schedule, type ScheduleInfo } from "./api.ts";
 import { describe, REPEATS, WEEKDAYS, when } from "./schedules.ts";
@@ -99,7 +100,7 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
     if (!(await ask(`Delete the schedule "${s.name}"? The sessions it started stay.`))) return;
     EngineService.DeleteSchedule(s.id).then(refresh).catch(onError);
   };
-  const projectName = (root: string) => projects.find((p) => p.root === root)?.name ?? root.split("/").pop() ?? root;
+  const projectName = (root: string) => projects.find((p) => p.root === root)?.name ?? (basename(root) || root);
 
   return (
     <section className="page">

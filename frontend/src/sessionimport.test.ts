@@ -19,6 +19,7 @@ test("rows are found by words of the title and folder, in any order", () => {
 test("a folder shows by its last part", () => {
   assert.equal(folderName("/Users/me/shop/"), "shop");
   assert.equal(folderName("/"), "/");
+  assert.equal(folderName("C:\\Users\\me\\shop\\"), "shop");
 });
 
 test("the result counts sessions and failures", () => {

@@ -25,7 +25,7 @@ export function matchesImport(row: ImportRow, query: string): boolean {
 
 // folderName is the last part of a path, for a list that has little room.
 export function folderName(folder: string): string {
-  return folder.split("/").filter(Boolean).pop() ?? folder;
+  return folder.split(/[\\/]/).filter(Boolean).pop() ?? folder;
 }
 
 // importResult says how an import went, in one line.

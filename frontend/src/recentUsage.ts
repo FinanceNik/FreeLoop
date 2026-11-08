@@ -1,5 +1,6 @@
 import { compact, OTHER, type Day, type Metric } from "./analytics.ts";
 import { sourceName } from "./source.ts";
+import { basename } from "./paths.ts";
 
 // Recent usage (GUI-023) as the usage chart takes it. The engine sends every
 // step, empty ones too, so the time axis stays even.
@@ -97,7 +98,7 @@ type Named = { id: string; name: string };
 export function recentKeys(projects: readonly Named[], providers: readonly Named[], harnesses: readonly Named[]): RecentKeys {
   const agent = (r: RecentRow) => sourceName(r, providers, harnesses);
   return {
-    project: (r) => projects.find((p) => p.id === r.projectId)?.name ?? (r.projectRoot.split("/").pop() || "No project"),
+    project: (r) => projects.find((p) => p.id === r.projectId)?.name ?? (basename(r.projectRoot) || "No project"),
     agent,
     model: (r) => r.model || `${agent(r)} (model not reported)`,
   };

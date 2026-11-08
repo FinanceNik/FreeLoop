@@ -27,3 +27,8 @@ test("rankFiles prefers file names, word starts and short paths", () => {
   assert.equal(fuzzyScore("tsx", "src/App.tsx")! > fuzzyScore("tsx", "t/s/x/long/name.go")!, true);
   assert.equal(rankFiles("", files, 2).length, 2);
 });
+
+test("a Windows path's file name counts the same as one written with slashes", () => {
+  assert.equal(fuzzyScore("app", "src\\App.tsx"), fuzzyScore("app", "src/App.tsx"));
+  assert.equal(rankFiles("api", ["internal\\rpc\\server.go", "src\\api.ts"])[0], "src\\api.ts");
+});

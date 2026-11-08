@@ -38,7 +38,7 @@ export function fuzzyScore(query: string, path: string): number | null {
   const q = query.toLowerCase();
   const p = path.toLowerCase();
   if (!q) return -path.length * 0.05;
-  const base = p.lastIndexOf("/") + 1;
+  const base = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\")) + 1;
   let score = 0;
   let from = 0;
   let prev = -2;
@@ -46,7 +46,7 @@ export function fuzzyScore(query: string, path: string): number | null {
     const i = p.indexOf(ch, from);
     if (i < 0) return null;
     if (i === prev + 1) score += 5;
-    if (i === 0 || "/._- ".includes(p[i - 1])) score += 3;
+    if (i === 0 || "/\\._- ".includes(p[i - 1])) score += 3;
     if (i >= base) score += 2;
     prev = i;
     from = i + 1;
