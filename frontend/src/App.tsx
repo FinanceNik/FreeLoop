@@ -74,6 +74,7 @@ import { ask } from "./ask.ts";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { applyFonts, type FontChoice } from "./fonts.ts";
+import { preferredLanguages, resolveLanguage, setLanguage } from "./i18n.ts";
 import { inSettings, isGeneral, isSettingsShortcut, MAX_FONT_SIZE, settingsStart, textSizeAfter, type GeneralPage } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
 import SessionImport from "./SessionImport.tsx";
@@ -407,6 +408,21 @@ export default function App() {
         report(err);
       });
   };
+
+  // The interface's language (GUI-048), from config.yaml or the system's. It is set
+  // while this renders, before anything below it writes a word, so a change shows at
+  // once; the system's list can change while the app runs.
+  const [systemLanguages, setSystemLanguages] = useState(preferredLanguages);
+  useEffect(() => {
+    const changed = () => setSystemLanguages(preferredLanguages());
+    window.addEventListener("languagechange", changed);
+    return () => window.removeEventListener("languagechange", changed);
+  }, []);
+  const language = resolveLanguage(config?.ui.language, systemLanguages);
+  setLanguage(language);
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   // Appearance (GUI-011, GUI-025): theme, font size and fonts from config.yaml.
   useEffect(() => {

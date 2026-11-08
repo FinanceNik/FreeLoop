@@ -257,6 +257,12 @@ An AFK run (`internal/engine/afk.go`, `afkruns.json`) is a list of steps moved o
 
 Add the constant to `internal/event/event.go` (in `ACPTypes` or `FreeloopTypes`) and to `schemas/events.json`, with a `$defs` entry for its data; the schema test checks both lists agree, and the store refuses unknown types. Fold it into the view in `frontend/src/transcript.ts` with a `node --test` case, and decide whether the search index (`internal/store/search.go`) and the Markdown export (`internal/engine/export.go`) should show it.
 
+## Text in the interface (GUI-048)
+
+Every word Freeloop writes in the window comes from a catalogue in `frontend/src/i18n/`: `en.ts` is the source, `de.ts` and `nl.ts` are typed against it through `translationOf` (`catalogue.ts`). A component calls `t("settings.theme")`, or `t("settings.fontSize", { size })` for a text with a `{placeholder}`; an entry with `one` and `other` forms is a plural, picked by `count` through `Intl.PluralRules`. Text with an element in it, such as `<code>` or a link, goes through `tNodes` (`i18nNodes.tsx`), so each language puts the element where its word order needs it. A table of labels holds catalogue keys (`PlainKey`) and translates where it renders, never at load, so a change of language shows at once. What a model, an agent or a file wrote is shown as given, and so are names: the language names in the picker, file names, tool names.
+
+To add a string, add it to `en.ts` and to `de.ts` and `nl.ts`; `tsc` fails until all three have it with the same placeholders. German and Dutch address no one: an infinitive or the passive instead of du/Sie or je/u (`i18n.test.ts` checks), and Commit, Branch, Token, Prompt and Worktree stay English. `i18nSource.test.ts` reads the components already translated and fails on English written into them; add a component to its list once it is translated. To add a language, add its catalogue, its entry in `LANGUAGES` and `CATALOGUES` (`i18n.ts`), and its value to `config.Languages`.
+
 ## Accessibility
 
 Pure rules are in `frontend/src/a11y.ts`, and `a11y.test.ts` computes the contrast of every text colour on every surface in each theme. To keep it true: define colours as theme tokens, never dim text with `opacity`, and size text in `rem` (`calc(12rem / 14)` is 12 at the default), so the Font size setting reaches it. A dot, colour or icon that carries meaning also needs words, in `.sr-only` if they would clutter the view. `aria-label` on a plain `div` or `span` is ignored: give it a role.

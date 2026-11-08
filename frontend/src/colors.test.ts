@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { COLOR_GROUPS, colorSheet, contrast, hardToRead, isColor, pickerValue } from "./colors.ts";
+import { setLanguage, t } from "./i18n.ts";
 
 test("only plain colors pass", () => {
   for (const v of ["#fff", "#2563eb", "#2563eb80", "rgb(1, 2, 3)", "rgba(37, 99, 235, 0.1)"]) assert.equal(isColor(v), true, v);
@@ -70,4 +71,13 @@ test("the editor's tokens exist in the style sheet", () => {
   for (const g of COLOR_GROUPS) {
     for (const t of g.tokens) assert.ok(css.includes(`--${t.id}:`), t.id);
   }
+});
+
+test("the editor's names are in the language in force (GUI-048)", () => {
+  setLanguage("de");
+  const colors: Record<string, string> = { text: "#777777", bg: "#888888", "bg-app": "#000000", muted: "#000000", "accent-text": "#ffffff", accent: "#000000" };
+  assert.match(hardToRead((t) => colors[t])[0], /^Text auf der Unterhaltung: /);
+  assert.equal(t(COLOR_GROUPS[0].title), "Hintergründe");
+  assert.equal(t(COLOR_GROUPS[0].tokens[1].label), "Unterhaltung");
+  setLanguage("en");
 });

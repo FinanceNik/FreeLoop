@@ -539,6 +539,13 @@ The user wants the app on macOS, Windows and Linux, working essentially the same
 
 Not in: a native Windows sandbox (OQ-044), signing for Windows (SmartScreen warns once, as macOS does for an unsigned app), the Microsoft Store, Flatpak and Snap.
 
+## German and Dutch (planned 2026-11-08, at the user's request)
+
+The interface in German and Dutch, chosen in Settings (GUI-048; the PRD and issues are in `backlog/`). Our own small translation module, no dependency; only Freeloop's own text is translated.
+
+1. **The setting, the module and the Settings page (backlog 001).** *Built 2026-11-08.* `ui.language` in `config.yaml` (`internal/config`), `frontend/src/i18n.ts` with the catalogues in `frontend/src/i18n/`, the picker beside Theme, `<html lang>`; the Settings page and what it is made of (the column, shortcuts, colours, fonts, marks, prices, usage, budgets, hooks, what waits for approval, the native dialog's buttons). A `make check-app` step switches to Deutsch and back.
+2. **Formats (002), the views used all day (003), the remaining views (004), the help pages (005), the menu bar and notifications (006), the guards against untranslated text and clipped labels (007), and the user's review of the wording (008).** *Not built.*
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.

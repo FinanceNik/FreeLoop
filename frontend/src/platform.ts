@@ -2,8 +2,9 @@
 // Linux in WebKitGTK. The interface behaves the same on all three, each in its own
 // conventions: ⌘ on a Mac is Ctrl elsewhere, ⌥ is Alt, and the Finder is File
 // Explorer or the file manager. Everything that checks a modifier or names a key or a
-// part of the system asks this module. It has no runtime imports, and setPlatform
-// lets a test pretend to be any system.
+// part of the system asks this module. Its one runtime import is the translation
+// module, and setPlatform lets a test pretend to be any system.
+import { t } from "./i18n.ts";
 
 export type OS = "mac" | "windows" | "linux";
 
@@ -123,7 +124,7 @@ export function terminalClipboard(e: Mods & { key: string }, hasSelection: boole
 }
 
 // pick chooses a word per system.
-function pick(mac: string, windows: string, linux: string): string {
+function pick<T extends string>(mac: T, windows: T, linux: T): T {
   return os === "mac" ? mac : os === "windows" ? windows : linux;
 }
 
@@ -139,7 +140,7 @@ export function fileManager(): string {
 
 // inFileManager ends "Show this folder …".
 export function inFileManager(): string {
-  return pick("in the Finder", "in File Explorer", "in the file manager");
+  return t(pick("platform.inFileManager.mac", "platform.inFileManager.windows", "platform.inFileManager.linux"));
 }
 
 // showInFiles is the label of a button that shows a folder or file there.
@@ -149,5 +150,5 @@ export function showInFiles(): string {
 
 // secretStore is where the app keeps keys and secrets, as used in a sentence.
 export function secretStore(): string {
-  return pick("the macOS Keychain", "Windows Credential Manager", "the system keyring");
+  return t(pick("platform.secretStore.mac", "platform.secretStore.windows", "platform.secretStore.linux"));
 }

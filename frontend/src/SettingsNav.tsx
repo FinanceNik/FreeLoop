@@ -1,4 +1,5 @@
 import { NavIcon as Icon } from "./icons.tsx";
+import { t } from "./i18n.ts";
 import { SETTINGS_GROUPS, type SettingsPage } from "./settings.ts";
 
 // The column of the settings area: its pages in groups, with a way back to
@@ -14,22 +15,22 @@ interface Props {
 
 export default function SettingsNav({ current, onOpen, onBack, counts = {} }: Props) {
   return (
-    <nav className="settings-nav" aria-label="Settings">
+    <nav className="settings-nav" aria-label={t("settings.title")}>
       <button className="settings-back" onClick={onBack}>
         <Icon name="back" />
-        Back
+        {t("common.back")}
       </button>
       {SETTINGS_GROUPS.map((g) => (
         <section key={g.title}>
-          <h2>{g.title}</h2>
+          <h2>{t(g.title)}</h2>
           <ul>
             {g.pages.map((p) => (
               <li key={p.id}>
                 <button aria-current={current === p.id ? "page" : undefined} onClick={() => onOpen(p.id)}>
                   <Icon name={p.icon} />
-                  {p.label}
+                  {t(p.label)}
                   {(counts[p.id] ?? 0) > 0 && (
-                    <span className="badge settings-count" aria-label={`, ${counts[p.id]} waiting`}>
+                    <span className="badge settings-count" aria-label={t("settings.nav.waiting", { count: counts[p.id] ?? 0 })}>
                       {counts[p.id]}
                     </span>
                   )}

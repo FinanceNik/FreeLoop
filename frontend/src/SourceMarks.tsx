@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { t } from "./i18n.ts";
 import { assignSlots, defaultLetters, SLOTS, sourceColor, validLetters, type Named, type SourceChoices } from "./source.ts";
 import SourceMark from "./SourceMark.tsx";
 
@@ -27,13 +28,13 @@ export default function SourceMarks({ value, providers, harnesses, onChange }: {
           <li key={x.id}>
             <SourceMark source={{ id: x.id, name: x.name, letters: letters && !bad ? letters : defaultLetters(x.name), slot: slots.get(x.id) ?? 0 }} />
             <span className="source-marks-name">{x.name}</span>
-            <span className="source-marks-slots" role="group" aria-label={`Colour for ${x.name}`}>
+            <span className="source-marks-slots" role="group" aria-label={t("marks.colourFor", { name: x.name })}>
               {Array.from({ length: SLOTS }, (_, i) => i + 1).map((slot) => (
                 <button
                   key={slot}
                   type="button"
                   className="source-marks-slot"
-                  aria-label={`Colour ${slot}`}
+                  aria-label={t("marks.colour", { slot })}
                   aria-pressed={slots.get(x.id) === slot}
                   style={{ "--source": sourceColor(slot) } as CSSProperties}
                   onClick={() => set(x.id, { slot })}
@@ -41,7 +42,7 @@ export default function SourceMarks({ value, providers, harnesses, onChange }: {
               ))}
             </span>
             <input
-              aria-label={`Letters for ${x.name}`}
+              aria-label={t("marks.lettersFor", { name: x.name })}
               aria-invalid={bad || undefined}
               maxLength={2}
               placeholder={defaultLetters(x.name)}
@@ -49,8 +50,8 @@ export default function SourceMarks({ value, providers, harnesses, onChange }: {
               onChange={(e) => set(x.id, { letters: e.target.value })}
             />
             {value?.[x.id] && (
-              <button type="button" className="link" aria-label={`Reset the mark of ${x.name}`} onClick={() => set(x.id, { slot: 0, letters: "" })}>
-                Reset
+              <button type="button" className="link" aria-label={t("marks.reset", { name: x.name })} onClick={() => set(x.id, { slot: 0, letters: "" })}>
+                {t("common.reset")}
               </button>
             )}
           </li>

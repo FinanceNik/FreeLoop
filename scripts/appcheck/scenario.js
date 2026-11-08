@@ -736,6 +736,29 @@ await step("the app's settings are seven short pages", async () => {
   await sleep(100);
 });
 
+await step("the Settings page follows the language chosen, at once", async () => {
+  // GUI-048: picked beside Theme, it applies without a reload, and the page's lang follows.
+  document.querySelector(".settings-link").click();
+  (await until("the Appearance page", () => withText(".settings-nav button", "Appearance"))).click();
+  await until("Appearance", () => document.querySelector(".settings-page h2")?.textContent === "Appearance");
+  const pick = (value) => {
+    const select = document.querySelector(".settings-page select.language-select");
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  check("the language is picked beside Theme", document.querySelector(".settings-page select.language-select")?.closest("label")?.previousElementSibling?.textContent.startsWith("Theme"));
+  pick("de");
+  const h2 = await until("the heading in German", () => document.querySelector(".settings-page h2")?.textContent === "Darstellung" && document.querySelector(".settings-page h2"), 8000).catch(() => null);
+  check("Deutsch turns the Settings heading German without a reload", h2, document.querySelector(".settings-page h2")?.textContent);
+  check("the page's lang follows", document.documentElement.lang === "de", document.documentElement.lang);
+  check("the sections and the column follow", !!withText(".settings-page h3", "Farbmodus und Textgröße") && !!withText(".settings-nav button", "Zurück") && !!withText(".settings-nav h2", "Modelle"));
+  pick("en");
+  await until("the heading in English", () => document.querySelector(".settings-page h2")?.textContent === "Appearance", 8000).catch(() => {});
+  check("English comes back", document.querySelector(".settings-page h2")?.textContent === "Appearance" && document.documentElement.lang === "en", `${document.querySelector(".settings-page h2")?.textContent} ${document.documentElement.lang}`);
+  document.querySelector(".settings-nav .settings-back").click();
+  await sleep(100);
+});
+
 await step("a problem report says what an issue needs", async () => {
   // Shown, not copied: a copy here would replace the clipboard of whoever runs the check.
   document.querySelector(".settings-link").click();

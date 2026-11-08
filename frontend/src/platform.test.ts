@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { ariaKeys, chord, detectOS, fileManager, forPlatform, keyLabel, primaryKey, primaryOnly, secretStore, setPlatform, showInFiles, systemName, terminalClipboard } from "./platform.ts";
+import { ariaKeys, chord, detectOS, fileManager, forPlatform, keyLabel, primaryKey, primaryOnly, secretStore, inFileManager, setPlatform, showInFiles, systemName, terminalClipboard } from "./platform.ts";
 import { approvalHint, approvalShortcut, bindingOf, bindingProblem, comboOf, defaultKey, pressed, setBindings } from "./shortcuts.ts";
 import { isSettingsShortcut, textSizeAfter } from "./settings.ts";
+import { setLanguage } from "./i18n.ts";
 
 const k = (key: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({
   key,
@@ -183,4 +184,20 @@ test("every help page reads cleanly on each system", () => {
       assert.doesNotMatch(text, /\bthis Mac\b|\byour Mac\b|Finder|Keychain|~\/Library/, `${f} on ${p}`);
     }
   }
+});
+
+test("where secrets are kept and what shows a folder are said in the language in force (GUI-048)", () => {
+  setLanguage("de");
+  setPlatform("MacIntel");
+  assert.equal(secretStore(), "dem macOS-Schlüsselbund");
+  assert.equal(inFileManager(), "im Finder");
+  setPlatform("Win32");
+  assert.equal(secretStore(), "der Windows-Anmeldeinformationsverwaltung");
+  setLanguage("nl");
+  assert.equal(inFileManager(), "in Verkenner");
+  setPlatform("Linux x86_64");
+  assert.equal(secretStore(), "de sleutelbos van het systeem");
+  setLanguage("en");
+  setPlatform("MacIntel");
+  assert.equal(inFileManager(), "in the Finder");
 });

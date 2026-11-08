@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, inSettings, isGeneral, settingsStart, isSettingsShortcut, textSizeAfter, autoSaved, settingsKey } from "./settings.ts";
+import { setLanguage, t } from "./i18n.ts";
+import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, pageTitle, inSettings, isGeneral, settingsStart, isSettingsShortcut, textSizeAfter, autoSaved, settingsKey } from "./settings.ts";
 import { setPlatform } from "./platform.ts";
 
 setPlatform("MacIntel");
@@ -69,4 +70,14 @@ test("the settings open on the page last shown, or Appearance", () => {
   assert.equal(settingsStart("session"), "appearance");
   assert.equal(isGeneral("network"), true);
   assert.equal(isGeneral("rules"), false);
+});
+
+test("a page's title and its group's are in the language in force (GUI-048)", () => {
+  assert.equal(pageTitle("appearance"), "Appearance");
+  setLanguage("de");
+  assert.equal(pageTitle("appearance"), "Darstellung");
+  assert.equal(t(SETTINGS_GROUPS[0].title), "Modelle");
+  setLanguage("nl");
+  assert.equal(pageTitle("data"), "Gegevens");
+  setLanguage("en");
 });

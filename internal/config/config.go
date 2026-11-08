@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -192,6 +193,9 @@ func DefaultOptimizerFingerprint(id string) string {
 type UI struct {
 	// Theme is "system", "light" or "dark" (GUI-011).
 	Theme string `yaml:"theme" json:"theme"`
+	// Language is the interface's: "system", "en", "de" or "nl" (GUI-048). System
+	// follows the languages the computer prefers, falling back to English.
+	Language string `yaml:"language,omitempty" json:"language"`
 	// FontSize is the base font size in points, 11 to 20.
 	FontSize int `yaml:"fontSize,omitempty" json:"fontSize"`
 	// TextFont is the family name for the interface and messages, CodeFont
@@ -209,6 +213,9 @@ type UI struct {
 	// (GUI-010).
 	Onboarded bool `yaml:"onboarded,omitempty" json:"onboarded"`
 }
+
+// Languages are the values ui.language takes (GUI-048).
+var Languages = []string{"system", "en", "de", "nl"}
 
 // SourceMark is a provider's or agent's mark: a colour slot from 1 to SourceSlots, and
 // one or two letters. Zero and empty mean its own.
@@ -248,7 +255,7 @@ func CleanSourceMarks(in map[string]SourceMark) (map[string]SourceMark, []Issue)
 
 // Default returns the configuration used when config.yaml is missing.
 func Default() Config {
-	return Config{Version: 1, UI: UI{Theme: "system", FontSize: 14}, Notifications: Notifications{Enabled: true, Finished: true}}
+	return Config{Version: 1, UI: UI{Theme: "system", Language: "system", FontSize: 14}, Notifications: Notifications{Enabled: true, Finished: true}}
 }
 
 // Validate fixes invalid fields to their defaults and reports each.
@@ -262,6 +269,12 @@ func (c *Config) Validate() []Issue {
 	if !slices.Contains([]string{"system", "light", "dark"}, c.UI.Theme) {
 		issues = append(issues, Issue{Field: "ui.theme", Message: fmt.Sprintf("%q is not one of system, light, dark", c.UI.Theme)})
 		c.UI.Theme = def.UI.Theme
+	}
+	if c.UI.Language == "" {
+		c.UI.Language = def.UI.Language
+	} else if !slices.Contains(Languages, c.UI.Language) {
+		issues = append(issues, Issue{Field: "ui.language", Message: fmt.Sprintf("%q is not one of %s", c.UI.Language, strings.Join(Languages, ", "))})
+		c.UI.Language = def.UI.Language
 	}
 	if c.UI.FontSize == 0 {
 		c.UI.FontSize = def.UI.FontSize

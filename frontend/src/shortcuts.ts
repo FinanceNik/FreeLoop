@@ -1,4 +1,5 @@
 import { isMac, keyLabel, chord, systemName } from "./platform.ts";
+import { t, type PlainKey } from "./i18n.ts";
 
 // Keyboard shortcuts for the approval card (GUI-006). Single letters work
 // when no text field has focus; the ⌘ forms (Ctrl on Windows and Linux) work
@@ -25,13 +26,14 @@ export interface Keys {
 // Windows or Super key is written Super.
 export interface ShortcutInfo {
   id: string;
-  label: string;
+  // A catalogue key (GUI-048).
+  label: PlainKey;
   key: string;
   // A letter works only outside text fields, and on the approval card.
   letter?: boolean;
 }
 
-function pane(id: string, label: string, arrow: string): ShortcutInfo {
+function pane(id: string, label: PlainKey, arrow: string): ShortcutInfo {
   return {
     id,
     label,
@@ -42,20 +44,20 @@ function pane(id: string, label: string, arrow: string): ShortcutInfo {
 }
 
 export const SHORTCUTS: ShortcutInfo[] = [
-  { id: "palette", label: "Open the command palette", key: "Meta+K" },
-  { id: "settings", label: "Open Settings", key: "Meta+," },
-  { id: "attention", label: "Open Needs attention", key: "Meta+0" },
-  { id: "textLarger", label: "Larger text", key: "Meta+=" },
-  { id: "textSmaller", label: "Smaller text", key: "Meta+-" },
+  { id: "palette", label: "shortcut.palette", key: "Meta+K" },
+  { id: "settings", label: "shortcut.settings", key: "Meta+," },
+  { id: "attention", label: "shortcut.attention", key: "Meta+0" },
+  { id: "textLarger", label: "shortcut.textLarger", key: "Meta+=" },
+  { id: "textSmaller", label: "shortcut.textSmaller", key: "Meta+-" },
   // ⌃⇧ and an arrow on a Mac. Elsewhere Ctrl+Shift and an arrow selects a word in a
   // text field, so Alt+Shift and an arrow.
-  pane("paneLeft", "Move to the pane on the left", "ArrowLeft"),
-  pane("paneRight", "Move to the pane on the right", "ArrowRight"),
-  pane("paneUp", "Move to the pane above", "ArrowUp"),
-  pane("paneDown", "Move to the pane below", "ArrowDown"),
-  { id: "allow_once", label: "Approval: allow once", key: "y", letter: true },
-  { id: "allow_always", label: "Approval: allow always", key: "a", letter: true },
-  { id: "reject", label: "Approval: deny", key: "n", letter: true },
+  pane("paneLeft", "shortcut.paneLeft", "ArrowLeft"),
+  pane("paneRight", "shortcut.paneRight", "ArrowRight"),
+  pane("paneUp", "shortcut.paneUp", "ArrowUp"),
+  pane("paneDown", "shortcut.paneDown", "ArrowDown"),
+  { id: "allow_once", label: "shortcut.allowOnce", key: "y", letter: true },
+  { id: "allow_always", label: "shortcut.allowAlways", key: "a", letter: true },
+  { id: "reject", label: "shortcut.reject", key: "n", letter: true },
 ];
 
 // Keys the system or the app's fixed shortcuts need: edit commands, closing and
@@ -128,21 +130,21 @@ export function pressed(k: Keys, id: string): boolean {
 // bindingProblem says why a key cannot be used for a shortcut, or "".
 export function bindingProblem(id: string, combo: string, current: Bindings): string {
   const info = SHORTCUTS.find((s) => s.id === id);
-  if (!info || !combo) return "Press a key.";
+  if (!info || !combo) return t("shortcuts.problem.pressKey");
   if (info.letter) {
-    if (!/^[A-Z]$/.test(combo)) return "An approval shortcut is one letter, with no modifier.";
+    if (!/^[A-Z]$/.test(combo)) return t("shortcuts.problem.letter");
   } else {
     // Alt with a letter types a character on a Mac and opens a menu elsewhere, so
     // Alt goes only with a named key such as an arrow.
     const key = combo.endsWith("++") ? "+" : combo.slice(combo.lastIndexOf("+") + 1);
     if (!/(^|\+)(Meta|Ctrl)\+/.test(combo) && !(/(^|\+)Alt\+/.test(combo) && key.length > 1)) {
-      return isMac ? "Use ⌘ or ⌃ with it, or ⌥ with an arrow, so it works while you type." : "Use Ctrl with it, or Alt with an arrow, so it works while you type.";
+      return t(isMac ? "shortcuts.problem.modifierMac" : "shortcuts.problem.modifier");
     }
-    if (reserved(normal(combo))) return `${keyLabel(combo)} is kept for ${systemName()} or the app.`;
+    if (reserved(normal(combo))) return t("shortcuts.problem.reserved", { key: keyLabel(combo), system: systemName() });
   }
   const wanted = info.letter ? combo.toLowerCase() : normal(combo);
   const taken = SHORTCUTS.find((s) => s.id !== id && (info.letter ? current[s.id] || s.key : normal(current[s.id] || s.key)) === wanted);
-  return taken ? `${keyLabel(wanted)} is already "${taken.label}".` : "";
+  return taken ? t("shortcuts.problem.taken", { key: keyLabel(wanted), label: t(taken.label) }) : "";
 }
 
 export function approvalHint(kind: ApprovalKind): string {

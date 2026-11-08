@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ask } from "./ask.ts";
-import { autoSaved, settingsKey, SETTINGS_GROUPS, type GeneralPage } from "./settings.ts";
+import { autoSaved, pageTitle, settingsKey, type GeneralPage } from "./settings.ts";
+import { LANGUAGES, list, t, type PlainKey } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
 import SourceMarks from "./SourceMarks.tsx";
@@ -38,6 +40,13 @@ interface Props {
   reportSession?: { id: string; title: string } | null;
 }
 
+// How a backup's file compares with the one in force, as the engine says it.
+const CHANGES: Record<string, PlainKey> = {
+  replaced: "settings.restore.change.replaced",
+  new: "settings.restore.change.new",
+  same: "settings.restore.change.same",
+};
+
 // What restoring a backup would do, before anything changes (SET-005).
 function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPreview; onRestore: () => void; onCancel: () => void }) {
   const files = preview.files ?? [];
@@ -52,24 +61,22 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
     box.current?.scrollIntoView({ block: "nearest" });
   }, []);
   return (
-    <div className="restore-preview" ref={box} role="group" aria-label="What restoring this backup would do">
-      <h4>Restore this backup?</h4>
-      <p className="muted">Nothing has changed yet. The files it replaces are kept in the data folder's backups folder, and local-only mode stays on if it is on.</p>
+    <div className="restore-preview" ref={box} role="group" aria-label={t("settings.restore.label")}>
+      <h4>{t("settings.restore.title")}</h4>
+      <p className="muted">{t("settings.restore.nothingYet")}</p>
       <details>
-        <summary>
-          {files.length} files: {count("replaced")} replaced, {count("new")} new, {count("same")} unchanged
-        </summary>
+        <summary>{t("settings.restore.files", { count: files.length, replaced: count("replaced"), added: count("new"), same: count("same") })}</summary>
         <ul>
           {files.map((f) => (
             <li key={f.path}>
-              <code>{f.path}</code> <span className="muted">{f.change}</span>
+              <code>{f.path}</code> <span className="muted">{CHANGES[f.change] ? t(CHANGES[f.change]) : f.change}</span>
             </li>
           ))}
         </ul>
       </details>
       {gone.length > 0 && (
         <>
-          <p className="error-text">These would stop applying, because the backup's files do not have them:</p>
+          <p className="error-text">{t("settings.restore.gone")}</p>
           <ul>
             {gone.map((g) => (
               <li key={g}>{g}</li>
@@ -79,12 +86,13 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
       )}
       {addresses.length > 0 && (
         <>
-          <p>Where things would be sent:</p>
+          <p>{t("settings.restore.addresses")}</p>
           <ul>
             {addresses.map((a) => (
               <li key={a.what}>
-                {a.what}: {a.from ? <><code>{a.from}</code> becomes </> : "new, "}
-                <code>{a.to}</code>
+                {a.from
+                  ? tNodes("settings.restore.addressChanged", { what: a.what, from: <code>{a.from}</code>, to: <code>{a.to}</code> })
+                  : tNodes("settings.restore.addressNew", { what: a.what, to: <code>{a.to}</code> })}
               </li>
             ))}
           </ul>
@@ -92,16 +100,14 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
       )}
       {waiting.length > 0 && (
         <>
-          <p>These {waiting.length} would wait for your approval, and do nothing until you give it:</p>
-          <div className="pending-list" tabIndex={0} role="group" aria-label={`${waiting.length} would wait for approval`}>
+          <p>{t("settings.restore.waiting", { count: waiting.length })}</p>
+          <div className="pending-list" tabIndex={0} role="group" aria-label={t("settings.restore.waitingLabel", { count: waiting.length })}>
             {groupPending(waiting).map((g) => (
               <div key={g.title}>
                 <h5>{g.title}</h5>
                 <ul>
                   {g.items.map((c, i) => (
-                    <li key={i}>
-                      {pendingLabel(c)} from {c.source}: <code>{c.runs}</code>
-                    </li>
+                    <li key={i}>{tNodes("pending.item", { what: pendingLabel(c), source: c.source, runs: <code>{c.runs}</code> })}</li>
                   ))}
                 </ul>
               </div>
@@ -109,18 +115,23 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
           </div>
         </>
       )}
-      {keys.length > 0 && <p>You would enter the API keys for {keys.join(", ")} under Providers.</p>}
+      {keys.length > 0 && <p>{t("settings.restore.needKeys", { providers: list(keys) })}</p>}
       <div className="row">
         <button type="button" className="primary" onClick={onRestore}>
-          Restore
+          {t("common.restore")}
         </button>
         <button type="button" onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </button>
       </div>
     </div>
   );
 }
+
+// The built-in agent's search tool, and an address it can query: names, the same in
+// every language.
+const WEB_SEARCH_TOOL = "web_search";
+const SEARCH_EXAMPLE = "http://localhost:8888/search?format=json&q={query}";
 
 // waitingDraft holds the edits that wait for Save (hooks, prices, budgets, web search)
 // while the user is on another page, so leaving the settings does not drop them.
@@ -261,18 +272,15 @@ export default function Settings({ page, config, providers, harnesses, environme
   // What waits for Save, by name, wherever it is.
   const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const waitingNames = [
-    !same(form.hooks, config.hooks) && "Hooks",
-    !same(form.prices, config.prices) && "Prices",
-    !same(form.budgets, config.budgets) && "Budgets",
-    !same(form.web, config.web) && "Web search",
+    !same(form.hooks, config.hooks) && t("settings.hooks.title"),
+    !same(form.prices, config.prices) && t("settings.prices.title"),
+    !same(form.budgets, config.budgets) && t("settings.budgets.title"),
+    !same(form.web, config.web) && t("settings.web.title"),
   ].filter((x): x is string => !!x);
-  const waitingCount = waitingNames.length;
-  const waiting = waitingNames.join(", ").replace(/, ([^,]*)$/, " and $1") || "Nothing";
+  const waiting = t("settings.save.waiting", { count: waitingNames.length || 1, names: list(waitingNames) || t("settings.save.nothing") });
   const allowBypass = async (on: boolean) => {
     if (on) {
-      const ok = await ask(
-        "Allow bypass mode? In bypass mode tool calls run without asking. Protected paths and deny rules still hold, but shell commands can do anything you can. New sessions never start in bypass.",
-      );
+      const ok = await ask(t("settings.bypass.ask"));
       if (!ok) return;
     }
     setForm((f) => ({ ...f, permissions: { ...f.permissions, allowBypass: on } }));
@@ -280,25 +288,25 @@ export default function Settings({ page, config, providers, harnesses, environme
 
   const provider = providers.find((p) => p.id === form.defaults.providerId);
 
-  const title = SETTINGS_GROUPS.flatMap((g) => g.pages).find((p) => p.id === page)?.label ?? "Settings";
+  const title = pageTitle(page);
   const pageForm = (inner: ReactNode) => (
     <form ref={formBox} className="card form" onSubmit={save} onBlur={() => setLeft((n) => n + 1)}>
       {inner}
       <div className={unsaved ? "row settings-save" : "row"} role="status">
         {unsaved ? (
           <>
-            <span className="muted">{waiting} {waitingCount === 1 ? "waits" : "wait"} for Save.</span>
+            <span className="muted">{waiting}</span>
             <button type="submit" className="primary">
-              Save
+              {t("common.save")}
             </button>
             <button type="button" onClick={() => setForm(config)}>
-              Revert
+              {t("common.revert")}
             </button>
           </>
         ) : (
-          <span className="muted">Changes save themselves.</span>
+          <span className="muted">{t("settings.save.auto")}</span>
         )}
-        {saved && <span className="ok">Saved</span>}
+        {saved && <span className="ok">{t("common.saved")}</span>}
       </div>
     </form>
   );
@@ -309,17 +317,29 @@ export default function Settings({ page, config, providers, harnesses, environme
       {page === "appearance" &&
         pageForm(
           <>
-        <h3>Theme and text size</h3>
+        <h3>{t("settings.appearance.title")}</h3>
         <label>
-          Theme
+          {t("settings.theme")}
           <select value={form.ui.theme} onChange={(e) => setForm({ ...form, ui: { ...form.ui, theme: e.target.value } })}>
-            <option value="system">Follow the system</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            <option value="system">{t("common.followSystem")}</option>
+            <option value="light">{t("settings.theme.light")}</option>
+            <option value="dark">{t("settings.theme.dark")}</option>
+          </select>
+        </label>
+        {/* GUI-048: applies once saved, a moment after the choice, like Theme. */}
+        <label>
+          {t("settings.language")}
+          <select className="language-select" value={form.ui.language || "system"} onChange={(e) => setForm({ ...form, ui: { ...form.ui, language: e.target.value } })}>
+            <option value="system">{t("common.followSystem")}</option>
+            {LANGUAGES.map((l) => (
+              <option key={l.id} value={l.id} lang={l.id}>
+                {l.name}
+              </option>
+            ))}
           </select>
         </label>
         <label>
-          Font size: {form.ui.fontSize} pt
+          {t("settings.fontSize", { size: form.ui.fontSize })}
           <input
             type="range"
             min={11}
@@ -327,19 +347,17 @@ export default function Settings({ page, config, providers, harnesses, environme
             value={form.ui.fontSize}
             onChange={(e) => setForm({ ...form, ui: { ...form.ui, fontSize: Number(e.target.value) } })}
           />
-          <span className="muted">
-            {keyLabel(bindingOf("textLarger"))} and {keyLabel(bindingOf("textSmaller"))} change this from anywhere in the app.
-          </span>
+          <span className="muted">{t("settings.fontSize.keys", { larger: keyLabel(bindingOf("textLarger")), smaller: keyLabel(bindingOf("textSmaller")) })}</span>
         </label>
 
-        <h3>Fonts</h3>
+        <h3>{t("settings.fonts.title")}</h3>
         <FontEditor textFont={config.ui.textFont} codeFont={config.ui.codeFont} onChange={onFonts} />
 
-        <h3>Colors</h3>
+        <h3>{t("settings.colors.title")}</h3>
         <ColorEditor colors={colors} onChange={onColors} onError={onError} />
 
-        <h3>Provider marks</h3>
-        <p className="muted">What each session runs on shows as a colour and two letters, in the sidebar and on its pane.</p>
+        <h3>{t("settings.marks.title")}</h3>
+        <p className="muted">{t("settings.marks.intro")}</p>
         <SourceMarks
           value={form.ui.sourceMarks as Record<string, { slot: number; letters: string }> | null | undefined}
           providers={providers}
@@ -354,8 +372,13 @@ export default function Settings({ page, config, providers, harnesses, environme
           <>
         <ShortcutsEditor value={form.ui.shortcuts ?? {}} onChange={(shortcuts) => setForm({ ...form, ui: { ...form.ui, shortcuts } })} />
         <p className="muted">
-          {keyLabel("Meta+1")} to {keyLabel("Meta+9")} open the sessions listed first, and {approvalChord("allow_once")}, {approvalChord("allow_always")} and{" "}
-          {approvalChord("reject")} answer an approval from anywhere; those stay as they are.
+          {t("settings.keyboard.fixed", {
+            first: keyLabel("Meta+1"),
+            last: keyLabel("Meta+9"),
+            once: approvalChord("allow_once"),
+            always: approvalChord("allow_always"),
+            reject: approvalChord("reject"),
+          })}
         </p>
 
           </>,
@@ -363,9 +386,9 @@ export default function Settings({ page, config, providers, harnesses, environme
       {page === "sessions" &&
         pageForm(
           <>
-        <h3>Defaults for new sessions</h3>
+        <h3>{t("settings.defaults.title")}</h3>
         <label>
-          Provider
+          {t("settings.defaults.provider")}
           <select
             value={form.defaults.providerId}
             onChange={(e) => {
@@ -373,7 +396,7 @@ export default function Settings({ page, config, providers, harnesses, environme
               setForm({ ...form, defaults: { ...form.defaults, providerId: e.target.value, model: p?.defaultModel ?? "" } });
             }}
           >
-            <option value="">First in the list</option>
+            <option value="">{t("settings.defaults.firstProvider")}</option>
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -382,20 +405,20 @@ export default function Settings({ page, config, providers, harnesses, environme
           </select>
         </label>
         <label>
-          Model
+          {t("settings.defaults.model")}
           <input
             value={form.defaults.model}
-            placeholder={provider?.defaultModel || "The provider's default"}
+            placeholder={provider?.defaultModel || t("settings.defaults.modelDefault")}
             onChange={(e) => setForm({ ...form, defaults: { ...form.defaults, model: e.target.value } })}
           />
         </label>
         <label>
-          Environment <span className="muted">(for projects without their own)</span>
+          {t("settings.defaults.environment")} <span className="muted">{t("settings.defaults.forProjects")}</span>
           <select
             value={form.defaults.environmentId}
             onChange={(e) => setForm({ ...form, defaults: { ...form.defaults, environmentId: e.target.value } })}
           >
-            <option value="">Local</option>
+            <option value="">{t("settings.defaults.local")}</option>
             {environments
               .filter((x) => x.id !== "local")
               .map((x) => (
@@ -406,9 +429,9 @@ export default function Settings({ page, config, providers, harnesses, environme
           </select>
         </label>
         <label>
-          Profile <span className="muted">(for projects without their own)</span>
+          {t("settings.defaults.profile")} <span className="muted">{t("settings.defaults.forProjects")}</span>
           <select value={form.defaults.profileId} onChange={(e) => setForm({ ...form, defaults: { ...form.defaults, profileId: e.target.value } })}>
-            <option value="">Default</option>
+            <option value="">{t("settings.defaults.defaultProfile")}</option>
             {profiles
               .filter((x) => x.id !== "default")
               .map((x) => (
@@ -419,15 +442,15 @@ export default function Settings({ page, config, providers, harnesses, environme
           </select>
         </label>
 
-        <h3>Notifications</h3>
-        <p className="muted">Shown while Freeloop is in the background; clicking one opens its session.</p>
+        <h3>{t("settings.notifications.title")}</h3>
+        <p className="muted">{t("settings.notifications.intro")}</p>
         <label className="row">
           <input
             type="checkbox"
             checked={form.notifications.enabled}
             onChange={(e) => setForm({ ...form, notifications: { ...form.notifications, enabled: e.target.checked } })}
           />
-          When a session needs an approval or fails
+          {t("settings.notifications.enabled")}
         </label>
         <label className="row">
           <input
@@ -436,11 +459,13 @@ export default function Settings({ page, config, providers, harnesses, environme
             checked={form.notifications.finished}
             onChange={(e) => setForm({ ...form, notifications: { ...form.notifications, finished: e.target.checked } })}
           />
-          Also when a session finishes a turn
+          {t("settings.notifications.finished")}
         </label>
         {projects.length > 0 && (
           <fieldset>
-            <legend>Projects <span className="muted">(saved at once)</span></legend>
+            <legend>
+              {t("settings.notifications.projects")} <span className="muted">{t("common.savedAtOnce")}</span>
+            </legend>
             {projects.map((p) => (
               <label key={p.id} className="row">
                 <input
@@ -452,7 +477,7 @@ export default function Settings({ page, config, providers, harnesses, environme
                       .catch(onError)
                   }
                 />
-                {p.name} <span className="muted">{p.muted ? "muted" : ""}</span>
+                {p.name} <span className="muted">{p.muted ? t("settings.notifications.muted") : ""}</span>
               </label>
             ))}
           </fieldset>
@@ -464,16 +489,16 @@ export default function Settings({ page, config, providers, harnesses, environme
         <>
           {pageForm(
             <>
-        <h3 id="prices">Prices</h3>
+        <h3 id="prices">{t("settings.prices.title")}</h3>
         <PriceTable prices={form.prices ?? []} providers={providers} onChange={(prices) => setForm({ ...form, prices })} />
 
-        <h3 id="budgets">Budgets</h3>
+        <h3 id="budgets">{t("settings.budgets.title")}</h3>
         <BudgetTable budgets={form.budgets ?? []} profiles={profiles} onChange={(budgets) => setForm({ ...form, budgets })} />
 
             </>,
           )}
       <div className="card">
-        <h3>Usage and estimated cost</h3>
+        <h3>{t("settings.usage.title")}</h3>
         <UsageTable
           version={config}
           onError={onError}
@@ -490,17 +515,17 @@ export default function Settings({ page, config, providers, harnesses, environme
           <PendingCommands version={[config, restored]} onSaved={onSaved} onError={onError} />
           {pageForm(
             <>
-        <h3>Bypass mode</h3>
+        <h3>{t("settings.bypass.title")}</h3>
         <label className="row">
           <input
             type="checkbox"
             checked={form.permissions.allowBypass}
             onChange={(e) => allowBypass(e.target.checked)}
           />
-          Allow bypass mode to be chosen for a session
+          {t("settings.bypass.allow")}
         </label>
 
-        <h3>Hooks</h3>
+        <h3>{t("settings.hooks.title")}</h3>
         <HookTable hooks={form.hooks ?? []} onChange={(hooks) => setForm({ ...form, hooks })} />
 
             </>,
@@ -510,23 +535,19 @@ export default function Settings({ page, config, providers, harnesses, environme
       {page === "network" &&
         pageForm(
           <>
-        <h3>Local only</h3>
+        <h3>{t("settings.localOnly.title")}</h3>
         <label className="row">
           <input
             type="checkbox"
             checked={!!form.network?.localOnly}
             onChange={(e) => setForm({ ...form, network: { ...form.network, localOnly: e.target.checked } })}
           />
-          Local only: the app connects to nothing but this computer
+          {t("settings.localOnly.label")}
         </label>
-        <p className="muted">
-          Providers and MCP servers elsewhere become unreachable; local ones (Ollama, LM Studio, servers on localhost) keep working. Docker
-          containers created while it is on have no network. Commands, external agents and MCP servers the app starts run as you, outside this
-          switch.
-        </p>
+        <p className="muted">{t("settings.localOnly.note")}</p>
         {blocked.length > 0 && (
           <details>
-            <summary>{blocked.length} blocked connection{blocked.length > 1 ? "s" : ""}</summary>
+            <summary>{t("settings.network.blocked", { count: blocked.length })}</summary>
             <ul>
               {[...blocked].reverse().map((b, i) => (
                 <li key={i}>
@@ -537,30 +558,27 @@ export default function Settings({ page, config, providers, harnesses, environme
           </details>
         )}
 
-        <h3>Web search</h3>
-        <p className="muted">
-          The built-in agent's <code>web_search</code> tool queries this endpoint, and the tool is offered only when one is set: Freeloop has no search
-          engine of its own to send your queries to. A self-hosted SearXNG and the Brave Search API both work. Each search asks you first.
-        </p>
+        <h3>{t("settings.web.title")}</h3>
+        <p className="muted">{tNodes("settings.web.intro", { tool: <code>{WEB_SEARCH_TOOL}</code> })}</p>
         <label>
-          Search address <span className="muted">(with {"{query}"} where the query goes, and {"{key}"} if the key goes in the address)</span>
+          {t("settings.web.address")} <span className="muted">{t("settings.web.addressHint", { query: "{query}", key: "{key}" })}</span>
           <input
             value={form.web?.searchURL ?? ""}
-            placeholder="http://localhost:8888/search?format=json&q={query}"
+            placeholder={SEARCH_EXAMPLE}
             onChange={(e) => setForm({ ...form, web: { ...form.web, searchURL: e.target.value } })}
           />
         </label>
         <label>
-          Key header <span className="muted">(optional, such as X-Subscription-Token)</span>
+          {t("settings.web.keyHeader")} <span className="muted">{t("settings.web.keyHeaderHint", { example: "X-Subscription-Token" })}</span>
           <input value={form.web?.searchHeader ?? ""} onChange={(e) => setForm({ ...form, web: { ...form.web, searchHeader: e.target.value } })} />
         </label>
         {(form.web?.searchHeader || form.web?.searchURL?.includes("{key}")) && (
           <label>
-            Key <span className="muted">(kept in {secretStore()}; saved at once)</span>
+            {t("settings.web.key")} <span className="muted">{t("settings.web.keyHint", { store: secretStore() })}</span>
             <input
               type="password"
               autoComplete="off"
-              placeholder="Leave empty to keep the current key"
+              placeholder={t("settings.web.keyPlaceholder")}
               onBlur={(e) => {
                 const key = e.target.value.trim();
                 if (!key) return;
@@ -571,26 +589,23 @@ export default function Settings({ page, config, providers, harnesses, environme
           </label>
         )}
 
-        <h3>Updates</h3>
+        <h3>{t("settings.updates.title")}</h3>
         <label className="row">
           <input
             type="checkbox"
             checked={!!form.updates?.check}
             onChange={(e) => setForm({ ...form, updates: { ...form.updates, check: e.target.checked } })}
           />
-          Check for a newer version once a day
+          {t("settings.updates.daily")}
         </label>
-        <p className="muted">
-          Asks GitHub for the project's latest release and says when it is newer than {update?.current ?? "this version"}. The request carries
-          nothing about this copy of the app, and nothing is downloaded or installed. Off unless you turn it on.
-        </p>
+        <p className="muted">{t("settings.updates.note", { version: update?.current ?? t("settings.updates.thisVersion") })}</p>
         <div className="row">
           <button type="button" disabled={checking || !!form.network?.localOnly} onClick={checkNow}>
-            {checking ? "Checking…" : "Check now"}
+            {checking ? t("settings.updates.checking") : t("settings.updates.checkNow")}
           </button>
           {update?.newer && update.url && (
             <span>
-              Version {update.latest} is available.{" "}
+              {t("settings.updates.available", { version: update.latest ?? "" })}{" "}
               <a
                 href={update.url}
                 onClick={(e) => {
@@ -598,11 +613,11 @@ export default function Settings({ page, config, providers, harnesses, environme
                   Browser.OpenURL(update.url!).catch(onError);
                 }}
               >
-                See the release
+                {t("settings.updates.seeRelease")}
               </a>
             </span>
           )}
-          {update && !update.newer && update.latest && <span className="muted">Up to date ({update.current}).</span>}
+          {update && !update.newer && update.latest && <span className="muted">{t("settings.updates.upToDate", { version: update.current })}</span>}
           {update?.error && <span className="muted">{update.error}</span>}
         </div>
 
@@ -611,47 +626,43 @@ export default function Settings({ page, config, providers, harnesses, environme
       {page === "data" && (
         <>
       <div className="card">
-        <h3>Import from Claude Code</h3>
-        <p className="muted">Copy sessions, MCP servers, permission rules and skills from Claude Code. Nothing is written back to it.</p>
+        <h3>{t("settings.import.title")}</h3>
+        <p className="muted">{t("settings.import.intro")}</p>
         <div className="row">
           <button type="button" onClick={onImport}>
-            Import from Claude Code…
+            {t("settings.import.button")}
           </button>
         </div>
 
       </div>
       <div className="card">
-        <h3>Backup</h3>
-        <p className="muted">
-          Settings, providers, profiles, environments, rules, MCP servers and harness presets in one file. API keys and other secrets stay in{" "}
-          {secretStore()} and are not included; values you typed into config files as plain text are.
-        </p>
+        <h3>{t("settings.backup.title")}</h3>
+        <p className="muted">{t("settings.backup.intro", { store: secretStore() })}</p>
         <div className="row">
           <button type="button" onClick={backUp}>
-            Back up configuration…
+            {t("settings.backup.export")}
           </button>
           <button type="button" onClick={chooseBackup}>
-            Restore from a backup…
+            {t("settings.backup.restore")}
           </button>
-          {backup && <span className="ok">Saved to {backup}</span>}
+          {backup && <span className="ok">{t("settings.backup.savedTo", { path: backup })}</span>}
         </div>
         {preview && <RestorePreview preview={preview} onRestore={() => restore(preview)} onCancel={() => setPreview(null)} />}
         {restored && (
           <div className="banner" role="status">
-            Restored {restored.files?.length ?? 0} files. {restored.backupNote}
-            {restored.needApproval > 0 && <p>What waits for your approval, listed at the top of this page, does nothing until you approve it.</p>}
-            {(restored.gone ?? []).length > 0 && (
-              <p>
-                These no longer apply, because the backup's files do not have them: {(restored.gone ?? []).join("; ")}.
-              </p>
-            )}
+            {t("settings.restored.files", { count: restored.files?.length ?? 0 })} {restored.backupNote}
+            {restored.needApproval > 0 && <p>{t("settings.restored.approval")}</p>}
+            {(restored.gone ?? []).length > 0 && <p>{t("settings.restored.gone", { list: (restored.gone ?? []).join("; ") })}</p>}
             {(restored.needKeys ?? []).length > 0 && (
               <p>
-                Enter the API keys for {(restored.needKeys ?? []).join(", ")} under{" "}
-                <button type="button" className="link" onClick={onProviders}>
-                  Providers
-                </button>
-                .
+                {tNodes("settings.restored.needKeys", {
+                  providers: list(restored.needKeys ?? []),
+                  link: (
+                    <button type="button" className="link" onClick={onProviders}>
+                      {t("settings.page.providers")}
+                    </button>
+                  ),
+                })}
               </p>
             )}
           </div>
@@ -659,26 +670,28 @@ export default function Settings({ page, config, providers, harnesses, environme
       </div>
 
       <div className="card">
-        <h3>Report a problem</h3>
+        <h3>{t("settings.report.title")}</h3>
         <p className="muted">
-          Copies Freeloop's version, this computer's model and system version,{" "}
-          {reportSession ? <>the agent and provider of “{reportSession.title}”,</> : "the agent and provider of the session last open,"} and the log's last 200
-          lines, for an issue. Secrets the app knows and your home folder's path are taken out, and nothing is sent anywhere. Read it before you share it.
+          {reportSession ? t("settings.report.introNamed", { title: reportSession.title }) : t("settings.report.introLast")} {t("settings.report.privacy")}
         </p>
         <div className="row">
           <button type="button" onClick={copyReport}>
-            Copy a report
+            {t("settings.report.copy")}
           </button>
           <button type="button" onClick={toggleReport} aria-expanded={report !== null}>
-            {report !== null ? "Hide what is copied" : "Show what is copied"}
+            {report !== null ? t("settings.report.hide") : t("settings.report.show")}
           </button>
           <button type="button" onClick={() => EngineService.ShowLogs().catch(onError)}>
-            Show logs {inFileManager()}
+            {t("settings.report.showLogs", { where: inFileManager() })}
           </button>
-          {reportCopied && <span className="ok" role="status">Copied to the clipboard.</span>}
+          {reportCopied && (
+            <span className="ok" role="status">
+              {t("settings.report.copied")}
+            </span>
+          )}
         </div>
         {report !== null && (
-          <pre className="report-preview" tabIndex={0} aria-label="The report">
+          <pre className="report-preview" tabIndex={0} aria-label={t("settings.report.label")}>
             {report}
           </pre>
         )}
