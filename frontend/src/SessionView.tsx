@@ -742,8 +742,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const act = (id: string, title: string, run: () => void, extra: Partial<PaletteItem> = {}): PaletteItem => ({
     id: `session:${session.id}:${id}`,
     title,
-    group: "Session",
-    detail: session.title,
+    group: "This session",
     run,
     ...extra,
   });

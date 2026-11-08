@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { rank, type PaletteItem } from "./palette.ts";
+import { sections, type PaletteItem } from "./palette.ts";
 
 // The command palette (GUI-014): ⌘K opens it over the window. App supplies
 // the items it owns (pages, sessions, filters); views add the actions they
@@ -45,8 +45,10 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
   // Nothing is picked until the user types or moves, so ⌘K then a reflex
   // Enter runs nothing, an approval least of all.
   const [pick, setPick] = useState(-1);
-  const shown = useMemo(() => rank(items, query), [items, query]);
-  const list = useRef<HTMLUListElement>(null);
+  const grouped = useMemo(() => sections(items, query), [items, query]);
+  const shown = useMemo(() => grouped.flatMap((s) => s.items), [grouped]);
+  const index = useMemo(() => new Map(shown.map((item, i) => [item, i])), [shown]);
+  const list = useRef<HTMLDivElement>(null);
   const opener = useRef(document.activeElement as HTMLElement | null);
 
   useEffect(() => setPick(query.trim() ? 0 : -1), [query]);
@@ -94,31 +96,56 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
           aria-controls="palette-list"
           aria-activedescendant={shown[pick] ? `palette-${pick}` : undefined}
           aria-autocomplete="list"
-          placeholder="Go to a session or page, or run an action"
+          placeholder="Search sessions, pages and actions; / for the agent's commands"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
         />
-        <ul id="palette-list" role="listbox" ref={list} aria-label="Results">
-          {shown.map((item, i) => (
-            <li
-              key={item.id}
-              id={`palette-${i}`}
-              data-index={i}
-              role="option"
-              aria-selected={i === pick}
-              className={i === pick ? "palette-item palette-on" : "palette-item"}
-              onMouseMove={() => i !== pick && setPick(i)}
-              onClick={() => run(item)}
-            >
-              <span className="palette-group">{item.group}</span>
-              <span className="palette-title">{item.title}</span>
-              {item.detail && <span className="palette-detail muted">{item.detail}</span>}
-              {item.shortcut && <kbd className="palette-shortcut" aria-hidden="true">{item.shortcut}</kbd>}
-            </li>
+        <div id="palette-list" role="listbox" ref={list} aria-label="Results" className="palette-list">
+          {grouped.map((section) => (
+            <div key={section.group} role="group" aria-label={section.label} className="palette-section">
+              <div className="palette-heading" aria-hidden="true">
+                {section.label}
+              </div>
+              {section.items.map((item) => {
+                const i = index.get(item) ?? -1;
+                return (
+                  <div
+                    key={item.id}
+                    id={`palette-${i}`}
+                    data-index={i}
+                    role="option"
+                    aria-selected={i === pick}
+                    className={i === pick ? "palette-item palette-on" : "palette-item"}
+                    onMouseMove={() => i !== pick && setPick(i)}
+                    onClick={() => run(item)}
+                  >
+                    <span className="palette-title">{item.title}</span>
+                    {item.detail && <span className="palette-detail">{item.detail}</span>}
+                    {item.shortcut && (
+                      <kbd className="palette-shortcut" aria-hidden="true">
+                        {item.shortcut}
+                      </kbd>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           ))}
-          {shown.length === 0 && <li className="muted palette-empty">Nothing matches.</li>}
-        </ul>
+          {shown.length === 0 && <div className="palette-empty">{query.trim().startsWith("/") ? "No agent command matches. The agent's commands are those of the open session." : "Nothing matches."}</div>}
+        </div>
+        <div className="palette-keys" aria-hidden="true">
+          <span>
+            <kbd>↑</kbd>
+            <kbd>↓</kbd> move
+          </span>
+          <span>
+            <kbd>↵</kbd> open
+          </span>
+          <span>
+            <kbd>esc</kbd> close
+          </span>
+        </div>
       </div>
     </div>
   );

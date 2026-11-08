@@ -1137,6 +1137,36 @@ await step("the usage pane cycles through its views", async () => {
 // answer of the policy, one demo at a time, and "Remove demo" leaves nothing behind. It
 // runs before the bypass step and removes what it made, so later steps find the app as
 // it was.
+await step("the palette is short, grouped and one line a result", async () => {
+  const open = async (query) => {
+    if (!document.querySelector(".palette")) window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    const box = await until("the palette", () => document.querySelector(".palette input"), 4000);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(box, query);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await sleep(100);
+    return box;
+  };
+  const headings = () => all(".palette-heading").map((h) => h.textContent);
+  const box = await open("");
+  const radius = parseFloat(getComputedStyle(document.querySelector(".palette")).borderTopLeftRadius);
+  check("the palette is a panel, not a pill", radius > 0 && radius <= 20, `${radius}px`);
+  const rest = headings();
+  check("before typing it lists only the short sections", rest.length > 0 && rest.every((h) => ["Waiting for you", "Actions", "Recent sessions", "Go to"].includes(h)), rest.join(", "));
+  const recent = all('.palette-section[aria-label="Recent sessions"] .palette-item').length;
+  check("at most five recent sessions", recent > 0 && recent <= 5, `${recent}`);
+  const tall = all(".palette-item").filter((i) => i.getBoundingClientRect().height > 40);
+  check("every result is one line", tall.length === 0, tall.map((i) => i.textContent).slice(0, 3).join(" | "));
+  await open("/");
+  const slash = headings();
+  check("a slash lists only the agent's commands", slash.every((h) => h === "Agent commands"), slash.join(", "));
+  await open("settings");
+  const found = headings();
+  check("a search groups what it finds", found.length > 0 && all(".palette-section").every((sec) => sec.querySelectorAll(".palette-item").length <= 6), found.join(", "));
+  check("the best match comes first", (document.querySelector(".palette-item .palette-title")?.textContent ?? "") === "Settings", document.querySelector(".palette-item")?.textContent);
+  box.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  await until("the palette to close", () => !document.querySelector(".palette"), 4000);
+});
+
 await step("the demo runs a tour and removes itself", async () => {
   const TITLE = "Demo: your policy at work";
   const demoRows = () => all(".session-row").filter((r) => r.textContent.includes(TITLE));
@@ -1154,9 +1184,9 @@ await step("the demo runs a tour and removes itself", async () => {
     await until("the palette to close", () => !document.querySelector(".palette"), 4000);
   };
   const projectEntries = async () => {
-    const box = await palette("New session in");
+    const box = await palette("new session demo");
     await sleep(100);
-    const found = all(".palette-item").filter((i) => i.textContent.includes("New session in") && (i.querySelector(".palette-detail")?.textContent ?? "").endsWith("-demo"));
+    const found = all('.palette-section[aria-label="New session in"] .palette-item').filter((i) => (i.querySelector(".palette-detail")?.textContent ?? "").endsWith("-demo"));
     box.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     await until("the palette to close", () => !document.querySelector(".palette"), 4000);
     return found.length;

@@ -4,7 +4,8 @@
 export interface PaletteItem {
   id: string;
   title: string;
-  // What kind of item it is, shown beside it: Session, Page, Action…
+  // What kind of item it is: the palette lists items under their group's
+  // heading (Session, Page, Action…).
   group: string;
   // More words that find it, and a detail shown dimmed.
   keywords?: string;
@@ -51,15 +52,80 @@ function escapeRe(s: string): string {
 }
 
 // rank keeps the items matching query, best first; ties keep the given
-// order, so callers list what matters most first. Matches on the title beat
-// matches on the keywords and group.
+// order, so callers list what matters most first. A title matches loosely,
+// its characters in order; the group, keywords and detail only by a word or
+// part of one, since a long description holds nearly any query's characters
+// in order, which once filled the list with an agent's commands.
 export function rank(items: readonly PaletteItem[], query: string, limit = 60): PaletteItem[] {
   if (!query.trim()) return items.slice(0, limit);
   const scored: { item: PaletteItem; s: number; i: number }[] = [];
   items.forEach((item, i) => {
-    const s = Math.max(score(query, item.title) * 2, score(query, `${item.group} ${item.title} ${item.keywords ?? ""} ${item.detail ?? ""}`));
+    const rest = score(query, `${item.group} ${item.title} ${item.keywords ?? ""} ${item.detail ?? ""}`);
+    const s = Math.max(score(query, item.title) * 2, rest >= 40 ? rest : 0);
     if (s > 0) scored.push({ item, s, i });
   });
   scored.sort((a, b) => b.s - a.s || a.i - b.i);
   return scored.slice(0, limit).map((x) => x.item);
+}
+
+// A section of the palette's list: items of one group under its heading.
+export interface PaletteSection {
+  group: string;
+  label: string;
+  items: PaletteItem[];
+}
+
+// What each group is called above its items.
+const LABELS: Record<string, string> = {
+  Approval: "Waiting for you",
+  "This session": "This session",
+  Action: "Actions",
+  "New session": "New session in",
+  Session: "Sessions",
+  Page: "Go to",
+  Filter: "Filters",
+  Command: "Agent commands",
+  Resource: "Attach to the message",
+  Changes: "Changes",
+};
+
+const labelOf = (group: string) => LABELS[group] ?? group;
+
+// Before anything is typed the palette shows a short list: what waits for
+// the user, the app's actions, the latest sessions and where to go. The rest
+// (this session's controls, filters, the agent's commands) is a search away.
+const AT_REST: [group: string, label: string, most: number][] = [
+  ["Approval", labelOf("Approval"), Infinity],
+  ["Action", labelOf("Action"), Infinity],
+  ["Session", "Recent sessions", 5],
+  ["Page", labelOf("Page"), Infinity],
+];
+
+// How many of one group a search shows; the agent's commands, after a "/",
+// show all.
+export const PER_GROUP = 6;
+
+// sections arranges what query finds under headings. A query starting with
+// "/" searches the agent's commands only. Otherwise each group shows its best
+// few, and the groups come in the order of their best match.
+export function sections(items: readonly PaletteItem[], query: string): PaletteSection[] {
+  const q = query.trim();
+  if (!q) {
+    return AT_REST.map(([group, label, most]) => ({ group, label, items: items.filter((i) => i.group === group).slice(0, most) })).filter((s) => s.items.length > 0);
+  }
+  if (q.startsWith("/")) {
+    const found = rank(
+      items.filter((i) => i.group === "Command"),
+      q,
+      500,
+    );
+    return found.length ? [{ group: "Command", label: labelOf("Command"), items: found }] : [];
+  }
+  const out: PaletteSection[] = [];
+  for (const item of rank(items, q, 500)) {
+    let s = out.find((x) => x.group === item.group);
+    if (!s) out.push((s = { group: item.group, label: labelOf(item.group), items: [] }));
+    if (s.items.length < PER_GROUP) s.items.push(item);
+  }
+  return out;
 }

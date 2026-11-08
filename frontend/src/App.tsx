@@ -909,8 +909,9 @@ export default function App() {
       })),
       ...projects.map((p) => ({
         id: `new:${p.id}`,
-        title: `New session in ${p.name}`,
-        group: "Action",
+        title: p.name,
+        group: "New session",
+        keywords: "new session start create",
         detail: p.root,
         run: () => setScreen({ kind: "new", root: p.root }),
       })),
