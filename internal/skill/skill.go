@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -172,9 +173,11 @@ func Discover(fs FS, base, source, root string) ([]Skill, []Issue) {
 		if _, err := fs.ReadFile(path.Join(dir, FileName)); err != nil {
 			continue // not a skill
 		}
-		s, err := Parse(fs, dir, source, path.Join(root, e.Name))
+		// root is a path on this machine, in its spelling (C:\... on Windows); dir
+		// is the file system's, always with slashes.
+		s, err := Parse(fs, dir, source, filepath.Join(root, e.Name))
 		if err != nil {
-			issues = append(issues, Issue{Path: path.Join(root, e.Name, FileName), Message: err.Error()})
+			issues = append(issues, Issue{Path: filepath.Join(root, e.Name, FileName), Message: err.Error()})
 			continue
 		}
 		out = append(out, s)

@@ -364,14 +364,15 @@ func editFile() *tool {
 					return result{}, err
 				}
 				old := string(b)
-				n := strings.Count(old, in.OldString)
+				from, to := matchLineEndings(old, in.OldString, in.NewString)
+				n := strings.Count(old, from)
 				switch {
 				case n == 0:
 					return result{}, fmt.Errorf("old_string not found in %s", in.Path)
 				case n > 1 && !in.ReplaceAll:
 					return result{}, fmt.Errorf("old_string occurs %d times in %s; add context to make it unique or set replace_all", n, in.Path)
 				}
-				updated := strings.Replace(old, in.OldString, in.NewString, map[bool]int{true: -1, false: 1}[in.ReplaceAll])
+				updated := strings.Replace(old, from, to, map[bool]int{true: -1, false: 1}[in.ReplaceAll])
 				if err := s.env.FS().WriteFile(abs, []byte(updated)); err != nil {
 					return result{}, err
 				}
@@ -382,6 +383,28 @@ func editFile() *tool {
 			}}, nil
 		},
 	}
+}
+
+// matchLineEndings fits an edit to a file's line endings (NFR-XPLAT-003). A model
+// writes \n, and a file checked out on Windows often ends its lines with \r\n: in
+// a file whose every line ends so, both strings get \r\n, so the edit matches and
+// the lines it adds end like the others. In a file with both endings, the strings
+// as written are tried first, then with \r\n. Elsewhere they are as written.
+func matchLineEndings(file, from, to string) (string, string) {
+	crlf := strings.Count(file, "\r\n")
+	if crlf == 0 || !strings.Contains(from+to, "\n") {
+		return from, to
+	}
+	if crlf != strings.Count(file, "\n") && strings.Contains(file, from) {
+		return from, to
+	}
+	withCRLF := func(s string) string {
+		return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\n", "\r\n")
+	}
+	if crlf != strings.Count(file, "\n") && !strings.Contains(file, withCRLF(from)) {
+		return from, to
+	}
+	return withCRLF(from), withCRLF(to)
 }
 
 func shellTool() *tool {

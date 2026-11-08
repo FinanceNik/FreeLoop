@@ -420,8 +420,14 @@ func Warning(s config.MCPServer) string {
 		return ""
 	}
 	cmd := s.Command
-	if i := strings.LastIndex(cmd, "/"); i >= 0 {
+	if i := strings.LastIndexAny(cmd, `/\`); i >= 0 {
 		cmd = cmd[i+1:]
+	}
+	// npm's shims on Windows are npx.cmd and the like (NFR-XPLAT-003).
+	for _, ext := range []string{".cmd", ".exe", ".bat", ".ps1"} {
+		if len(cmd) > len(ext) && strings.EqualFold(cmd[len(cmd)-len(ext):], ext) {
+			cmd = cmd[:len(cmd)-len(ext)]
+		}
 	}
 	args := strings.Join(s.Args, " ")
 	switch cmd {

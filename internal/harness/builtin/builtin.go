@@ -687,13 +687,30 @@ func truncate(s string, n int) string {
 	return strings.ToValidUTF8(s[:n], "") + "\n…"
 }
 
+// osFacts are the system prompt's lines about the system commands run on, for an
+// app on goos and an environment of kind: a container is Linux and another
+// machine its own, whatever the app runs on. On Windows the shell tool runs Git Bash
+// (OQ-043), so the model is told to write bash, not PowerShell or cmd.
+func osFacts(goos string, kind environment.Kind) string {
+	switch kind {
+	case environment.KindDocker:
+		return "- OS: linux\n"
+	case environment.KindSSH:
+		return "- OS: the SSH host's, most often linux\n"
+	}
+	if goos == "windows" {
+		return "- OS: windows. The shell tool runs commands in Git Bash, so write bash, not PowerShell or cmd: forward slashes, /c/Users/... for C:\\Users\\..., and Unix tools such as ls, grep and sed. Windows programs (git, node, python, .exe and .cmd files) run from it as usual. Paths you give the file tools are relative to the project root, with forward slashes.\n"
+	}
+	return "- OS: " + goos + "\n"
+}
+
 // systemPrompt assembles the system prompt (HRN-010): the harness's own
 // instructions, facts about the environment, the mode, and the project's
 // instruction file, read fresh for each call.
 func (s *session) systemPrompt(mode permission.Mode) string {
 	var sb strings.Builder
 	sb.WriteString(basePrompt)
-	fmt.Fprintf(&sb, "\n# Environment\n\n- Project root: %s\n- OS: %s\n- Date: %s\n", s.env.Root(), runtime.GOOS, time.Now().Format("2006-01-02"))
+	fmt.Fprintf(&sb, "\n# Environment\n\n- Project root: %s\n%s- Date: %s\n", s.env.Root(), osFacts(runtime.GOOS, s.env.Kind()), time.Now().Format("2006-01-02"))
 	// Where commands run, when that is not the project root.
 	if d, ok := s.env.(interface{ Describe() string }); ok {
 		fmt.Fprintf(&sb, "- %s\n", d.Describe())
@@ -728,7 +745,7 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 		if err != nil {
 			continue
 		}
-		fmt.Fprintf(&sb, "\n# Project instructions (%s)\n\nThe project's own instructions for agents. Follow them unless they conflict with the user's request or with safety.\n\n<project_instructions file=%q>\n%s\n</project_instructions>\n", name, name, strings.TrimSpace(string(b)))
+		fmt.Fprintf(&sb, "\n# Project instructions (%s)\n\nThe project's own instructions for agents. Follow them unless they conflict with the user's request or with safety.\n\n<project_instructions file=%q>\n%s\n</project_instructions>\n", name, name, instructionText(b))
 		break
 	}
 	s.mu.Lock()
@@ -740,9 +757,15 @@ func (s *session) systemPrompt(mode permission.Mode) string {
 			continue
 		}
 		dir := strings.TrimSuffix(file, "/AGENTS.md")
-		fmt.Fprintf(&sb, "\n# Instructions for %s/\n\nThese apply to work inside %s/ and take precedence over the project-wide instructions there.\n\n<project_instructions file=%q>\n%s\n</project_instructions>\n", dir, dir, file, strings.TrimSpace(string(b)))
+		fmt.Fprintf(&sb, "\n# Instructions for %s/\n\nThese apply to work inside %s/ and take precedence over the project-wide instructions there.\n\n<project_instructions file=%q>\n%s\n</project_instructions>\n", dir, dir, file, instructionText(b))
 	}
 	return sb.String()
+}
+
+// instructionText is an instruction file as the prompt holds it: trimmed, with
+// Windows' line endings made plain ones.
+func instructionText(b []byte) string {
+	return strings.TrimSpace(strings.ReplaceAll(string(b), "\r\n", "\n"))
 }
 
 const basePrompt = `You are the built-in coding agent of Freeloop, working in the user's project. Help with software engineering tasks: read and search code, make changes, and run commands to check your work.

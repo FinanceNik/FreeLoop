@@ -287,6 +287,65 @@ func TestEditFile(t *testing.T) {
 	}
 }
 
+// NFR-XPLAT-003: an edit written with \n matches a file whose lines end in \r\n, as
+// files checked out on Windows often do, and the lines it adds end the same way.
+func TestEditFileKeepsCRLF(t *testing.T) {
+	f := setup(t, permission.ModeAcceptEdits,
+		scripted.Step{Calls: []scripted.Call{
+			{Name: "edit_file", Input: map[string]any{"path": "a.txt", "old_string": "one\ntwo\n", "new_string": "one\n2\nand a half\n"}},
+		}},
+		scripted.Step{Text: "done"},
+	)
+	os.WriteFile(filepath.Join(f.root, "a.txt"), []byte("zero\r\none\r\ntwo\r\nthree\r\n"), 0o644)
+	if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "edit"}); err != nil {
+		t.Fatal(err)
+	}
+	if r := f.prov.Requests()[1].Messages[2].Parts[0]; r.IsError {
+		t.Fatalf("edit failed: %+v", r)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.root, "a.txt")); string(b) != "zero\r\none\r\n2\r\nand a half\r\nthree\r\n" {
+		t.Errorf("file = %q", b)
+	}
+}
+
+func TestMatchLineEndings(t *testing.T) {
+	for _, c := range []struct{ file, from, to, wantFrom, wantTo string }{
+		// A file with \n alone, or a one-line edit with nothing to fit: as written.
+		{"a\nb\n", "a\nb", "c\nd", "a\nb", "c\nd"},
+		{"a\r\nb\r\n", "a", "c", "a", "c"},
+		// Every line ends in \r\n: both strings do too, whatever the model wrote.
+		{"a\r\nb\r\n", "a\nb", "c\nd", "a\r\nb", "c\r\nd"},
+		{"a\r\nb\r\n", "a\r\nb", "c\nd", "a\r\nb", "c\r\nd"},
+		{"a\r\nb\r\n", "a", "a\nx", "a", "a\r\nx"},
+		// Both endings: what matches as written stays, else the \r\n form if it matches.
+		{"a\nb\r\nc\r\n", "a\nb", "x\ny", "a\nb", "x\ny"},
+		{"a\nb\r\nc\r\n", "b\nc", "x\ny", "b\r\nc", "x\r\ny"},
+		{"a\nb\r\nc\r\n", "q\nr", "x\ny", "q\nr", "x\ny"},
+	} {
+		from, to := matchLineEndings(c.file, c.from, c.to)
+		if from != c.wantFrom || to != c.wantTo {
+			t.Errorf("matchLineEndings(%q, %q, %q) = %q, %q; want %q, %q", c.file, c.from, c.to, from, to, c.wantFrom, c.wantTo)
+		}
+	}
+}
+
+// The model is told it writes bash on Windows, where the shell is Git Bash (OQ-043),
+// and a container's system is Linux whatever the app runs on.
+func TestOSFacts(t *testing.T) {
+	if got := osFacts("windows", environment.KindLocal); !strings.Contains(got, "OS: windows") || !strings.Contains(got, "Git Bash") || !strings.Contains(got, "not PowerShell") {
+		t.Errorf("osFacts(windows) = %q", got)
+	}
+	if got := osFacts("darwin", environment.KindLocal); got != "- OS: darwin\n" {
+		t.Errorf("osFacts(darwin) = %q", got)
+	}
+	if got := osFacts("windows", environment.KindDocker); got != "- OS: linux\n" {
+		t.Errorf("osFacts(windows, docker) = %q", got)
+	}
+	if got := osFacts("windows", environment.KindSSH); strings.Contains(got, "Git Bash") {
+		t.Errorf("osFacts(windows, ssh) = %q", got)
+	}
+}
+
 func TestProtectedPathRefusedInBypass(t *testing.T) {
 	f := setup(t, permission.ModeBypass,
 		scripted.Step{Calls: []scripted.Call{{Name: "write_file", Input: map[string]any{"path": ".git/config", "content": "x"}}}},

@@ -134,6 +134,9 @@ func TestWarning(t *testing.T) {
 		{config.MCPServer{Transport: "stdio", Command: "/opt/homebrew/bin/uvx", Args: []string{"mcp-server-git"}}, true},
 		{config.MCPServer{Transport: "stdio", Command: "docker", Args: []string{"run", "-i", "ghcr.io/x/y"}}, true},
 		{config.MCPServer{Transport: "stdio", Command: "/usr/local/bin/my-server"}, false},
+		// npm's shims on Windows (NFR-XPLAT-003).
+		{config.MCPServer{Transport: "stdio", Command: `C:\Program Files\nodejs\npx.cmd`, Args: []string{"-y", "@x/server"}}, true},
+		{config.MCPServer{Transport: "stdio", Command: "uvx.EXE", Args: []string{"mcp-server-git"}}, true},
 		{config.MCPServer{Transport: "http", URL: "https://x"}, false},
 	} {
 		if got := Warning(c.s) != ""; got != c.warn {
