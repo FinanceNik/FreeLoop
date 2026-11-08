@@ -12,6 +12,7 @@ lived_in_files() {
 ui:
   onboarded: true
   theme: dark
+  language: en
   fontSize: 15
 defaults:
   profileId: opencode

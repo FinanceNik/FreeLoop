@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent } from "react";
+import { t } from "./i18n.ts";
 import { bindingProblem, comboOf, defaultKey, keyLabel, SHORTCUTS, type Bindings } from "./shortcuts.ts";
 
 // ShortcutsEditor changes the app's own shortcuts (SET-006). A row listens while
@@ -47,12 +48,12 @@ export default function ShortcutsEditor({ value, onChange }: Props) {
         const current = value[s.id] || s.key;
         return (
           <li key={s.id}>
-            <span>{s.label}</span>
+            <span>{t(s.label)}</span>
             <span className="row">
               <button
                 type="button"
                 className={listening === s.id ? "shortcut-key shortcut-listening" : "shortcut-key"}
-                aria-label={`Change ${s.label}, now ${keyLabel(current)}`}
+                aria-label={t("shortcuts.change", { label: t(s.label), key: keyLabel(current) })}
                 onClick={() => {
                   setListening(s.id);
                   setProblem(null);
@@ -60,20 +61,20 @@ export default function ShortcutsEditor({ value, onChange }: Props) {
                 onBlur={() => listening === s.id && setListening(null)}
                 onKeyDown={(e) => take(s.id, s.letter, e)}
               >
-                {listening === s.id ? "Press a key…" : keyLabel(current)}
+                {listening === s.id ? t("shortcuts.listening") : keyLabel(current)}
               </button>
               {value[s.id] && (
                 <button
                   type="button"
                   className="link"
-                  aria-label={`Reset ${s.label}`}
+                  aria-label={t("common.resetNamed", { name: t(s.label) })}
                   onClick={() => {
                     const next = { ...value };
                     delete next[s.id];
                     onChange(next);
                   }}
                 >
-                  Reset
+                  {t("common.reset")}
                 </button>
               )}
             </span>

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { approvalHint, approvalShortcut, optionLabel, bindingOf, bindingProblem, comboOf, isTextField, keyLabel, optionKind, pressed, setBindings } from "./shortcuts.ts";
 import { setPlatform } from "./platform.ts";
+import { setLanguage } from "./i18n.ts";
 
 // These are the Mac's shortcuts; platform.test.ts has the others.
 setPlatform("MacIntel");
@@ -105,4 +106,14 @@ test("the pane shortcuts start as ⌃⇧ and the arrows, and can be changed", ()
   // A key another one uses is refused.
   assert.match(bindingProblem("paneUp", "Ctrl+Shift+ArrowDown", {}), /already/);
   setBindings({});
+});
+
+test("why a key cannot be a shortcut is said in the language in force (GUI-048)", () => {
+  setLanguage("de");
+  assert.equal(bindingProblem("palette", "Meta+,", {}), "⌘, ist schon „Einstellungen öffnen“.");
+  assert.equal(bindingProblem("palette", "Meta+C", {}), "⌘C ist für macOS oder die App reserviert.");
+  assert.match(bindingProblem("palette", "K", {}), /^Mit ⌘ oder ⌃ kombinieren/);
+  setLanguage("nl");
+  assert.equal(bindingProblem("allow_once", "Meta+K", {}), "Een goedkeuringssneltoets is één letter, zonder speciale toets.");
+  setLanguage("en");
 });

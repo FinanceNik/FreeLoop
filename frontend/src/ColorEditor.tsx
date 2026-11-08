@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { t } from "./i18n.ts";
 import { EngineService } from "./api.ts";
 import { COLOR_GROUPS, hardToRead, isColor, pickerValue, tokenDefaults, type ColorMap, type ColorMode, type ColorSet } from "./colors.ts";
 
@@ -36,37 +37,37 @@ export default function ColorEditor({ colors, onChange, onError }: Props) {
   return (
     <div className="color-editor">
       <div className="row">
-        <div className="segmented" role="group" aria-label="Which appearance to change">
+        <div className="segmented" role="group" aria-label={t("colors.which")}>
           {(["light", "dark"] as const).map((m) => (
             <button key={m} type="button" className={mode === m ? "on" : ""} aria-pressed={mode === m} onClick={() => setMode(m)}>
-              {m === "light" ? "Light" : "Dark"}
+              {t(m === "light" ? "settings.theme.light" : "settings.theme.dark")}
             </button>
           ))}
         </div>
         <button type="button" onClick={() => EngineService.OpenColors().catch(onError)}>
-          Open colors.json
+          {t("colors.open")}
         </button>
         <button type="button" disabled={changed === 0} onClick={() => put({})}>
-          Reset {mode} colors
+          {t(mode === "light" ? "colors.resetLight" : "colors.resetDark")}
         </button>
       </div>
-      {other && <p className="muted">The app is showing its {mode === "dark" ? "light" : "dark"} appearance, so these show when it switches to {mode}.</p>}
+      {other && <p className="muted">{t(mode === "dark" ? "colors.showingLight" : "colors.showingDark")}</p>}
       {COLOR_GROUPS.map((g) => (
         <fieldset key={g.title} className="color-group">
-          <legend>{g.title}</legend>
-          {g.tokens.map((t) => {
+          <legend>{t(g.title)}</legend>
+          {g.tokens.map((token) => {
             // Links and focus follow the accent until they are set themselves.
-            const follows = (t.id === "link" || t.id === "focus") && !!set.accent;
+            const follows = (token.id === "link" || token.id === "focus") && !!set.accent;
             return (
               <ColorRow
-                key={`${mode}-${t.id}`}
-                id={t.id}
-                label={t.label}
-                value={set[t.id]}
-                fallback={follows ? set.accent : (defaults[t.id] ?? "")}
-                placeholder={follows ? "Follows Buttons" : undefined}
-                onSet={(v) => setToken(t.id, v)}
-                onReset={() => reset(t.id)}
+                key={`${mode}-${token.id}`}
+                id={token.id}
+                label={t(token.label)}
+                value={set[token.id]}
+                fallback={follows ? set.accent : (defaults[token.id] ?? "")}
+                placeholder={follows ? t("colors.followsButtons") : undefined}
+                onSet={(v) => setToken(token.id, v)}
+                onReset={() => reset(token.id)}
               />
             );
           })}
@@ -74,7 +75,7 @@ export default function ColorEditor({ colors, onChange, onError }: Props) {
       ))}
       {warnings.length > 0 && (
         <p role="status" className="color-warning">
-          Hard to read (4.5:1 is the usual minimum): {warnings.join("; ")}.
+          {t("colors.hardToRead", { pairs: warnings.join("; ") })}
         </p>
       )}
     </div>
@@ -102,7 +103,7 @@ function ColorRow({ id, label, value, fallback, placeholder, onSet, onReset }: R
     <div className="color-row" title={`--${id}`}>
       <input
         type="color"
-        aria-label={`${label} color`}
+        aria-label={t("colors.pick", { label })}
         value={pickerValue(shown) || "#000000"}
         onChange={(e) => {
           setDraft(null);
@@ -113,7 +114,7 @@ function ColorRow({ id, label, value, fallback, placeholder, onSet, onReset }: R
       <input
         type="text"
         className="color-text"
-        aria-label={`${label} value`}
+        aria-label={t("colors.value", { label })}
         aria-invalid={bad || undefined}
         spellCheck={false}
         placeholder={placeholder ?? fallback}
@@ -126,8 +127,8 @@ function ColorRow({ id, label, value, fallback, placeholder, onSet, onReset }: R
         }}
         onBlur={() => setDraft(null)}
       />
-      <button type="button" className="link color-reset" disabled={value === undefined} aria-label={`Reset ${label}`} onClick={onReset}>
-        Reset
+      <button type="button" className="link color-reset" disabled={value === undefined} aria-label={t("common.resetNamed", { name: label })} onClick={onReset}>
+        {t("common.reset")}
       </button>
     </div>
   );

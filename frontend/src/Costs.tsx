@@ -1,8 +1,22 @@
 import { useEffect, useState } from "react";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 import { EngineService, type DayCost, type Price, type ProviderInfo } from "./api.ts";
 import { formatCost } from "./cost.ts";
 
 // The price table and the usage per day on the Settings page (PRV-008).
+
+// The per-token columns of a price row.
+const PRICE_COLUMNS = [
+  { field: "input", label: "prices.input" },
+  { field: "output", label: "prices.output" },
+  { field: "cacheRead", label: "prices.cacheRead" },
+  { field: "cacheWrite", label: "prices.cacheWrite" },
+  { field: "cacheWrite1h", label: "prices.cacheWrite1h" },
+] as const;
+
+// What a price row's model can look like; a pattern, the same in every language.
+const PRICE_PATTERN = "claude-*";
 
 export function PriceTable({ prices, providers, onChange }: { prices: Price[]; providers: ProviderInfo[]; onChange: (p: Price[]) => void }) {
   const [list, setList] = useState<{ asOf: string; prices: Price[] } | null>(null);
@@ -16,21 +30,18 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
   return (
     <>
       <p className="muted">
-        US dollars per million tokens. Models from Anthropic, OpenAI and Google use their official API list prices{list ? `, as of ${list.asOf}` : ""}. A row here comes
-        first, for another price or a model not on the list. The model can be a pattern such as <code>claude-*</code>; the first matching row applies.
+        {t("prices.unit")} {list ? t("prices.listAsOf", { date: list.asOf }) : t("prices.list")} {tNodes("prices.rows", { pattern: <code>{PRICE_PATTERN}</code> })}
       </p>
       {prices.length > 0 && (
         <div className="prices-scroll">
         <table className="prices">
           <thead>
             <tr>
-              <th>Provider</th>
-              <th>Model</th>
-              <th>Input</th>
-              <th>Output</th>
-              <th>Cache read</th>
-              <th>5-min write</th>
-              <th>1-hour write</th>
+              <th>{t("prices.provider")}</th>
+              <th>{t("prices.model")}</th>
+              {PRICE_COLUMNS.map((c) => (
+                <th key={c.field}>{t(c.label)}</th>
+              ))}
               <th />
             </tr>
           </thead>
@@ -38,8 +49,8 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
             {prices.map((p, i) => (
               <tr key={i}>
                 <td>
-                  <select aria-label="Provider" value={p.providerId} onChange={(e) => set(i, { providerId: e.target.value })}>
-                    <option value="">Any</option>
+                  <select aria-label={t("prices.provider")} value={p.providerId} onChange={(e) => set(i, { providerId: e.target.value })}>
+                    <option value="">{t("prices.anyProvider")}</option>
                     {providers.map((x) => (
                       <option key={x.id} value={x.id}>
                         {x.name}
@@ -49,12 +60,12 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
                   </select>
                 </td>
                 <td>
-                  <input aria-label="Model" required value={p.model} onChange={(e) => set(i, { model: e.target.value })} />
+                  <input aria-label={t("prices.model")} required value={p.model} onChange={(e) => set(i, { model: e.target.value })} />
                 </td>
-                {(["input", "output", "cacheRead", "cacheWrite", "cacheWrite1h"] as const).map((k) => (
+                {PRICE_COLUMNS.map(({ field: k, label }) => (
                   <td key={k}>
                     <input
-                      aria-label={k}
+                      aria-label={t(label)}
                       type="number"
                       min={0}
                       step="any"
@@ -66,7 +77,7 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
                 ))}
                 <td>
                   <button type="button" className="link" onClick={() => onChange(prices.filter((_, j) => j !== i))}>
-                    Remove
+                    {t("common.remove")}
                   </button>
                 </td>
               </tr>
@@ -77,22 +88,20 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
       )}
       <div className="row">
         <button type="button" onClick={() => onChange([...prices, { providerId: "", model: "", input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0 }])}>
-          Add a price
+          {t("prices.add")}
         </button>
       </div>
       {list && (
         <details>
-          <summary>List prices</summary>
+          <summary>{t("prices.listTitle")}</summary>
           <div className="prices-scroll">
           <table className="prices">
             <thead>
               <tr>
-                <th>Model</th>
-                <th>Input</th>
-                <th>Output</th>
-                <th>Cache read</th>
-                <th>5-min write</th>
-                <th>1-hour write</th>
+                <th>{t("prices.model")}</th>
+                {PRICE_COLUMNS.map((c) => (
+                  <th key={c.field}>{t(c.label)}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -130,7 +139,7 @@ export function UsageTable({ version, onPrice, onError }: { version: unknown; on
       .catch(onError);
   }, [version]);
   if (!days) return null;
-  if (days.length === 0) return <p className="muted">No model calls in the last 30 days.</p>;
+  if (days.length === 0) return <p className="muted">{t("usage.none")}</p>;
   const total = days.reduce((n, d) => n + d.cost, 0);
   const unpriced = new Map<string, { providerId: string; model: string }>();
   for (const d of days) for (const m of d.models ?? []) if (!m.priced) unpriced.set(`${m.providerId}/${m.model}`, m);
@@ -139,21 +148,21 @@ export function UsageTable({ version, onPrice, onError }: { version: unknown; on
       <p>
         {days.some((d) => (d.models ?? []).some((m) => m.priced)) ? (
           <>
-            Last 30 days: <strong>≈ {formatCost(total)}</strong>
-            {unpriced.size > 0 && <span className="muted"> plus calls to models without a price</span>}
+            {tNodes("usage.last30", { cost: <strong>≈ {formatCost(total)}</strong> })}
+            {unpriced.size > 0 && <span className="muted"> {t("usage.plusUnpriced")}</span>}
           </>
         ) : (
-          <span className="muted">Add prices to estimate what these calls cost.</span>
+          <span className="muted">{t("usage.addPrices")}</span>
         )}
       </p>
       {unpriced.size > 0 && (
         <ul className="unpriced">
           {[...unpriced.values()].map((m) => (
             <li key={`${m.providerId}/${m.model}`}>
-              {m.model || "an unnamed model"} <span className="muted">{m.providerId || "external agent"}</span>{" "}
+              {m.model || t("usage.unnamedModel")} <span className="muted">{m.providerId || t("usage.externalAgent")}</span>{" "}
               {m.model && (
                 <button type="button" className="link" onClick={() => onPrice(m.providerId, m.model)}>
-                  Add a price
+                  {t("prices.add")}
                 </button>
               )}
             </li>
@@ -163,12 +172,12 @@ export function UsageTable({ version, onPrice, onError }: { version: unknown; on
       <table className="usage">
         <thead>
           <tr>
-            <th>Day</th>
-            <th>Model</th>
-            <th>Calls</th>
-            <th title="Input, including cache reads and writes">In</th>
-            <th>Out</th>
-            <th>Cost</th>
+            <th>{t("usage.day")}</th>
+            <th>{t("usage.model")}</th>
+            <th>{t("usage.calls")}</th>
+            <th title={t("usage.inTitle")}>{t("usage.in")}</th>
+            <th>{t("usage.out")}</th>
+            <th>{t("usage.cost")}</th>
           </tr>
         </thead>
         <tbody>
@@ -182,11 +191,11 @@ export function UsageTable({ version, onPrice, onError }: { version: unknown; on
                     </>
                   )}
                 </td>
-                <td>{m.model || <span className="muted">unnamed</span>}</td>
+                <td>{m.model || <span className="muted">{t("usage.unnamed")}</span>}</td>
                 <td>{m.calls}</td>
                 <td>{tokens(m.inputTokens + m.cacheReadTokens + m.cacheWriteTokens)}</td>
                 <td>{tokens(m.outputTokens)}</td>
-                <td>{m.priced ? formatCost(m.cost) : <span className="muted">no price</span>}</td>
+                <td>{m.priced ? formatCost(m.cost) : <span className="muted">{t("usage.noPrice")}</span>}</td>
               </tr>
             )),
           )}

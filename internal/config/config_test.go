@@ -71,6 +71,28 @@ func TestInvalidValueFallsBackPerField(t *testing.T) {
 	}
 }
 
+// GUI-048: the interface's language, validated as the theme is.
+func TestLanguage(t *testing.T) {
+	for _, lang := range []string{"system", "en", "de", "nl"} {
+		cfg, issues, _ := Load(write(t, "version: 1\nui:\n  language: "+lang+"\n"))
+		if len(issues) != 0 || cfg.UI.Language != lang {
+			t.Errorf("language %s: got %q, issues %v", lang, cfg.UI.Language, issues)
+		}
+	}
+	cfg, issues, _ := Load(write(t, "version: 1\nui:\n  language: fr\n"))
+	if len(issues) != 1 || issues[0].Field != "ui.language" || cfg.UI.Language != "system" {
+		t.Errorf("language fr: got %q, issues %v", cfg.UI.Language, issues)
+	}
+	if cfg, issues, _ := Load(write(t, "version: 1\nui:\n  theme: dark\n")); len(issues) != 0 || cfg.UI.Language != "system" {
+		t.Errorf("no language: got %q, issues %v", cfg.UI.Language, issues)
+	}
+	c := Default()
+	c.UI.Language = "klingon"
+	if err := Save(t.TempDir(), c); err == nil {
+		t.Error("an unknown language saved")
+	}
+}
+
 func TestDataDirHonoursHome(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "home")
 	got, err := DataDir(dir)

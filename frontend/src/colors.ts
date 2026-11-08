@@ -1,5 +1,6 @@
 // The user's colors over the look's tokens (GUI-022), from colors.json or the
 // editor in Settings. Kept apart from the components so it can be tested.
+import { t, type PlainKey } from "./i18n.ts";
 
 export type ColorMode = "light" | "dark";
 export type ColorMap = Record<string, string>;
@@ -10,48 +11,49 @@ export interface ColorSet {
 
 // What the editor offers; colors.json can also set the tokens these derive
 // from below, and the chart series.
-export const COLOR_GROUPS: { title: string; tokens: { id: string; label: string }[] }[] = [
+// Titles and labels are catalogue keys (GUI-048).
+export const COLOR_GROUPS: { title: PlainKey; tokens: { id: string; label: PlainKey }[] }[] = [
   {
-    title: "Backgrounds",
+    title: "colors.group.backgrounds",
     tokens: [
-      { id: "bg-app", label: "Sidebar and panel" },
-      { id: "bg", label: "Conversation" },
-      { id: "surface", label: "Cards" },
-      { id: "surface-2", label: "Hover and selection" },
-      { id: "input", label: "Text fields" },
+      { id: "bg-app", label: "colors.token.bgApp" },
+      { id: "bg", label: "colors.token.bg" },
+      { id: "surface", label: "colors.token.surface" },
+      { id: "surface-2", label: "colors.token.surface2" },
+      { id: "input", label: "colors.token.input" },
     ],
   },
   {
-    title: "Text and lines",
+    title: "colors.group.text",
     tokens: [
-      { id: "text", label: "Text" },
-      { id: "muted", label: "Secondary text" },
-      { id: "faint", label: "Hints" },
-      { id: "border", label: "Lines" },
-      { id: "border-strong", label: "Strong lines" },
-      { id: "input-border", label: "Text field outline" },
+      { id: "text", label: "colors.token.text" },
+      { id: "muted", label: "colors.token.muted" },
+      { id: "faint", label: "colors.token.faint" },
+      { id: "border", label: "colors.token.border" },
+      { id: "border-strong", label: "colors.token.borderStrong" },
+      { id: "input-border", label: "colors.token.inputBorder" },
     ],
   },
   {
-    title: "Accent",
+    title: "colors.group.accent",
     tokens: [
-      { id: "accent", label: "Buttons" },
-      { id: "accent-text", label: "Text on buttons" },
-      { id: "link", label: "Links and live states" },
-      { id: "focus", label: "Keyboard focus" },
+      { id: "accent", label: "colors.token.accent" },
+      { id: "accent-text", label: "colors.token.accentText" },
+      { id: "link", label: "colors.token.link" },
+      { id: "focus", label: "colors.token.focus" },
     ],
   },
   {
-    title: "Status",
+    title: "colors.group.status",
     tokens: [
-      { id: "ok", label: "Success" },
-      { id: "warn", label: "Warning" },
-      { id: "danger", label: "Danger" },
+      { id: "ok", label: "colors.token.ok" },
+      { id: "warn", label: "colors.token.warn" },
+      { id: "danger", label: "colors.token.danger" },
     ],
   },
   {
-    title: "Marks",
-    tokens: [{ id: "git", label: "Git branch mark" }],
+    title: "colors.group.marks",
+    tokens: [{ id: "git", label: "colors.token.git" }],
   },
 ];
 
@@ -135,11 +137,11 @@ export function contrast(a: string, b: string): number | null {
 }
 
 // The pairs people read most, with what WCAG AA asks of body text.
-const READABLE: [string, string, string][] = [
-  ["text", "bg", "Text on the conversation"],
-  ["text", "bg-app", "Text on the sidebar"],
-  ["muted", "bg", "Secondary text on the conversation"],
-  ["accent-text", "accent", "Text on buttons"],
+const READABLE: [string, string, PlainKey][] = [
+  ["text", "bg", "colors.pair.textOnConversation"],
+  ["text", "bg-app", "colors.pair.textOnSidebar"],
+  ["muted", "bg", "colors.pair.mutedOnConversation"],
+  ["accent-text", "accent", "colors.token.accentText"],
 ];
 
 // hardToRead names the pairs under 4.5:1, for colors read through get.
@@ -147,7 +149,7 @@ export function hardToRead(get: (token: string) => string): string[] {
   const out: string[] = [];
   for (const [fg, bg, label] of READABLE) {
     const ratio = contrast(get(fg), get(bg));
-    if (ratio !== null && ratio < 4.5) out.push(`${label}: ${ratio.toFixed(1)}:1`);
+    if (ratio !== null && ratio < 4.5) out.push(`${t(label)}: ${ratio.toFixed(1)}:1`);
   }
   return out;
 }

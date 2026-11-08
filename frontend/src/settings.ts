@@ -1,3 +1,4 @@
+import { t, type PlainKey } from "./i18n.ts";
 import { pressed, type Keys } from "./shortcuts.ts";
 
 // The settings area: the configuration pages, grouped, behind one sidebar
@@ -9,49 +10,56 @@ export type GeneralPage = "appearance" | "keyboard" | "sessions" | "costs" | "pe
 
 export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "optimizers" | "workflows" | "rules" | "environments" | "schedules" | GeneralPage;
 
+// The group's title and each page's label are catalogue keys (GUI-048).
 export interface SettingsGroup {
-  title: string;
-  pages: { id: SettingsPage; label: string; icon: string }[];
+  title: PlainKey;
+  pages: { id: SettingsPage; label: PlainKey; icon: string }[];
 }
 
 export const SETTINGS_GROUPS: SettingsGroup[] = [
   {
-    title: "Models",
+    title: "settings.group.models",
     pages: [
-      { id: "providers", label: "Providers", icon: "providers" },
-      { id: "profiles", label: "Profiles", icon: "profiles" },
+      { id: "providers", label: "settings.page.providers", icon: "providers" },
+      { id: "profiles", label: "settings.page.profiles", icon: "profiles" },
     ],
   },
   {
-    title: "Agents",
+    title: "settings.group.agents",
     pages: [
-      { id: "skills", label: "Skills", icon: "skills" },
-      { id: "mcp", label: "MCP servers", icon: "mcp" },
-      { id: "optimizers", label: "Token optimizers", icon: "optimizers" },
-      { id: "workflows", label: "Workflows", icon: "workflows" },
-      { id: "rules", label: "Policy", icon: "rules" },
+      { id: "skills", label: "settings.page.skills", icon: "skills" },
+      { id: "mcp", label: "settings.page.mcp", icon: "mcp" },
+      { id: "optimizers", label: "settings.page.optimizers", icon: "optimizers" },
+      { id: "workflows", label: "settings.page.workflows", icon: "workflows" },
+      { id: "rules", label: "settings.page.rules", icon: "rules" },
     ],
   },
   {
-    title: "Workspace",
+    title: "settings.group.workspace",
     pages: [
-      { id: "environments", label: "Environments", icon: "environments" },
-      { id: "schedules", label: "Schedules", icon: "schedules" },
+      { id: "environments", label: "settings.page.environments", icon: "environments" },
+      { id: "schedules", label: "settings.page.schedules", icon: "schedules" },
     ],
   },
   {
-    title: "App",
+    title: "settings.group.app",
     pages: [
-      { id: "appearance", label: "Appearance", icon: "appearance" },
-      { id: "keyboard", label: "Keyboard", icon: "keyboard" },
-      { id: "sessions", label: "Sessions", icon: "sessions" },
-      { id: "costs", label: "Costs", icon: "costs" },
-      { id: "permissions", label: "Permissions", icon: "permissions" },
-      { id: "network", label: "Network", icon: "network" },
-      { id: "data", label: "Data", icon: "data" },
+      { id: "appearance", label: "settings.page.appearance", icon: "appearance" },
+      { id: "keyboard", label: "settings.page.keyboard", icon: "keyboard" },
+      { id: "sessions", label: "settings.page.sessions", icon: "sessions" },
+      { id: "costs", label: "settings.page.costs", icon: "costs" },
+      { id: "permissions", label: "settings.page.permissions", icon: "permissions" },
+      { id: "network", label: "settings.page.network", icon: "network" },
+      { id: "data", label: "settings.page.data", icon: "data" },
     ],
   },
 ];
+
+// pageTitle is a page's name in the language in force.
+export function pageTitle(page: string): string {
+  const p = SETTINGS_GROUPS.flatMap((g) => g.pages).find((x) => x.id === page);
+  return t(p ? p.label : "settings.title");
+}
 
 export const GENERAL_PAGES = SETTINGS_GROUPS.at(-1)!.pages.map((p) => p.id) as GeneralPage[];
 

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { t } from "./i18n.ts";
 import { CODE_FONTS, fontOnThisMac, isFontName, TEXT_FONTS, type FontChoice } from "./fonts.ts";
 
 // The fonts of Settings → Appearance (GUI-025). It edits ui.textFont and
@@ -14,10 +15,10 @@ interface Props {
 export default function FontEditor({ textFont, codeFont, onChange }: Props) {
   return (
     <div className="font-editor">
-      <FontRow label="Text" hint="The interface and messages." choices={TEXT_FONTS} value={textFont} onSet={(v) => onChange({ textFont: v, codeFont })} />
+      <FontRow label={t("fonts.text")} hint={t("fonts.textHint")} choices={TEXT_FONTS} value={textFont} onSet={(v) => onChange({ textFont: v, codeFont })} />
       <FontRow
-        label="Code"
-        hint="Code blocks, inline code, tool output, diffs and the terminal."
+        label={t("fonts.code")}
+        hint={t("fonts.codeHint")}
         choices={CODE_FONTS}
         value={codeFont}
         onSet={(v) => onChange({ textFont, codeFont: v })}
@@ -62,23 +63,23 @@ function FontRow({ label, hint, choices, value, onSet }: RowProps) {
             if (v !== OTHER) onSet(v);
           }}
         >
-          <option value="">The app's own font</option>
+          <option value="">{t("fonts.own")}</option>
           {present.map((f) => (
             <option key={f} value={f}>
               {f}
             </option>
           ))}
-          <option value={OTHER}>Other…</option>
+          <option value={OTHER}>{t("fonts.other")}</option>
         </select>
       </label>
       {typed && (
         <input
           type="text"
-          aria-label={`${label} font name`}
+          aria-label={t("fonts.name", { label })}
           aria-invalid={bad || undefined}
           spellCheck={false}
           autoComplete="off"
-          placeholder="Family name, as in Font Book"
+          placeholder={t("fonts.placeholder")}
           value={text}
           onChange={(e) => {
             const v = e.target.value.trim();
@@ -94,8 +95,8 @@ function FontRow({ label, hint, choices, value, onSet }: RowProps) {
         />
       )}
       <span className="muted">{hint}</span>
-      {bad && <span role="status" className="font-note">A font name has only letters, digits, spaces and . _ + -, up to 64 characters.</span>}
-      {missing && <span role="status" className="font-note">{value} is not on this computer, so the app's own font shows.</span>}
+      {bad && <span role="status" className="font-note">{t("fonts.bad")}</span>}
+      {missing && <span role="status" className="font-note">{t("fonts.missing", { font: value })}</span>}
     </div>
   );
 }

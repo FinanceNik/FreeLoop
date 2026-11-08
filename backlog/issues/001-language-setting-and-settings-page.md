@@ -1,6 +1,6 @@
 ---
 title: Choose a language in Settings; the Settings page follows it
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: german-and-dutch-interface
@@ -30,3 +30,12 @@ translation module, catalogues and one fully translated page.
 - Add the requirement to docs/REQUIREMENTS.md under the next free GUI ID (GUI-048 when this was written) and
   use that ID in commits.
 - The setting sits beside Theme in Settings ("Theme and text size").
+
+## Done
+- `system` reads `navigator.languages`, and WebKit gives only the first preferred language there (a Mac
+  set to French, then Dutch, gets English, where a native app would pick Dutch). Issue 006 resolves
+  `system` on the Go side anyway; passing the full list from there would close the gap.
+- `secretStore()` and `inFileManager()` are translated at the source, so the views still in English
+  show those few words in German or Dutch inside English sentences until 003 and 004.
+- The app check pins `language: en` in its scratch data, so it reads English on any Mac.
+- `i18nSource.test.ts` lists the components already translated; later issues add theirs to it.

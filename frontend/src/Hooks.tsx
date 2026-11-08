@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 import { ask } from "./ask.ts";
 import { EngineService, type Config, type Hook, type PendingCommand } from "./api.ts";
 import { approveAllQuestion, EVENTS, groupPending, pendingLabel } from "./pending.ts";
 
 // The global hooks in Settings (EXT-005). Profiles carry their own in their
 // YAML; a trusted project's are in .freeloop/hooks.yaml.
+const PROJECT_HOOKS = ".freeloop/hooks.yaml";
 
 // What waits for approval in the app's files (SET-005): a backup or another
 // program can put it there, so it does nothing until approved.
@@ -41,21 +44,17 @@ export function PendingCommands({ version, onSaved, onError }: { version: unknow
   if (list.length === 0) return null;
   return (
     <div className="card" id="pending-approvals">
-      <h3>Waiting for your approval ({list.length})</h3>
-      <p className="muted">
-        These are in the app's config files, but were not written or approved in the app: they may come from a restored backup, or from a file edited outside the app. A trusted project's hooks are here when they changed since you trusted it, by a pull, a merge or anything else that writes the project. Until you approve them as they are now, hooks and agents run nothing, allow rules and settings do not apply, no session can use an environment, and nothing is sent to an address. Approve only what you recognize.
-      </p>
-      <div className="pending-list" tabIndex={0} role="group" aria-label={`${list.length} waiting for approval`}>
+      <h3>{t("pending.title", { count: list.length })}</h3>
+      <p className="muted">{t("pending.intro")}</p>
+      <div className="pending-list" tabIndex={0} role="group" aria-label={t("pending.label", { count: list.length })}>
         {groupPending(list).map((g) => (
           <div key={g.title}>
             <h4>{g.title}</h4>
             {g.items.map((c) => (
               <div className="row pending-row" key={c.fingerprint + c.source}>
-                <span>
-                  {pendingLabel(c)} from {c.source}: <code>{c.runs}</code>
-                </span>
+                <span>{tNodes("pending.item", { what: pendingLabel(c), source: c.source, runs: <code>{c.runs}</code> })}</span>
                 <button type="button" onClick={() => approve(c)}>
-                  Approve
+                  {t("pending.approve")}
                 </button>
               </div>
             ))}
@@ -65,7 +64,7 @@ export function PendingCommands({ version, onSaved, onError }: { version: unknow
       {list.length > 1 && (
         <div className="row pending-all">
           <button type="button" onClick={approveAll}>
-            Approve all {list.length}…
+            {t("pending.approveAll", { count: list.length })}
           </button>
         </div>
       )}
@@ -77,19 +76,15 @@ export function HookTable({ hooks, onChange }: { hooks: Hook[]; onChange: (h: Ho
   const set = (i: number, patch: Partial<Hook>) => onChange(hooks.map((h, j) => (j === i ? { ...h, ...patch } : h)));
   return (
     <>
-      <p className="muted">
-        Shell commands run in the session's environment with the event as JSON on standard input. Exit 0 goes on; exit 2 blocks the call (or
-        the session's start) with standard error as the reason; any other exit is reported and the session goes on. Hooks can block, never
-        approve. Profiles can add hooks in their YAML, and a trusted project in <code>.freeloop/hooks.yaml</code>.
-      </p>
+      <p className="muted">{tNodes("hooks.intro", { file: <code>{PROJECT_HOOKS}</code> })}</p>
       {hooks.length > 0 && (
         <table className="prices hooks">
           <thead>
             <tr>
-              <th>When</th>
-              <th>Tool</th>
-              <th>Command</th>
-              <th>Timeout (s)</th>
+              <th>{t("hooks.when")}</th>
+              <th>{t("hooks.tool")}</th>
+              <th>{t("hooks.command")}</th>
+              <th>{t("hooks.timeout")}</th>
               <th />
             </tr>
           </thead>
@@ -97,29 +92,29 @@ export function HookTable({ hooks, onChange }: { hooks: Hook[]; onChange: (h: Ho
             {hooks.map((h, i) => (
               <tr key={i}>
                 <td>
-                  <select aria-label="When" value={h.event} onChange={(e) => set(i, { event: e.target.value, match: e.target.value === "session_start" ? "" : h.match })}>
+                  <select aria-label={t("hooks.when")} value={h.event} onChange={(e) => set(i, { event: e.target.value, match: e.target.value === "session_start" ? "" : h.match })}>
                     {EVENTS.map((ev) => (
                       <option key={ev.id} value={ev.id}>
-                        {ev.name}
+                        {t(ev.label)}
                       </option>
                     ))}
                   </select>
                 </td>
                 <td>
                   <input
-                    aria-label="Tool"
-                    placeholder={h.event === "session_start" ? "" : "any"}
+                    aria-label={t("hooks.tool")}
+                    placeholder={h.event === "session_start" ? "" : t("hooks.anyTool")}
                     disabled={h.event === "session_start"}
                     value={h.match}
                     onChange={(e) => set(i, { match: e.target.value })}
                   />
                 </td>
                 <td>
-                  <input aria-label="Command" className="hook-command" required value={h.command} onChange={(e) => set(i, { command: e.target.value })} />
+                  <input aria-label={t("hooks.command")} className="hook-command" required value={h.command} onChange={(e) => set(i, { command: e.target.value })} />
                 </td>
                 <td>
                   <input
-                    aria-label="Timeout in seconds"
+                    aria-label={t("hooks.timeoutLabel")}
                     type="number"
                     min={1}
                     max={600}
@@ -130,7 +125,7 @@ export function HookTable({ hooks, onChange }: { hooks: Hook[]; onChange: (h: Ho
                 </td>
                 <td>
                   <button type="button" className="link" onClick={() => onChange(hooks.filter((_, j) => j !== i))}>
-                    Remove
+                    {t("common.remove")}
                   </button>
                 </td>
               </tr>
@@ -140,7 +135,7 @@ export function HookTable({ hooks, onChange }: { hooks: Hook[]; onChange: (h: Ho
       )}
       <div className="row">
         <button type="button" onClick={() => onChange([...hooks, { event: "pre_tool_use", match: "", command: "", timeout: 0, source: "" }])}>
-          Add a hook
+          {t("hooks.add")}
         </button>
       </div>
     </>

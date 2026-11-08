@@ -1,42 +1,42 @@
+import { t, type PlainKey } from "./i18n.ts";
+
 // What waits for approval in the app's files (SET-005), for reading: by what it
 // does, what runs first.
 
-export const EVENTS = [
-  { id: "session_start", name: "Session start" },
-  { id: "pre_tool_use", name: "Before a tool call" },
-  { id: "permission_request", name: "Before asking you" },
-  { id: "post_tool_use", name: "After a tool call" },
+export const EVENTS: { id: string; label: PlainKey }[] = [
+  { id: "session_start", label: "hooks.event.sessionStart" },
+  { id: "pre_tool_use", label: "hooks.event.preToolUse" },
+  { id: "permission_request", label: "hooks.event.permissionRequest" },
+  { id: "post_tool_use", label: "hooks.event.postToolUse" },
 ];
 
-const GROUPS: { title: string; kinds: string[] }[] = [
-  { title: "Commands that would run", kinds: ["hook", "project_hooks", "agent", "optimizer", "mcp"] },
-  { title: "Rules that would allow without asking", kinds: ["rule"] },
-  { title: "Environments", kinds: ["environment"] },
-  { title: "Settings", kinds: ["setting"] },
-  { title: "Where things would be sent", kinds: ["address"] },
+// Settings is where one of a kind no group names goes.
+const SETTINGS_GROUP: PlainKey = "pending.group.settings";
+
+const GROUPS: { title: PlainKey; kinds: string[] }[] = [
+  { title: "pending.group.commands", kinds: ["hook", "project_hooks", "agent", "optimizer", "mcp"] },
+  { title: "pending.group.rules", kinds: ["rule"] },
+  { title: "pending.group.environments", kinds: ["environment"] },
+  { title: SETTINGS_GROUP, kinds: ["setting"] },
+  { title: "pending.group.addresses", kinds: ["address"] },
 ];
+
+const KINDS: Record<string, PlainKey> = {
+  project_hooks: "pending.kind.projectHooks",
+  agent: "pending.kind.agent",
+  optimizer: "pending.kind.optimizer",
+  mcp: "pending.kind.mcp",
+  rule: "pending.kind.rule",
+  environment: "pending.kind.environment",
+  address: "pending.kind.address",
+};
 
 export function pendingLabel(c: { kind: string; event: string }): string {
-  switch (c.kind) {
-    case "hook":
-      return `Hook (${EVENTS.find((e) => e.id === c.event)?.name ?? c.event})`;
-    case "project_hooks":
-      return "A trusted project's changed hooks";
-    case "agent":
-      return "Agent";
-    case "optimizer":
-      return "Token optimizer";
-    case "mcp":
-      return "MCP server";
-    case "rule":
-      return "Rule";
-    case "environment":
-      return "Environment";
-    case "address":
-      return "Address";
-    default:
-      return "Setting";
+  if (c.kind === "hook") {
+    const event = EVENTS.find((e) => e.id === c.event);
+    return t("pending.kind.hook", { event: event ? t(event.label) : c.event });
   }
+  return t(KINDS[c.kind] ?? "pending.kind.setting");
 }
 
 // groupPending keeps every item: one of a kind no group names goes under Settings
@@ -44,13 +44,13 @@ export function pendingLabel(c: { kind: string; event: string }): string {
 export function groupPending<T extends { kind: string }>(items: T[]): { title: string; items: T[] }[] {
   const known = GROUPS.flatMap((g) => g.kinds);
   return GROUPS.map((g) => ({
-    title: g.title,
-    items: items.filter((c) => g.kinds.includes(c.kind) || (g.title === "Settings" && !known.includes(c.kind))),
+    title: t(g.title),
+    items: items.filter((c) => g.kinds.includes(c.kind) || (g.title === SETTINGS_GROUP && !known.includes(c.kind))),
   })).filter((g) => g.items.length > 0);
 }
 
 // approveAllQuestion is what the user agrees to: how many, of what.
 export function approveAllQuestion(items: { kind: string }[]): string {
   const counts = groupPending(items).map((g) => `${g.title}: ${g.items.length}`);
-  return `Approve all ${items.length}?\n\n${counts.join("\n")}\n\nThey take effect at once, and a backup can hold anything. Approve all only if you know where these came from, such as your own backup from another computer.`;
+  return t("pending.approveAllQuestion", { count: items.length, counts: counts.join("\n") });
 }
