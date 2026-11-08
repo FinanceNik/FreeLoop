@@ -477,3 +477,12 @@ test("what the model sees is kept, and never shows in the conversation", () => {
   );
   assert.equal(view.items.length, 0);
 });
+
+test("a workflow stage starting is an item of its own (WFL-008)", () => {
+  const e = (seq: number, type: string, data: object) => ({ v: 1, seq, ts: "2026-11-08T10:00:00Z", sid: "s", type, data });
+  const v = buildView([e(1, "workflow_stage", { workflow: "w", command: "prd", title: "Write the PRD", kind: "prompt" }), e(2, "workflow_stage", { workflow: "w", command: "go", kind: "prompt" })]);
+  assert.deepEqual(
+    v.items.map((i) => (i.kind === "stage" ? `${i.command}:${i.title}` : i.kind)),
+    ["prd:Write the PRD", "go:/go"],
+  );
+});

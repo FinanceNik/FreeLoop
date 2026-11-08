@@ -350,3 +350,40 @@ func TestReviewStage(t *testing.T) {
 		t.Errorf("/afk from the engine: %v", err)
 	}
 }
+
+// WFL-009: the plan offers the project's other check targets, and the user can allow
+// commands of their own, though never everything at once.
+func TestAFKRunOwnCommands(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	os.WriteFile(filepath.Join(root, "Makefile"), []byte("test:\n\tgo test ./...\ncheck-app:\n\t./check.sh\nbuild:\n\tgo build\n"), 0o644)
+	gitIn(t, root, "add", "Makefile")
+	gitIn(t, root, "commit", "-qm", "make")
+	plan, err := e.PrepareAFK(ctx, root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	from := map[string]string{}
+	for _, c := range plan.Commands {
+		from[c.Command] = c.From
+	}
+	if from["make test"] != "project" || from["make check-app"] != "project-more" || from["make build"] != "" {
+		t.Errorf("offered %v", from)
+	}
+	for _, bad := range []string{"*", "* rm", "  "} {
+		if _, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, Extra: []string{bad}}); err == nil {
+			t.Errorf("%q was allowed", bad)
+		}
+	}
+	if _, err := e.SetQueue(true, 0); err != nil {
+		t.Fatal(err)
+	}
+	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, Allow: []string{"git commit *"}, Extra: []string{"  npm   run e2e "}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(run.Allow, "|") != "git commit *|npm run e2e" {
+		t.Errorf("allow = %v", run.Allow)
+	}
+	e.StopAFK(ctx, run.ID)
+}

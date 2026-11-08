@@ -143,6 +143,8 @@ type ItemKinds =
   | { kind: "turn_end"; key: string; rev: number; stopReason: string; ts: string; calls: ModelCall[] }
   | { kind: "error"; key: string; rev: number; message: string }
   | { kind: "mode"; key: string; rev: number; mode: string }
+  // A stage of the session's workflow starting (WFL-008).
+  | { kind: "stage"; key: string; rev: number; command: string; title: string }
   | { kind: "model"; key: string; rev: number; model: string; providerId: string }
   | { kind: "notice"; key: string; rev: number; message: string; warn: boolean; optimizer?: string }
   | { kind: "cache_resend"; key: string; rev: number; tokens: number }
@@ -435,6 +437,9 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "stuck":
         stuck = { reason: d.reason ?? "", detail: d.detail ?? "", profileId: d.profileId, profileName: d.profileName, auto: !!d.auto };
         items.push({ kind: "notice", key, rev, message: `Not getting on: ${d.detail ?? d.reason}.`, warn: true });
+        break;
+      case "workflow_stage":
+        items.push({ kind: "stage", key, rev, command: d.command ?? "", title: d.title || `/${d.command ?? ""}` });
         break;
       case "handed_off":
         stuck = null;

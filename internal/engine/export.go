@@ -217,6 +217,8 @@ func renderMarkdown(ses session.Session, events []event.Event) string {
 			} else {
 				note("Workflow turned off.")
 			}
+		case event.WorkflowStage:
+			note("Workflow stage: " + cmp.Or(str("title"), "/"+str("command")) + ".")
 		case event.Rewind:
 			note("Rewound to an earlier checkpoint; the turns after it were undone.")
 		case event.PullRequest:

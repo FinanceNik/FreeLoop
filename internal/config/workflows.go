@@ -79,6 +79,9 @@ type WorkflowStage struct {
 	// Skill is the skill the prompt names, which must be installed and on.
 	Skill  string `yaml:"skill,omitempty" json:"skill"`
 	Prompt string `yaml:"prompt,omitempty" json:"prompt"`
+	// NeedsInput says the stage needs what follows its command, such as a brief:
+	// it is refused without, and its Next button asks for it rather than run (WFL-008).
+	NeedsInput bool `yaml:"needsInput,omitempty" json:"needsInput"`
 }
 
 // WorkflowAFK is how an AFK run's sessions go (WFL-005).
@@ -394,7 +397,7 @@ func BuiltinWorkflows() []Workflow {
 		Description: "Grill the brief, write a PRD, slice it into issues, then let agents do the unattended ones, one fresh session each, each reviewed before you QA it. After Matt Pocock's workflow for AI coding.",
 		Skills:      []string{"grill-the-brief", "write-a-prd", "slice-into-issues", "work-an-issue"},
 		Stages: []WorkflowStage{
-			{Command: "grill", Title: "Grill the brief", Description: "The agent interviews you about a brief, one question at a time, until you share the design", Mode: string(permission.ModePlan), Skill: "grill-the-brief",
+			{Command: "grill", Title: "Grill the brief", Description: "The agent interviews you about a brief, one question at a time, until you share the design", Mode: string(permission.ModeAsk), Skill: "grill-the-brief", NeedsInput: true,
 				Prompt: "# Workflow stage: grill\n\nUse the skill grill-the-brief. Interview me about the brief below until we share one design: one question at a time, each with the answer you suggest. Look in the code for anything it can answer. Write nothing yet.\n\nThe brief: {{input}}\n"},
 			{Command: "prd", Title: "Write the PRD", Description: "The agent writes the design you settled as a PRD in the backlog", Mode: string(permission.ModeAsk), Skill: "write-a-prd",
 				Prompt: "# Workflow stage: prd\n\nUse the skill write-a-prd. Write the PRD for the design we settled in this conversation as one file in {{backlog}}/prds/: problem, solution, user stories, decisions, how it is tested, and what is out of scope.\n\n{{input}}\n"},

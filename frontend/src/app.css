@@ -1438,8 +1438,147 @@ button.ghost[aria-pressed="true"] {
 
 /* A pane the user is not in keeps its conversation's room; these come back
    when they click into it. */
-.pane-split:not(.pane-active) .composer-actions {
+.pane-split:not(.pane-active) .composer-actions,
+.pane-split:not(.pane-active) .workflow-strip {
   display: none;
+}
+
+/* Where the session is in its workflow, above the composer (WFL-008). */
+.workflow-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0 0 6px;
+  font-size: calc(12rem / 14);
+}
+
+.workflow-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.workflow-step-done {
+  color: var(--text);
+}
+
+.workflow-step-done .workflow-step-mark {
+  color: var(--ok);
+}
+
+.workflow-step-running,
+.workflow-step-next {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.workflow-step-running .workflow-step-mark {
+  color: var(--accent);
+}
+
+.workflow-step-detail {
+  color: var(--muted);
+}
+
+.workflow-strip-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.workflow-wrote {
+  overflow: hidden;
+  max-width: 28rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workflow-next {
+  padding: 2px 10px;
+  font-size: calc(12rem / 14);
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.workflow-next:hover {
+  background: var(--accent-hover);
+}
+
+.workflow-strip-note {
+  margin-left: auto;
+}
+
+/* Where a workflow stage starts in the conversation: a turn-end line, but
+   standing out, since what follows is the stage's work. */
+.workflow-stage-marker {
+  padding: 2px 0;
+  color: var(--text);
+  font-size: calc(12rem / 14);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* An AFK run in full (WFL-009). */
+.afk-run-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.afk-run-step {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.afk-run-step-qa {
+  border-color: var(--ok);
+}
+
+.afk-run-step-failed {
+  border-color: var(--danger);
+}
+
+.afk-run-step-state {
+  margin-top: 2px;
+  font-size: calc(12rem / 14);
+}
+
+.afk-run-step-actions {
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.afk-run-to-come {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+}
+
+.workflow-brief textarea {
+  width: 100%;
+  resize: vertical;
 }
 
 /* A short pane keeps room for its conversation. */
@@ -2239,6 +2378,16 @@ details.choice[open] > summary h3::after {
 .afk-commands label.row {
   gap: 8px;
   align-items: center;
+}
+
+.afk-add-command {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.afk-add-command input {
+  flex: 1;
+  min-width: 0;
 }
 
 .backlog-project + .backlog-project {

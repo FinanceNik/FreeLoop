@@ -53,7 +53,8 @@
         "stuck",
         "handed_off",
         "model_context",
-        "workflow_changed"
+        "workflow_changed",
+        "workflow_stage"
       ],
       "x-acp-types": [
         "user_message_chunk",
@@ -122,6 +123,10 @@
     {
       "if": { "properties": { "type": { "const": "workflow_changed" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/workflowChanged" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "workflow_stage" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/workflowStage" } } }
     },
     {
       "if": { "properties": { "type": { "const": "effort_changed" } } },
@@ -266,6 +271,12 @@
       "description": "The session's workflow (WFL-002); an empty workflow means none.",
       "required": ["workflow"],
       "properties": { "workflow": { "type": "string" }, "name": { "type": "string" } }
+    },
+    "workflowStage": {
+      "type": "object",
+      "description": "A stage of the session's workflow starting (WFL-008): its command, title and kind.",
+      "required": ["workflow", "command", "kind"],
+      "properties": { "workflow": { "type": "string" }, "command": { "type": "string" }, "title": { "type": "string" }, "kind": { "type": "string" } }
     },
     "worktreeSetup": {
       "type": "object",

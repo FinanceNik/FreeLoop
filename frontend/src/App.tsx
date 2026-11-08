@@ -38,6 +38,7 @@ import Schedules from "./Schedules.tsx";
 import Optimizers from "./Optimizers.tsx";
 import Workflows from "./Workflows.tsx";
 import AFKDialog from "./AFKDialog.tsx";
+import AFKRunView from "./AFKRunView.tsx";
 import { runLine, waitingStep } from "./afk.ts";
 import Usage from "./Usage.tsx";
 import Compare from "./Compare.tsx";
@@ -243,12 +244,14 @@ export default function App() {
     EngineService.Backlogs()
       .then((l) => setBacklogs(l ?? []))
       .catch(() => setBacklogs([]));
+  // A project's AFK run in full (WFL-009), by its root, from the Board or a session.
+  const [runFor, setRunFor] = useState<string | null>(null);
   useEffect(() => {
-    if (screen.kind !== "board") return;
+    if (screen.kind !== "board" && runFor === null) return;
     refreshBacklogs();
     const t = setInterval(refreshBacklogs, 5000);
     return () => clearInterval(t);
-  }, [screen.kind]);
+  }, [screen.kind, runFor]);
   // The AFK run's dialog (WFL-005), for a project's backlog.
   const [afkFor, setAfkFor] = useState<{ root: string; workflowId?: string; startedBy: string } | null>(null);
   const backlogActions = (b: BacklogInfo) => {
@@ -274,6 +277,11 @@ export default function App() {
           {going && (
             <button onClick={() => EngineService.StopAFK(r.id).then(refreshBacklogs).catch(report)}>
               Stop
+            </button>
+          )}
+          {r && (
+            <button className="link backlog-run-details" onClick={() => setRunFor(b.projectRoot)}>
+              Show the run
             </button>
           )}
         </p>
@@ -1137,6 +1145,7 @@ export default function App() {
       }}
       prices={prices}
       onRunAFK={(root, workflowId) => setAfkFor({ root, workflowId, startedBy: "/afk" })}
+      onShowRun={(root) => setRunFor(root)}
       knownTags={tagsInUse}
       onOpenCompare={(tag) => setScreen({ kind: "compare", tag })}
       events={transcripts[s.id]?.events ?? []}
@@ -1787,6 +1796,26 @@ export default function App() {
         )}
       </main>
       {palette && <Palette items={palette} onClose={() => setPalette(null)} />}
+      {runFor !== null &&
+        (() => {
+          const b = backlogs.find((x) => x.projectRoot === runFor && x.run);
+          return b ? (
+            <AFKRunView
+              backlog={b}
+              attention={attention}
+              onOpen={(sid) => {
+                setRunFor(null);
+                openSession(sid);
+              }}
+              onClose={() => setRunFor(null)}
+              onChanged={() => {
+                refreshBacklogs();
+                refreshAttention();
+              }}
+              onError={report}
+            />
+          ) : null;
+        })()}
       {afkFor && (
         <AFKDialog
           root={afkFor.root}

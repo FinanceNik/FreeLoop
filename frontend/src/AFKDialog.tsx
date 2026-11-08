@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { EngineService, MODES, type AFKPlan, type AFKRun, type Profile } from "./api.ts";
-import { commandOutcome, defaultAllow } from "./afk.ts";
+import { commandFrom, commandOutcome, defaultAllow } from "./afk.ts";
 
 // Starting an AFK run (WFL-005): what it would do first, where, on which profiles,
 // and the commands it will want, which the user can allow for the run's sessions up
@@ -23,6 +23,9 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   const [profileId, setProfileId] = useState("");
   const [reviewId, setReviewId] = useState("");
   const [busy, setBusy] = useState(false);
+  // Commands the user types in to allow as well, such as a check the plan missed (WFL-009).
+  const [extra, setExtra] = useState<string[]>([]);
+  const [typed, setTyped] = useState("");
   useEffect(() => {
     EngineService.PrepareAFK(root, workflowId ?? "")
       .then((p) => {
@@ -44,12 +47,19 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   const start = () => {
     if (!plan) return;
     setBusy(true);
-    EngineService.StartAFK({ projectRoot: plan.projectRoot, workflowId: plan.workflowId, profileId, reviewProfileId: reviewId, allow, startedBy })
+    EngineService.StartAFK({ projectRoot: plan.projectRoot, workflowId: plan.workflowId, profileId, reviewProfileId: reviewId, allow, extra, startedBy })
       .then(onStarted)
       .catch(onError)
       .finally(() => setBusy(false));
   };
   const toggle = (c: string, on: boolean) => setAllow((list) => (on ? [...list, c] : list.filter((x) => x !== c)));
+  const addTyped = () => {
+    const c = typed.trim().replace(/\s+/g, " ");
+    if (!c) return;
+    if ((plan?.commands ?? []).some((x) => x.command === c)) toggle(c, true);
+    else if (!extra.includes(c)) setExtra([...extra, c]);
+    setTyped("");
+  };
   const mode = MODES.find((m) => m.id === plan?.mode)?.name ?? plan?.mode;
   return (
     <div className="palette-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -120,10 +130,34 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                     <input type="checkbox" checked={allow.includes(c.command)} disabled={c.outcome === "denied"} onChange={(e) => toggle(c.command, e.target.checked)} />
                     <code>{c.command}</code>
                     <span className="muted">
-                      {c.from === "project" ? "the project's checks" : "the workflow"} · {commandOutcome(c)}
+                      {commandFrom(c.from)} · {commandOutcome(c)}
                     </span>
                   </label>
                 ))}
+                {extra.map((c) => (
+                  <label key={c} className="row">
+                    <input type="checkbox" checked onChange={() => setExtra(extra.filter((x) => x !== c))} />
+                    <code>{c}</code>
+                    <span className="muted">yours</span>
+                  </label>
+                ))}
+                <div className="row afk-add-command">
+                  <input
+                    aria-label="Another command to allow"
+                    placeholder="Another command, such as make check-app"
+                    value={typed}
+                    onChange={(e) => setTyped(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addTyped();
+                      }
+                    }}
+                  />
+                  <button type="button" onClick={addTyped} disabled={!typed.trim()}>
+                    Add
+                  </button>
+                </div>
               </fieldset>
             )}
           </>

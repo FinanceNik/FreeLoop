@@ -107,6 +107,10 @@ func TestRunStageSendsItsPrompt(t *testing.T) {
 
 	ch, cancel := e.Subscribe()
 	defer cancel()
+	// WFL-008: the grill stage needs its brief.
+	if _, err := e.RunStage(ctx, ses.ID, "/grill", "  "); err == nil || !strings.Contains(err.Error(), "needs to know what it is about") {
+		t.Errorf("a grill without a brief: %v", err)
+	}
 	if _, err := e.RunStage(ctx, ses.ID, "/grill", "add dark mode"); err != nil {
 		t.Fatal(err)
 	}
@@ -115,8 +119,27 @@ func TestRunStageSendsItsPrompt(t *testing.T) {
 	if !strings.Contains(text, "# Workflow stage: grill") || !strings.Contains(text, "The brief: add dark mode") || !strings.Contains(text, "grill-the-brief") {
 		t.Errorf("sent %q", text)
 	}
-	if got, _ := e.store.GetSession(ctx, ses.ID); got.Mode != "plan" {
+	// It asks before changes rather than plan, whose own approval would read as
+	// approving code (WFL-008).
+	if got, _ := e.store.GetSession(ctx, ses.ID); got.Mode != "ask" {
 		t.Errorf("mode = %s", got.Mode)
+	}
+	// The stage is recorded before its prompt, once, for the stage strip.
+	evs, _ := e.store.Events(ctx, ses.ID, 0)
+	var stages []string
+	for i, ev := range evs {
+		if ev.Type != event.WorkflowStage {
+			continue
+		}
+		var d event.WorkflowStageData
+		json.Unmarshal(ev.Data, &d)
+		stages = append(stages, d.Command+"/"+d.Kind)
+		if !slices.ContainsFunc(evs[i:], func(x event.Event) bool { return x.Type == event.UserMessageChunk }) {
+			t.Error("the stage came after its prompt")
+		}
+	}
+	if strings.Join(stages, ",") != "grill/prompt" {
+		t.Errorf("stages recorded: %v", stages)
 	}
 	if _, err := e.RunStage(ctx, ses.ID, "nope", ""); err == nil {
 		t.Error("a command the workflow lacks ran")

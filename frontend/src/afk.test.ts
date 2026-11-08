@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { commandOutcome, defaultAllow, issueStep, runLine, stepLabel, waitingStep } from "./afk.ts";
+import { commandFrom, commandOutcome, defaultAllow, issueStep, runLine, stepLabel, waitingStep } from "./afk.ts";
 
 test("a run offers to allow what would ask, never what is denied", () => {
   const cmds = [
@@ -34,4 +34,13 @@ test("a run says why its issue has not started", () => {
   // Once it has started, or the run has ended, nothing waits.
   assert.equal(waitingStep({ ...run, steps: [{ ...run.steps[0], waiting: "" }] }), undefined);
   assert.equal(waitingStep({ ...run, state: "stopped" }), undefined);
+});
+
+test("the project's other check targets are offered unticked (WFL-009)", () => {
+  const cmds = [
+    { command: "make test", from: "project", outcome: "ask" },
+    { command: "make check-app", from: "project-more", outcome: "ask" },
+  ];
+  assert.deepEqual(defaultAllow(cmds), ["make test"]);
+  assert.equal(commandFrom("project-more"), "another of the project's checks");
 });

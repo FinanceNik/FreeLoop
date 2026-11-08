@@ -329,6 +329,9 @@ func (e *Engine) RunStage(ctx context.Context, sid, command, input string) (Stag
 	case config.StageCleanup:
 		return e.cleanupStage(ctx, ses, w)
 	}
+	if stage.NeedsInput && strings.TrimSpace(input) == "" {
+		return res, fmt.Errorf("/%s needs to know what it is about: type it after the command", stage.Command)
+	}
 	if err := e.skillsReady(ctx, ses, w, stage.Skill); err != nil {
 		return res, err
 	}
@@ -337,6 +340,9 @@ func (e *Engine) RunStage(ctx context.Context, sid, command, input string) (Stag
 			return res, err
 		}
 	}
+	// The stage is recorded before its prompt, so the conversation shows where it
+	// starts and the stage strip knows it ran (WFL-008).
+	e.emit(sid, event.WorkflowStage, event.WorkflowStageData{Workflow: w.ID, Command: stage.Command, Title: stage.Title, Kind: stage.StageKind()})
 	text := config.Render(stage.Prompt, e.stageVars(ctx, ses, w, strings.TrimSpace(input)))
 	// The template and the backlog it quotes are not the user's typing: their @
 	// words attach nothing.

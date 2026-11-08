@@ -101,6 +101,10 @@ export default function NewSession({ providers, projects, environments, profiles
   // The workflow (WFL-002): empty takes the profile's or the default.
   const [workflow, setWorkflow] = useState(initialWorkflow ?? "");
   const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
+  // Started as a workflow: what it is about, sent to its first stage at once (WFL-008).
+  const [brief, setBrief] = useState("");
+  const chosenWorkflow = initialWorkflow ? workflows.find((w) => w.id === (workflow || initialWorkflow)) : undefined;
+  const firstStage = (chosenWorkflow?.stages ?? [])[0];
   useEffect(() => {
     EngineService.Workflows()
       .then((l) => setWorkflows(l ?? []))
@@ -251,6 +255,19 @@ export default function NewSession({ providers, projects, environments, profiles
         if (makeDefault && s.projectId) await EngineService.SetProjectProfile(s.projectId, profileId).catch(onError);
         if (issue) await EngineService.SetTags(s.id, [issue.tag]).catch(onError);
         const first = (workflows.find((w) => w.id === s.workflow)?.stages ?? [])[0];
+        // The brief goes to the first stage straight away; if the stage cannot run
+        // yet, it waits in the box with its command, and the reason shows.
+        if (initialWorkflow && first && brief.trim() && (!first.kind || first.kind === "prompt")) {
+          const ran = await EngineService.RunStage(s.id, first.command, brief.trim()).then(
+            () => true,
+            (err) => {
+              onError(err);
+              return false;
+            },
+          );
+          onCreated(s, ran ? undefined : `/${first.command} ${brief.trim()}`);
+          return;
+        }
         onCreated(s, issue?.text ?? (initialWorkflow && first ? `/${first.command} ` : undefined));
       })
       .catch(onError)
@@ -297,8 +314,26 @@ export default function NewSession({ providers, projects, environments, profiles
 
   return (
     <section className="page">
-      <h2>New session</h2>
+      <h2>{initialWorkflow ? "Start a workflow" : "New session"}</h2>
       <form className="card form" onSubmit={create}>
+        {initialWorkflow && firstStage && (
+          <label className="workflow-brief">
+            What is it about?
+            <textarea
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+              rows={3}
+              required={!!firstStage.needsInput}
+              placeholder="A feature, a fix or an idea, in a sentence or two"
+              autoFocus
+            />
+            <span className="muted">
+              {chosenWorkflow?.reason
+                ? `${chosenWorkflow.name} cannot start yet: ${chosenWorkflow.reason}. Settings → Workflows sets it up.`
+                : `${chosenWorkflow?.name}: the session starts at "${firstStage.title}" with this, and the stage strip above its box shows what comes after.`}
+            </span>
+          </label>
+        )}
         {projects.length > 0 && (
           <label>
             Project

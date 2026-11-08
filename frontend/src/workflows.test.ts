@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { stageAction, stageCall, stageCommands, type WorkflowLike } from "./workflows.ts";
+import { guided, stageAction, stageCall, stageCommands, stageOutputs, stageProgress, withoutStageSkills, type WorkflowLike } from "./workflows.ts";
 
 const w: WorkflowLike = {
   id: "plan-slice-afk",
@@ -34,4 +34,62 @@ test("a stage's command takes what follows it", () => {
 test("each kind says what it does", () => {
   assert.match(stageAction("afk"), /AFK run/);
   assert.match(stageAction(undefined), /prompt/);
+});
+
+const flow: WorkflowLike = {
+  id: "plan",
+  name: "Plan",
+  stages: [
+    { command: "grill", title: "Grill", skill: "grill-the-brief", needsInput: true },
+    { command: "prd", title: "PRD", skill: "write-a-prd" },
+    { command: "slice", title: "Slice", skill: "slice-into-issues" },
+    { command: "afk", title: "AFK", kind: "afk" },
+    { command: "review", title: "Review", kind: "review" },
+  ],
+};
+const states = (steps: { stage: { command: string }; state: string }[]) => steps.map((s) => `${s.stage.command}:${s.state}`).join(" ");
+
+test("the stage strip follows the path, not a review", () => {
+  assert.deepEqual(guided(flow).map((s) => s.command), ["grill", "prd", "slice", "afk"]);
+  // Nothing ran: the first stage is next.
+  assert.equal(states(stageProgress(flow, [], false)), "grill:next prd:todo slice:todo afk:todo");
+  // The grill runs, then ends: the PRD is next.
+  const grilling = [{ kind: "stage", command: "grill" }, { kind: "user" }];
+  assert.equal(states(stageProgress(flow, grilling, true)), "grill:running prd:todo slice:todo afk:todo");
+  const grilled = [...grilling, { kind: "turn_end" }];
+  assert.equal(states(stageProgress(flow, grilled, false)), "grill:done prd:next slice:todo afk:todo");
+  // A later turn without a stage leaves the PRD next.
+  assert.equal(states(stageProgress(flow, [...grilled, { kind: "user" }], true)), "grill:done prd:next slice:todo afk:todo");
+  // Skipping ahead: after slicing, the AFK run is next, and the PRD stays to do.
+  assert.equal(states(stageProgress(flow, [{ kind: "stage", command: "slice" }, { kind: "turn_end" }], false)), "grill:todo prd:todo slice:done afk:next");
+});
+
+test("the AFK stage follows the project's run", () => {
+  const sliced = [{ kind: "stage", command: "slice" }, { kind: "turn_end" }];
+  const run = { state: "running", steps: [{ state: "qa" }, { state: "working" }] };
+  const steps = stageProgress(flow, sliced, false, run);
+  assert.equal(states(steps), "grill:todo prd:todo slice:done afk:running");
+  assert.equal(steps[3].detail, "1 of 2 done");
+  assert.equal(states(stageProgress(flow, sliced, false, { ...run, state: "finished" })), "grill:todo prd:todo slice:done afk:done");
+});
+
+test("the handoff lists what the last stage wrote", () => {
+  const items = [
+    { kind: "stage", command: "prd" },
+    { kind: "tool", toolKind: "edit", status: "completed", content: [{ path: "backlog/prds/old.md" }] },
+    { kind: "stage", command: "slice" },
+    { kind: "tool", toolKind: "read", status: "completed", content: [{ path: "backlog/prds/x.md" }] },
+    { kind: "tool", toolKind: "edit", status: "completed", content: [{ path: "backlog/issues/001.md" }] },
+    { kind: "tool", toolKind: "edit", status: "failed", content: [{ path: "backlog/issues/bad.md" }] },
+    { kind: "tool", toolKind: "edit", status: "completed", input: { file_path: "backlog/issues/002.md" } },
+    { kind: "tool", toolKind: "edit", status: "completed", content: [{ path: "backlog/issues/001.md" }] },
+  ];
+  assert.deepEqual(stageOutputs(items), ["backlog/issues/001.md", "backlog/issues/002.md"]);
+  assert.deepEqual(stageOutputs([{ kind: "user" }]), []);
+});
+
+test("the menu offers the stage, not the agent's own command for its skill", () => {
+  const cmds = [{ name: "freeloop:grill-the-brief" }, { name: "write-a-prd" }, { name: "compact" }, { name: "work-an-issue" }];
+  assert.deepEqual(withoutStageSkills(cmds, flow).map((c) => c.name), ["compact", "work-an-issue"]);
+  assert.equal(withoutStageSkills(cmds, undefined).length, 4);
 });

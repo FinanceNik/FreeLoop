@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	goruntime "runtime"
 	"slices"
 	"strings"
@@ -96,8 +97,9 @@ func (e *Engine) lastRun(projectID string) *config.AFKRun {
 type AFKCommand struct {
 	// Command is a shell rule pattern, as "git commit *".
 	Command string `json:"command"`
-	// From is "workflow" or "project": the workflow names it, or the project's
-	// files suggest it as its tests or checks.
+	// From is "workflow", "project" or "project-more": the workflow names it, the
+	// project's files suggest it as its tests or checks, or as another check
+	// target, which is offered but not ticked.
 	From string `json:"from"`
 	// Outcome is allowed, ask or denied, for a session of the run as it would start.
 	Outcome string `json:"outcome"`
@@ -188,6 +190,41 @@ func projectChecks(env environment.Environment) []string {
 	}
 	if has("pyproject.toml") || has("pytest.ini") || has("setup.cfg") {
 		out = append(out, "pytest *")
+	}
+	return out
+}
+
+// extraCommand checks a command the user typed in for a run to allow: one line, and
+// never everything at once.
+func extraCommand(c string) (string, error) {
+	c = strings.Join(strings.Fields(c), " ")
+	switch {
+	case c == "":
+		return "", errors.New("an empty command cannot be allowed")
+	case strings.HasPrefix(c, "*"):
+		return "", fmt.Errorf("%q would allow any command; name the program it starts with", c)
+	case strings.ContainsAny(c, "\n\r"):
+		return "", errors.New("a command to allow is one line")
+	}
+	return c, nil
+}
+
+// moreTargets are Makefile targets named after a check, such as check-app or
+// test-keychain: offered for a run to allow, not ticked, since what they touch is
+// not known.
+var moreTargets = regexp.MustCompile(`(?m)^((?:test|check|lint|typecheck)-[A-Za-z0-9_-]+):`)
+
+// projectMoreChecks are the project's other check targets, as rule patterns.
+func projectMoreChecks(env environment.Environment) []string {
+	b, err := env.FS().ReadFile("Makefile")
+	if err != nil || len(b) > 1<<20 {
+		return nil
+	}
+	var out []string
+	for _, m := range moreTargets.FindAllStringSubmatch(string(b), -1) {
+		if c := "make " + m[1]; !slices.Contains(out, c) {
+			out = append(out, c)
+		}
 	}
 	return out
 }
@@ -294,6 +331,9 @@ func (e *Engine) PrepareAFK(ctx context.Context, root, workflowID string) (AFKPl
 	for _, c := range projectChecks(env) {
 		add(c, "project")
 	}
+	for _, c := range projectMoreChecks(env) {
+		add(c, "project-more")
+	}
 	return plan, nil
 }
 
@@ -316,6 +356,9 @@ type AFKStart struct {
 	ReviewProfileID string `json:"reviewProfileId"`
 	// Allow are commands of the plan the user allows for the run's sessions.
 	Allow []string `json:"allow"`
+	// Extra are commands the user typed in to allow as well, such as a check the
+	// plan did not find (WFL-009).
+	Extra []string `json:"extra"`
 	// StartedBy says where it was started, for the record.
 	StartedBy string `json:"startedBy"`
 }
@@ -339,6 +382,16 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 			return config.AFKRun{}, fmt.Errorf("%q is not among the commands the run offered to allow", c)
 		}
 	}
+	allow := slices.Clone(req.Allow)
+	for _, c := range req.Extra {
+		c, err := extraCommand(c)
+		if err != nil {
+			return config.AFKRun{}, err
+		}
+		if !slices.Contains(allow, c) {
+			allow = append(allow, c)
+		}
+	}
 	prof := plan.ProfileID
 	if req.ProfileID != "" {
 		if _, err := e.profileFor(project, req.ProfileID); err != nil {
@@ -355,7 +408,7 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 	}
 	run := config.AFKRun{
 		ID: fmt.Sprintf("afk_%d", time.Now().UnixNano()), WorkflowID: plan.WorkflowID, ProjectID: project.ID, ProjectRoot: project.Root,
-		ProfileID: prof, ReviewProfileID: review, EnvironmentID: plan.EnvironmentID, Mode: plan.Mode, Allow: slices.Clone(req.Allow),
+		ProfileID: prof, ReviewProfileID: review, EnvironmentID: plan.EnvironmentID, Mode: plan.Mode, Allow: allow,
 		MaxIssues: plan.MaxIssues, State: config.RunRunning, Steps: []config.AFKStep{}, StartedBy: req.StartedBy, StartedAt: time.Now().UTC(),
 	}
 	w, _ := e.findWorkflow(plan.WorkflowID)

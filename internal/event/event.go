@@ -77,6 +77,8 @@ const (
 	OptimizerChanged Type = "optimizer_changed"
 	// WorkflowChanged records the session's workflow (WFL-002).
 	WorkflowChanged Type = "workflow_changed"
+	// WorkflowStage records a stage of the session's workflow starting (WFL-008).
+	WorkflowStage Type = "workflow_stage"
 	// EffortChanged records the effort a session's model calls ask for (PRV-014).
 	EffortChanged Type = "effort_changed"
 	// SessionRuleChanged records a rule the user added to or removed from a session.
@@ -98,7 +100,7 @@ var FreeloopTypes = []Type{
 	TurnStarted, TurnEnded, PermissionRequested, PermissionDecided, SessionStatus,
 	GitState, ModelChanged, EnvHealth, HookRan, Error, HistoryMessage, Checkpoint, Rewind, Handoff,
 	PullRequest, TagsChanged, WorktreeSetup, OptimizerChanged, EffortChanged, SessionRuleChanged, SessionImported,
-	LimitUpdate, ModeRefused, Stuck, HandedOff, ModelContext, WorkflowChanged,
+	LimitUpdate, ModeRefused, Stuck, HandedOff, ModelContext, WorkflowChanged, WorkflowStage,
 }
 
 // AllTypes returns every known variant.
@@ -346,6 +348,15 @@ type OptimizerChangedData struct {
 type WorkflowChangedData struct {
 	Workflow string `json:"workflow"`
 	Name     string `json:"name"`
+}
+
+// WorkflowStageData is the payload of workflow_stage (WFL-008): the stage's
+// command, title and kind.
+type WorkflowStageData struct {
+	Workflow string `json:"workflow"`
+	Command  string `json:"command"`
+	Title    string `json:"title"`
+	Kind     string `json:"kind"`
 }
 
 // AvailableCommandsData is the payload of available_commands_update: the

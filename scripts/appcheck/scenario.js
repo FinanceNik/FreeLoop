@@ -1357,6 +1357,13 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   await until("the workflow listed", () => [...picker.options].some((o) => o.value === "plan-slice-afk"), 8000);
   setSelect(picker, "plan-slice-afk");
   await until("the workflow chosen", () => picker.value === "plan-slice-afk", 8000);
+  // WFL-008: choosing it shows the stage strip, with the first stage next.
+  const strip = await until("the stage strip", () => activePane().querySelector(".workflow-strip"), 8000);
+  const steps = () => all(".workflow-step", strip).map((s) => s.className.replace("workflow-step workflow-step-", "") + ":" + s.childNodes[s.childNodes.length - 2]?.textContent);
+  check("the strip shows the path, the first stage next", steps().join("|") === "next:Grill the brief|todo:Write the PRD|todo:Slice into issues|todo:Run the AFK issues", steps().join("|"));
+  check("its Next button names the first stage", withText(".workflow-next", "Next: Grill the brief", strip));
+  const sr = strip.getBoundingClientRect(), cr = activePane().querySelector(".composer").getBoundingClientRect();
+  check("the strip fits above the composer", sr.left >= cr.left - 1 && sr.right <= cr.right + 1 && sr.bottom <= cr.top + 1 && sr.height < 64 && strip.scrollWidth <= strip.clientWidth + 1, JSON.stringify({ strip: [sr.left, sr.right, sr.height, strip.scrollWidth, strip.clientWidth], composer: [cr.left, cr.right, cr.top] }));
   const box = activePane().querySelector(".composer textarea");
   box.focus();
   type(box, "/");
@@ -1378,16 +1385,17 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   const writes = all(".tool.tool-completed", activePane()).filter((t) => t.querySelector("summary")?.textContent.includes("write_file"));
   check("a file written has a pen beside it", writes.length > 0 && writes.every((t) => t.querySelector('.edit-mark[aria-label="Edited a file"] svg')), `${writes.length} writes`);
 
-  // The Board's backlog: two issues, the second waiting on the first.
-  named(".footer-links button", "Board").click();
-  const backlog = await until("the backlog", () => document.querySelector('.board-backlog [aria-label="Backlog of workflow"]'), 15000);
-  const cards = () => all(".backlog-card", backlog);
-  await until("two issues", () => cards().length === 2, 10000);
-  check("the first issue is ready", cards()[0].textContent.includes("Ready") && cards()[0].textContent.includes("AFK"), cards()[0].textContent);
-  check("the second waits on the first", cards()[1].textContent.includes("Blocked") && cards()[1].textContent.includes("after 001-first-slice"), cards()[1].textContent);
+  // WFL-008: the conversation marks where the stage began, and the strip moves on,
+  // saying what the stage wrote.
+  check("the conversation marks the stage", withText(".workflow-stage-marker", "Workflow stage: Slice into issues", activePane()));
+  await until("the strip to move on", () => steps().includes("done:Slice into issues"), 8000);
+  check("after slicing, the AFK run is next", steps().includes("next:Run the AFK issues"), steps().join("|"));
+  const wrote = strip.querySelector(".workflow-wrote")?.textContent ?? "";
+  check("the strip says what the stage wrote", wrote.includes("001-first-slice.md"), wrote);
 
-  // The run: what it will want, allowed up front, then both issues done and reviewed.
-  withText("button", "Run AFK issues…", backlog).click();
+  // The run: its Next button opens the dialog with what it will want, allowed up
+  // front, then both issues are done and reviewed.
+  withText(".workflow-next", "Next: Run the AFK issues", strip).click();
   const dialog = await until("the run's dialog", () => document.querySelector(".afk-dialog"), 8000);
   await until("the plan", () => dialog.textContent.includes("First:"), 8000);
   check("the dialog says what it does first", dialog.textContent.includes("First slice"), dialog.textContent.slice(0, 160));
@@ -1397,9 +1405,24 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   const reviewProfile = all("label", dialog).find((l) => l.textContent.startsWith("Profile for the reviews"))?.querySelector("select");
   setSelect(afkProfile, "afk-demo");
   if (reviewProfile) setSelect(reviewProfile, "afk-demo");
+  // WFL-009: a command of the user's own joins the list, ticked.
+  const another = dialog.querySelector('input[aria-label="Another command to allow"]');
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(another, "npm run e2e");
+  another.dispatchEvent(new Event("input", { bubbles: true }));
+  await sleep(50);
+  withText("button", "Add", dialog).click();
+  await until("the command added", () => all(".afk-commands label", dialog).some((l) => l.textContent.includes("npm run e2e") && l.textContent.includes("yours")), 4000);
+  check("a command of the user's own can be allowed", true);
   await sleep(100);
   (await until("Start", () => { const b = withText("button", "Start the run", dialog); return b && !b.disabled && b; }, 4000)).click();
   await until("the dialog closed", () => !document.querySelector(".afk-dialog"), 8000);
+
+  // Starting shows the Board's backlog: two issues, the second waiting on the first.
+  const backlog = await until("the backlog", () => document.querySelector('.board-backlog [aria-label="Backlog of workflow"]'), 15000);
+  const cards = () => all(".backlog-card", backlog);
+  await until("two issues", () => cards().length === 2, 10000);
+  check("the first issue is ready", cards()[0].textContent.includes("Ready") && cards()[0].textContent.includes("AFK"), cards()[0].textContent);
+  check("the second waits on the first", cards()[1].textContent.includes("Blocked") && cards()[1].textContent.includes("after 001-first-slice"), cards()[1].textContent);
   // The queue step above left the queue paused, which holds the run's issues: the
   // dialog said so, and the Queue page resumes it.
   if (queuePaused) {
@@ -1420,6 +1443,14 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   }, 150000);
   check("the run did both issues", line.startsWith("AFK run finished: 2 of 2 issues done"), line);
   check("no unattended session waited for an approval", !document.querySelector(".board-needs .board-card"), document.querySelector(".board-needs")?.textContent.slice(0, 120));
+
+  // WFL-009: the run in full, each issue with its session and review.
+  withText(".backlog-run-details", "Show the run").click();
+  const view = await until("the run view", () => document.querySelector(".afk-run-view"), 8000);
+  const runSteps = all(".afk-run-step", view);
+  check("the run view lists both issues, ready for QA", runSteps.length === 2 && runSteps.every((s) => s.textContent.includes("ready for QA") && withText("button", "Open its session", s) && withText("button", "Open its review", s)), runSteps.map((s) => s.textContent.slice(0, 80)).join(" | "));
+  withText("button", "Close", view).click();
+  await until("the run view closed", () => !document.querySelector(".afk-run-view"), 4000);
 
   // Ready for QA, each with its review, until QA'd.
   (await until("Needs attention", () => document.querySelector(".attention-link"), 8000)).click();

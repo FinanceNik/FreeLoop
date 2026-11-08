@@ -39,9 +39,22 @@ export function commandOutcome(c: CommandLike): string {
 }
 
 // defaultAllow ticks what would ask and is not denied: the run's own commands and
-// the project's checks, which an unattended session otherwise waits on.
+// the project's checks, which an unattended session otherwise waits on. The
+// project's other check targets are offered unticked: what they touch is not known.
 export function defaultAllow(cmds: CommandLike[]): string[] {
-  return cmds.filter((c) => c.outcome === "ask").map((c) => c.command);
+  return cmds.filter((c) => c.outcome === "ask" && c.from !== "project-more").map((c) => c.command);
+}
+
+// commandFrom says where an offered command comes from.
+export function commandFrom(from: string): string {
+  switch (from) {
+    case "project":
+      return "the project's checks";
+    case "project-more":
+      return "another of the project's checks";
+    default:
+      return "the workflow";
+  }
 }
 
 const STEP: Record<string, string> = {

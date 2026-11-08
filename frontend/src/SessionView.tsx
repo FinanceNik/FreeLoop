@@ -6,12 +6,14 @@ import { isDemo } from "./demo.ts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
 import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
-import { stageCall, stageCommands } from "./workflows.ts";
+import { stageCall, stageCommands, withoutStageSkills } from "./workflows.ts";
+import WorkflowStrip from "./WorkflowStrip.tsx";
 import {
   EngineService,
   MODES,
   type EnvironmentInfo,
   type OptimizerInfo,
+  type AFKRun,
   type WorkflowInfo,
   type HarnessInfo,
   type ProjectInfo,
@@ -63,6 +65,8 @@ interface Props {
   prices: PriceEntry[];
   // Opens the AFK run's dialog for a project's backlog (WFL-005), for /afk.
   onRunAFK?: (root: string, workflowId: string) => void;
+  // Shows a project's AFK run in full (WFL-009).
+  onShowRun?: (root: string) => void;
   // Text for the composer, as after a fork (SES-009).
   initialDraft?: string;
   // Profiles to continue the session with (HRN-012).
@@ -121,7 +125,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source, onRunAFK }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source, onRunAFK, onShowRun }: Props) {
   // Beside other panes the panel starts closed and only the active pane shows
   // it; the remembered choice is for a session alone in the window.
   const split = !!onClosePane;
@@ -351,11 +355,24 @@ export default function SessionView({ session, events, focus, prices, initialDra
   }, [session.id]);
   const workflow = workflows.find((w) => w.id === session.workflow);
   const setWorkflow = (id: string) => EngineService.SetWorkflow(session.id, id).catch(onError);
+  // The project's AFK run, for the stage strip's AFK stage (WFL-008).
+  const [afkRun, setAfkRun] = useState<AFKRun | null>(null);
+  useEffect(() => {
+    if (!workflow) return setAfkRun(null);
+    const load = () =>
+      EngineService.Backlog(session.projectRoot, workflow.id)
+        .then((b) => setAfkRun(b.run ?? null))
+        .catch(() => setAfkRun(null));
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [workflow?.id, session.projectRoot, view.running]);
   const commands = useMemo<SlashCommand[]>(
     () => [
       ...MODE_COMMANDS.filter((c) => modeAllowed(c.mode ?? "")),
       ...stageCommands(workflow),
-      ...view.commands.map((c) => ({ name: c.name, description: c.description })),
+      // The agent's own command for a stage's skill would duplicate the stage (WFL-008).
+      ...withoutStageSkills(view.commands, workflow).map((c) => ({ name: c.name, description: c.description })),
       ...(mcp?.prompts ?? []).map((p) => ({
         name: p.command,
         description: p.description || p.title || `Prompt from ${p.server}`,
@@ -570,6 +587,37 @@ export default function SessionView({ session, events, focus, prices, initialDra
   }, [view.running]);
 
   const [accepting, setAccepting] = useState(false);
+  // runStage has the engine run a stage of the session's workflow; typed, it
+  // clears the draft once accepted.
+  const runStage = (command: string, text: string, typed: boolean) => {
+    holdBottom.current = false;
+    setAccepting(true);
+    EngineService.RunStage(session.id, command, text)
+      .then(() => {
+        if (!typed) return;
+        forgetDraft(session.id);
+        setDraft("");
+      })
+      .catch(onError)
+      .finally(() => setAccepting(false));
+  };
+  // The stage strip's Next button (WFL-008): a stage that needs to know what it is
+  // about waits in the composer for it; an AFK run opens its dialog; any other runs.
+  const nextStage = (stage: { command: string; kind?: string; needsInput?: boolean }) => {
+    if (!workflow) return;
+    if (stage.kind === "afk") return onRunAFK?.(session.projectRoot, workflow.id);
+    if (stage.needsInput) {
+      setDraft(`/${stage.command} `);
+      requestAnimationFrame(() => {
+        const el = input.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+      return;
+    }
+    runStage(stage.command, "", false);
+  };
   const send = () => {
     const text = draft.trim();
     if ((!text && pictures.length === 0 && textFiles.length === 0) || accepting) return;
@@ -589,15 +637,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       return;
     }
     if (call) {
-      holdBottom.current = false;
-      setAccepting(true);
-      EngineService.RunStage(session.id, call.command, call.input)
-        .then(() => {
-          forgetDraft(session.id);
-          setDraft("");
-        })
-        .catch(onError)
-        .finally(() => setAccepting(false));
+      runStage(call.command, call.input, true);
       return;
     }
     // A message that is just an MCP prompt's command runs the prompt.
@@ -1243,6 +1283,17 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </div>
           </form>
         )}
+        {workflow && (
+          <WorkflowStrip
+            workflow={workflow}
+            items={view.items}
+            running={view.running}
+            run={afkRun}
+            roots={roots}
+            onNext={nextStage}
+            onShowRun={onShowRun ? () => onShowRun(session.projectRoot) : undefined}
+          />
+        )}
         <div
           className={dragging ? "composer composer-drop" : "composer"}
           onDragOver={(e) => {
@@ -1633,6 +1684,8 @@ function ItemBody({
       );
     case "error":
       return <div className="banner error">{item.message}</div>;
+    case "stage":
+      return <div className="workflow-stage-marker">Workflow stage: {item.title}</div>;
     case "mode":
       return <div className="turn-end">Mode changed to {MODES.find((m) => m.id === item.mode)?.name ?? item.mode}</div>;
     case "model":
