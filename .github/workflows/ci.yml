@@ -23,9 +23,10 @@ on:
 permissions:
   contents: read
 
-# Two jobs, for what minutes cost on a private repository, where a macOS minute counts
-# ten: the tests on Linux for every push, and the macOS build, lint and real-app check
-# on tags, weekly and from the Actions page (docs/ROADMAP.md, "From here to 0.1.0").
+# For what minutes cost on a private repository, where a macOS minute counts ten: the
+# tests on Linux and on Windows for every push, and the macOS build, lint and real-app
+# check on tags, weekly and from the Actions page (docs/ROADMAP.md, "From here to
+# 0.1.0"), where the Windows and Linux packages are built too (NFR-XPLAT-003).
 jobs:
   test:
     if: github.event_name != 'schedule'
@@ -63,6 +64,67 @@ jobs:
 
       - name: Frontend tests
         run: make frontend-test
+
+  # The same tests on Windows for every push (NFR-XPLAT-003), and the app compiled for
+  # both Windows architectures the way `make windows-exe` does it.
+  windows:
+    if: github.event_name != 'schedule'
+    runs-on: windows-latest
+    defaults:
+      run:
+        # Git Bash (C:\Program Files\Git\bin\bash.exe on the runner), so the commands
+        # read as on the other jobs.
+        shell: bash
+    steps:
+      - name: Checkout keeps LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Vetted
+        run: go vet ./internal/...
+
+      # -race needs cgo; the runner's MinGW gcc gives it. Without a C compiler the
+      # tests still run, without the race detector.
+      - name: Engine tests, every event checked against the schema
+        env:
+          FREELOOP_CHECK_EVENTS: ${{ github.workspace }}/schemas/events.json
+        run: |
+          if command -v gcc >/dev/null 2>&1; then
+            CGO_ENABLED=1 go test -race ./internal/... ./cmd/freeloop-sbom
+          else
+            echo "::warning::no gcc on the runner: Go tests without -race"
+            go test ./internal/... ./cmd/freeloop-sbom
+          fi
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@$(sed -n 's/^WAILS_VERSION := //p' Makefile)
+
+      # The shipped build, with its resource (icon, version, manifest) and no console.
+      - name: Build the app for Windows, amd64 and arm64
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          wails3 generate bindings -clean=true -ts -i -silent ./cmd/freeloop
+          (cd frontend && npm run build)
+          for arch in amd64 arm64; do ARCH=$arch wails3 task windows:build:exe SHIPPED=1; done
+          file bin/windows-*/Freeloop.exe || true
 
   build:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
@@ -124,12 +186,83 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: make verify-repro
 
+  # The Windows installers and zips (amd64, arm64), cross-compiled on Linux, where NSIS
+  # is a package away; kept as an artifact the release job adds to the release.
+  package-windows:
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: NSIS and zip
+        run: sudo apt-get install -y --no-install-recommends nsis zip
+
+      - name: Install wails3
+        run: make tools
+
+      - name: Build the Windows release files
+        run: make frontend/node_modules release RELEASE_PLATFORMS=windows
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-windows
+          path: bin/release
+          retention-days: 7
+
+  # The Linux AppImage and .deb, each architecture natively on its own runner, in the
+  # image from build/linux/Dockerfile as `make linux-package` does on a Mac.
+  package-linux:
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install wails3
+        run: make tools
+
+      # The container builds as uid 1000 into bin/, which is the runner's uid too.
+      - name: Build the Linux release files
+        run: make frontend/node_modules release RELEASE_PLATFORMS=linux LINUX_ARCHS=${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-linux-${{ matrix.arch }}
+          path: bin/release
+          retention-days: 7
+
   # A tag v<version> makes a draft pre-release from what this commit builds, once every
   # check above has passed. Nothing is published until someone reads the draft and
   # presses Publish. A dry run from the Actions page builds the same files and keeps them
   # as an artifact instead.
   release:
-    needs: build
+    needs: [build, package-windows, package-linux]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.dry_run)
     runs-on: macos-15
     permissions:
@@ -161,8 +294,26 @@ jobs:
           fi
           test -f "docs/release-notes/$version.md" || { echo "docs/release-notes/$version.md is missing" >&2; exit 1; }
 
-      - name: Build the release files
-        run: make frontend/node_modules release
+      - name: Build the Mac release files
+        run: make frontend/node_modules release RELEASE_PLATFORMS=mac
+
+      # The Windows and Linux files the package jobs built, beside the Mac's, under
+      # one SHA256SUMS.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-windows
+          path: bin/release-windows
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-linux-*
+          path: bin/release-linux
+          merge-multiple: true
+      - name: Add the Windows and Linux files
+        run: |
+          rm -f bin/release-windows/SHA256SUMS bin/release-linux/SHA256SUMS
+          cp bin/release-windows/* bin/release-linux/* bin/release/
+          make release-sums
+          ls -l bin/release
 
       - name: Keep the files of a dry run
         if: github.event_name == 'workflow_dispatch'
