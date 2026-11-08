@@ -412,38 +412,22 @@ func (f *localFS) writeMode(p string, data []byte, newMode os.FileMode) error {
 		}
 		target = real
 	}
-	// Checked before folders are made, and again once they exist, so
-	// every symlink on the way is resolved. The second answer is the path that
-	// is written.
-	check := func() (string, error) {
-		real := realTarget(target)
-		if real != abs {
-			return real, f.guard.CheckWrite(real)
+	// Every symlink in the existing part is resolved and the result checked: that
+	// is the path written, and missing folders are made along it.
+	real := realTarget(target)
+	if real != abs {
+		if err := f.guard.CheckWrite(real); err != nil {
+			return err
 		}
-		return real, nil
-	}
-	if _, err := check(); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
-	}
-	real, err := check()
-	if err != nil {
-		return err
-	}
-	mode := newMode
-	if fi, err := os.Lstat(real); err == nil {
-		if !fi.Mode().IsRegular() {
-			return fmt.Errorf("%s is not a regular file", p)
-		}
-		mode = fi.Mode().Perm()
 	}
 	afterCheck()
-	// A link put in place since the checks, here or in a folder on the way, is
-	// not followed.
-	file, err := os.OpenFile(real, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|noFollow, mode)
+	// A link put in place since the check, here or in a folder on the way, is not
+	// followed, and no folder is made through one.
+	file, err := createNoFollow(real, newMode)
 	if err != nil {
+		if errors.Is(err, errNotRegular) {
+			return fmt.Errorf("%s is not a regular file", p)
+		}
 		return err
 	}
 	if _, err := file.Write(data); err != nil {

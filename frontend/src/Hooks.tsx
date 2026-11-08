@@ -43,7 +43,7 @@ export function PendingCommands({ version, onSaved, onError }: { version: unknow
     <div className="card" id="pending-approvals">
       <h3>Waiting for your approval ({list.length})</h3>
       <p className="muted">
-        These are in the app's config files, but were not written or approved in the app: they may come from a restored backup, or from a file edited outside the app. Until you approve them as they are now, hooks and agents run nothing, allow rules and settings do not apply, no session can use an environment, and nothing is sent to an address. Approve only what you recognize.
+        These are in the app's config files, but were not written or approved in the app: they may come from a restored backup, or from a file edited outside the app. A trusted project's hooks are here when they changed since you trusted it, by a pull, a merge or anything else that writes the project. Until you approve them as they are now, hooks and agents run nothing, allow rules and settings do not apply, no session can use an environment, and nothing is sent to an address. Approve only what you recognize.
       </p>
       <div className="pending-list" tabIndex={0} role="group" aria-label={`${list.length} waiting for approval`}>
         {groupPending(list).map((g) => (

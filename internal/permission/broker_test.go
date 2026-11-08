@@ -18,12 +18,27 @@ import (
 type recorder struct {
 	mu     sync.Mutex
 	events []event.Type
+	// asked are the requests put to the user.
+	asked []Request
 }
 
-func (r *recorder) emit(_ string, typ event.Type, _ any) {
+func (r *recorder) emit(_ string, typ event.Type, data any) {
 	r.mu.Lock()
 	r.events = append(r.events, typ)
+	if req, ok := data.(Request); ok && typ == event.PermissionRequested {
+		r.asked = append(r.asked, req)
+	}
 	r.mu.Unlock()
+}
+
+// lastAsked is the last request put to the user, if any.
+func (r *recorder) lastAsked() (Request, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.asked) == 0 {
+		return Request{}, false
+	}
+	return r.asked[len(r.asked)-1], true
 }
 
 func setup(t *testing.T) (*Broker, *recorder, string, string) {
@@ -380,24 +395,75 @@ func TestProtectedDirectoryCreatedLaterIsCovered(t *testing.T) {
 }
 
 type fakeHooks struct {
-	mu        sync.Mutex
-	pre, perm string // reasons to return
-	preCalls  int
-	permCalls int
+	mu                    sync.Mutex
+	pre, perm             string // reasons to block with
+	preFailed, permFailed string // failures to report
+	preCalls              int
+	permCalls             int
 }
 
-func (h *fakeHooks) PreToolUse(_ context.Context, _ Context, _ Request) string {
+func (h *fakeHooks) PreToolUse(_ context.Context, _ Context, _ Request) HookResult {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.preCalls++
-	return h.pre
+	return HookResult{Block: h.pre, Failed: h.preFailed}
 }
 
-func (h *fakeHooks) PermissionRequest(_ context.Context, _ Context, _ Request) string {
+func (h *fakeHooks) PermissionRequest(_ context.Context, _ Context, _ Request) HookResult {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.permCalls++
-	return h.perm
+	return HookResult{Block: h.perm, Failed: h.permFailed}
+}
+
+// A guard hook that failed (timed out, could not start, exited other than 0 or 2)
+// lets nothing through unasked: the call goes to the user with the reason, in
+// every mode and over an allow rule. It never denies or allows by itself, and a
+// deny still wins without running it.
+func TestFailedHookAsks(t *testing.T) {
+	b, rec, _, root := setup(t)
+	rules := &memRules{global: []Rule{
+		{Effect: Allow, Tool: "shell", Command: "make test", Scope: ScopeGlobal},
+		{Effect: Deny, Tool: "shell", Command: "git push *", Scope: ScopeGlobal},
+	}}
+	b.SetRules(rules, rules)
+	h := &fakeHooks{preFailed: `the pre_tool_use hook "guard.sh" timed out after 1 s`}
+	b.SetHooks(h)
+	write := Request{SessionID: "s", Tool: "write_file", Kind: KindEdit, Paths: []string{filepath.Join(root, "a.go")}}
+	allowed := Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "make test"}
+	for _, c := range []struct {
+		mode Mode
+		req  Request
+	}{{ModeAcceptEdits, write}, {ModeBypass, write}, {ModeAsk, allowed}, {ModeBypass, allowed}} {
+		d := decide(t, b, Context{Mode: c.mode, Root: root}, c.req, "reject_once")
+		if d.Outcome != Denied || d.Actor != ActorUser {
+			t.Errorf("%s %s with a failed hook = %+v, want the user's answer", c.mode, c.req.Tool, d)
+		}
+		if asked, ok := rec.lastAsked(); !ok || asked.HookFailed != h.preFailed || asked.Command != c.req.Command {
+			t.Errorf("%s %s: the request does not say the hook failed: %+v", c.mode, c.req.Tool, asked)
+		}
+	}
+	if d := decide(t, b, Context{Mode: ModeAcceptEdits, Root: root}, write, "allow_once"); d.Outcome != Allowed || d.Actor != ActorUser {
+		t.Errorf("the user allowing it = %+v", d)
+	}
+
+	before := h.preCalls
+	push := Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "git push origin main"}
+	if d := decide(t, b, Context{Mode: ModeBypass, Root: root}, push, ""); d.Outcome != Denied || d.Actor != ActorRule || h.preCalls != before {
+		t.Errorf("a denied push with a failed hook = %+v, hooks ran %d times", d, h.preCalls-before)
+	}
+
+	// A permission_request hook that fails adds its reason; one that blocks still denies.
+	h.preFailed, h.permFailed = "", `the permission_request hook "p" exited with code 1`
+	shell := Request{SessionID: "s", Tool: "shell", Kind: KindExecute, Command: "ls -la"}
+	decide(t, b, Context{Mode: ModeAsk, Root: root}, shell, "reject_once")
+	if asked, _ := rec.lastAsked(); asked.HookFailed != h.permFailed || asked.Command != "ls -la" {
+		t.Errorf("a failed permission_request hook is not on the request: %+v", asked)
+	}
+	h.preFailed, h.perm = "pre failed", "blocked by a later hook"
+	if d := decide(t, b, Context{Mode: ModeAcceptEdits, Root: root}, write, ""); d.Outcome != Denied || d.Actor != ActorHook {
+		t.Errorf("a failed hook and a blocking one = %+v", d)
+	}
 }
 
 // EXT-005: a pre_tool_use hook blocks even an allowed call; a call already

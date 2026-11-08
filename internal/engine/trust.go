@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"path"
 	"slices"
@@ -265,6 +266,16 @@ func (e *Engine) SetProjectTrust(ctx context.Context, root string, trusted bool)
 	p, err := e.AddProject(ctx, root)
 	if err != nil {
 		return ProjectInfo{}, err
+	}
+	// Trusting approves the project's hooks as they are now; distrusting ends
+	// that, so trusting again approves what is there then. Distrusting always
+	// goes ahead: an untrusted project runs no hooks anyway.
+	if trusted {
+		if err := e.approveProjectHooks(p); err != nil {
+			return ProjectInfo{}, fmt.Errorf("approve the project's hooks: %w", err)
+		}
+	} else if err := e.revokeProjectHooks(p); err != nil {
+		log.Printf("engine: end the approval of %s's hooks: %v", p.Root, err)
 	}
 	p.Trusted = trusted
 	if err := e.store.UpdateProject(ctx, p); err != nil {

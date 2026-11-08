@@ -330,7 +330,7 @@ func checkText(v engine.PolicyCheck) string {
 		lines = append(lines, fmt.Sprintf("  waits for your approval: %s (%s)", r, r.Source))
 	}
 	if len(v.Hooks) > 0 {
-		lines = append(lines, fmt.Sprintf("  %d hook(s) would still run and could deny it", len(v.Hooks)))
+		lines = append(lines, fmt.Sprintf("  %d hook(s) would still run and could deny it, or make it ask by failing", len(v.Hooks)))
 	}
 	for _, a := range v.Agent {
 		lines = append(lines, "  note: "+a)

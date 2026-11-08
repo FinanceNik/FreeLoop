@@ -4,7 +4,7 @@ import { quietCommand, toolStatusLabel, visibleCommand } from "./a11y.ts";
 import { EngineService } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import { APPROVAL_GRACE_MS, approvalHint, approvalShortcut, formLabel, isTextField, optionKind, optionLabel } from "./shortcuts.ts";
-import { awaitingDecision, lineDiff, type Item, type PermissionOption, type ToolContent } from "./transcript.ts";
+import { awaitingDecision, hookFailedText, lineDiff, type Item, type PermissionOption, type ToolContent } from "./transcript.ts";
 import { planText } from "./planView.ts";
 import { agentQuestions } from "./forms.ts";
 import { PlanCard, PlanDecision } from "./PlanReview.tsx";
@@ -128,6 +128,7 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
               <code>{p}</code>
             </p>
           ))}
+          {item.permission?.hookFailed && <p className="warn-text">{hookFailedText(item.permission.hookFailed)}</p>}
           {!form && <input aria-label="Note for the agent" placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />}
           <div className="approval-buttons">
             {offersAlways && (

@@ -35,6 +35,15 @@ var wailsAllowed = []string{"cmd/freeloop"}
 // macOS-only code lives in one package (NFR-XPLAT-002).
 var darwinAllowed = []string{"internal/platform/darwin"}
 
+// The app reads its development switches, the FREELOOP_ variables, only through
+// devEnv in cmd/freeloop, which a shipped build turns off. There every other read
+// of the environment names a variable outside FREELOOP_ in a literal, so a new
+// switch cannot get past devEnv. Elsewhere, only the packages listed here read a
+// FREELOOP_ variable: the store's event check, which only `make test` and CI set.
+const devEnvPkg, devEnvFunc = "cmd/freeloop", "devEnv"
+
+var freeloopEnvAllowed = []string{"internal/store"}
+
 // Packages whose import alone means process control or raw file access.
 var execPackages = []string{"os/exec", "syscall", "golang.org/x/sys/unix"}
 var fsPackages = []string{"io/ioutil"}
@@ -135,6 +144,12 @@ func violations(rel string, src []byte) []string {
 		return out
 	}
 
+	for _, decl := range f.Decls {
+		for _, v := range envReads(pkg, decl, names, fset, in(freeloopEnvAllowed)) {
+			report("%s:%s", rel, v)
+		}
+	}
+
 	ast.Inspect(f, func(n ast.Node) bool {
 		sel, ok := n.(*ast.SelectorExpr)
 		if !ok {
@@ -161,6 +176,96 @@ func violations(rel string, src []byte) []string {
 		return true
 	})
 	return out
+}
+
+// envReads returns the reads of the environment in one declaration that get past
+// devEnv, each as "line: what".
+func envReads(pkg string, decl ast.Decl, names map[string]string, fset *token.FileSet, allowed bool) []string {
+	if fn, ok := decl.(*ast.FuncDecl); ok && pkg == devEnvPkg && fn.Recv == nil && fn.Name.Name == devEnvFunc {
+		return nil
+	}
+	isRead := func(n ast.Node) (*ast.SelectorExpr, bool) {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return nil, false
+		}
+		x, ok := sel.X.(*ast.Ident)
+		return sel, ok && names[x.Name] == "os" && (sel.Sel.Name == "Getenv" || sel.Sel.Name == "LookupEnv")
+	}
+	var out []string
+	called := map[*ast.SelectorExpr]bool{}
+	ast.Inspect(decl, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			sel, ok := isRead(call.Fun)
+			if !ok || len(call.Args) != 1 {
+				return true
+			}
+			called[sel] = true
+			line := fset.Position(call.Pos()).Line
+			name, literal := "", false
+			switch a := call.Args[0].(type) {
+			case *ast.BasicLit:
+				literal = a.Kind == token.STRING
+				name, _ = strconv.Unquote(a.Value)
+			case *ast.SelectorExpr:
+				if a.Sel.Name == "HomeEnv" {
+					name = "FREELOOP_HOME"
+				}
+			}
+			switch {
+			case pkg == devEnvPkg && (!literal || strings.HasPrefix(name, "FREELOOP_")):
+				out = append(out, fmt.Sprintf("%d: os.%s outside %s; development switches go through it, which a shipped build turns off", line, sel.Sel.Name, devEnvFunc))
+			case pkg != devEnvPkg && strings.HasPrefix(name, "FREELOOP_") && !allowed:
+				out = append(out, fmt.Sprintf("%d: os.%s(%q); only %s reads development switches, through %s", line, sel.Sel.Name, name, devEnvPkg, devEnvFunc))
+			}
+			return true
+		}
+		if sel, ok := isRead(n); ok && !called[sel] && pkg == devEnvPkg {
+			out = append(out, fmt.Sprintf("%d: os.%s used as a value outside %s", fset.Position(sel.Pos()).Line, sel.Sel.Name, devEnvFunc))
+		}
+		return true
+	})
+	return out
+}
+
+func TestDevSwitchReadsAreDetected(t *testing.T) {
+	app := []byte(`package main
+
+import (
+	"os"
+
+	"github.com/FinanceNik/Freeloop/internal/config"
+)
+
+func devEnv(name string) string { return devValue(false, name, os.Getenv) }
+
+func f() {
+	_ = os.Getenv("HOME")
+	_ = os.Getenv("FREELOOP_DEV")
+	_, _ = os.LookupEnv(config.HomeEnv)
+	name := "FREELOOP_NEW"
+	_ = os.Getenv(name)
+	_ = devValue(true, "X", os.Getenv)
+}
+`)
+	got := violations("cmd/freeloop/main.go", app)
+	want := []string{":13: os.Getenv outside devEnv", ":14: os.LookupEnv outside devEnv", ":16: os.Getenv outside devEnv", ":17: os.Getenv used as a value"}
+	if len(got) != len(want) {
+		t.Fatalf("got %d violations, want %d:\n%s", len(got), len(want), strings.Join(got, "\n"))
+	}
+	for i, w := range want {
+		if !strings.Contains(got[i], w) {
+			t.Errorf("violation %d = %q, want it to mention %q", i, got[i], w)
+		}
+	}
+	engine := []byte("package engine\nimport \"os\"\nvar _ = os.Getenv(\"FREELOOP_DEV\")\nvar _ = os.Getenv(\"HOME\")\n")
+	if v := violations("internal/engine/dev.go", engine); len(v) != 1 || !strings.Contains(v[0], `os.Getenv("FREELOOP_DEV")`) {
+		t.Errorf("engine: %v", v)
+	}
+	store := []byte("package store\nimport \"os\"\nvar _ = os.Getenv(\"FREELOOP_CHECK_EVENTS\")\n")
+	if v := violations("internal/store/check.go", store); len(v) != 0 {
+		t.Errorf("store flagged: %v", v)
+	}
 }
 
 func TestViolationsAreDetected(t *testing.T) {

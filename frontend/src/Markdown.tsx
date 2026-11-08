@@ -1,6 +1,6 @@
-import { Component, memo, useMemo, useState, type ReactNode } from "react";
+import { Component, memo, useMemo, useRef, useState, type ReactNode } from "react";
 import { Browser, Clipboard } from "@wailsio/runtime";
-import { parseMarkdown, safeHref, type Block, type Inline } from "./markdown.ts";
+import { parseMarkdownAfter, safeHref, type Block, type Inline, type Parsed } from "./markdown.ts";
 
 // Markdown renders agent text as React elements (see markdown.ts): no HTML
 // from the model ever reaches the DOM.
@@ -12,10 +12,24 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
   );
 });
 
+// Rendered parses a streamed reply only from its last finished block on
+// (parseMarkdownAfter), and a finished block keeps its identity, so
+// BlockView skips rendering it again as the reply grows.
 function Rendered({ text }: { text: string }) {
-  const blocks = useMemo(() => parseMarkdown(text), [text]);
-  return <div className="md">{blocks.map((b, i) => renderBlock(b, i))}</div>;
+  const last = useRef<Parsed | undefined>(undefined);
+  const { blocks } = useMemo(() => (last.current = parseMarkdownAfter(text, last.current)), [text]);
+  return (
+    <div className="md">
+      {blocks.map((b, i) => (
+        <BlockView key={i} block={b} />
+      ))}
+    </div>
+  );
 }
+
+const BlockView = memo(function BlockView({ block }: { block: Block }) {
+  return renderBlock(block, 0);
+});
 
 // Plain shows the text as it is if rendering it fails, so one message the
 // parser cannot handle never takes down the window, which would come back

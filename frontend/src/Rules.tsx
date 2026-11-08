@@ -228,7 +228,7 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
           ))}
           {(verdict.hooks ?? []).length > 0 && (
             <p className="muted">
-              {verdict.hooks!.length === 1 ? "A hook" : `${verdict.hooks!.length} hooks`} would still run and could deny it:{" "}
+              {verdict.hooks!.length === 1 ? "A hook" : `${verdict.hooks!.length} hooks`} would still run and could deny it, or make it ask by failing:{" "}
               {verdict.hooks!.map((h) => h.source).join(", ")}.
             </p>
           )}

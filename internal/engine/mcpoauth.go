@@ -2,10 +2,12 @@ package engine
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -213,6 +215,13 @@ func (e *Engine) fetchCode(serverID string, port int) auth.AuthorizationCodeFetc
 		if !webPage(args.URL) {
 			return nil, fmt.Errorf("the sign-in page %q is not an https address", args.URL)
 		}
+		// The state the SDK put in the sign-in page's address: only a
+		// redirect that carries it back ends the wait.
+		u, _ := url.Parse(args.URL)
+		want := u.Query().Get("state")
+		if want == "" {
+			return nil, errors.New("the sign-in page carries no state")
+		}
 		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err != nil {
 			return nil, fmt.Errorf("listen for the sign-in: %w", err)
@@ -220,23 +229,12 @@ func (e *Engine) fetchCode(serverID string, port int) auth.AuthorizationCodeFetc
 		got := make(chan url.Values, 1)
 		srv := &http.Server{
 			ReadHeaderTimeout: 10 * time.Second,
-			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/callback" {
-					http.NotFound(w, r)
-					return
-				}
-				q := r.URL.Query()
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				msg := "Signed in. You can close this tab and return to Freeloop."
-				if q.Get("error") != "" {
-					msg = "The sign-in did not complete: " + q.Get("error") + ". Return to Freeloop to try again."
-				}
-				fmt.Fprintf(w, "<!doctype html><meta charset=utf-8><title>Freeloop</title><p style=\"font:15px system-ui;margin:3em\">%s</p>", html.EscapeString(msg))
-				select {
-				case got <- q:
-				default:
-				}
-			}),
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			IdleTimeout:       10 * time.Second,
+			MaxHeaderBytes:    16 << 10,
+			Handler:           callbackHandler(want, got),
+			ErrorLog:          log.New(io.Discard, "", 0),
 		}
 		go srv.Serve(ln)
 		defer srv.Close()
@@ -263,6 +261,35 @@ func (e *Engine) fetchCode(serverID string, port int) auth.AuthorizationCodeFetc
 			return nil, errors.New("the sign-in was not finished in the browser within 5 minutes")
 		}
 	}
+}
+
+// callbackHandler answers the loopback redirect of a sign-in. Any page in
+// the browser and any local process can reach the address, so a request
+// that is not a GET of /callback carrying the sign-in's state, and a code
+// or an error, gets a plain 400 and is otherwise ignored: the sign-in keeps
+// waiting for the real redirect. Only the right state ends it, with the
+// code or as a failure with the authorization server's error.
+func callbackHandler(want string, got chan<- url.Values) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 0)
+		q := r.URL.Query()
+		if r.Method != http.MethodGet || r.URL.Path != "/callback" ||
+			subtle.ConstantTimeCompare([]byte(q.Get("state")), []byte(want)) != 1 ||
+			(q.Get("code") == "" && q.Get("error") == "") {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		msg := "Signed in. You can close this tab and return to Freeloop."
+		if q.Get("error") != "" {
+			msg = "The sign-in did not complete: " + q.Get("error") + ". Return to Freeloop to try again."
+		}
+		fmt.Fprintf(w, "<!doctype html><meta charset=utf-8><title>Freeloop</title><p style=\"font:15px system-ui;margin:3em\">%s</p>", html.EscapeString(msg))
+		select {
+		case got <- q:
+		default:
+		}
+	})
 }
 
 func (e *Engine) setSignInURL(serverID, u string) {

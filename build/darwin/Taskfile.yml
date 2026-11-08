@@ -24,8 +24,10 @@ tasks:
     cmds:
       - wails3 tool prepare-macos-output --dir "{{.BIN_DIR}}"
       - go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}" {{.MAIN_PKG}}
+    # SHIPPED=1 (`make dmg`, `make release`, `make package SHIPPED=1`) makes the
+    # build users get, which reads no development switch (cmd/freeloop/devenv.go).
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s{{if eq (.SHIPPED | default "") "1"}} -X main.shipped=1{{end}}"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
     env:

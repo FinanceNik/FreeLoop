@@ -478,7 +478,7 @@ The feature freeze stands: only fixes, the stages above and what the testers' bl
 
 - **CI minutes run out again.** Stage 1 cuts the cost about tenfold; a public repository removes it.
 - **Real accounts behave unlike the stand-ins.** Stage 2 comes before testers for that reason.
-- **The stall seen on CI is real.** Stage 1's timing in the log will show it if a tester meets it.
+- **The stall seen on CI is real.** Stage 1's timing in the log will show it if a tester meets it. *2026-11-08: the app check's driver now holds off App Nap, the likeliest cause; not reproduced in four runs under load here. The accepted low risks in SECURITY.md are all fixed ("Closing the accepted risks").*
 - **An unsigned app puts testers off.** Signing is the first decision before 0.1.0.
 
 ## After 0.1.0: the bill measured by what it bought (planned 2026-11-06)

@@ -33,7 +33,8 @@ import (
 // So one runs only with a mark from approvalMark, which needs a key the file
 // cannot read. The app adds the mark when the user writes the command in the app
 // or approves it in Settings; a command edited in a file waits for approval. A
-// project's own hooks need no mark: trusting the project lists them (SEC-006).
+// project's own hooks get their mark when the project is trusted, as one set,
+// and a set that changed since waits here too (projecthooks.go, SEC-006).
 //
 // The same holds for what changes how much is asked or confined without running
 // anything itself (SEC-002, ENV-009, SEC-001): an allow rule, an environment's
@@ -485,10 +486,11 @@ func describePreset(p config.HarnessPreset) string {
 	return out
 }
 
-// PendingCommands lists the commands from files waiting for the user's approval.
+// PendingCommands lists the commands from files waiting for the user's approval,
+// trusted projects' changed hooks among them.
 func (e *Engine) PendingCommands() []PendingCommand {
 	out := []PendingCommand{}
-	for _, c := range e.fileCommands() {
+	for _, c := range append(e.fileCommands(), e.projectHookItems()...) {
 		if !e.commandApproved(c.Fingerprint) {
 			out = append(out, c)
 		}
@@ -618,7 +620,7 @@ func (e *Engine) pendingIssues() []config.Issue {
 	var out []config.Issue
 	for _, c := range e.PendingCommands() {
 		msg := "%s does not run until you approve it in Settings"
-		if c.Kind != pendingHook && c.Kind != pendingAgent {
+		if c.Kind != pendingHook && c.Kind != pendingAgent && c.Kind != pendingProjectHooks {
 			msg = "%s does not apply until you approve it in Settings"
 		}
 		out = append(out, config.Issue{File: c.Source, Message: fmt.Sprintf(msg, c.Runs), Approval: true})
@@ -654,6 +656,7 @@ func (e *Engine) adoptExistingCommands() {
 	e.adopt(e.commandsAdoptedRef(), pendingHook, pendingAgent)
 	e.adopt(e.settingsAdoptedRef(), pendingRule, pendingEnvironment, pendingSetting)
 	e.adopt(e.addressesAdoptedRef(), pendingAddress)
+	e.adoptProjectHooks()
 }
 
 // adopt writes the item first: if the rest fails the user is asked, which is the

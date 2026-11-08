@@ -39,7 +39,8 @@ type PolicyCheck struct {
 	Mode    string `json:"mode"`
 	Root    string `json:"root"`
 	Harness string `json:"harness"`
-	// Hooks would still run for the call and can deny it, never allow it.
+	// Hooks would still run for the call and can deny it, never allow it; one
+	// that fails puts the call to the user.
 	Hooks []config.Hook `json:"hooks"`
 	// Pending are allow rules that match but wait for the user's approval.
 	Pending []permission.Rule `json:"pending"`
@@ -281,11 +282,20 @@ func (e *Engine) policyHooks(sc policyScene) []PolicyHook {
 	for _, h := range e.Config().Hooks {
 		add(h, config.FileName, true)
 	}
+	// A project's hooks, its profiles' included, run as the set approved.
+	pc := e.projectConfig(sc.project)
+	projectOK := e.projectHooksApproved(sc.project, pc)
 	for _, h := range sc.profile.Hooks {
-		add(h, "profile "+sc.profile.Name, !strings.HasPrefix(sc.profile.ID, config.ProjectProfilePrefix))
+		if strings.HasPrefix(sc.profile.ID, config.ProjectProfilePrefix) {
+			h.Source = "profile " + sc.profile.Name
+			out = append(out, PolicyHook{Hook: h, Approved: projectOK})
+			continue
+		}
+		add(h, "profile "+sc.profile.Name, true)
 	}
-	for _, h := range e.projectConfig(sc.project).Hooks {
-		add(h, cmpOr(h.Source, "the project"), false)
+	for _, h := range pc.Hooks {
+		h.Source = cmpOr(h.Source, "the project")
+		out = append(out, PolicyHook{Hook: h, Approved: projectOK})
 	}
 	return out
 }

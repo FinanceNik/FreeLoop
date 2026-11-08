@@ -24,11 +24,16 @@ dev: ## Run the app in development mode with live reload (offers the scripted de
 build: ## Build a production binary into bin/
 	$(WAILS) build
 
-package: ## Build bin/Freeloop.app (ad-hoc signed)
-	$(WAILS) package
+package: ## Build bin/Freeloop.app (ad-hoc signed; SHIPPED=1 for the build users get)
+	$(WAILS) package $(if $(filter 1,$(SHIPPED)),SHIPPED=1)
 
 # The DMG holds the app and a link to /Applications, compressed (UDZO). It is
-# as signed as the app inside: ad-hoc (OQ-009).
+# as signed as the app inside: ad-hoc (OQ-009). Its app is the build users get,
+# which reads no development switch (FREELOOP_DEV, FREELOOP_DEV_*, FREELOOP_HOME,
+# FREELOOP_RELEASE_API; cmd/freeloop/devenv.go). make passes SHIPPED on to the
+# package it builds for the DMG, and so for a release; `make package` alone,
+# which memcheck and local rebuilds use, keeps the switches.
+dmg: SHIPPED := 1
 dmg: package notices ## Build bin/Freeloop.dmg from bin/Freeloop.app
 	rm -rf bin/dmg bin/Freeloop.dmg
 	mkdir -p bin/dmg

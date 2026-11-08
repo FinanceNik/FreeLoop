@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { optimizerCounts, apply, awaitingDecision, buildView, emptyTranscript, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
+import { optimizerCounts, apply, awaitingDecision, buildView, emptyTranscript, hookFailedText, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
 
 const ev = (seq: number, data: unknown = {}): TranscriptEvent => ({
   v: 1,
@@ -51,6 +51,19 @@ test("summary prefers text content", () => {
 });
 
 const at = (seq: number, type: string, data: unknown): TranscriptEvent => ({ v: 1, seq, ts: "2026-10-28T00:00:00Z", sid: "s", type, data });
+
+test("a request a failed guard hook put to the user says so", () => {
+  const v = buildView([
+    at(1, "tool_call", { toolCallId: "c1", title: "Write a.go", kind: "edit", status: "pending" }),
+    at(2, "permission_requested", { requestId: "r1", toolCallId: "c1", hookFailed: 'the pre_tool_use hook "guard" timed out after 1 s', options: [] }),
+    at(3, "tool_call", { toolCallId: "c2", title: "Write b.go", kind: "edit", status: "pending" }),
+    at(4, "permission_requested", { requestId: "r2", toolCallId: "c2", options: [] }),
+  ]);
+  const [a, b] = v.items as any[];
+  assert.equal(a.permission.hookFailed, 'the pre_tool_use hook "guard" timed out after 1 s');
+  assert.equal(b.permission.hookFailed, undefined);
+  assert.match(hookFailedText(a.permission.hookFailed), /guard hook did not answer: the pre_tool_use hook "guard" timed out after 1 s\./);
+});
 
 test("buildView folds a tool-calling turn", () => {
   const v = buildView([

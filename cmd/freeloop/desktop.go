@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +29,7 @@ func appMenu() *application.Menu {
 	view := menu.AddSubmenu("View")
 	view.AddRole(application.Reload)
 	view.AddRole(application.ForceReload)
-	if os.Getenv("FREELOOP_DEV") != "" {
+	if devEnv("FREELOOP_DEV") != "" {
 		view.AddRole(application.OpenDevTools)
 	}
 	view.AddSeparator()

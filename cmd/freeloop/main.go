@@ -62,7 +62,7 @@ func init() {
 }
 
 func main() {
-	dataDir, err := config.DataDir()
+	dataDir, err := config.DataDir(devEnv(config.HomeEnv))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -76,6 +76,9 @@ func main() {
 		os.Exit(runCLI(config.SocketPath(dataDir), os.Args[1:], os.Stdout, os.Stderr))
 	}
 	logs := startLog(dataDir)
+	if names := ignoredDevSwitches(shipped == "1", os.Environ()); len(names) > 0 {
+		log.Printf("freeloop: this build ignores the development switches %s", strings.Join(names, ", "))
+	}
 	lock, err := environment.LockFolder(filepath.Join(dataDir, ".lock"))
 	if errors.Is(err, environment.ErrLocked) {
 		failStartup("Freeloop is already running with this data folder, and two copies would overwrite each other's work. Switch to the one that is open.")
@@ -83,7 +86,8 @@ func main() {
 		failStartup("Freeloop could not open its data folder: " + err.Error())
 	}
 	defer lock.Close()
-	// FREELOOP_DEV=1 (set by `make dev`) offers the scripted demo provider.
+	// FREELOOP_DEV=1 (set by `make dev`; never read by a shipped build) offers the
+	// scripted demo provider.
 	// Reloads can happen before the app exists; they wait here.
 	configChanges := make(chan engine.ConfigChange, 16)
 	notices := make(chan engine.Notice, 64)
@@ -93,11 +97,11 @@ func main() {
 	}
 	eng, err := engine.Open(engine.Options{
 		HookProgram: hookProgram,
-		DataDir:     dataDir, Secrets: secretStore(), Confiner: darwin.Seatbelt{}, ProcessStarted: darwin.ProcessStart, GroupMembers: darwin.GroupMembers, EditorArgv: darwin.EditorArgv, PDFArgv: darwin.PDFArgv, FolderArgv: darwin.FolderArgv, Dev: os.Getenv("FREELOOP_DEV") == "1",
+		DataDir:     dataDir, Secrets: secretStore(), Confiner: darwin.Seatbelt{}, ProcessStarted: darwin.ProcessStart, GroupMembers: darwin.GroupMembers, EditorArgv: darwin.EditorArgv, PDFArgv: darwin.PDFArgv, FolderArgv: darwin.FolderArgv, Dev: devEnv("FREELOOP_DEV") == "1",
 		// A fake release server for trying the update check (OQ-015).
-		ReleaseAPI: os.Getenv("FREELOOP_RELEASE_API"),
+		ReleaseAPI: devEnv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).
-		GH: os.Getenv("FREELOOP_DEV_GH"),
+		GH: devEnv("FREELOOP_DEV_GH"),
 		OnConfigChange: func(c engine.ConfigChange) {
 			select {
 			case configChanges <- c:
@@ -259,7 +263,7 @@ func main() {
 // data, can keep what it stores in memory with FREELOOP_DEV_SECRETS=memory, so a
 // scratch folder leaves nothing in the login keychain and asks it nothing.
 func secretStore() secrets.Store {
-	if servedBuild && os.Getenv("FREELOOP_DEV_SECRETS") == "memory" {
+	if servedBuild && devEnv("FREELOOP_DEV_SECRETS") == "memory" {
 		return secrets.NewMemory()
 	}
 	return secrets.NewVault(darwin.Keychain{}, "freeloop")
@@ -298,7 +302,7 @@ func startLog(dataDir string) *logOutput {
 		return out
 	}
 	logFile := config.NewLogFile(dataDir, f)
-	if os.Getenv("FREELOOP_DEV") == "1" {
+	if devEnv("FREELOOP_DEV") == "1" {
 		out.w = io.MultiWriter(os.Stderr, logFile)
 	} else if err := environment.RedirectStderr(f); err != nil {
 		out.w = logFile

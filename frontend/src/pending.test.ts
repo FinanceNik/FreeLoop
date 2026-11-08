@@ -17,6 +17,8 @@ test("labels name a hook's event", () => {
   assert.equal(pendingLabel({ kind: "hook", event: "pre_tool_use" }), "Hook (Before a tool call)");
   assert.equal(pendingLabel({ kind: "hook", event: "later" }), "Hook (later)");
   assert.equal(pendingLabel({ kind: "something-new", event: "" }), "Setting");
+  assert.equal(pendingLabel({ kind: "project_hooks", event: "" }), "A trusted project's changed hooks");
+  assert.equal(groupPending([{ kind: "project_hooks" }])[0].title, "Commands that would run");
 });
 
 test("approving all says how many of what", () => {

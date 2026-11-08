@@ -76,6 +76,8 @@ export interface PermissionState {
   options: PermissionOption[];
   command?: string;
   paths?: string[];
+  // A guard hook that failed, which is why this is asked (EXT-005).
+  hookFailed?: string;
   // An MCP server's request for input (MCP-008), asked as a form.
   form?: { server: string; message: string; schema?: unknown; url?: string };
   decided?: {
@@ -397,6 +399,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           options: d.options ?? [],
           command: d.command,
           paths: d.paths ?? undefined,
+          hookFailed: d.hookFailed || undefined,
           form: d.form ?? undefined,
         };
         if (item) replaceTool(items, tools, { ...item, rev, permission });
@@ -579,6 +582,12 @@ function replaceTool(
   const i = items.indexOf(tools.get(next.toolCallId)!);
   if (i >= 0) items[i] = next;
   tools.set(next.toolCallId, next);
+}
+
+// hookFailedText says why a request reached the user although the mode or a rule
+// might have allowed it: a guard hook did not answer (EXT-005).
+export function hookFailedText(why: string): string {
+  return `Asked because a guard hook did not answer: ${why}. Without it, the mode or a rule might have allowed this.`;
 }
 
 // pendingRequest returns the permission the user still has to answer.

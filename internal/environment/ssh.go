@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -128,6 +129,12 @@ type SSH struct {
 	state     string
 	acted     map[string]bool
 	synced
+
+	// master is the shared connection's process once seen, with when it started; Close
+	// ends it (noteMaster).
+	masterMu sync.Mutex
+	master   int
+	masterAt time.Time
 }
 
 // NewSSH returns an SSH environment; Start connects and prepares the working copy.
@@ -219,19 +226,11 @@ func (s *SSH) sshArgv(script string, args ...string) []string {
 	if s.opts.ConfigFile != "" {
 		argv = append(argv, "-F", s.opts.ConfigFile)
 	}
-	shared := false
-	if s.opts.ControlDir != "" {
-		// One per session, since ending it ends every command using it. Sockets have a
-		// short limit on their path, and %C is 40 characters.
-		socket := filepath.Join(s.opts.ControlDir, hashOf([]byte(s.opts.SessionID))[:12]+"-%C")
-		if len(socket)+38 < 100 {
-			shared = true
-			argv = append(argv, "-o", "ControlMaster=auto", "-o", "ControlPath="+socket, "-o", "ControlPersist=60")
-		}
-	}
-	// Not the user's own sharing either: a connection of theirs could have what this
-	// command line turns off.
-	if !shared {
+	if socket := s.controlSocket(); socket != "" {
+		argv = append(argv, "-o", "ControlMaster=auto", "-o", "ControlPath="+socket, "-o", "ControlPersist=60")
+	} else {
+		// Not the user's own sharing either: a connection of theirs could have what this
+		// command line turns off.
 		argv = append(argv, "-o", "ControlMaster=no", "-o", "ControlPath=none")
 	}
 	words := []string{"sh", "-c", quoteSh(script), "freeloop"}
@@ -239,6 +238,78 @@ func (s *SSH) sshArgv(script string, args ...string) []string {
 		words = append(words, quoteSh(a))
 	}
 	return append(argv, "--", s.opts.Host, strings.Join(words, " "))
+}
+
+// controlSocket is the shared connection's socket as ssh is given it, with %C for ssh to
+// fill in; empty when the session shares no connection. One per session, since ending
+// it ends every command using it. Sockets have a short limit on their path, and %C is
+// 40 characters.
+func (s *SSH) controlSocket() string {
+	if s.opts.ControlDir == "" {
+		return ""
+	}
+	socket := filepath.Join(s.opts.ControlDir, s.socketPrefix()+"-%C")
+	if len(socket)+38 >= 100 {
+		return ""
+	}
+	return socket
+}
+
+func (s *SSH) socketPrefix() string { return hashOf([]byte(s.opts.SessionID))[:12] }
+
+// controlArgv asks the shared connection's master to do op, check or exit: the same
+// options as a command, with -O op in place of the command.
+func (s *SSH) controlArgv(op string) []string {
+	argv := s.sshArgv("")
+	return append(argv[:len(argv)-3:len(argv)-3], "-O", op, "--", s.opts.Host)
+}
+
+// masterPID is in what ssh -O check says.
+var masterPID = regexp.MustCompile(`\(pid=([0-9]+)\)`)
+
+// noteMaster records the shared connection's master in the process ledger. ssh puts
+// it in a session and process group of its own, out of the group of the command that
+// started it, so neither that group's end nor a crash's leftovers would include it.
+// A master that ControlPersist ended is replaced by the next command, so this runs
+// after each one; while the known master runs it costs nothing.
+func (s *SSH) noteMaster(ctx context.Context) {
+	if s.controlSocket() == "" {
+		return
+	}
+	s.masterMu.Lock()
+	defer s.masterMu.Unlock()
+	if s.master != 0 {
+		if s.masterRunning() {
+			return
+		}
+		untrack(s.master, s.masterAt)
+		s.master, s.masterAt = 0, time.Time{}
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	res, err := s.host.Exec(ctx, ExecSpec{Argv: s.controlArgv("check"), Cwd: "/", Timeout: 10 * time.Second, MaxOutput: 4 << 10, SeparateStderr: true})
+	if err != nil || res.ExitCode != 0 {
+		return
+	}
+	m := masterPID.FindStringSubmatch(res.Stderr + res.Output)
+	if m == nil {
+		return
+	}
+	pid, err := strconv.Atoi(m[1])
+	if err != nil || pid <= 1 {
+		return
+	}
+	s.master, s.masterAt = pid, track(pid, sshProgram)
+}
+
+// masterRunning reports whether the recorded master still runs, and is the very
+// process recorded where the platform can tell; called with masterMu held.
+func (s *SSH) masterRunning() bool {
+	if ProcessStarted != nil && !s.masterAt.IsZero() {
+		at, ok := ProcessStarted(s.master)
+		return ok && at.Equal(s.masterAt)
+	}
+	return groupAlive(s.master)
 }
 
 // quoteSh quotes s for a POSIX shell.
@@ -298,6 +369,7 @@ func (s *SSH) Start(ctx context.Context) (string, error) {
 	if res.ExitCode != 0 {
 		return "", s.connectError(res)
 	}
+	s.noteMaster(ctx)
 	lines := strings.Split(strings.TrimSpace(res.Output), "\n")
 	if len(lines) < 4 {
 		return "", errors.New("the other machine did not answer as expected")
@@ -371,6 +443,7 @@ func (s *SSH) script(ctx context.Context, timeout time.Duration, stdin []byte, s
 	if err != nil {
 		return res, err
 	}
+	s.noteMaster(ctx)
 	if res.TimedOut {
 		return res, errors.New("no answer in time")
 	}
@@ -505,6 +578,7 @@ func (s *SSH) run(ctx context.Context, spec ExecSpec) (ExecResult, error) {
 		defer cancel()
 		s.host.Exec(killCtx, ExecSpec{Argv: s.sshArgv(sshKillScript, s.state+"/run-"+id), Cwd: "/", Timeout: 20 * time.Second})
 	}
+	s.noteMaster(ctx)
 	if err == nil && res.ExitCode == 137 && res.Duration >= timeout {
 		res.TimedOut = true
 	}
@@ -541,15 +615,36 @@ func (s *SSH) mapWork(p string) string {
 	return p
 }
 
-// Close ends the shared connection.
+// Close ends the shared connection: it asks the master to exit, stops it by its process
+// group if it is still there a moment later, and removes a socket it left. ControlPersist
+// keeps the connection for the next command while the session runs; it does not outlive
+// the session, or the app.
 func (s *SSH) Close(ctx context.Context) {
-	if s.opts.ControlDir == "" {
+	if s.controlSocket() == "" {
 		return
 	}
-	argv := s.sshArgv("")
-	// The same options, for -O exit in place of a command.
-	argv = append(argv[:len(argv)-3:len(argv)-3], "-O", "exit", "--", s.opts.Host)
-	s.host.Exec(ctx, ExecSpec{Argv: argv, Cwd: "/", Timeout: 10 * time.Second})
+	s.host.Exec(ctx, ExecSpec{Argv: s.controlArgv("exit"), Cwd: "/", Timeout: 10 * time.Second, MaxOutput: 4 << 10})
+	s.masterMu.Lock()
+	if s.master != 0 {
+		// It exits as soon as it has answered; one that did not hear goes with its group.
+		for deadline := time.Now().Add(2 * time.Second); s.masterRunning() && time.Now().Before(deadline); {
+			time.Sleep(20 * time.Millisecond)
+		}
+		if s.masterRunning() {
+			stopGroup(s.master)
+		}
+		untrack(s.master, s.masterAt)
+		s.master, s.masterAt = 0, time.Time{}
+	}
+	s.masterMu.Unlock()
+	// A master that was killed leaves its socket behind. Only this session's: the name
+	// starts with its own prefix, and only a socket goes.
+	sockets, _ := filepath.Glob(filepath.Join(s.opts.ControlDir, s.socketPrefix()+"-*"))
+	for _, p := range sockets {
+		if fi, err := os.Lstat(p); err == nil && fi.Mode().Type() == os.ModeSocket {
+			os.Remove(p)
+		}
+	}
 }
 
 // RemoveSSHCopy deletes a session's folder on the machine it was on. Only that folder

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -873,7 +872,7 @@ func (s *EngineService) ExportConfig(ctx context.Context) (string, error) {
 func (s *EngineService) PreviewConfigRestore(ctx context.Context) (*engine.ConfigPreview, error) {
 	path := ""
 	if servedBuild {
-		path = os.Getenv("FREELOOP_DEV_BACKUP")
+		path = devEnv("FREELOOP_DEV_BACKUP")
 	} else {
 		var err error
 		path, err = s.app.Dialog.OpenFile().

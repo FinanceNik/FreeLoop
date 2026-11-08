@@ -279,7 +279,7 @@
     },
     "hookRan": {
       "type": "object",
-      "description": "One hook run (EXT-005). Exit code 2 blocked what it ran for; any other non-zero code, a timeout or an error was reported and the session went on.",
+      "description": "One hook run (EXT-005). Exit code 2 blocked what it ran for; any other non-zero code, a timeout or an error was reported and the session went on, and for a pre_tool_use or permission_request hook the call was put to the user, whose permission_requested then names the failure in hookFailed.",
       "required": ["event", "command", "exitCode"],
       "properties": {
         "event": { "enum": ["session_start", "pre_tool_use", "permission_request", "post_tool_use"] },

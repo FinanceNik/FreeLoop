@@ -20,17 +20,19 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// HomeEnv overrides the data directory, for development and tests.
+// HomeEnv names the environment variable that overrides the data directory, for
+// development and tests. The app reads it, unless it is a shipped build; this
+// package does not.
 const HomeEnv = "FREELOOP_HOME"
 
 // FileName is the general settings file inside the data directory.
 const FileName = "config.yaml"
 
-// DataDir returns the app data directory: $FREELOOP_HOME if set, otherwise
-// the OS user config directory plus "freeloop" (on macOS,
+// DataDir returns the app data directory: home if not empty, otherwise the OS
+// user config directory plus "freeloop" (on macOS,
 // ~/Library/Application Support/freeloop). It creates the directory.
-func DataDir() (string, error) {
-	dir := os.Getenv(HomeEnv)
+func DataDir(home string) (string, error) {
+	dir := home
 	if dir == "" {
 		base, err := os.UserConfigDir()
 		if err != nil {

@@ -71,10 +71,9 @@ func TestInvalidValueFallsBackPerField(t *testing.T) {
 	}
 }
 
-func TestDataDirHonoursEnv(t *testing.T) {
+func TestDataDirHonoursHome(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "home")
-	t.Setenv(HomeEnv, dir)
-	got, err := DataDir()
+	got, err := DataDir(dir)
 	if err != nil || got != dir {
 		t.Fatalf("DataDir = %q, %v", got, err)
 	}

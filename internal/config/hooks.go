@@ -22,10 +22,13 @@ import (
 //
 // The exit code decides: 0 continues; 2 blocks, with standard error as the
 // reason (a pre_tool_use or permission_request hook denies the call, a
-// session_start hook stops the session from starting); any other code, or
-// a timeout, is reported in the transcript and the session continues. A
-// hook can block but never approve: approval stays with the rules, the mode
-// and the user (SEC-003).
+// session_start hook stops the session from starting); any other code, a
+// timeout, a kill or a hook that cannot start is reported in the transcript
+// and the session continues. A pre_tool_use or permission_request hook is a
+// guard, and one that fails like that has not let the call through: the user
+// is asked, with the reason, whatever the mode or an allow rule says. A hook
+// can block but never approve: approval stays with the rules, the mode and the
+// user (SEC-003).
 type Hook struct {
 	Event string `yaml:"event" json:"event"`
 	// Match is a glob on the tool name (pre_tool_use, post_tool_use,
@@ -63,6 +66,20 @@ const HooksFileName = "hooks.yaml"
 func (h Hook) Fingerprint() string {
 	h.Source = ""
 	return commandFingerprint("hook", h)
+}
+
+// ProjectHooksFingerprint identifies a project's hooks as one set, with the file
+// each is in: trusting the project approves exactly this, and a set that differs
+// waits for approval. "" for a project with none, which needs nothing.
+func ProjectHooksFingerprint(projectID, root string, hooks []Hook) string {
+	if len(hooks) == 0 {
+		return ""
+	}
+	return commandFingerprint("project-hooks", struct {
+		Project string `json:"project"`
+		Root    string `json:"root"`
+		Hooks   []Hook `json:"hooks"`
+	}{projectID, root, hooks})
 }
 
 // commandFingerprint hashes a command's settings; kind keeps a mark for one kind

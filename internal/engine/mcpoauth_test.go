@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -309,4 +311,84 @@ func TestSignOutEndsAWaitingSignIn(t *testing.T) {
 	if _, ok := e.loadOAuth(server(e)); ok || e.mcp.Status("remote").State == mcp.Running {
 		t.Errorf("after the sign-out: kept %v, %+v", ok, e.mcp.Status("remote"))
 	}
+}
+
+// Any page or local process can reach a sign-in's loopback address. What
+// does not carry the sign-in's state, and a code or an error, on a GET of
+// /callback gets a 400 and leaves the sign-in waiting; the real redirect
+// still completes it, and the authorization server's error with the right
+// state ends it as a failure.
+func TestSignInCallbackIgnoresStrangers(t *testing.T) {
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	const state = "the-state"
+	run := func(t *testing.T, requests []string, wantStatus []int) (*auth.AuthorizationResult, error) {
+		port, err := freeLoopbackPort()
+		if err != nil {
+			t.Fatal(err)
+		}
+		base := fmt.Sprintf("http://127.0.0.1:%d", port)
+		e.SetOpenURL(func(string) error {
+			for i, r := range requests {
+				method, path, _ := strings.Cut(r, " ")
+				req, _ := http.NewRequest(method, base+path, nil)
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Errorf("%s: %v", r, err)
+					continue
+				}
+				resp.Body.Close()
+				if resp.StatusCode != wantStatus[i] {
+					t.Errorf("%s: status %d, want %d", r, resp.StatusCode, wantStatus[i])
+				}
+			}
+			return nil
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return e.fetchCode("remote", port)(ctx, &auth.AuthorizationArgs{URL: "https://auth.example.com/authorize?state=" + state})
+	}
+
+	t.Run("strangers then the redirect", func(t *testing.T) {
+		res, err := run(t, []string{
+			"GET /callback?state=wrong&code=evil",
+			"GET /callback?code=evil",
+			"GET /callback?state=wrong&error=access_denied",
+			"GET /callback?state=" + state,
+			"POST /callback?state=" + state + "&code=evil",
+			"GET /other?state=" + state + "&code=evil",
+			"GET /callback?state=" + state + "&code=good&iss=https://auth.example.com",
+		}, []int{400, 400, 400, 400, 400, 400, 200})
+		if err != nil || res.Code != "good" || res.State != state || res.Iss != "https://auth.example.com" {
+			t.Fatalf("result = %+v, %v", res, err)
+		}
+	})
+
+	t.Run("refused with the right state", func(t *testing.T) {
+		res, err := run(t, []string{
+			"GET /callback?state=wrong&code=evil",
+			"GET /callback?state=" + state + "&error=access_denied&error_description=no",
+		}, []int{400, 200})
+		if err == nil || !strings.Contains(err.Error(), "access_denied: no") {
+			t.Fatalf("result = %+v, %v", res, err)
+		}
+	})
+
+	t.Run("only strangers", func(t *testing.T) {
+		port, _ := freeLoopbackPort()
+		e.SetOpenURL(func(string) error {
+			resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/callback?state=wrong&code=evil", port))
+			if err == nil {
+				resp.Body.Close()
+			}
+			return nil
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		defer cancel()
+		if res, err := e.fetchCode("remote", port)(ctx, &auth.AuthorizationArgs{URL: "https://auth.example.com/authorize?state=" + state}); err == nil {
+			t.Fatalf("a wrong state ended the sign-in: %+v", res)
+		} else if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("err = %v, want the wait to run until its deadline", err)
+		}
+	})
 }

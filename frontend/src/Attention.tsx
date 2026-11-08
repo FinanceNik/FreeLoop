@@ -5,7 +5,7 @@ import { EngineService, type AttentionItem, type PermissionRequest } from "./api
 import { currentOf, editPreview, moved, oldestFirst } from "./attentionview.ts";
 import { since } from "./board.ts";
 import { approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
-import { lineDiff } from "./transcript.ts";
+import { hookFailedText, lineDiff } from "./transcript.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import { basename } from "./paths.ts";
 
@@ -151,6 +151,7 @@ export function RequestView({ req, current, onError }: { req: PermissionRequest;
           {p}
         </code>
       ))}
+      {req.hookFailed && <p className="warn-text">{hookFailedText(req.hookFailed)}</p>}
       {edit && (
         <div className="diff">
           <pre>

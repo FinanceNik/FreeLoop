@@ -103,6 +103,10 @@ func (e *Engine) sshEnv(ctx context.Context, ses session.Session, cfg config.Env
 		health["detail"] = did
 	}
 	if err != nil {
+		// A start that connected and then failed has a shared connection to end.
+		cctx, ccancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		env.Close(cctx)
+		ccancel()
 		health["status"], health["detail"] = "unhealthy", err.Error()
 		e.emit(ses.ID, event.EnvHealth, health)
 		return nil, fmt.Errorf("the %s environment cannot start: %w", cfg.Name, err)

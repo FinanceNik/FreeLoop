@@ -28,6 +28,7 @@ Rules the lint enforces (`internal/archtest`): no `os/exec` or file I/O in the e
 ## Build and test
 
 - `make tools` once, then `make dev` (live reload; `FREELOOP_DEV=1` adds a scripted demo provider, `FREELOOP_HOME=/some/dir` keeps your data apart).
+- The development switches (`FREELOOP_DEV`, `FREELOOP_DEV_*`, `FREELOOP_RELEASE_API`, `FREELOOP_HOME`) work in every build but the one users get: `make dmg` and `make release` (and `make package SHIPPED=1`) link it with `-X main.shipped=1`, and that build ignores them and logs their names once at start. `make build`, `make package`, `make dev` and the served build keep them. Read a new switch with `devEnv` in `cmd/freeloop/devenv.go`; the architecture test fails on any other read of a `FREELOOP_` variable there, and on one elsewhere outside `internal/store`'s test-only event check.
 - `make test` runs the Go tests, `cmd/` included, with the race detector and the frontend tests (`node --test`, no framework). One test: `go test ./internal/<pkg>/ -run '^TestName$'`.
 - `make lint` runs gofmt, `go vet`, the architecture test and `tsc`. Both pass before every commit.
 - Ask the user with `ask` (`frontend/src/ask.ts`), never the page's `confirm`, `alert` or `prompt`: Wails gives the web view no way to show them, so the packaged app answers no without showing anything, while a browser shows them. A test holds this. A served build has no native dialogs and its `ask` never answers, so a check there answers that call itself.
@@ -108,7 +109,7 @@ What it builds:
 
 `make release` writes `bin/release`: the DMG, its bill of materials (`Freeloop.sbom.cdx.json`, CycloneDX 1.6), the tools it was built with (`BUILDINFO.txt`), and checksums (`SHA256SUMS`, and `APP-FILES.sha256` for every file in the bundle).
 
-`make verify-repro REF=<tag>` builds a commit twice from clean clones and compares every file; CI does this for tags. To check a release yourself, check out its tag and install what `BUILDINFO.txt` names: the same Go (`go.mod`'s toolchain fetches it), Node and Xcode command line tools, since the linker and the SDK shape the binary. Then run `make package` and compare `bin/Freeloop.app` with `APP-FILES.sha256`.
+`make verify-repro REF=<tag>` builds a commit twice from clean clones and compares every file; CI does this for tags. To check a release yourself, check out its tag and install what `BUILDINFO.txt` names: the same Go (`go.mod`'s toolchain fetches it), Node and Xcode command line tools, since the linker and the SDK shape the binary. Then run `make package SHIPPED=1` (a release's app is the shipped build) and compare `bin/Freeloop.app` with `APP-FILES.sha256`.
 
 Two things differ by design. A DMG is stamped with the time, so compare the app inside it. Should a build ever carry a Developer ID signature, which releases do not (OQ-009), it is dated, so remove it first (`codesign --remove-signature`) and sign both ad hoc.
 

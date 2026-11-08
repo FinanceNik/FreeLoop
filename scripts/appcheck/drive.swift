@@ -112,6 +112,10 @@ guard args.count == 3, let url = URL(string: args[1]), let scenario = try? Strin
   exit(2)
 }
 let app = NSApplication.shared
+// No App Nap: on a machine no one watches, such as CI, macOS may otherwise throttle this
+// process's timers and the page's with them, which reads as a step that stalls (opening
+// a session took over 30 s in about one CI run in four; it never did here).
+let busy = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "running the app check")
 let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: 720), styleMask: [.borderless], backing: .buffered, defer: false)
 let mouse = Mouse()
 let configuration = WKWebViewConfiguration()

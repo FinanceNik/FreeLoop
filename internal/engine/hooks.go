@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -19,9 +20,11 @@ import (
 // container for a Docker session, with the event as JSON on stdin. They are
 // the user's own commands, like the diff panel's git actions, so they do
 // not go through the permission broker, which is why one from a file runs only
-// once the user approved it (approvals.go); they are the broker's: its
-// pre_tool_use and permission_request hooks can deny a call, never allow
-// one. See config.Hook for the exit-code contract.
+// once the user approved it (approvals.go), and a project's run only as the
+// set its trust or a later approval saw (projecthooks.go); they are the
+// broker's: its pre_tool_use and permission_request hooks can deny a call,
+// never allow one, and one that fails to answer puts the call to the user. See
+// config.Hook for the exit-code contract.
 
 // hookOutputCap bounds the output a hook_ran event records.
 const hookOutputCap = 4 << 10
@@ -68,25 +71,35 @@ func (e *Engine) hooksOf(ctx context.Context, r *runtime) []config.Hook {
 	if err != nil {
 		return hooks
 	}
+	pc := e.projectConfig(project)
+	// A trusted project's hooks, its profiles' included, run as the set the user
+	// approved: trusting it approved them as they were.
+	projectOK := e.projectHooksRun(r, project, pc)
 	if prof, err := e.profileFor(project, r.profileID); err == nil {
 		var own []config.Hook
 		for _, h := range prof.Hooks {
 			h.Source = "profile " + prof.Name
 			own = append(own, h)
 		}
-		// A trusted project's profile is covered by that trust.
 		if !strings.HasPrefix(r.profileID, config.ProjectProfilePrefix) {
 			own = e.approvedHooks(r, own)
+		} else if !projectOK {
+			own = nil
 		}
 		hooks = append(hooks, own...)
 	}
-	return append(hooks, e.projectConfig(project).Hooks...)
+	if !projectOK {
+		return hooks
+	}
+	return append(hooks, pc.Hooks...)
 }
 
-// runHooks runs the hooks for event and tool in order and returns the
-// reason the first blocking one gave, or "". payload is added to the JSON
-// the hooks read.
-func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payload map[string]any) string {
+// runHooks runs the hooks for event and tool in order. Block is the reason
+// the first blocking one gave; Failed says which ran but did not answer (timed
+// out, could not start, was killed, was stopped or exited other than 0 and 2),
+// which only a guard's caller acts on. payload is added to the JSON the hooks
+// read.
+func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payload map[string]any) permission.HookResult {
 	var hooks []config.Hook
 	for _, h := range e.hooksOf(ctx, r) {
 		if h.Matches(ev, tool) {
@@ -94,7 +107,7 @@ func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payl
 		}
 	}
 	if len(hooks) == 0 {
-		return ""
+		return permission.HookResult{}
 	}
 	in := map[string]any{"event": ev, "sessionId": r.sid, "cwd": r.env.Root()}
 	for k, v := range payload {
@@ -103,9 +116,10 @@ func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payl
 	stdin, err := json.Marshal(in)
 	if err != nil {
 		log.Printf("engine: hook input: %v", err)
-		return ""
+		return permission.HookResult{Failed: fmt.Sprintf("the %s hooks could not be given the call: %v", ev, err)}
 	}
 	callID, _ := payload["toolCallId"].(string)
+	var failed []string
 	for _, h := range hooks {
 		timeout := h.Timeout
 		if timeout == 0 {
@@ -129,7 +143,7 @@ func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payl
 		d.Blocked = err == nil && !res.TimedOut && res.ExitCode == 2
 		e.emit(r.sid, event.HookRan, d)
 		if d.Stopped {
-			return ""
+			return permission.HookResult{Failed: hookFailure(h, d, timeout)}
 		}
 		if d.Blocked {
 			why := strings.TrimSpace(res.Stderr)
@@ -139,10 +153,43 @@ func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payl
 			if why == "" {
 				why = "blocked by a hook (" + h.Command + ")"
 			}
-			return capText(why)
+			return permission.HookResult{Block: capText(why)}
+		}
+		if why := hookFailure(h, d, timeout); why != "" {
+			failed = append(failed, why)
 		}
 	}
+	return permission.HookResult{Failed: strings.Join(failed, "; ")}
+}
+
+// hookFailure says how a hook run failed to answer, or "" for exit 0 or 2.
+func hookFailure(h config.Hook, d HookRanData, timeout int) string {
+	name := fmt.Sprintf("the %s hook %q", h.Event, capCommand(h.Command))
+	if h.Source != "" {
+		name += " from " + h.Source
+	}
+	switch {
+	case d.Stopped:
+		return name + " was stopped"
+	case d.TimedOut:
+		return fmt.Sprintf("%s timed out after %d s", name, timeout)
+	case d.Error != "":
+		return name + " could not start: " + d.Error
+	case d.ExitCode < 0:
+		return name + " was killed"
+	case d.ExitCode != 0 && d.ExitCode != 2:
+		return fmt.Sprintf("%s exited with code %d", name, d.ExitCode)
+	}
 	return ""
+}
+
+// capCommand shortens a hook's command for a reason shown on one line.
+func capCommand(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > 120 {
+		return string(r[:120]) + "…"
+	}
+	return s
 }
 
 func capText(s string) string {
@@ -155,7 +202,7 @@ func capText(s string) string {
 // engineHooks lets the permission broker run a session's hooks.
 type engineHooks struct{ e *Engine }
 
-func (h engineHooks) request(ctx context.Context, ev string, pc permission.Context, req permission.Request) string {
+func (h engineHooks) request(ctx context.Context, ev string, pc permission.Context, req permission.Request) permission.HookResult {
 	h.e.mu.Lock()
 	r := h.e.runtimes[req.SessionID]
 	if r == nil {
@@ -163,7 +210,7 @@ func (h engineHooks) request(ctx context.Context, ev string, pc permission.Conte
 	}
 	h.e.mu.Unlock()
 	if r == nil {
-		return ""
+		return permission.HookResult{}
 	}
 	return h.e.runHooks(ctx, r, ev, req.Tool, map[string]any{
 		"tool": req.Tool, "toolCallId": req.ToolCallID, "kind": req.Kind, "title": req.Title,
@@ -171,11 +218,11 @@ func (h engineHooks) request(ctx context.Context, ev string, pc permission.Conte
 	})
 }
 
-func (h engineHooks) PreToolUse(ctx context.Context, pc permission.Context, req permission.Request) string {
+func (h engineHooks) PreToolUse(ctx context.Context, pc permission.Context, req permission.Request) permission.HookResult {
 	return h.request(ctx, config.HookPreToolUse, pc, req)
 }
 
-func (h engineHooks) PermissionRequest(ctx context.Context, pc permission.Context, req permission.Request) string {
+func (h engineHooks) PermissionRequest(ctx context.Context, pc permission.Context, req permission.Request) permission.HookResult {
 	return h.request(ctx, config.HookPermissionRequest, pc, req)
 }
 
@@ -243,7 +290,7 @@ func (e *Engine) toolHooks(r *runtime, typ event.Type, data any) {
 	if why := e.runHooks(ctx, r, config.HookPostToolUse, call.Tool, map[string]any{
 		"tool": call.Tool, "toolCallId": d.ToolCallID, "kind": call.Kind, "title": call.Title, "input": call.RawInput,
 		"status": d.Status, "output": capText(strings.Join(out, "\n")), "paths": paths,
-	}); why != "" {
+	}).Block; why != "" {
 		// The call already ran; a blocking post_tool_use hook can only say
 		// so.
 		e.emit(r.sid, event.Notice, event.NoticeData{Message: "A post_tool_use hook objected to " + call.Title + ": " + why})

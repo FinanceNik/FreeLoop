@@ -99,9 +99,13 @@ type Request struct {
 	RewrittenReadOnly bool `json:"rewrittenReadOnly,omitempty"`
 	// LeavesSandbox asks to run a command outside the sandbox: no rule covers
 	// it, so it always reaches the user.
-	LeavesSandbox bool      `json:"leavesSandbox,omitempty"`
-	Options       []Option  `json:"options"`
-	Created       time.Time `json:"createdAt"`
+	LeavesSandbox bool `json:"leavesSandbox,omitempty"`
+	// HookFailed says which guard hook failed and how, when that is why the call
+	// is put to the user although a rule or the mode would have allowed it
+	// (EXT-005).
+	HookFailed string    `json:"hookFailed,omitempty"`
+	Options    []Option  `json:"options"`
+	Created    time.Time `json:"createdAt"`
 	// Form is set when the request asks the user for input rather than
 	// for permission: an MCP server's elicitation (MCP-008). It is always
 	// put to the user; no rule, mode or hook answers it.
@@ -163,15 +167,25 @@ const (
 	ActorSandbox Actor = "sandbox"
 )
 
-// Hooks runs the user's hooks for a request (EXT-005). Each returns a
-// reason when a hook blocks the call, or "" to go on. Hooks can block but
+// Hooks runs the user's hooks for a request (EXT-005). Hooks can block but
 // never approve.
 type Hooks interface {
 	// PreToolUse runs for a call the path policy and the deny rules let
 	// through, before it is allowed or asked about.
-	PreToolUse(ctx context.Context, pc Context, req Request) string
+	PreToolUse(ctx context.Context, pc Context, req Request) HookResult
 	// PermissionRequest runs before the user is asked.
-	PermissionRequest(ctx context.Context, pc Context, req Request) string
+	PermissionRequest(ctx context.Context, pc Context, req Request) HookResult
+}
+
+// HookResult is what a request's hooks said. Both empty lets the call go on.
+type HookResult struct {
+	// Block is the reason a hook gave for blocking the call: it is denied.
+	Block string
+	// Failed says which hook failed and how: it timed out, could not start, was
+	// killed or exited with a code other than 0 and 2. A guard that did not answer
+	// has not let the call through, so the user is asked, whatever the mode or an
+	// allow rule says; a failure never denies or allows by itself.
+	Failed string
 }
 
 // Decision is the broker's answer.
@@ -211,6 +225,36 @@ type pending struct {
 	req    Request
 	pc     Context
 	answer chan Decision
+
+	// Guarded by Broker.mu. An answer and a cancellation are mutually exclusive:
+	// whichever moves the request out of open first ends it, and "Allow always"
+	// saves its rule only once it has done so, so a rule is saved if and only if
+	// the answer that saved it is the request's decision.
+	state requestState
+	// cancel is a cancellation that came while an answer was saving its rule. The
+	// answer wins if the rule is saved; if saving fails, the cancellation ends the
+	// request.
+	cancel *Decision
+}
+
+type requestState int
+
+const (
+	// open waits for an answer or a cancellation.
+	open requestState = iota
+	// saving is held by an answer saving its "Allow always" rule.
+	saving
+	// done has its decision on the answer channel.
+	done
+)
+
+// finish ends p with d unless it has ended already. Call it with Broker.mu held.
+func (p *pending) finish(d Decision) {
+	if p.state == done {
+		return
+	}
+	p.state = done
+	p.answer <- d // buffered, and sent to once
 }
 
 // NewBroker returns a broker that records decisions through emit.
@@ -255,12 +299,28 @@ func (b *Broker) Request(ctx context.Context, pc Context, req Request) Decision 
 	// Hooks run only for calls that are not denied already: a deny wins
 	// without running anything.
 	if b.hooks != nil && req.Form == nil && (!settled || d.Outcome != Denied) {
-		if why := b.hooks.PreToolUse(ctx, pc, req); why != "" {
-			d, settled = Decision{Outcome: Denied, Actor: ActorHook, Reason: why}, true
-		} else if !settled {
-			if why := b.hooks.PermissionRequest(ctx, pc, req); why != "" {
-				d, settled = Decision{Outcome: Denied, Actor: ActorHook, Reason: why}, true
+		pre := b.hooks.PreToolUse(ctx, pc, req)
+		switch {
+		case pre.Block != "":
+			d, settled = Decision{Outcome: Denied, Actor: ActorHook, Reason: pre.Block}, true
+		case pre.Failed != "":
+			// A guard that failed has not let the call through: the user decides,
+			// even where the mode or an allow rule would have allowed it.
+			d, settled = Decision{}, false
+			req.HookFailed = pre.Failed
+		}
+		if !settled && ctx.Err() == nil {
+			perm := b.hooks.PermissionRequest(ctx, pc, req)
+			switch {
+			case perm.Block != "":
+				d, settled = Decision{Outcome: Denied, Actor: ActorHook, Reason: perm.Block}, true
+			case perm.Failed != "":
+				req.HookFailed = strings.TrimPrefix(req.HookFailed+"; "+perm.Failed, "; ")
 			}
+		}
+		// A hook Stop ended has not answered either, and nobody is left to ask.
+		if req.HookFailed != "" && !settled && ctx.Err() != nil {
+			d, settled = Decision{Outcome: Cancelled, Actor: ActorUser, Reason: "the turn was cancelled"}, true
 		}
 	}
 	if !settled {
@@ -474,7 +534,24 @@ func (b *Broker) ask(ctx context.Context, pc Context, req Request) Decision {
 	case d := <-p.answer:
 		return d
 	case <-ctx.Done():
-		return Decision{Outcome: Cancelled, Actor: ActorUser, Reason: "the turn was cancelled"}
+		// The cancellation ends the request only if no answer has: an "Allow always"
+		// saving its rule is waited for, so the rule and the decision agree.
+		b.cancel(p, Decision{Outcome: Cancelled, Actor: ActorUser, Reason: "the turn was cancelled"})
+		return <-p.answer
+	}
+}
+
+// cancel ends p as cancelled, unless an answer has ended it or is saving its rule.
+func (b *Broker) cancel(p *pending, d Decision) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	switch p.state {
+	case open:
+		p.finish(d)
+	case saving:
+		if p.cancel == nil {
+			p.cancel = &d
+		}
 	}
 }
 
@@ -492,6 +569,7 @@ func (b *Broker) Decide(requestID, optionID, reason string, scope Scope) error {
 func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, answers map[string]any) error {
 	b.mu.Lock()
 	p, ok := b.pending[requestID]
+	ok = ok && p.state == open // not answered, cancelled or being answered already
 	b.mu.Unlock()
 	if !ok {
 		return ErrUnknownRequest
@@ -504,6 +582,7 @@ func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, ans
 	if p.req.Form != nil && p.req.Options[i].Kind == "allow_once" {
 		d.Answers = answers
 	}
+	var rule *Rule
 	switch p.req.Options[i].Kind {
 	case "allow_once":
 		d.Outcome = Allowed
@@ -528,31 +607,55 @@ func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, ans
 			d.Reason = strings.TrimSpace(d.Reason + " Allowed once: one rule cannot cover this call, so none was saved.")
 			break
 		}
-		if err := b.sink.AddRule(p.req.SessionID, r); err != nil {
-			return fmt.Errorf("permission: save rule: %w", err)
+		rule = &r
+	}
+
+	b.mu.Lock()
+	if p.state != open {
+		b.mu.Unlock()
+		return ErrUnknownRequest
+	}
+	if rule == nil {
+		p.finish(d)
+		b.mu.Unlock()
+		return nil
+	}
+	// The answer claims the request before its rule is saved: no cancellation can
+	// end the request while the rule is saved, and no rule is saved for a request
+	// that has ended.
+	p.state = saving
+	b.mu.Unlock()
+	err := b.sink.AddRule(p.req.SessionID, *rule)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err != nil {
+		// No rule, so no answer: the request waits again, or ends as cancelled if a
+		// cancellation came meanwhile.
+		p.state = open
+		if p.cancel != nil {
+			p.finish(*p.cancel)
 		}
-		d.Persisted = &r
+		return fmt.Errorf("permission: save rule: %w", err)
 	}
-	select {
-	case p.answer <- d:
-	default: // already answered
-	}
+	d.Persisted = rule
+	p.finish(d)
 	return nil
 }
 
 // CancelSession ends every request a session is waiting on, as a cancelled turn would:
 // for a session that continued elsewhere, whose questions nobody will answer (HRN-020).
+// An "Allow always" already saving its rule still answers its request.
 func (b *Broker) CancelSession(sid, reason string) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	var ps []*pending
 	for _, p := range b.pending {
-		if p.req.SessionID != sid {
-			continue
+		if p.req.SessionID == sid {
+			ps = append(ps, p)
 		}
-		select {
-		case p.answer <- Decision{Outcome: Cancelled, Actor: ActorUser, Reason: reason}:
-		default:
-		}
+	}
+	b.mu.Unlock()
+	for _, p := range ps {
+		b.cancel(p, Decision{Outcome: Cancelled, Actor: ActorUser, Reason: reason})
 	}
 }
 

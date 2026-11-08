@@ -9,7 +9,7 @@ export const EVENTS = [
 ];
 
 const GROUPS: { title: string; kinds: string[] }[] = [
-  { title: "Commands that would run", kinds: ["hook", "agent", "optimizer", "mcp"] },
+  { title: "Commands that would run", kinds: ["hook", "project_hooks", "agent", "optimizer", "mcp"] },
   { title: "Rules that would allow without asking", kinds: ["rule"] },
   { title: "Environments", kinds: ["environment"] },
   { title: "Settings", kinds: ["setting"] },
@@ -20,6 +20,8 @@ export function pendingLabel(c: { kind: string; event: string }): string {
   switch (c.kind) {
     case "hook":
       return `Hook (${EVENTS.find((e) => e.id === c.event)?.name ?? c.event})`;
+    case "project_hooks":
+      return "A trusted project's changed hooks";
     case "agent":
       return "Agent";
     case "optimizer":

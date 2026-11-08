@@ -274,7 +274,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 	}()
 	if why := e.runHooks(ctx, r, config.HookSessionStart, "", map[string]any{
 		"harness": ses.HarnessID, "providerId": ses.ProviderID, "model": ses.Model, "profileId": ses.ProfileID, "mode": ses.Mode,
-	}); why != "" {
+	}).Block; why != "" {
 		return nil, fmt.Errorf("a session_start hook stopped the session: %s", why)
 	}
 	lastCommands := []byte(`{"availableCommands":[]}`)
