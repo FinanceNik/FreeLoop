@@ -462,6 +462,13 @@ func (s *EngineService) ShowLogs() error {
 	return s.app.Env.OpenFileManager(s.logPath, true)
 }
 
+// ProblemReport is the text "Copy a report" puts on the clipboard: the version,
+// this Mac, the session's agent and provider, and the log's end, redacted. It is
+// sent nowhere.
+func (s *EngineService) ProblemReport(ctx context.Context, sessionID string) (string, error) {
+	return s.eng.ProblemReport(ctx, sessionID)
+}
+
 // Optimizers lists the token optimizers a session can use (HRN-019).
 func (s *EngineService) Optimizers(ctx context.Context, sessionID string) ([]engine.OptimizerInfo, error) {
 	return s.eng.Optimizers(ctx, sessionID)

@@ -61,6 +61,9 @@ type Options struct {
 	// GroupMembers lists a process group's processes, so a group whose first process
 	// ended is recognised and stopped too.
 	GroupMembers func(pgid int) []int
+	// SystemInfo describes this Mac for a problem report (macOS version, model,
+	// chip, memory). Without it the report says the system is unknown.
+	SystemInfo func() string
 	// Home is the user's home directory, for the protected-path policy.
 	// Default os.UserHomeDir().
 	Home string
@@ -138,6 +141,7 @@ type Engine struct {
 	loginGitConfig string
 	// editorArgv is the command that opens a file for editing.
 	editorArgv func(path string) []string
+	systemInfo func() string
 	// pdfArgv is the command that shows a PDF.
 	pdfArgv    func(path string) []string
 	folderArgv func(path string) []string
@@ -241,6 +245,7 @@ func Open(opts Options) (*Engine, error) {
 		secrets:       opts.Secrets,
 		confiner:      opts.Confiner,
 		editorArgv:    opts.EditorArgv,
+		systemInfo:    opts.SystemInfo,
 		pdfArgv:       opts.PDFArgv,
 		folderArgv:    opts.FolderArgv,
 		modelLists:    map[string]modelList{},

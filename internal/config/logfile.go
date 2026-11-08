@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -67,4 +69,54 @@ func (l *LogFile) Write(b []byte) (int, error) {
 	n, err := l.f.Write(b)
 	l.size += int64(n)
 	return n, err
+}
+
+// LogTail returns the last n lines of the log, reaching into the file before the
+// current one when the current one holds fewer, oldest first. A missing log is no
+// lines. Only the end of each file is read, so a full log costs little.
+func LogTail(dir string, n int) ([]string, error) {
+	var lines []string
+	for _, path := range []string{LogPath(dir), LogPath(dir) + ".1"} {
+		if len(lines) >= n {
+			break
+		}
+		got, err := tailLines(path, n-len(lines))
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("config: %w", err)
+		}
+		lines = append(got, lines...)
+	}
+	return lines, nil
+}
+
+// tailLines returns up to the last n lines of the file at path.
+func tailLines(path string, n int) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	// Lines of the log are short; 400 bytes a line is plenty, and a longer line
+	// is cut at the start of what was read.
+	size := min(fi.Size(), int64(n)*400+1)
+	buf := make([]byte, size)
+	if _, err := f.ReadAt(buf, fi.Size()-size); err != nil && err != io.EOF {
+		return nil, err
+	}
+	text := strings.TrimRight(string(buf), "\n")
+	if text == "" {
+		return nil, nil
+	}
+	all := strings.Split(text, "\n")
+	if size < fi.Size() && len(all) > 1 {
+		all = all[1:] // the first is likely cut
+	}
+	if len(all) > n {
+		all = all[len(all)-n:]
+	}
+	return all, nil
 }

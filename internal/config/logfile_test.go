@@ -40,3 +40,32 @@ func TestLogFileMovesOnWhileRunning(t *testing.T) {
 		t.Errorf("the new log holds %d bytes", now.Size())
 	}
 }
+
+// The end of the log reaches into the file before when the current one is short,
+// and reads only the end of a long one.
+func TestLogTailReadsAcrossARotation(t *testing.T) {
+	dir := t.TempDir()
+	if got, err := LogTail(dir, 5); err != nil || len(got) != 0 {
+		t.Fatalf("no log = %v, %v", got, err)
+	}
+	if err := os.MkdirAll(dir+"/"+LogsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var old strings.Builder
+	old.WriteString(strings.Repeat("y", 1<<20) + "\n") // a long first line, cut when read
+	for i := 1; i <= 100; i++ {
+		old.WriteString("old " + strings.Repeat("o", i%7) + "\n")
+	}
+	os.WriteFile(LogPath(dir)+".1", []byte(old.String()), 0o600)
+	os.WriteFile(LogPath(dir), []byte("new 1\nnew 2\nnew 3\n"), 0o600)
+	got, err := LogTail(dir, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, "|") != "old o|old oo|new 1|new 2|new 3" {
+		t.Errorf("LogTail = %q", got)
+	}
+	if got, _ := LogTail(dir, 2); strings.Join(got, "|") != "new 2|new 3" {
+		t.Errorf("LogTail(2) = %q", got)
+	}
+}

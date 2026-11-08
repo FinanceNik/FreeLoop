@@ -8,7 +8,7 @@ import FontEditor from "./FontEditor.tsx";
 import type { ColorSet } from "./colors.ts";
 import type { FontChoice } from "./fonts.ts";
 import { bindingOf, keyLabel } from "./shortcuts.ts";
-import { Browser } from "@wailsio/runtime";
+import { Browser, Clipboard } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
 import BudgetTable from "./BudgetTable.tsx";
 import { HookTable, PendingCommands } from "./Hooks.tsx";
@@ -33,6 +33,8 @@ interface Props {
   onFonts: (f: FontChoice) => void;
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
+  // The session a problem report describes: the one last open, if any.
+  reportSession?: { id: string; title: string } | null;
 }
 
 // What restoring a backup would do, before anything changes (SET-005).
@@ -123,7 +125,21 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
 // while the user is on another page, so leaving the settings does not drop them.
 let waitingDraft: Pick<Config, "hooks" | "prices" | "budgets" | "web"> | null = null;
 
-export default function Settings({ page, config, providers, harnesses, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError }: Props) {
+export default function Settings({ page, config, providers, harnesses, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError, reportSession }: Props) {
+  // A problem report: copied, and shown when asked, before it is pasted anywhere.
+  const [report, setReport] = useState<string | null>(null);
+  const [reportCopied, setReportCopied] = useState(false);
+  const copyReport = () =>
+    EngineService.ProblemReport(reportSession?.id ?? "")
+      .then((text) => Clipboard.SetText(text))
+      .then(() => setReportCopied(true))
+      .catch(onError);
+  const toggleReport = () =>
+    report !== null
+      ? setReport(null)
+      : EngineService.ProblemReport(reportSession?.id ?? "")
+          .then(setReport)
+          .catch(onError);
   // What waited for Save when the settings were last left comes back with them.
   const [form, setForm] = useState<Config>(() => (waitingDraft ? { ...config, ...waitingDraft } : config));
   const [saved, setSaved] = useState(false);
@@ -639,11 +655,29 @@ export default function Settings({ page, config, providers, harnesses, environme
       </div>
 
       <div className="card">
-        <h3>Logs</h3>
-        <p className="muted">What went wrong, for a bug report. Logs stay on this Mac, with the secrets the app knows about removed. Read them before sharing them.</p>
-        <button type="button" onClick={() => EngineService.ShowLogs().catch(onError)}>
-          Show logs in Finder
-        </button>
+        <h3>Report a problem</h3>
+        <p className="muted">
+          Copies Freeloop's version, this Mac's model and macOS version,{" "}
+          {reportSession ? <>the agent and provider of “{reportSession.title}”,</> : "the agent and provider of the session last open,"} and the log's last 200
+          lines, for an issue. Secrets the app knows and your home folder's path are taken out, and nothing is sent anywhere. Read it before you share it.
+        </p>
+        <div className="row">
+          <button type="button" onClick={copyReport}>
+            Copy a report
+          </button>
+          <button type="button" onClick={toggleReport} aria-expanded={report !== null}>
+            {report !== null ? "Hide what is copied" : "Show what is copied"}
+          </button>
+          <button type="button" onClick={() => EngineService.ShowLogs().catch(onError)}>
+            Show logs in Finder
+          </button>
+          {reportCopied && <span className="ok" role="status">Copied to the clipboard.</span>}
+        </div>
+        {report !== null && (
+          <pre className="report-preview" tabIndex={0} aria-label="The report">
+            {report}
+          </pre>
+        )}
       </div>
 
         </>

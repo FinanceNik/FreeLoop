@@ -781,6 +781,15 @@ export default function SessionView({ session, events, focus, prices, initialDra
     ...[{ id: "", name: "Off" }, ...optimizers]
       .filter((o) => o.id !== session.optimizer)
       .map((o) => act(`optimizer:${o.id}`, `Token optimizer: ${o.name}`, () => setOptimizer(o.id), { keywords: "tokens rtk compress output" })),
+    act(
+      "report",
+      "Copy a problem report",
+      () =>
+        EngineService.ProblemReport(session.id)
+          .then((text) => Clipboard.SetText(text))
+          .catch(onError),
+      { keywords: "bug issue log crash", detail: "version, Mac, this session's agent, the log's end" },
+    ),
     act("panel", panelOpen ? "Hide the panel" : "Show the panel", togglePanel, { keywords: "right sidebar" }),
     ...(onClosePane ? [act("close-pane", "Close this pane", onClosePane, { keywords: "workspace split" })] : []),
     act("approvals", "Show approvals", () => showPanel("approvals"), { keywords: "panel decided" }),

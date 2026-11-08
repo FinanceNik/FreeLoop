@@ -97,7 +97,7 @@ func main() {
 	}
 	eng, err := engine.Open(engine.Options{
 		HookProgram: hookProgram,
-		DataDir:     dataDir, Secrets: secretStore(), Confiner: darwin.Seatbelt{}, ProcessStarted: darwin.ProcessStart, GroupMembers: darwin.GroupMembers, EditorArgv: darwin.EditorArgv, PDFArgv: darwin.PDFArgv, FolderArgv: darwin.FolderArgv, Dev: devEnv("FREELOOP_DEV") == "1",
+		DataDir:     dataDir, Secrets: secretStore(), Confiner: darwin.Seatbelt{}, ProcessStarted: darwin.ProcessStart, GroupMembers: darwin.GroupMembers, EditorArgv: darwin.EditorArgv, PDFArgv: darwin.PDFArgv, FolderArgv: darwin.FolderArgv, SystemInfo: darwin.SystemInfo, Dev: devEnv("FREELOOP_DEV") == "1",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: devEnv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).

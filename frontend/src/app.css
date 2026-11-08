@@ -2846,6 +2846,15 @@ ul.unpriced {
   color: var(--muted);
 }
 
+.report-preview {
+  max-height: 320px;
+  overflow: auto;
+  margin-top: 10px;
+  font-size: calc(11.5rem / 14);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 /* Command palette (GUI-014): a search field over sections of results, each
    under a small heading, one line per result. */
 .palette-backdrop {

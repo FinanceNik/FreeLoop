@@ -854,6 +854,7 @@ export default function App() {
       page("import-sessions", "Import sessions", () => setScreen({ kind: "import" }), { keywords: "claude code agent transcript history resume" }),
       page("backup", "Back up or restore the configuration", () => setScreen({ kind: "data" }), { keywords: "export import settings providers profiles logs data" }),
       page("guide", "Setup guide", () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
+      page("report", "Report a problem", () => setScreen({ kind: "data" }), { keywords: "bug issue copy report logs crash help" }),
       {
         id: "app:find",
         title: "Find a session",
@@ -1600,6 +1601,7 @@ export default function App() {
                   colors={colors}
                   onColors={changeColors}
                   onFonts={changeFonts}
+                  reportSession={sessions.find((s) => s.id === lastSessionId) ?? null}
                 onSaved={setConfig} onError={report} />
               )}
               {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
