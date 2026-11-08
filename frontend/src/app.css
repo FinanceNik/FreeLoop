@@ -2855,6 +2855,126 @@ ul.unpriced {
   word-break: break-all;
 }
 
+/* Help (GUI-047): its topics beside the page being read. */
+.help {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+.help-nav {
+  overflow-y: auto;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+}
+
+.help-nav h2 {
+  margin: 4px 10px 10px;
+  font-size: calc(15rem / 14);
+}
+
+.help-nav input {
+  width: calc(100% - 4px);
+  margin: 0 2px 8px;
+}
+
+.help-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.help-topic {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.help-topic:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.help-topic[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+
+.help-snippet {
+  font-size: calc(11.5rem / 14);
+  color: var(--muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.help-none {
+  padding: 6px 10px;
+}
+
+.help-page {
+  overflow-y: auto;
+  padding: 24px 32px 48px;
+  outline: none;
+}
+
+.help-page > * {
+  max-width: 760px;
+}
+
+.help-page h1 {
+  margin: 0 0 6px;
+  font-size: calc(24rem / 14);
+}
+
+.help-page h3 {
+  margin: 26px 0 6px;
+  font-size: calc(17rem / 14);
+}
+
+.help-page h4 {
+  margin: 18px 0 4px;
+  font-size: calc(15rem / 14);
+}
+
+.help-opens {
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.help-turn {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 720px) {
+  .help {
+    grid-template-columns: 1fr;
+  }
+  .help-nav {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 40vh;
+  }
+  .help-page {
+    padding: 16px;
+  }
+}
+
 /* Command palette (GUI-014): a search field over sections of results, each
    under a small heading, one line per result. */
 .palette-backdrop {

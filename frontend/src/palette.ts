@@ -87,6 +87,7 @@ const LABELS: Record<string, string> = {
   Command: "Agent commands",
   Resource: "Attach to the message",
   Changes: "Changes",
+  Help: "Help",
 };
 
 const labelOf = (group: string) => LABELS[group] ?? group;

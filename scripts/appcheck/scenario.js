@@ -1098,6 +1098,30 @@ await step("the usage pane cycles through its views", async () => {
 // answer of the policy, one demo at a time, and "Remove demo" leaves nothing behind. It
 // runs before the bypass step and removes what it made, so later steps find the app as
 // it was.
+await step("the help is a book of topics, searchable, leading into the app", async () => {
+  named("button", "Help").click();
+  const nav = await until("the help", () => document.querySelector(".help-nav"), 5000);
+  const topics = all(".help-topic", nav).map((b) => b.textContent);
+  check("the help lists its topics", topics.length >= 10 && topics[0] === "Getting started", topics.join(", "));
+  check("it opens on the first topic", document.querySelector(".help-page h1")?.textContent === "Getting started", document.querySelector(".help-page h1")?.textContent);
+  withText(".help-topic", "Permissions and the policy").click();
+  await until("the permissions page", () => document.querySelector(".help-page h1")?.textContent?.startsWith("Permissions"), 4000);
+  check("a topic opens on a click", true);
+  const box = nav.querySelector("input");
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(box, "deny rule");
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  const hit = await until("a search result", () => nav.querySelector(".help-snippet"), 4000);
+  check("a search quotes what it found", /deny/i.test(hit.textContent), hit.textContent);
+  check("the page renders no markup from its text", !document.querySelector(".help-page script, .help-page img, .help-page iframe"));
+  withText(".help-opens button", "Open Policy").click();
+  await until("the Policy page", () => named("select", "Effect"), 5000);
+  check("a topic leads to its page in the app", true);
+  await openPalette("help permissions");
+  check("the palette finds help topics", !!all('.palette-section[aria-label="Help"] .palette-item').length);
+  document.querySelector(".palette input").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  await until("the palette to close", () => !document.querySelector(".palette"), 4000);
+});
+
 await step("the palette is short, grouped and one line a result", async () => {
   const open = async (query) => {
     if (!document.querySelector(".palette")) window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));

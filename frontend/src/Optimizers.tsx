@@ -85,7 +85,7 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
             {chosen && list && !list.some((o) => o.id === chosen) && <option value={chosen}>{chosen} (no such optimizer)</option>}
           </select>
           <span className="muted">A profile can choose its own, and each session can switch at any time from its header.</span>
-          {waitsApproval && <span className="muted">This choice comes from a file and waits for your approval under General; until then new sessions start with it off. Choosing another here approves that one.</span>}
+          {waitsApproval && <span className="muted">This choice comes from a file and waits for your approval in Settings → Permissions; until then new sessions start with it off. Choosing another here approves that one.</span>}
         </label>
       </div>
       {list === null && <p className="muted">Looking for them…</p>}

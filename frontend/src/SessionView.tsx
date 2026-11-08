@@ -174,6 +174,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
     if (step === "confirm" && !(await askUser(`Trusting ${project.name} lets it run or try these:\n\n${list}`))) return;
     EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError);
   };
+  // Trust is taken back as it is given, by the user: the project's instructions,
+  // .freeloop/ settings, hooks and skills stop applying, and trusting again approves
+  // its hooks as they are then (SEC-006).
+  const distrust = async () => {
+    if (!project?.trusted) return;
+    if (!(await askUser(`Stop trusting ${project.name}? Its AGENTS.md, .freeloop/ settings, hooks and skills stop applying to its sessions until you trust it again.`))) return;
+    EngineService.SetProjectTrust(project.root, false).then(onProjectsChanged).catch(onError);
+  };
   const [renaming, setRenaming] = useState<string | null>(null);
   const [tagging, setTagging] = useState(false);
   const setTags = (tags: string[]) => EngineService.SetTags(session.id, tags).catch(onError);
@@ -828,6 +836,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     act("rename", "Rename session", () => setRenaming(session.title), { keywords: "title" }),
     act("tag", "Add a tag to this session", () => setTagging(true), { keywords: "label tags" }),
     act("archive", archived ? "Unarchive session" : "Archive session", archive, { keywords: "hide" }),
+    ...(project?.trusted ? [act("distrust", "Stop trusting this project…", distrust, { keywords: "untrust distrust trust revoke" })] : []),
     act("delete", "Delete session…", remove, { keywords: "remove" }),
   ]);
 
@@ -956,6 +965,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 <button onClick={fromMenu(() => exportAs("markdown"))}>Export as Markdown…</button>
                 <button onClick={fromMenu(() => exportAs("json"))}>Export as JSON…</button>
                 <button onClick={fromMenu(archive)}>{archived ? "Unarchive" : "Archive"}</button>
+                {project?.trusted && <button onClick={fromMenu(distrust)}>Stop trusting this project…</button>}
                 <hr />
                 <button className="danger" onClick={fromMenu(remove)}>
                   Delete…

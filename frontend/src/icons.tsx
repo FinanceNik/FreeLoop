@@ -189,6 +189,7 @@ export const BellIcon = () => (
   </Icon>
 );
 export const BoardIcon = () => <Icon><rect x="3" y="3" width="18" height="18" rx="2" />{line("M9 3v18", "M15 3v18")}</Icon>;
+export const BookIcon = () => <Icon>{line("M12 7v14", "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z")}</Icon>;
 export const UsageIcon = () => <Icon>{line("M3 3v16a2 2 0 0 0 2 2h16", "M18 17V9", "M13 17V5", "M8 17v-3")}</Icon>;
 export const SendIcon = () => <Icon>{line("m5 12 7-7 7 7", "M12 19V5")}</Icon>;
 export const QueueIcon = () => <Icon>{line("M11 12H3", "M16 6H3", "M16 18H3", "M18 9v6", "M21 12h-6")}</Icon>;

@@ -51,7 +51,9 @@ import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav from "./SettingsNav.tsx";
 import { budgetLine, budgetName, worst } from "./budgets.ts";
-import { BellIcon, BoardIcon, ChevronIcon, FilterIcon, Logo, NavIcon as Icon, NewSessionIcon, UsageIcon } from "./icons.tsx";
+import { BellIcon, BoardIcon, BookIcon, ChevronIcon, FilterIcon, Logo, NavIcon as Icon, NewSessionIcon, UsageIcon } from "./icons.tsx";
+import Help, { SHOWN_TOPICS } from "./Help.tsx";
+import type { HelpPlace } from "./help.ts";
 import { clearSelectionOnClick } from "./selection.ts";
 import Splitter from "./Splitter.tsx";
 import { clampSidebar, rememberSidebar, setPanelWidth, SIDEBAR_MIN, sidebarMax, storedPanel, storedSidebar } from "./sizes.ts";
@@ -91,6 +93,7 @@ type Screen =
   | { kind: "skills" }
   | { kind: "mcp" }
   | { kind: "import" }
+  | { kind: "help"; topic?: string }
   | { kind: "none" };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -854,6 +857,8 @@ export default function App() {
       page("import-sessions", "Import sessions", () => setScreen({ kind: "import" }), { keywords: "claude code agent transcript history resume" }),
       page("backup", "Back up or restore the configuration", () => setScreen({ kind: "data" }), { keywords: "export import settings providers profiles logs data" }),
       page("guide", "Setup guide", () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
+      page("help", "Help", () => setScreen({ kind: "help" }), { keywords: "docs documentation guide manual how" }),
+      ...SHOWN_TOPICS.map((t) => ({ id: `help:${t.slug}`, title: t.title, group: "Help", keywords: "help docs guide how", run: () => setScreen({ kind: "help", topic: t.slug }) })),
       page("report", "Report a problem", () => setScreen({ kind: "data" }), { keywords: "bug issue copy report logs crash help" }),
       {
         id: "app:find",
@@ -970,6 +975,9 @@ export default function App() {
         openSession(s.id);
       })
       .catch(report);
+
+  // Where a help page's buttons lead.
+  const openPlace = (place: HelpPlace) => (place === "demo" ? startDemo() : setScreen({ kind: place }));
 
   const sessionDeleted = (sid: string) => {
     forgetDraft(sid);
@@ -1401,6 +1409,9 @@ export default function App() {
               >
                 <UsageIcon />
               </button>
+              <button className="icon-button" aria-label="Help" title="Help: how Freeloop works" aria-current={screen.kind === "help" ? "page" : undefined} onClick={() => setScreen({ kind: "help" })}>
+                <BookIcon />
+              </button>
               {/* Shown once anything is priced today, and whenever a budget is near or reached (PRV-017). */}
               {((today && (today.models ?? []).some((m) => m.priced)) || worst(budgets) !== "") && (
                 <button
@@ -1563,6 +1574,7 @@ export default function App() {
             onError={report}
           />
         )}
+        {screen.kind === "help" && <Help topic={screen.topic ?? ""} onTopic={(topic) => setScreen({ kind: "help", topic })} onOpen={openPlace} />}
         {inSettings(screen.kind) && (
           <div className="settings-area">
             <SettingsNav current={screen.kind} onOpen={(kind) => setScreen({ kind } as Screen)} onBack={leaveSettings} counts={{ permissions: waitingApproval }} />
