@@ -9,7 +9,6 @@ import (
 	"maps"
 	"path/filepath"
 	"regexp"
-	goruntime "runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -109,7 +108,7 @@ func downloadNote(o config.Optimizer) (bool, string) {
 	if o.Download == nil {
 		return false, ""
 	}
-	if _, ok := o.Download.Assets[goruntime.GOARCH]; !ok {
+	if _, ok := o.Download.Assets[config.AssetKey()]; !ok {
 		return false, ""
 	}
 	return true, fmt.Sprintf("Downloads %s %s (%s) from its GitHub releases and checks it. It stays in Freeloop's own folder, and only sessions that choose it use it.", o.Name, o.Download.Version, o.Download.License)
@@ -484,7 +483,7 @@ func (e *Engine) optimizerDir(ses session.Session, sandboxed bool) string {
 	if sandboxed {
 		return filepath.Join(e.projectCache(ses.ProjectID), "cache", "optimizer", ses.ID)
 	}
-	return filepath.Join(environment.Canonical(e.home), "Library", "Caches", "Freeloop", "optimizer", ses.ID)
+	return e.appCache("optimizer", ses.ID)
 }
 
 // optimizerProbe is what looking for an optimizer's program found.

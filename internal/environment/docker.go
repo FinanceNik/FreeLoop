@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -88,6 +89,9 @@ func FindDocker() (string, error) {
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
 			return p, nil
 		}
+	}
+	if runtime.GOOS != "darwin" {
+		return "", errors.New("the docker command is not installed; install Docker Engine or Docker Desktop")
 	}
 	return "", errors.New("the docker command is not installed; install Docker Desktop, or Colima and the docker CLI (brew install colima docker)")
 }

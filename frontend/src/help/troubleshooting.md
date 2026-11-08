@@ -36,6 +36,24 @@ A session that is not making progress shows a banner that starts with "Not getti
 
 Use the banner's **Continue on** button, or the **Another profile…** menu, to carry on in a new session, in the same project, with another profile, for example one on a different provider or agent. The old session's last request and a summary of it go with it. The **Continue on** button names the profile chosen for that agent under **When a session is stuck** on the profiles page. If an account limit was reached and the session's profile sets `onLimit`, the banner says it continues on that profile when the turn ends, and it does so without asking.
 
+## The sandbox will not start on Linux
+
+On Linux, **Local, sandboxed** runs commands under bubblewrap. Install the `bubblewrap` package if the session says it is missing.
+
+Bubblewrap needs unprivileged user namespaces. Ubuntu 24.04 and later withhold them, through AppArmor, from programs that have no profile of their own, so the session says the sandbox would not start. To give bubblewrap a profile, save this as `/etc/apparmor.d/bwrap`:
+
+```
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+```
+
+Then load it with `sudo apparmor_parser -r /etc/apparmor.d/bwrap` and start the session again. This lets every program that runs bubblewrap create user namespaces, as Flatpak does; Ubuntu restricts them to make some kernel attacks harder. If you would rather not, use a Docker environment to confine commands instead.
+
 ## Configuration problems
 
 If a settings file cannot be read, a banner appears: "Configuration problems; using defaults where needed." Each line names the file, line and field. Open the file, fix it and save. Freeloop picks up edits to its files within a second, and the banner clears when the problem is gone.

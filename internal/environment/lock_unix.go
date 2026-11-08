@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // ErrLocked is a data folder another copy of the app has open.
@@ -33,5 +35,6 @@ func LockFolder(path string) (*os.File, error) {
 // RedirectStderr sends the process's standard error to f, so a crash's stack trace
 // lands in the log: a launched app's goes to /dev/null.
 func RedirectStderr(f *os.File) error {
-	return syscall.Dup2(int(f.Fd()), 2)
+	// Dup2 is not on every system (Linux on arm64 has only dup3); unix.Dup2 is.
+	return unix.Dup2(int(f.Fd()), 2)
 }

@@ -7,6 +7,7 @@ import (
 	"maps"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -40,7 +41,20 @@ func sandboxedEnvironment() config.Environment {
 var sandboxTools = []string{
 	".gitignore_global",
 	"go", ".nvm", ".cargo", ".rustup", ".pyenv", ".rbenv", ".asdf", ".volta", ".bun", ".deno", ".local/bin", ".local/share/mise",
+	// macOS
 	"Library/Developer", "Library/Python", "Library/pnpm",
+	// Linux
+	".local/share/pnpm", ".local/lib", ".sdkman", ".ghcup", ".opam", ".nix-profile",
+}
+
+// appCache is the app's folder in the user's caches, or a folder in it: where a
+// sandboxed command, a downloaded optimizer and SSH's sockets go.
+func (e *Engine) appCache(parts ...string) string {
+	base := filepath.Join(environment.Canonical(e.home), "Library", "Caches", "Freeloop")
+	if goruntime.GOOS == "linux" {
+		base = filepath.Join(environment.Canonical(e.home), ".cache", "freeloop")
+	}
+	return filepath.Join(append([]string{base}, parts...)...)
 }
 
 // sandboxProtected are the project's files that something outside the sandbox
@@ -51,7 +65,7 @@ var sandboxProtected = append([]string{ProjectDir}, permission.ActedOnLater...)
 // projectCache is the project's folder in the app's caches, where a sandboxed
 // command can write.
 func (e *Engine) projectCache(projectID string) string {
-	return filepath.Join(environment.Canonical(e.home), "Library", "Caches", "Freeloop", "sandbox", cmp.Or(projectID, "default"))
+	return e.appCache("sandbox", cmp.Or(projectID, "default"))
 }
 
 // sandboxEnv returns the session's environment confined as its settings say.
@@ -63,7 +77,7 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 	}
 	root = host.Root()
 	home := environment.Canonical(e.home)
-	cacheBase := filepath.Join(home, "Library", "Caches", "Freeloop")
+	cacheBase := e.appCache()
 	cache, tmp, cacheEnv, err := environment.SandboxCaches(e.projectCache(ses.ProjectID))
 	if err != nil {
 		return nil, nil, err
@@ -139,7 +153,7 @@ func (e *Engine) sandboxEnv(ctx context.Context, ses session.Session, cfg config
 		ID: cfg.ID, Root: root, Env: allVars, Guard: e.broker.Policy().Guard(root), NoSSHAgent: !cfg.ShareSSHAgent(),
 		// No startup files: they may hold keys, so they are closed, and what they
 		// set came through loginVars.
-		Shell: []string{"zsh", "-fc"},
+		Shell: environment.LoginShell().NoStartup,
 		Sandbox: &environment.SandboxOptions{
 			Confiner: e.confiner, Base: c, Env: cacheEnv, NetworkEnv: networkEnv, Reach: reach,
 			Probe: filepath.Join(cacheBase, ".sandbox-probe"),
@@ -246,8 +260,8 @@ func (e *Engine) loginVars(ctx context.Context, host *environment.Local) map[str
 		defer cancel()
 		const marker = "__FREELOOP_ENV__"
 		res, err := host.Exec(ctx, environment.ExecSpec{
-			Argv: []string{"zsh", "-lc", "print -r -- " + marker + "; /usr/bin/env"},
-			Env:  map[string]string{"HOME": e.home},
+			Command: "printf '%s\\n' " + marker + "; /usr/bin/env",
+			Env:     map[string]string{"HOME": e.home},
 		})
 		if err != nil || res.ExitCode != 0 {
 			return

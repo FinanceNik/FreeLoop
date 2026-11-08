@@ -34,7 +34,7 @@ const (
 // toolsDir holds what the app downloaded. A sandboxed command can read it, to run
 // it, and cannot write it.
 func (e *Engine) toolsDir() string {
-	return filepath.Join(environment.Canonical(e.home), "Library", "Caches", "Freeloop", "tools")
+	return e.appCache("tools")
 }
 
 // downloadedProgram is where an optimizer's download goes.
@@ -69,7 +69,7 @@ func (e *Engine) InstallOptimizer(ctx context.Context, id string) (OptimizerStat
 	if o.Download == nil {
 		return OptimizerStatus{}, fmt.Errorf("Freeloop cannot install %s; install it with: %s", o.Name, o.Install)
 	}
-	asset, ok := o.Download.Assets[goruntime.GOARCH]
+	asset, ok := o.Download.Assets[config.AssetKey()]
 	if !ok {
 		return OptimizerStatus{}, fmt.Errorf("%s has no build for this Mac (%s)", o.Name, goruntime.GOARCH)
 	}

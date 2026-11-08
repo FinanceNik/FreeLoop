@@ -8,6 +8,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.84.0
 	github.com/coder/acp-go-sdk v0.13.5
 	github.com/creack/pty v1.1.24
+	github.com/godbus/dbus/v5 v5.2.4
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/openai/openai-go/v3 v3.90.0
 	github.com/wailsapp/wails/v3 v3.0.0
@@ -34,7 +35,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect

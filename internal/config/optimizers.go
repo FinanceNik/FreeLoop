@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"unicode"
@@ -78,7 +79,8 @@ type Optimizer struct {
 type OptimizerDownload struct {
 	Version string
 	License string
-	// Assets are .tar.gz builds by Go's name for the architecture.
+	// Assets are .tar.gz builds by Go's names for the system and the architecture,
+	// as "linux/amd64" (AssetKey).
 	Assets map[string]OptimizerAsset
 }
 
@@ -115,12 +117,14 @@ func BuiltinOptimizers() []Optimizer {
 		// Full outputs are kept here, for `rtk recall`, so they go when the
 		// session goes.
 		DataEnv: map[string]string{"RTK_DB_PATH": "tracking.db", "RTK_RECALL_DB": "recall.db"},
-		Install: "brew install rtk",
+		Install: rtkInstall(),
 		// The edition without RTK's BUSL-licensed engine. Hashes from the release's
 		// checksums.txt.
 		Download: &OptimizerDownload{Version: "1.1.0", License: "Apache-2.0", Assets: map[string]OptimizerAsset{
-			"arm64": {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-aarch64-apple-darwin.tar.gz", SHA256: "1623590dd8d65374f61589c599c764c08ba9ce993ebe6b601312a89a3c874558"},
-			"amd64": {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-x86_64-apple-darwin.tar.gz", SHA256: "559156238dd3e148c84c88c3a62a7594b874f68793208994e1b02e77a9d9abf9"},
+			"darwin/arm64": {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-aarch64-apple-darwin.tar.gz", SHA256: "1623590dd8d65374f61589c599c764c08ba9ce993ebe6b601312a89a3c874558"},
+			"darwin/amd64": {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-x86_64-apple-darwin.tar.gz", SHA256: "559156238dd3e148c84c88c3a62a7594b874f68793208994e1b02e77a9d9abf9"},
+			"linux/arm64":  {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-aarch64-unknown-linux-gnu.tar.gz", SHA256: "57a4fac13d18da77f0577ea8b68def7934b934bf76d0a6e161f0bfd06b1e1078"},
+			"linux/amd64":  {URL: "https://github.com/rtk-ai/rtk/releases/download/v1.1.0/rtk-oss-x86_64-unknown-linux-musl.tar.gz", SHA256: "4dec94a64035e08189ae82fd5408fe4ae9ae27a665fc07e3e3ec3c4c2d8e8a3e"},
 		}},
 	}}
 }
@@ -232,3 +236,15 @@ func LoadOptimizers(dir string) ([]Optimizer, []Issue) {
 	slices.SortFunc(out, func(a, b Optimizer) int { return strings.Compare(a.ID, b.ID) })
 	return out, issues
 }
+
+// rtkInstall is how to get RTK by hand: Homebrew's formula on a Mac. Nothing
+// is offered elsewhere, because "brew install" is not what the user has there.
+func rtkInstall() string {
+	if runtime.GOOS == "darwin" {
+		return "brew install rtk"
+	}
+	return ""
+}
+
+// AssetKey names this system's build among an optimizer's downloads.
+func AssetKey() string { return runtime.GOOS + "/" + runtime.GOARCH }

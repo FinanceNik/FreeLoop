@@ -22,18 +22,22 @@ const root = "../.."
 var execAllowed = []string{"internal/environment"}
 
 // Direct file-system access is allowed in the environment layer and in the
-// app's own infrastructure: the store, config loading and the platform layer.
+// app's own infrastructure: the store, config loading and the platform layers.
 // Everything else, the harnesses above all, goes through an Environment.
 // cmd/freeloop-sbom is a tool make release runs on the build machine, to read the
 // licenses of what went into the app; it is not part of the app.
-var fsAllowed = []string{"internal/environment", "internal/store", "internal/config", "internal/platform/darwin", "cmd/freeloop-sbom"}
+var fsAllowed = []string{"internal/environment", "internal/store", "internal/config", "internal/platform/darwin", "internal/platform/linux", "cmd/freeloop-sbom"}
 
 // Only the Wails adapter may depend on Wails; the engine stays
 // transport-agnostic.
 var wailsAllowed = []string{"cmd/freeloop"}
 
-// macOS-only code lives in one package (NFR-XPLAT-002).
+// macOS-only code lives in one package (NFR-XPLAT-002), and Linux's platform code, cgo
+// included, in another. Only cmd/freeloop, which picks one for the system it runs on,
+// imports either.
 var darwinAllowed = []string{"internal/platform/darwin"}
+var linuxAllowed = []string{"internal/platform/linux"}
+var platformImporters = []string{"cmd/freeloop"}
 
 // The app reads its development switches, the FREELOOP_ variables, only through
 // devEnv in cmd/freeloop, which a shipped build turns off. There every other read
@@ -124,8 +128,10 @@ func violations(rel string, src []byte) []string {
 	for _, imp := range f.Imports {
 		p, _ := strconv.Unquote(imp.Path.Value)
 		switch {
-		case p == "C" && !in(darwinAllowed):
-			report("%s: cgo outside %v", rel, darwinAllowed)
+		case p == "C" && !in(darwinAllowed) && !in(linuxAllowed):
+			report("%s: cgo outside %v and %v", rel, darwinAllowed, linuxAllowed)
+		case strings.HasPrefix(p, "github.com/FinanceNik/Freeloop/internal/platform/") && !in(platformImporters):
+			report("%s: imports %s; only %v may import the platform packages", rel, p, platformImporters)
 		case slices.Contains(execPackages, p) && !in(execAllowed):
 			report("%s: imports %s; only %v may start processes (ENV-001)", rel, p, execAllowed)
 		case slices.Contains(fsPackages, p) && !in(fsAllowed):
@@ -302,5 +308,23 @@ func f() {
 	}
 	if v := violations("internal/environment/local.go", []byte("package environment\nimport \"os/exec\"\nvar _ = exec.Command\n")); len(v) != 0 {
 		t.Errorf("environment flagged: %v", v)
+	}
+}
+
+func TestPlatformPackagesAreImportedOnlyByTheApp(t *testing.T) {
+	src := []byte("package engine\nimport _ \"github.com/FinanceNik/Freeloop/internal/platform/linux\"\n")
+	if v := violations("internal/engine/x.go", src); len(v) != 1 || !strings.Contains(v[0], "only [cmd/freeloop] may import the platform packages") {
+		t.Errorf("engine importing the platform: %v", v)
+	}
+	if v := violations("cmd/freeloop/platform_linux.go", src); len(v) != 0 {
+		t.Errorf("the app flagged: %v", v)
+	}
+	// The Linux platform layer reads files and may use cgo, like the macOS one.
+	src = []byte("package linux\nimport \"C\"\nimport \"os\"\nvar _, _ = os.ReadFile(\"/proc/stat\")\n")
+	if v := violations("internal/platform/linux/proc.go", src); len(v) != 0 {
+		t.Errorf("platform/linux flagged: %v", v)
+	}
+	if v := violations("internal/engine/x.go", src); len(v) != 2 {
+		t.Errorf("cgo and os.ReadFile outside the platform layers: %v", v)
 	}
 }

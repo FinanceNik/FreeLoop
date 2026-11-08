@@ -53,8 +53,33 @@ func NewPolicy(home, appDataDir string) *Policy {
 		filepath.Join(lib, "Application Support", "Microsoft Edge"),
 		filepath.Join(lib, "Application Support", "Arc"),
 		filepath.Join(lib, "Application Support", "Firefox"),
-		appDataDir,
 	}
+	// Linux's equivalents: the keyrings, the browsers' profiles with their cookies and saved
+	// logins, including the Snap and Flatpak copies, and the password managers' stores.
+	// Both sets are always in, whatever the system: a path of the other system's is
+	// harmless where it does not exist, and one rule list that does not depend on where
+	// it runs is simpler to read, test and hand to a sandbox than two.
+	neverRead = append(neverRead,
+		filepath.Join(home, ".local", "share", "keyrings"),
+		filepath.Join(home, ".local", "share", "kwalletd"),
+		filepath.Join(home, ".mozilla"),
+		filepath.Join(home, ".config", "google-chrome"),
+		filepath.Join(home, ".config", "chromium"),
+		filepath.Join(home, ".config", "BraveSoftware"),
+		filepath.Join(home, ".config", "microsoft-edge"),
+		filepath.Join(home, ".config", "vivaldi"),
+		filepath.Join(home, ".config", "opera"),
+		filepath.Join(home, "snap", "firefox"),
+		filepath.Join(home, "snap", "chromium"),
+		filepath.Join(home, ".var", "app", "org.mozilla.firefox"),
+		filepath.Join(home, ".var", "app", "com.google.Chrome"),
+		filepath.Join(home, ".var", "app", "org.chromium.Chromium"),
+		filepath.Join(home, ".pki"),
+		filepath.Join(home, ".password-store"),
+		filepath.Join(home, ".config", "Bitwarden"),
+		filepath.Join(home, ".config", "KeePassXC"),
+		appDataDir,
+	)
 	p := &Policy{shown: neverRead}
 	for _, d := range neverRead {
 		p.neverRead = append(p.neverRead, canonical(d)...)

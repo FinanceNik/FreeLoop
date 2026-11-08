@@ -57,7 +57,7 @@ func (e *Engine) runGH(ctx context.Context, env environment.Environment, args ..
 		return res, err
 	}
 	if res.ExitCode == 127 {
-		return res, errors.New("the GitHub CLI (gh) is not installed; install it (brew install gh) and sign in with `gh auth login`")
+		return res, errors.New("the GitHub CLI (gh) is not installed; install it (" + environment.InstallHint("gh") + ") and sign in with `gh auth login`")
 	}
 	if res.TimedOut {
 		return res, errors.New("gh timed out")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -110,9 +111,13 @@ func (e *Engine) missingCommand(cmd string) string {
 			missing = fmt.Sprintf("%s is not on your login PATH", cmd)
 			switch filepath.Base(cmd) {
 			case "npx", "node", "npm":
-				missing += "; install Node.js (for example with Homebrew: brew install node)"
+				if goruntime.GOOS == "darwin" {
+					missing += "; install Node.js (for example with Homebrew: brew install node)"
+				} else {
+					missing += "; install Node.js " + environment.InstallHint("node")
+				}
 			case "uvx", "uv":
-				missing += "; install uv (brew install uv)"
+				missing += "; install uv (" + environment.InstallHint("uv") + ")"
 			}
 		}
 	}

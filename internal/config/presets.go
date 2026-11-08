@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -163,7 +164,7 @@ func BuiltinPresets() []HarnessPreset {
 		// Its default approves every tool call. It has no read-only mode that
 		// keeps reading: plan is chat, with no tools at all.
 		Modes:   askingModes("approve", "chat"),
-		Notes:   "Install it (brew install block-goose-cli; tested with 1.57.0) and choose its provider and key once by running goose configure in a terminal.",
+		Notes:   gooseNotes(),
 		Builtin: true,
 	}, {
 		ID:          "opencode",
@@ -298,4 +299,14 @@ func DirFingerprint(dir string) string {
 		return nil
 	})
 	return sb.String()
+}
+
+// gooseNotes says how to install goose: with Homebrew on a Mac, from its own
+// instructions elsewhere.
+func gooseNotes() string {
+	install := "Install it (see goose's own instructions; tested with 1.57.0)"
+	if runtime.GOOS == "darwin" {
+		install = "Install it (brew install block-goose-cli; tested with 1.57.0)"
+	}
+	return install + " and choose its provider and key once by running goose configure in a terminal."
 }

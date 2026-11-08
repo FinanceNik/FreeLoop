@@ -272,7 +272,7 @@ func (e *Engine) CreatePullRequest(ctx context.Context, req CreatePullRequestReq
 		return event.PullRequestData{}, errors.New("gh timed out; the branch is pushed")
 	}
 	if res.ExitCode == 127 {
-		return event.PullRequestData{}, errors.New("the GitHub CLI (gh) is not installed. Install it (brew install gh), sign in with `gh auth login`, and try again; the branch is pushed")
+		return event.PullRequestData{}, errors.New("the GitHub CLI (gh) is not installed. Install it (" + environment.InstallHint("gh") + "), sign in with `gh auth login`, and try again; the branch is pushed")
 	}
 	url := prURL(res.Output)
 	if res.ExitCode != 0 || url == "" {

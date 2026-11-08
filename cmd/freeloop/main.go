@@ -24,7 +24,6 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/engine"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
-	"github.com/FinanceNik/Freeloop/internal/platform/darwin"
 	"github.com/FinanceNik/Freeloop/internal/rpc"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -97,7 +96,7 @@ func main() {
 	}
 	eng, err := engine.Open(engine.Options{
 		HookProgram: hookProgram,
-		DataDir:     dataDir, Secrets: secretStore(), Confiner: darwin.Seatbelt{}, ProcessStarted: darwin.ProcessStart, GroupMembers: darwin.GroupMembers, EditorArgv: darwin.EditorArgv, PDFArgv: darwin.PDFArgv, FolderArgv: darwin.FolderArgv, SystemInfo: darwin.SystemInfo, Dev: devEnv("FREELOOP_DEV") == "1",
+		DataDir:     dataDir, Secrets: secretStore(), Confiner: thisPlatform.Confiner, ProcessStarted: thisPlatform.ProcessStarted, GroupMembers: thisPlatform.GroupMembers, EditorArgv: thisPlatform.EditorArgv, PDFArgv: thisPlatform.PDFArgv, FolderArgv: thisPlatform.FolderArgv, SystemInfo: thisPlatform.SystemInfo, Dev: devEnv("FREELOOP_DEV") == "1",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: devEnv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).
@@ -259,14 +258,15 @@ func main() {
 	}
 }
 
-// secretStore is one Keychain item holding every secret, so a rebuild asks once. A served build, for checking the UI on scratch
+// secretStore is one keyring item holding every secret (the login keychain on a Mac, the
+// Secret Service on Linux), so a rebuild asks once. A served build, for checking the UI on scratch
 // data, can keep what it stores in memory with FREELOOP_DEV_SECRETS=memory, so a
-// scratch folder leaves nothing in the login keychain and asks it nothing.
+// scratch folder leaves nothing in the keyring and asks it nothing.
 func secretStore() secrets.Store {
 	if servedBuild && devEnv("FREELOOP_DEV_SECRETS") == "memory" {
 		return secrets.NewMemory()
 	}
-	return secrets.NewVault(darwin.Keychain{}, "freeloop")
+	return secrets.NewVault(thisPlatform.Keys, "freeloop")
 }
 
 // shutdownLimit is how long quitting waits for sessions to stop. Each stops its

@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,8 +18,11 @@ import (
 func TestBudgets(t *testing.T) {
 	ctx := context.Background()
 	e, root := queueEngine(t)
-	var notices []Notice
-	e.onNotice = func(n Notice) { notices = append(notices, n) }
+	// The schedule loop checks budgets too, on its own goroutine.
+	var mu sync.Mutex
+	var got []Notice
+	e.onNotice = func(n Notice) { mu.Lock(); got = append(got, n); mu.Unlock() }
+	noticed := func() []Notice { mu.Lock(); defer mu.Unlock(); return slices.Clone(got) }
 	cfg := e.Config()
 	cfg.Prices = []config.Price{{Model: "m", Input: 1_000_000}} // a dollar a token
 	cfg.Budgets = []config.Budget{{Period: config.BudgetDay, Amount: 10}, {Period: config.BudgetMonth, Amount: 100, ProfileID: "other"}}
@@ -49,15 +54,15 @@ func TestBudgets(t *testing.T) {
 	}
 	e.checkBudgets(ctx, now)
 	e.checkBudgets(ctx, now)
-	if len(notices) != 1 || notices[0].Title != "Budget nearly spent" {
-		t.Errorf("notices at 80%% = %+v", notices)
+	if len(noticed()) != 1 || noticed()[0].Title != "Budget nearly spent" {
+		t.Errorf("notices at 80%% = %+v", noticed())
 	}
 
 	spend(event.UsageData{InputTokens: 3, Model: "m"})
 	e.checkBudgets(ctx, now)
 	e.checkBudgets(ctx, now)
-	if len(notices) != 2 || notices[1].Title != "Budget reached" {
-		t.Errorf("notices when reached = %+v", notices)
+	if len(noticed()) != 2 || noticed()[1].Title != "Budget reached" {
+		t.Errorf("notices when reached = %+v", noticed())
 	}
 
 	// The queue starts nothing under it.

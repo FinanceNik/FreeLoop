@@ -137,7 +137,7 @@ func (s *EngineService) KeepCompare(ctx context.Context, tag, sessionID string) 
 	return s.eng.KeepCompare(ctx, tag, sessionID)
 }
 
-// SetWebSearchKey keeps the search endpoint's key in the Keychain (HRN-017).
+// SetWebSearchKey keeps the search endpoint's key in the keyring (HRN-017).
 func (s *EngineService) SetWebSearchKey(key string) error { return s.eng.SetWebSearchKey(key) }
 
 // RequestReview sends a session's changes to another profile (HRN-018).
@@ -427,7 +427,7 @@ func (s *EngineService) LoadSessionOptions(ctx context.Context, sessionID string
 	return s.eng.LoadSessionOptions(ctx, sessionID)
 }
 
-// OpenProjectFolder shows the session's folder in the Finder (GUI-024).
+// OpenProjectFolder shows the session's folder in the file manager (GUI-024).
 func (s *EngineService) OpenProjectFolder(ctx context.Context, sessionID string) error {
 	return s.eng.OpenProjectFolder(ctx, sessionID)
 }
@@ -457,7 +457,7 @@ func (s *EngineService) RecentUsage(ctx context.Context, hours int) (engine.Rece
 	return s.eng.RecentUsage(ctx, hours)
 }
 
-// ShowLogs shows the app's log file in Finder, for a bug report (NFR-PRIV-001).
+// ShowLogs shows the app's log file in the file manager, for a bug report (NFR-PRIV-001).
 func (s *EngineService) ShowLogs() error {
 	return s.app.Env.OpenFileManager(s.logPath, true)
 }

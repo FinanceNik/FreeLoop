@@ -26,7 +26,7 @@ type LocalOptions struct {
 	ID   string
 	Root string
 	// Shell runs commands as Shell[0] Shell[1:]... <command>. Default
-	// zsh -lc (OQ-019).
+	// LoginShell().Login: zsh -lc on a Mac (OQ-019).
 	Shell []string
 	Env   map[string]string
 	Guard Guard
@@ -77,7 +77,7 @@ func NewLocal(opts LocalOptions) (*Local, error) {
 	}
 	shell := opts.Shell
 	if len(shell) == 0 {
-		shell = []string{"zsh", "-lc"}
+		shell = LoginShell().Login
 	}
 	l := &Local{id: opts.ID, root: root, shell: shell, env: opts.Env, sandbox: opts.Sandbox, noSSHAgent: opts.NoSSHAgent}
 	l.fs = &localFS{env: l, guard: opts.Guard}
@@ -355,7 +355,7 @@ func (f *localFS) openRead(abs string) (*os.File, error) {
 		}
 	}
 	afterCheck()
-	return os.OpenFile(real, os.O_RDONLY|syscall.O_NONBLOCK|noFollow, 0)
+	return openNoFollow(real, os.O_RDONLY|syscall.O_NONBLOCK)
 }
 
 func (f *localFS) ReadFile(p string) ([]byte, error) {

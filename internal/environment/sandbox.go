@@ -7,7 +7,9 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strings"
 )
 
 // The native sandbox (ENV-009). A local environment can run its commands under
@@ -174,7 +176,23 @@ func (l *Local) CheckSandbox(ctx context.Context) error {
 		os.Remove(l.sandbox.Probe)
 		return errors.New("the sandbox let a write through that it must refuse, so commands will not run; the session needs another environment")
 	}
-	return fmt.Errorf("the sandbox would not start (exit %d): %s; commands will not run; the session needs another environment", res.ExitCode, res.Output)
+	return fmt.Errorf("the sandbox would not start (exit %d): %s; commands will not run; the session needs another environment.%s", res.ExitCode, res.Output, sandboxStartHint())
+}
+
+// sandboxStartHint says why bubblewrap may not start on this system, when the
+// system says so (OQ-037): it needs unprivileged user namespaces.
+func sandboxStartHint() string {
+	if runtime.GOOS != "linux" {
+		return ""
+	}
+	read := func(p string) string { b, _ := os.ReadFile(p); return strings.TrimSpace(string(b)) }
+	switch {
+	case read("/proc/sys/kernel/apparmor_restrict_unprivileged_userns") == "1":
+		return " This system's AppArmor withholds user namespaces from programs without a profile of their own (Ubuntu 24.04 and later), and bubblewrap needs them: Help, Troubleshooting says how to give it one."
+	case read("/proc/sys/kernel/unprivileged_userns_clone") == "0", read("/proc/sys/user/max_user_namespaces") == "0":
+		return " This system has unprivileged user namespaces turned off, and bubblewrap needs them."
+	}
+	return ""
 }
 
 // PrivateCache makes a folder under the app's caches that only the user reads.

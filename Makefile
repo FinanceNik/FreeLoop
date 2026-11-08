@@ -98,6 +98,37 @@ test-keychain: ## Run the Keychain backend test against the real login keychain
 frontend-test: frontend/node_modules
 	cd frontend && npm test
 
+# Linux (NFR-XPLAT-003) is built and tested in a container from build/linux/Dockerfile,
+# so a Mac with Docker (Colima) can do both. The source is mounted read-only; module
+# and build caches live in a volume between runs.
+LINUX_ARCH ?= arm64
+LINUX_IMAGE := freeloop-linux-$(LINUX_ARCH)
+LINUX_RUN := docker run --rm --platform linux/$(LINUX_ARCH) -v "$(CURDIR)":/src:ro -v freeloop-linux-cache:/home/build/go -v freeloop-linux-buildcache:/home/build/.cache -e FREELOOP_CHECK_EVENTS=/src/schemas/events.json $(LINUX_IMAGE)
+
+linux-image: ## Build the Linux build and test image (needs Docker)
+	docker build --platform linux/$(LINUX_ARCH) -t $(LINUX_IMAGE) build/linux
+
+linux-test: linux-image ## Run the Go tests on Linux in the build image (race detector on)
+	$(LINUX_RUN) go test -race ./internal/...
+
+# Needs no desktop: a private session bus and a GNOME Keyring that gnome-keyring-daemon
+# --unlock creates (the login keyring, empty password) and opens, as a login does. The
+# way to run the same on a Linux desktop is in internal/platform/linux/secretservice_test.go.
+linux-test-keyring: linux-image ## Run the Secret Service tests against a real GNOME Keyring in the build image
+	$(LINUX_RUN) dbus-run-session -- sh -c 'echo "" | gnome-keyring-daemon --unlock --components=secrets >/dev/null; FREELOOP_KEYRING_TEST=1 go test -race -count=1 -run "^TestSecretService" ./internal/platform/linux/'
+
+# Compiles the app for Linux (Wails needs cgo and GTK, so this cannot be done from the Mac
+# directly) and vets cmd/freeloop there. The source is copied, since it is mounted read-only.
+linux-build: linux-image frontend/node_modules ## Compile and vet the Linux app in the build image
+	cd frontend && npm run build
+	$(LINUX_RUN) sh -c 'mkdir /tmp/app && cd /src && tar cf - --exclude=node_modules --exclude=.git --exclude=bin . | tar xf - -C /tmp/app && cd /tmp/app && go vet -tags gtk3,production ./cmd/freeloop && go build -tags gtk3,production -o /tmp/freeloop ./cmd/freeloop && file /tmp/freeloop'
+
+# The sandbox's tests need bubblewrap and user namespaces: a privileged container,
+# in a VM that allows unprivileged user namespaces (Colima's Ubuntu restricts them
+# through AppArmor; `colima ssh -- sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`).
+linux-test-sandbox: linux-image ## Try to break out of the Linux sandbox, in a privileged container
+	docker run --rm --privileged --platform linux/$(LINUX_ARCH) -v "$(CURDIR)":/src:ro -v freeloop-linux-cache:/home/build/go -v freeloop-linux-buildcache:/home/build/.cache -e FREELOOP_SANDBOX_TEST=1 $(LINUX_IMAGE) go test -race -count=1 ./internal/platform/linux/
+
 bindings: ## Regenerate the TypeScript bindings for the Go services
 	$(WAILS) generate bindings -clean=true -ts -i -silent ./cmd/freeloop
 

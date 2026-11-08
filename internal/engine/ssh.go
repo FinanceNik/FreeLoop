@@ -35,7 +35,7 @@ func isSSH(c config.Environment) bool { return c.Kind == string(environment.Kind
 // sshDir holds the sockets of shared connections, private to the user. It is short,
 // since a socket's path has a low limit.
 func (e *Engine) sshDir() string {
-	dir := filepath.Join(environment.Canonical(e.home), "Library", "Caches", "Freeloop", "ssh")
+	dir := e.appCache("ssh")
 	if err := environment.PrivateCache(dir); err != nil {
 		return ""
 	}
@@ -45,7 +45,7 @@ func (e *Engine) sshDir() string {
 // sshSetAsideDir keeps what a session's sync replaced or deleted here; it goes with the
 // session.
 func (e *Engine) sshSetAsideDir(sid string) string {
-	dir := filepath.Join(environment.Canonical(e.home), "Library", "Caches", "Freeloop", "ssh-replaced", sid)
+	dir := e.appCache("ssh-replaced", sid)
 	if err := environment.PrivateCache(dir); err != nil {
 		return ""
 	}

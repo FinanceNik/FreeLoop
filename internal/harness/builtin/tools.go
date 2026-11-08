@@ -388,7 +388,7 @@ func shellTool() *tool {
 	return &tool{
 		spec: provider.ToolSpec{
 			Name:        "shell",
-			Description: "Run a shell command in the project root (zsh login shell). Returns the exit code and combined output, capped at 30 KB.",
+			Description: "Run a shell command in the project root (login shell). Returns the exit code and combined output, capped at 30 KB.",
 			InputSchema: schema([]string{"command"}, map[string]any{
 				"command":         str("The command line."),
 				"timeout_seconds": num("Timeout in seconds. Default 120, maximum 600."),
@@ -470,7 +470,7 @@ func shellTool() *tool {
 func sandboxedShellSpec(reach string) provider.ToolSpec {
 	return provider.ToolSpec{
 		Name:        "shell",
-		Description: "Run a shell command in the project root (zsh login shell), in a sandbox: it can write only in the project, read little outside it, and reach " + reach + ". Returns the exit code and combined output, capped at 30 KB.",
+		Description: "Run a shell command in the project root (login shell), in a sandbox: it can write only in the project, read little outside it, and reach " + reach + ". Returns the exit code and combined output, capped at 30 KB.",
 		InputSchema: schema([]string{"command"}, map[string]any{
 			"command":         str("The command line."),
 			"timeout_seconds": num("Timeout in seconds. Default 120, maximum 600."),

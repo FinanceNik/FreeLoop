@@ -12,7 +12,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -70,7 +69,7 @@ func TestInstallOptimizerChecksTheDownload(t *testing.T) {
 	defer srv.Close()
 	sum := sha256.Sum256(archive)
 	o := config.Optimizer{ID: "dl", Name: "Dl", Program: "freeloop-test-tool", Download: &config.OptimizerDownload{
-		Version: "1.0", Assets: map[string]config.OptimizerAsset{goruntime.GOARCH: {URL: srv.URL, SHA256: strings.Repeat("0", 64)}},
+		Version: "1.0", Assets: map[string]config.OptimizerAsset{config.AssetKey(): {URL: srv.URL, SHA256: strings.Repeat("0", 64)}},
 	}}
 	e.optimizers = []config.Optimizer{o}
 	if _, err := e.InstallOptimizer(ctx, "dl"); err == nil || !strings.Contains(err.Error(), "not the build") {
@@ -81,11 +80,11 @@ func TestInstallOptimizerChecksTheDownload(t *testing.T) {
 		t.Fatal("a download with a wrong checksum was kept")
 	}
 
-	o.Download.Assets[goruntime.GOARCH] = config.OptimizerAsset{URL: srv.URL, SHA256: hex.EncodeToString(sum[:])}
+	o.Download.Assets[config.AssetKey()] = config.OptimizerAsset{URL: srv.URL, SHA256: hex.EncodeToString(sum[:])}
 	if _, err := e.InstallOptimizer(ctx, "dl"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(program, filepath.Join("Library", "Caches", "Freeloop", "tools")) {
+	if !strings.HasPrefix(program, e.appCache("tools")) {
 		t.Errorf("installed at %s", program)
 	}
 	info, err := os.Stat(program)
