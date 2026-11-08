@@ -882,3 +882,16 @@ func TestSSHBareRepoConfigIsHeld(t *testing.T) {
 		t.Errorf("an ordinary file named config: %q", s)
 	}
 }
+
+// The SSH client is the system's own, by its absolute path on each system.
+func TestSSHProgramFor(t *testing.T) {
+	if got := sshProgramFor("darwin", ""); got != "/usr/bin/ssh" {
+		t.Errorf("darwin: %q", got)
+	}
+	if got := sshProgramFor("windows", `D:\Win`); got != `D:\Win\System32\OpenSSH\ssh.exe` {
+		t.Errorf("windows: %q", got)
+	}
+	if got := sshProgramFor("windows", ""); got != `C:\Windows\System32\OpenSSH\ssh.exe` {
+		t.Errorf("windows without SystemRoot: %q", got)
+	}
+}

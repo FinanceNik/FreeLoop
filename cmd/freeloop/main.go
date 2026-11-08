@@ -259,7 +259,7 @@ func main() {
 }
 
 // secretStore is one keyring item holding every secret (the login keychain on a Mac, the
-// Secret Service on Linux), so a rebuild asks once. A served build, for checking the UI on scratch
+// Secret Service on Linux, the Credential Manager on Windows), so a rebuild asks once. A served build, for checking the UI on scratch
 // data, can keep what it stores in memory with FREELOOP_DEV_SECRETS=memory, so a
 // scratch folder leaves nothing in the keyring and asks it nothing.
 func secretStore() secrets.Store {
@@ -273,7 +273,7 @@ func secretStore() secrets.Store {
 // commands first, so this is rarely reached; a quit must still always finish.
 const shutdownLimit = 8 * time.Second
 
-// logOutput is the app's log: to a file on this Mac, with what the app knows to be
+// logOutput is the app's log: to a file on this computer, with what the app knows to be
 // secret removed. Errors from providers and tools can echo a key.
 type logOutput struct {
 	w      io.Writer
@@ -333,8 +333,8 @@ func startupHint(err error) string {
 	return "Nothing was changed."
 }
 
-// failStartup says why the app cannot start and ends it. Launched from Finder, its
-// standard error goes nowhere, and the app would just seem not to open.
+// failStartup says why the app cannot start and ends it. Launched from Finder, the
+// Start menu or a desktop launcher, its standard error goes nowhere, and the app would just seem not to open.
 func failStartup(message string) {
 	log.Print("freeloop: " + message)
 	if servedBuild {

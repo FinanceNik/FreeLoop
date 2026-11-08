@@ -25,3 +25,7 @@ func joinGroup(*exec.Cmd) error { return nil }
 
 // releaseGroup lets go of what holds an ended group; on Unix nothing does.
 func releaseGroup(int) {}
+
+// noWindow keeps a console program from opening a window of its own; only Windows
+// opens one.
+func noWindow(*exec.Cmd) {}

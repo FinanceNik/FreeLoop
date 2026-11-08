@@ -242,3 +242,20 @@ func TestDockerRefusesASymlinkedReadOnlyPath(t *testing.T) {
 		t.Errorf("a container was created:\n%s", b)
 	}
 }
+
+// On Windows a host path is mounted in the container where Git Bash would spell it,
+// since a drive letter cannot be part of a Linux path; elsewhere at itself.
+func TestContainerPath(t *testing.T) {
+	cases := []struct{ goos, in, want string }{
+		{"darwin", "/Users/a/p", "/Users/a/p"},
+		{"linux", "/home/a/p", "/home/a/p"},
+		{"windows", `C:\Users\a\p`, "/c/Users/a/p"},
+		{"windows", `D:\`, "/d/"},
+		{"windows", `\\server\share\p`, "/unc/server/share/p"},
+	}
+	for _, c := range cases {
+		if got := containerPath(c.goos, c.in); got != c.want {
+			t.Errorf("containerPath(%s, %q) = %q, want %q", c.goos, c.in, got, c.want)
+		}
+	}
+}

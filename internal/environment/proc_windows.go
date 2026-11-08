@@ -184,3 +184,12 @@ func RedirectStderr(f *os.File) error {
 	os.Stderr = f
 	return nil
 }
+
+// noWindow keeps a console program from opening a window of its own, for a command
+// that runs outside a job.
+func noWindow(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.CreationFlags |= windows.CREATE_NO_WINDOW
+}

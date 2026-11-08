@@ -79,18 +79,51 @@ type Docker struct {
 // app's PATH, as for an app started from Finder.
 var dockerDirs = []string{"/opt/homebrew/bin", "/usr/local/bin", "/Applications/Docker.app/Contents/Resources/bin"}
 
+// dockerDirsWindows are where Docker Desktop puts the CLI on Windows.
+var dockerDirsWindows = []string{`C:\Program Files\Docker\Docker\resources\bin`}
+
+// A host path is mounted in the container at the same path, so a path means the same
+// on both sides. A Windows path cannot be a Linux container's, so there C:\Users\a\p
+// is mounted at /c/Users/a/p, as Git Bash spells it (containerPath).
+func bind(host, suffix string) string {
+	return host + ":" + containerPath(runtime.GOOS, host) + suffix
+}
+
+// containerPath is where host path p is in the container: p itself, or on Windows the
+// drive letter as a folder and slashes for backslashes. A UNC path, \\server\share\p,
+// becomes /unc/server/share/p.
+func containerPath(goos, p string) string {
+	if goos != "windows" {
+		return p
+	}
+	if rest, ok := strings.CutPrefix(p, `\\`); ok {
+		return "/unc/" + strings.ReplaceAll(rest, `\`, "/")
+	}
+	if len(p) >= 2 && p[1] == ':' {
+		return "/" + strings.ToLower(p[:1]) + strings.ReplaceAll(p[2:], `\`, "/")
+	}
+	return strings.ReplaceAll(p, `\`, "/")
+}
+
 // FindDocker returns the docker CLI's path.
 func FindDocker() (string, error) {
 	if p, err := exec.LookPath("docker"); err == nil {
 		return p, nil
 	}
-	for _, d := range dockerDirs {
-		p := filepath.Join(d, "docker")
+	dirs, name := dockerDirs, "docker"
+	if runtime.GOOS == "windows" {
+		dirs, name = dockerDirsWindows, "docker.exe"
+	}
+	for _, d := range dirs {
+		p := filepath.Join(d, name)
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
 			return p, nil
 		}
 	}
-	if runtime.GOOS != "darwin" {
+	switch runtime.GOOS {
+	case "windows":
+		return "", errors.New("the docker command is not installed; install Docker Desktop")
+	case "linux":
 		return "", errors.New("the docker command is not installed; install Docker Engine or Docker Desktop")
 	}
 	return "", errors.New("the docker command is not installed; install Docker Desktop, or Colima and the docker CLI (brew install colima docker)")
@@ -179,17 +212,15 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 			did = append(did, "built the image")
 		}
 		root := d.Root()
-		args := []string{"run", "-d", "--init", "--name", d.opts.Container, "--label", "app=freeloop", "-v", root + ":" + root}
+		args := []string{"run", "-d", "--init", "--name", d.opts.Container, "--label", "app=freeloop", "-v", bind(root, "")}
 		if d.opts.NoNetwork {
 			args = append(args, "--network", "none")
 		}
 		for _, m := range d.opts.Mounts {
-			m = filepath.Clean(m)
-			args = append(args, "-v", m+":"+m)
+			args = append(args, "-v", bind(filepath.Clean(m), ""))
 		}
 		for _, m := range d.opts.ReadOnlyMounts {
-			m = filepath.Clean(m)
-			args = append(args, "-v", m+":"+m+":ro")
+			args = append(args, "-v", bind(filepath.Clean(m), ":ro"))
 		}
 		inside := func(p string) bool {
 			for _, base := range append([]string{root}, d.opts.Mounts...) {
@@ -218,9 +249,9 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 					return "", fmt.Errorf("prepare %s: %w", p, err)
 				}
 			}
-			args = append(args, "-v", p+":"+p+":ro")
+			args = append(args, "-v", bind(p, ":ro"))
 		}
-		args = append(args, "-w", root, image, "sleep", "infinity")
+		args = append(args, "-w", containerPath(runtime.GOOS, root), image, "sleep", "infinity")
 		if _, err := d.run(ctx, MaxTimeout, nil, args...); err != nil {
 			return "", err
 		}
@@ -239,7 +270,7 @@ func (d *Docker) Start(ctx context.Context) (string, error) {
 		did = append(did, "started the container")
 	}
 	// A bind mount of a folder Docker's VM does not share comes up empty.
-	if res, err := d.Exec(ctx, ExecSpec{Argv: []string{"ls", "-A", d.Root()}, Timeout: time.Minute}); err != nil || res.ExitCode != 0 || strings.TrimSpace(res.Output) == "" {
+	if res, err := d.Exec(ctx, ExecSpec{Argv: []string{"ls", "-A", containerPath(runtime.GOOS, d.Root())}, Timeout: time.Minute}); err != nil || res.ExitCode != 0 || strings.TrimSpace(res.Output) == "" {
 		if entries, _ := os.ReadDir(d.Root()); len(entries) > 0 {
 			return strings.Join(did, ", "), fmt.Errorf("the container cannot see %s; Docker's VM shares only some folders (Colima shares your home folder by default)", d.Root())
 		}
@@ -276,7 +307,7 @@ func (d *Docker) execArgs(interactive bool, cwd string, env map[string]string, e
 	} else {
 		cwd = d.Resolve(cwd)
 	}
-	args = append(args, "-w", cwd)
+	args = append(args, "-w", containerPath(runtime.GOOS, cwd))
 	all := map[string]string{}
 	maps.Copy(all, d.opts.Env)
 	maps.Copy(all, env)
@@ -441,6 +472,7 @@ func RemoveContainer(ctx context.Context, name string) error {
 	}
 	cmd := exec.CommandContext(ctx, docker, "rm", "-f", name)
 	cmd.Env = baseEnv()
+	noWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil && !strings.Contains(string(out), "No such container") {
 		return fmt.Errorf("docker rm: %s", lastLines(string(out), 2))
@@ -448,6 +480,7 @@ func RemoveContainer(ctx context.Context, name string) error {
 	// The image Start built for the container from a Dockerfile, if any.
 	img := exec.CommandContext(ctx, docker, "image", "rm", "freeloop-"+name)
 	img.Env = baseEnv()
+	noWindow(img)
 	img.Run()
 	return nil
 }

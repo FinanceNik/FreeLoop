@@ -155,7 +155,7 @@ func (s *EngineService) ReviewFindings(ctx context.Context, reviewerID string) (
 	return s.eng.ReviewFindings(ctx, reviewerID)
 }
 
-// PortOpen reports whether something listens on a port of this Mac (GUI-020).
+// PortOpen reports whether something listens on a port of this computer (GUI-020).
 func (s *EngineService) PortOpen(ctx context.Context, port int) bool {
 	return s.eng.PortOpen(ctx, port)
 }
@@ -463,7 +463,7 @@ func (s *EngineService) ShowLogs() error {
 }
 
 // ProblemReport is the text "Copy a report" puts on the clipboard: the version,
-// this Mac, the session's agent and provider, and the log's end, redacted. It is
+// this computer, the session's agent and provider, and the log's end, redacted. It is
 // sent nowhere.
 func (s *EngineService) ProblemReport(ctx context.Context, sessionID string) (string, error) {
 	return s.eng.ProblemReport(ctx, sessionID)

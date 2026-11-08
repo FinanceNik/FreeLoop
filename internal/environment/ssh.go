@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,8 +30,19 @@ import (
 // KindSSH is a working copy on another machine.
 const KindSSH Kind = "ssh"
 
-// sshProgram is the system's own client, never one found on a PATH.
-const sshProgram = "/usr/bin/ssh"
+// sshProgram is the system's own client, never one found on a PATH: on Windows the
+// OpenSSH client Windows ships.
+var sshProgram = sshProgramFor(runtime.GOOS, os.Getenv("SystemRoot"))
+
+func sshProgramFor(goos, systemRoot string) string {
+	if goos != "windows" {
+		return "/usr/bin/ssh"
+	}
+	if systemRoot == "" {
+		systemRoot = `C:\Windows`
+	}
+	return systemRoot + `\System32\OpenSSH\ssh.exe`
+}
 
 // stoppedPullGrace is how long what a stopped command changed may take to come back.
 const stoppedPullGrace = 15 * time.Second
@@ -245,7 +257,8 @@ func (s *SSH) sshArgv(script string, args ...string) []string {
 // it ends every command using it. Sockets have a short limit on their path, and %C is
 // 40 characters.
 func (s *SSH) controlSocket() string {
-	if s.opts.ControlDir == "" {
+	// Windows' OpenSSH cannot share a connection: each command makes its own.
+	if s.opts.ControlDir == "" || runtime.GOOS == "windows" {
 		return ""
 	}
 	socket := filepath.Join(s.opts.ControlDir, s.socketPrefix()+"-%C")
