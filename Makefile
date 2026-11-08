@@ -9,11 +9,15 @@ WAILS := $(GOBIN)/wails3
 export MACOSX_DEPLOYMENT_TARGET := 14.0
 export CGO_CFLAGS := -O2 -g -mmacosx-version-min=14.0
 export CGO_LDFLAGS := -mmacosx-version-min=14.0
+# The app's version, as build/config.yml has it.
+VERSION := $(shell sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml)
+# shasum on macOS; sha256sum where Perl's shasum is missing (Git for Windows). Same output.
+SHA256 := $(shell command -v shasum >/dev/null 2>&1 && echo "shasum -a 256" || echo sha256sum)
 
-.PHONY: help tools dev build package check-app dmg notices release verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
+.PHONY: help tools dev build package check-app dmg notices windows windows-exe windows-tools linux-package linux-package-arch release release-mac release-windows release-linux release-sums verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
 
 help: ## List targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-19s %s\n", $$1, $$2}'
 
 tools: ## Install the pinned wails3 CLI into GOPATH/bin
 	go install github.com/wailsapp/wails/v3/cmd/wails3@$(WAILS_VERSION)
@@ -48,21 +52,104 @@ dmg: package notices ## Build bin/Freeloop.dmg from bin/Freeloop.app
 notices: ## Write bin/THIRD_PARTY_NOTICES.txt from what bin/Freeloop.app was built with
 	go run ./cmd/freeloop-sbom -notices -modcache "$$(go env GOMODCACHE)" -node-modules frontend/node_modules \
 		-binary bin/Freeloop.app/Contents/MacOS/Freeloop \
-		-version $$(sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml) < frontend/package-lock.json > bin/THIRD_PARTY_NOTICES.txt
+		-version $(VERSION) < frontend/package-lock.json > bin/THIRD_PARTY_NOTICES.txt
 
-# What a release ships besides the app: its bill of materials (SEC-012), the
-# tools it was built with, and checksums, of every file in the bundle too.
-release: dmg ## Build bin/release: the DMG, its SBOM, build information and checksums
+# Windows (NFR-XPLAT-003) is pure Go (WebView2 through go-webview2), so it
+# cross-compiles from any host with CGO_ENABLED=0; build/windows/Taskfile.yml has
+# the steps. The installer needs NSIS 3's makensis, the zip needs zip. Both are
+# unsigned for now, as the Mac build is ad-hoc signed (OQ-009).
+WINDOWS_ARCHS := amd64 arm64
+
+windows-tools:
+	@command -v makensis >/dev/null 2>&1 || { echo "makensis (NSIS 3) is missing; it makes the Windows installer."; \
+		echo "  macOS: brew install makensis   Debian/Ubuntu: sudo apt install nsis   Windows: https://nsis.sourceforge.io"; exit 1; }
+	@command -v zip >/dev/null 2>&1 || { echo "zip is missing; it makes the portable Windows zip."; exit 1; }
+
+windows-exe: frontend/node_modules bindings ## Cross-compile bin/windows-{amd64,arm64}/Freeloop.exe, the build users get
+	cd frontend && npm run build
+	for arch in $(WINDOWS_ARCHS); do $(WAILS) task windows:build:exe ARCH=$$arch SHIPPED=1 || exit 1; done
+
+windows: windows-tools windows-exe ## Build the Windows installers and portable zips (amd64, arm64) into bin/
+	for arch in $(WINDOWS_ARCHS); do $(WAILS) task windows:package:files ARCH=$$arch || exit 1; done
+
+# Linux packages build per architecture in the image from build/linux/Dockerfile
+# (cgo with GTK 3 and WebKitGTK 4.1): arm64 natively on Apple Silicon, amd64
+# emulated through --platform (Colima and Docker Desktop use Rosetta or QEMU;
+# slower, same result). build/linux/package.sh runs inside and writes into bin/.
+LINUX_ARCHS := amd64 arm64
+
+linux-package: frontend/node_modules bindings ## Build the Linux AppImages and .debs (amd64, arm64) into bin/ (needs Docker)
+	cd frontend && npm run build
+	for arch in $(LINUX_ARCHS); do $(MAKE) linux-package-arch LINUX_ARCH=$$arch || exit 1; done
+
+linux-package-arch: linux-image
+	mkdir -p bin
+	docker run --rm --platform linux/$(LINUX_ARCH) -v "$(CURDIR)":/src:ro -v "$(CURDIR)/bin":/out \
+		-v freeloop-linux-cache:/home/build/go -v freeloop-linux-buildcache:/home/build/.cache \
+		$(LINUX_IMAGE) sh /src/build/linux/package.sh
+
+# A release holds what this machine can build (RELEASE_PLATFORMS): the Mac on a
+# Mac, Windows where makensis is, Linux where Docker runs. Naming them builds
+# exactly those and fails on what cannot be built; `RELEASE_PLATFORMS=mac` is the
+# Mac-only release of before. Each platform adds its files, its bill of materials
+# (SEC-012) and the tools it was built with; SHA256SUMS covers every file.
+RELEASE_PLATFORMS ?= $(strip $(if $(filter Darwin,$(shell uname -s)),mac) \
+	$(if $(shell command -v makensis 2>/dev/null),windows) \
+	$(if $(shell docker info >/dev/null 2>&1 && echo yes),linux))
+
+release: ## Build bin/release for RELEASE_PLATFORMS (default: what this host can), with SBOMs, build information, checksums
+	@test -n "$(RELEASE_PLATFORMS)" || { echo "nothing this machine can release: not macOS, no makensis, no Docker"; exit 1; }
+	@echo "release for: $(RELEASE_PLATFORMS)"
+	@for p in mac windows linux; do case " $(RELEASE_PLATFORMS) " in *" $$p "*) ;; *) echo "  leaving out $$p (RELEASE_PLATFORMS)";; esac; done
 	rm -rf bin/release
+	mkdir -p bin/release
+	for p in $(RELEASE_PLATFORMS); do $(MAKE) release-$$p || exit 1; done
+	$(MAKE) release-sums
+	@echo "bin/release"
+
+# The Mac: the DMG, its bill, the tools it was built with, and checksums of every
+# file in the bundle.
+release-mac: dmg
 	mkdir -p bin/release
 	cp bin/Freeloop.dmg bin/THIRD_PARTY_NOTICES.txt bin/release/
 	go run ./cmd/freeloop-sbom -binary bin/Freeloop.app/Contents/MacOS/Freeloop \
-		-version $$(sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml) < frontend/package-lock.json > bin/release/Freeloop.sbom.cdx.json
+		-version $(VERSION) < frontend/package-lock.json > bin/release/Freeloop.sbom.cdx.json
 	{ echo "commit $$(git rev-parse HEAD)"; go version; echo "node $$(node --version)"; clang --version | head -1; \
 		echo "macOS SDK $$(xcrun --show-sdk-version)"; echo "wails3 $(WAILS_VERSION)"; } > bin/release/BUILDINFO.txt
 	cd bin && find Freeloop.app -type f | LC_ALL=C sort | xargs shasum -a 256 > release/APP-FILES.sha256
-	cd bin/release && shasum -a 256 Freeloop.dmg Freeloop.sbom.cdx.json THIRD_PARTY_NOTICES.txt BUILDINFO.txt APP-FILES.sha256 > SHA256SUMS
-	@echo "bin/release"
+
+# Windows: the installer and the zip per architecture and a bill per exe; the
+# notices are the same for both architectures.
+release-windows: windows
+	mkdir -p bin/release
+	for arch in $(WINDOWS_ARCHS); do \
+		cp bin/Freeloop-$(VERSION)-windows-$$arch-setup.exe bin/Freeloop-$(VERSION)-windows-$$arch-portable.zip bin/release/ && \
+		go run ./cmd/freeloop-sbom -binary bin/windows-$$arch/Freeloop.exe -version $(VERSION) \
+			< frontend/package-lock.json > bin/release/Freeloop-windows-$$arch.sbom.cdx.json || exit 1; \
+	done
+	cp bin/windows-amd64/THIRD_PARTY_NOTICES.txt bin/release/THIRD_PARTY_NOTICES-windows.txt
+	{ echo "commit $$(git rev-parse HEAD)"; go version; echo "node $$(node --version)"; \
+		echo "GOOS=windows CGO_ENABLED=0 for $(WINDOWS_ARCHS)"; echo "makensis $$(makensis -VERSION)"; \
+		echo "wails3 $(WAILS_VERSION)"; } > bin/release/BUILDINFO-windows.txt
+	cd bin && find windows-amd64/Freeloop.exe windows-arm64/Freeloop.exe | LC_ALL=C sort | xargs $(SHA256) > release/WINDOWS-FILES.sha256
+
+# Linux: the AppImage and the .deb per architecture, a bill per binary, and what
+# the image built them with.
+release-linux: linux-package
+	mkdir -p bin/release
+	for arch in $(LINUX_ARCHS); do \
+		cp bin/Freeloop-$(VERSION)-linux-$$arch.AppImage bin/Freeloop-$(VERSION)-linux-$$arch.deb bin/release/ && \
+		go run ./cmd/freeloop-sbom -binary bin/linux-$$arch/freeloop -version $(VERSION) \
+			< frontend/package-lock.json > bin/release/Freeloop-linux-$$arch.sbom.cdx.json || exit 1; \
+	done
+	cp bin/linux-amd64/THIRD_PARTY_NOTICES.txt bin/release/THIRD_PARTY_NOTICES-linux.txt
+	{ echo "commit $$(git rev-parse HEAD)"; echo "node $$(node --version), frontend built on the host"; echo "wails3 $(WAILS_VERSION)"; \
+		for arch in $(LINUX_ARCHS); do echo; cat bin/linux-$$arch/BUILDINFO.txt; done; } > bin/release/BUILDINFO-linux.txt
+
+# Checksums of every file in bin/release, files another machine built and copied
+# in included (CI's release job adds the Windows and Linux files that way).
+release-sums:
+	cd bin/release && rm -f SHA256SUMS && find . -type f | sed 's|^\./||' | LC_ALL=C sort | xargs $(SHA256) > ../SHA256SUMS.tmp && mv ../SHA256SUMS.tmp SHA256SUMS
 
 verify-repro: ## Build twice from clean clones and compare every file (NFR-SEC-004; REF=<tag> for a release)
 	scripts/verify-repro.sh $(REF)
@@ -106,7 +193,7 @@ LINUX_IMAGE := freeloop-linux-$(LINUX_ARCH)
 LINUX_RUN := docker run --rm --platform linux/$(LINUX_ARCH) -v "$(CURDIR)":/src:ro -v freeloop-linux-cache:/home/build/go -v freeloop-linux-buildcache:/home/build/.cache -e FREELOOP_CHECK_EVENTS=/src/schemas/events.json $(LINUX_IMAGE)
 
 linux-image: ## Build the Linux build and test image (needs Docker)
-	docker build --platform linux/$(LINUX_ARCH) -t $(LINUX_IMAGE) build/linux
+	docker build --platform linux/$(LINUX_ARCH) --build-arg WAILS_VERSION=$(WAILS_VERSION) -t $(LINUX_IMAGE) build/linux
 
 linux-test: linux-image ## Run the Go tests on Linux in the build image (race detector on)
 	$(LINUX_RUN) go test -race ./internal/...
