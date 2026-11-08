@@ -1,25 +1,27 @@
 # Keyboard and the command palette
 
-This page covers the command palette, the default keyboard shortcuts, how to change them, and the keys that answer approvals.
+Find anything with the palette, and see or change the shortcuts.
 
-## The command palette
+## Use the command palette
 
-Press ⌘K to open the palette over the window, and press it again or Escape to close it. It reaches nearly everything you can click: pages, sessions, actions and the controls of the open session.
+Press ⌘K to open the palette, and press it again or Escape to close it. It reaches nearly everything you can click: pages, sessions, actions and the controls of the open session.
 
-Before you type, it shows a short list in four sections:
+- Move with ↑ and ↓ and press Enter to run the highlighted item.
+- Nothing is highlighted until you type or move, so ⌘K then a reflex Enter runs nothing.
+- A hint on the right shows the shortcut that does the same thing.
 
-- **Waiting for you**: approvals that need an answer.
-- **Actions**: for example **New session** and **Try the demo**.
-- **Recent sessions**: your latest five.
-- **Go to**: pages such as **Board**, **Queue**, **Providers**, **Profiles**, **Policy**, **Settings** and **Keyboard shortcuts**.
+Before you type, it lists four sections:
 
-Type to search. Results come in sections, each showing its best few matches. Besides the sections above you may see **This session**, **Sessions**, **New session in**, **Filters**, **Attach to the message** and **Help**, which finds the pages of this help. **This session** holds what the open session offers, such as **Stop the turn**, **Show approvals**, **Show changes**, a permission mode, **Rewind to before the last message…**, **Fork before the last message** and **Continue with** another profile.
+| Section | Shows |
+| --- | --- |
+| Waiting for you | Approvals that need an answer |
+| Actions | For example New session and Try the demo |
+| Recent sessions | Your latest five |
+| Go to | Pages such as Board, Queue, Providers, Profiles, Policy and Settings |
 
-Move with ↑ and ↓ and press Enter to run the highlighted item. Nothing is highlighted until you type or move, so ⌘K followed by a reflex Enter runs nothing. A hint on the right shows the shortcut that does the same thing.
+Type to search. This session holds what the open session offers, such as Stop the turn, Show approvals and Continue with another profile. Help finds the pages of this help.
 
-### Agent commands
-
-Type `/` first to search only the open session's commands. These are the mode commands, the commands the session's agent advertises, your profile's slash commands and your MCP servers' prompts. The list appears under **Agent commands**. It is empty when no session is open.
+Type `/` first to search only the open session's commands: modes, the commands its agent advertises, your profile's slash commands and your MCP servers' prompts.
 
 ## Default shortcuts
 
@@ -30,10 +32,7 @@ Type `/` first to search only the open session's commands. These are the mode co
 | Open Needs attention | ⌘0 |
 | Larger text | ⌘= |
 | Smaller text | ⌘- |
-| Move to the pane on the left | ⌃⇧← |
-| Move to the pane on the right | ⌃⇧→ |
-| Move to the pane above | ⌃⇧↑ |
-| Move to the pane below | ⌃⇧↓ |
+| Move to the pane on the left, right, above, below | ⌃⇧← ⌃⇧→ ⌃⇧↑ ⌃⇧↓ |
 | Approval: allow once | Y |
 | Approval: allow always | A |
 | Approval: deny | N |
@@ -42,24 +41,21 @@ Some shortcuts are fixed:
 
 - ⌘1 to ⌘9 open the sessions listed first in the sidebar.
 - ⌥⌘1 to ⌥⌘4 make a pane active, and ⌥⌘← and ⌥⌘→ move between panes.
-- ⌘↩, ⌘⇧↩ and ⌘⇧⌫ answer an approval from anywhere.
-
-In the message box, Enter sends, Shift+Enter adds a line, `@` and `/` open pickers, and Escape closes one.
 
 ## Change a shortcut
 
-Open **Settings → Keyboard**. Choose the key shown beside an action, press the new combination, and it is saved. Press Escape to leave it as it was. **Reset** puts the default back.
+Open **Settings → Keyboard**, choose the key beside an action and press the new combination. Press Escape to leave it as it was, or choose **Reset** for the default.
 
-Freeloop refuses a key that cannot work and says why:
+Freeloop refuses a key that can't work and says why:
 
 - An app shortcut needs ⌘ or ⌃, so it works while you type.
-- Keys macOS and the app keep, such as ⌘C, ⌘V, ⌘Q and ⌘1 to ⌘9, cannot be used.
+- Keys macOS and the app keep, such as ⌘C, ⌘V, ⌘Q and ⌘1 to ⌘9, can't be used.
 - A key already used for another action is refused.
 - An approval shortcut is one letter with no modifier.
 
-## Approval keys
+## Answer approvals with keys
 
-When an approval card is waiting, **Y**, **A** and **N** allow once, allow always and deny. The letters work only when no text field has focus. The ⌘ forms work everywhere, the message box included, so you can answer without leaving it:
+The letters Y, A and N work only when no text field has focus. These work from anywhere, the message box included:
 
 | Answer | Keys |
 | --- | --- |
@@ -67,4 +63,6 @@ When an approval card is waiting, **Y**, **A** and **N** allow once, allow alway
 | Allow always | ⌘⇧↩ |
 | Deny | ⌘⇧⌫ |
 
-A new card ignores these keys for a moment after it appears, so a key you pressed for something else cannot approve a call you have not read. Buttons on the card show their keys. In **Needs attention**, J and K or the arrow keys choose which request the keys answer.
+In Needs attention, J and K or the arrow keys choose which request the keys answer.
+
+> A new card ignores these keys for a moment after it appears, so a key you pressed for something else can't approve a call you haven't read.

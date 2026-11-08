@@ -12,6 +12,17 @@ export const HELP_PAGES: Record<string, string> = Object.fromEntries(Object.entr
 // heading: the Markdown parser lowers headings for an agent's replies.
 const body = (page: string) => page.replace(/^#\s.*\n+/, "");
 
+// layout splits a page into its lead (the text before the first section), the rest,
+// and the sections' titles, for the "On this page" links.
+function layout(page: string): { lead: string; rest: string; sections: string[] } {
+  const b = body(page);
+  const i = b.search(/^## /m);
+  const lead = (i < 0 ? b : b.slice(0, i)).trim();
+  const rest = i < 0 ? "" : b.slice(i);
+  const sections = [...rest.matchAll(/^## (.+)$/gm)].map((m) => m[1].replace(/[*`_]/g, "").trim());
+  return { lead, rest, sections };
+}
+
 // The topics there is a page for, in reading order.
 export const SHOWN_TOPICS = HELP_TOPICS.filter((t) => HELP_PAGES[t.slug] !== undefined);
 
@@ -21,6 +32,7 @@ export default function Help({ topic, onTopic, onOpen }: { topic: string; onTopi
   const at = Math.max(0, SHOWN_TOPICS.findIndex((t) => t.slug === topic));
   const current = SHOWN_TOPICS[at];
   const page = useRef<HTMLElement>(null);
+  const shown = useMemo(() => (current ? layout(HELP_PAGES[current.slug]) : { lead: "", rest: "", sections: [] }), [current]);
   // A new topic is read from its top.
   useEffect(() => page.current?.scrollTo({ top: 0 }), [current?.slug]);
 
@@ -54,7 +66,23 @@ export default function Help({ topic, onTopic, onOpen }: { topic: string; onTopi
         {current ? (
           <>
             <h1>{current.title}</h1>
-            <Markdown text={body(HELP_PAGES[current.slug])} />
+            {shown.lead && (
+              <div className="help-lead">
+                <Markdown text={shown.lead} />
+              </div>
+            )}
+            {shown.sections.length > 2 && (
+              <nav className="help-toc" aria-label="On this page">
+                {shown.sections.map((s, i) => (
+                  <button type="button" className="link" key={s} onClick={() => page.current?.querySelectorAll(".help-body h4")[i]?.scrollIntoView({ block: "start", behavior: "smooth" })}>
+                    {s}
+                  </button>
+                ))}
+              </nav>
+            )}
+            <div className="help-body">
+              <Markdown text={shown.rest} />
+            </div>
             <div className="help-opens row">
               {current.opens.map((o) => (
                 <button type="button" key={o.label} onClick={() => onOpen(o.place)}>
