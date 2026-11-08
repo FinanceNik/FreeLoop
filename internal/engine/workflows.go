@@ -325,7 +325,7 @@ func (e *Engine) RunStage(ctx context.Context, sid, command, input string) (Stag
 		// commands (PrepareAFK, StartAFK).
 		return res, errors.New("an AFK run starts from its dialog: open the Board's backlog, or type /afk in the app")
 	case config.StageReview:
-		return res, errors.New("reviews from a workflow are not built yet")
+		return e.reviewStage(ctx, ses, w, strings.TrimSpace(input))
 	case config.StageCleanup:
 		return e.cleanupStage(ctx, ses, w)
 	}

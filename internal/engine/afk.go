@@ -127,6 +127,9 @@ type AFKPlan struct {
 	Commands        []AFKCommand `json:"commands"`
 	// Running is the project's run going on, if any.
 	Running *config.AFKRun `json:"running"`
+	// QueuePaused says the queue is paused, so the run's issues wait until it is
+	// resumed (SES-025).
+	QueuePaused bool `json:"queuePaused"`
 }
 
 // projectChecks are the commands a project's files suggest for its tests and type
@@ -230,6 +233,9 @@ func (e *Engine) PrepareAFK(ctx context.Context, root, workflowID string) (AFKPl
 	plan.ProfileID = e.afkProfile(project, w.AFK.Profile)
 	plan.ReviewProfileID = e.afkProfile(project, cmp.Or(w.Review.Profile, plan.ProfileID))
 	plan.EnvironmentID, plan.EnvironmentNote = e.afkEnvironment(project, w)
+	if q, err := e.Queue(); err == nil {
+		plan.QueuePaused = q.Paused
+	}
 	if r := e.lastRun(project.ID); r != nil && r.Active() {
 		plan.Running = r
 		plan.Problem = "A run is going on in this project; pause or stop it first."
@@ -592,6 +598,18 @@ func (e *Engine) finishIssue(ctx context.Context, id, sid string, w config.Workf
 		return
 	}
 	commit, note := e.commitLeftovers(ctx, env, *s)
+	// Then a second agent reviews it, before the next issue changes the worktree it
+	// reads (WFL-006).
+	if !w.Review.Off {
+		reviewer, err := e.reviewIssue(ctx, r, *s, sid, w, env)
+		if err == nil {
+			e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) {
+				st.Commit, st.Note, st.ReviewID, st.State = commit, note, reviewer, config.StepReviewing
+			})
+			return
+		}
+		note = strings.TrimSpace(note + " Not reviewed: " + err.Error())
+	}
 	e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) {
 		st.Commit, st.Note, st.State, st.EndedAt = commit, note, config.StepQA, time.Now().UTC()
 	})

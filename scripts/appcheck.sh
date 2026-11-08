@@ -30,6 +30,14 @@ providers:
     name: Stand-in
     type: scripted
 YAML
+# The profile an AFK run's sessions take in the workflow's step (WFL-005): the default
+# profile names no provider here.
+mkdir -p "$FREELOOP_HOME/profiles"
+cat > "$FREELOOP_HOME/profiles/afk-demo.yaml" <<'YAML'
+name: AFK demo
+provider: demo
+model: scripted
+YAML
 
 . "$HERE/appcheck/lived-in.sh"
 
@@ -66,10 +74,12 @@ start_app() {
 }
 start_app "$DATA/app.log"
 
-for name in alpha beta menu full plan; do
+for name in alpha beta menu full plan workflow; do
   mkdir -p "$DATA/projects/$name"
   git -C "$DATA/projects/$name" init -q
   git -C "$DATA/projects/$name" -c user.name=check -c user.email=check@example.com commit -q --allow-empty -m start
+  # The workflow's agents and the app commit there, whatever this Mac's own git identity.
+  [ "$name" != workflow ] || { git -C "$DATA/projects/$name" config user.name check; git -C "$DATA/projects/$name" config user.email check@example.com; }
   # "Check full" sets a model's limit, which needs a provider in the file.
   provider=demo
   [ "$name" != full ] || provider=stand-in
@@ -116,7 +126,8 @@ while [ $n -lt "${APPCHECK_TURNS:-25}" ]; do
 done
 
 status=0
-cat "$HERE/appcheck/lib.js" "$HERE/appcheck/scenario.js" > "$DATA/fresh.js"
+# APPCHECK_SCENARIO runs another scenario on the same data, to try one step alone.
+cat "$HERE/appcheck/lib.js" "${APPCHECK_SCENARIO:-$HERE/appcheck/scenario.js}" > "$DATA/fresh.js"
 "$DATA/drive" "http://localhost:$PORT/" "$DATA/fresh.js" > "$OUT/results.txt" || status=$?
 cat "$OUT/results.txt"
 

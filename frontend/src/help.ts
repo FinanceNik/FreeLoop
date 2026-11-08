@@ -18,6 +18,7 @@ export type HelpPlace =
   | "mcp"
   | "environments"
   | "optimizers"
+  | "workflows"
   | "usage"
   | "costs"
   | "keyboard"
@@ -42,6 +43,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   { slug: "skills-and-mcp", title: "Skills and MCP servers", opens: [{ label: "Open Skills", place: "skills" }, { label: "Open MCP servers", place: "mcp" }] },
   { slug: "environments", title: "Environments", opens: [{ label: "Open Environments", place: "environments" }] },
   { slug: "token-optimizers", title: "Token optimizers", opens: [{ label: "Open Token optimizers", place: "optimizers" }] },
+  { slug: "workflows", title: "Workflows", opens: [{ label: "Open Workflows", place: "workflows" }, { label: "Open the Board", place: "board" }, { label: "Open Needs attention", place: "attention" }] },
   { slug: "usage-and-budgets", title: "Usage, prices and budgets", opens: [{ label: "Open Usage", place: "usage" }, { label: "Open Prices and budgets", place: "costs" }] },
   { slug: "keyboard", title: "Keyboard and the command palette", opens: [{ label: "Open Keyboard shortcuts", place: "keyboard" }] },
   { slug: "privacy", title: "Privacy and your data", opens: [{ label: "Open Network settings", place: "network" }, { label: "Open Data settings", place: "data" }] },

@@ -73,6 +73,11 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                 {plan.problem}
               </p>
             )}
+            {plan.queuePaused && (
+              <p className="error-text" role="status">
+                The queue is paused: the run's issues wait until you resume it on the Queue page.
+              </p>
+            )}
             <p className="muted">
               The run works in a git worktree and branch of its own; your checkout stays as it is until you merge the branch from the Diff tab. Its sessions start in {mode} mode. {plan.environmentNote}
             </p>

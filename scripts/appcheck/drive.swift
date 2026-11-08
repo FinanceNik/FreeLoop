@@ -130,7 +130,9 @@ let driver = Driver(scenario: scenario)
 web.uiDelegate = ui
 web.navigationDelegate = driver
 web.load(URLRequest(url: url))
-DispatchQueue.main.asyncAfter(deadline: .now() + 240) {
+// The whole scenario's time, which the workflow's AFK run (WFL-005) made longer.
+let deadline = Double(ProcessInfo.processInfo.environment["APPCHECK_DEADLINE"] ?? "") ?? 420
+DispatchQueue.main.asyncAfter(deadline: .now() + deadline) {
   print("the scenario took too long")
   exit(2)
 }

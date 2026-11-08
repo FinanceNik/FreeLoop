@@ -116,9 +116,19 @@ func TestAFKRunDoesTheIssuesInOrder(t *testing.T) {
 		t.Fatalf("steps = %+v", run.Steps)
 	}
 	var worktrees []string
-	for _, s := range run.Steps {
+	for i, s := range run.Steps {
 		if s.State != config.StepQA || s.Commit == "" {
 			t.Errorf("step %+v", s)
+		}
+		// Each was reviewed, read-only, in the run's worktree, before the next began.
+		rev, err := e.store.GetSession(ctx, s.ReviewID)
+		if err != nil || rev.Mode != "plan" || rev.ParentID != s.SessionID || !slices.Contains(rev.Tags, ReviewTag) {
+			t.Errorf("review of %s: %+v %v", s.Issue, rev, err)
+		}
+		if i > 0 {
+			if prev, _ := e.store.GetSession(ctx, run.Steps[i-1].ReviewID); !s.StartedAt.After(prev.CreatedAt) {
+				t.Errorf("%s started before the review of the one before", s.Issue)
+			}
 		}
 		ses, err := e.store.GetSession(ctx, s.SessionID)
 		if err != nil {
@@ -167,6 +177,11 @@ func TestAFKRunDoesTheIssuesInOrder(t *testing.T) {
 	}
 	if strings.Join(qa, ",") != "001-store,002-search" {
 		t.Errorf("ready for QA: %v", qa)
+	}
+	for _, it := range items {
+		if it.QA != nil && !strings.Contains(it.QA.Reply, "found nothing wrong") {
+			t.Errorf("%s's review reply: %q", it.QA.Issue, it.QA.Reply)
+		}
 	}
 	if err := e.QADone(ctx, run.ID, "001-store"); err != nil {
 		t.Fatal(err)
@@ -275,6 +290,9 @@ func TestAFKRunStop(t *testing.T) {
 		e.KickRuns()
 		time.Sleep(20 * time.Millisecond)
 	}
+	if plan, _ := e.PrepareAFK(ctx, root, ""); !plan.QueuePaused {
+		t.Error("the plan does not say the queue is paused")
+	}
 	if q, _ := e.Queue(); len(q.Tasks) != 1 || q.Tasks[0].RunID != run.ID {
 		t.Fatalf("queue = %+v", q.Tasks)
 	}
@@ -297,4 +315,26 @@ func indent(s string) string {
 		b.WriteString("    " + line + "\n")
 	}
 	return b.String()
+}
+
+// WFL-006: /review has the workflow's review profile review the session's changes.
+func TestReviewStage(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "main", Workflow: config.BuiltinWorkflowID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(root, "change.txt"), []byte("a change\n"), 0o644)
+	res, err := e.RunStage(ctx, ses.ID, "review", "the naming")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rev, err := e.store.GetSession(ctx, res.SessionID)
+	if err != nil || rev.Mode != "plan" || rev.ParentID != ses.ID {
+		t.Errorf("review = %+v, %v", rev, err)
+	}
+	if _, err := e.RunStage(ctx, ses.ID, "afk", ""); err == nil || !strings.Contains(err.Error(), "dialog") {
+		t.Errorf("/afk from the engine: %v", err)
+	}
 }

@@ -1308,6 +1308,103 @@ await step("the demo runs a tour and removes itself", async () => {
   }
 });
 
+// WFL-001 to WFL-006: the built-in workflow from end to end on the demo provider:
+// install its skills, slice into two issues (the second blocked by the first), see
+// them on the Board, run them AFK, and QA what the run finished.
+await step("a workflow slices a brief and runs its issues AFK", async () => {
+  const setSelect = (el, value) => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(el, value);
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  // Settings → Workflows: the built-in one, and its skills installed on request.
+  document.querySelector(".settings-link").click();
+  (await until("the Workflows page", () => withText(".settings-nav button", "Workflows"))).click();
+  const card = await until("the built-in workflow", () => all(".workflow-card").find((c) => c.querySelector("h3")?.textContent === "Plan, slice, run AFK"), 8000);
+  check("the built-in workflow lists its stages", ["/grill", "/prd", "/slice", "/afk", "/review", "/cleanup"].every((c) => card.textContent.includes(c)), card.textContent.slice(0, 120));
+  check("its skills wait to be installed", card.textContent.includes("not installed"));
+  withText("button", "Install skills", card).click();
+  await until("the skills installed", () => card.textContent.includes("Installed grill-the-brief"), 8000);
+  check("installing names what it wrote", !card.textContent.includes("not installed"), card.textContent.slice(0, 200));
+  document.querySelector(".settings-nav .settings-back").click();
+  await sleep(100);
+
+  // A trusted project, a session in it with the workflow, and /slice.
+  openSession("Check workflow");
+  await until("the conversation", () => activePane().querySelector(".conversation"));
+  const trust = await until("the trust button", () => withText("button", "Trust project", activePane()), 8000);
+  trust.click();
+  await until("trusted", () => !withText("button", "Trust project", activePane()), 8000);
+  const picker = await until("the workflow picker", () => all(".session-control", activePane()).find((l) => l.textContent.includes("Workflow"))?.querySelector("select"), 8000);
+  await until("the workflow listed", () => [...picker.options].some((o) => o.value === "plan-slice-afk"), 8000);
+  setSelect(picker, "plan-slice-afk");
+  await until("the workflow chosen", () => picker.value === "plan-slice-afk", 8000);
+  const box = activePane().querySelector(".composer textarea");
+  box.focus();
+  type(box, "/");
+  await sleep(150);
+  const listed = all('.mention-picker[aria-label="Commands"] li', activePane()).map((l) => l.textContent);
+  check("its stages are slash commands", ["grill", "prd", "slice", "afk"].every((c) => listed.some((l) => l.includes(c))), listed.join(" | ").slice(0, 200));
+  const ended = () => all(".turn-end", activePane()).length;
+  const before = ended();
+  type(box, "/slice");
+  await sleep(100);
+  (await until("Send", () => { const b = named(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
+  await until("the slice to end", () => {
+    const allow = activePane().querySelector(".approval-buttons button.primary");
+    if (allow) allow.click();
+    return ended() > before;
+  }, 45000);
+  const sent = await until("the stage's prompt", () => all(".msg-user").find((m) => m.textContent.includes("Workflow stage: slice")), 5000).catch(() => null);
+  check("the stage's prompt was sent", !!sent, all(".msg-user").map((m) => m.textContent.slice(0, 60)).join(" | "));
+
+  // The Board's backlog: two issues, the second waiting on the first.
+  named(".footer-links button", "Board").click();
+  const backlog = await until("the backlog", () => document.querySelector('.board-backlog [aria-label="Backlog of workflow"]'), 15000);
+  const cards = () => all(".backlog-card", backlog);
+  await until("two issues", () => cards().length === 2, 10000);
+  check("the first issue is ready", cards()[0].textContent.includes("Ready") && cards()[0].textContent.includes("AFK"), cards()[0].textContent);
+  check("the second waits on the first", cards()[1].textContent.includes("Blocked") && cards()[1].textContent.includes("after 001-first-slice"), cards()[1].textContent);
+
+  // The run: what it will want, allowed up front, then both issues done and reviewed.
+  withText("button", "Run AFK issues…", backlog).click();
+  const dialog = await until("the run's dialog", () => document.querySelector(".afk-dialog"), 8000);
+  await until("the plan", () => dialog.textContent.includes("First:"), 8000);
+  check("the dialog says what it does first", dialog.textContent.includes("First slice"), dialog.textContent.slice(0, 160));
+  check("the dialog offers the run's commands", dialog.textContent.includes("git commit *"), dialog.textContent.slice(0, 300));
+  const queuePaused = dialog.textContent.includes("The queue is paused");
+  const afkProfile = all("label", dialog).find((l) => l.textContent.startsWith("Profile for the issues"))?.querySelector("select");
+  const reviewProfile = all("label", dialog).find((l) => l.textContent.startsWith("Profile for the reviews"))?.querySelector("select");
+  setSelect(afkProfile, "afk-demo");
+  if (reviewProfile) setSelect(reviewProfile, "afk-demo");
+  await sleep(100);
+  (await until("Start", () => { const b = withText("button", "Start the run", dialog); return b && !b.disabled && b; }, 4000)).click();
+  await until("the dialog closed", () => !document.querySelector(".afk-dialog"), 8000);
+  // The queue step above left the queue paused, which holds the run's issues: the
+  // dialog said so, and the Queue page resumes it.
+  if (queuePaused) {
+    document.querySelector(".board-queue").click();
+    const page = await until("the queue page", () => [...document.querySelectorAll(".page h2")].find((h) => h.textContent === "Queue")?.closest(".page"), 8000);
+    (await until("Resume", () => withText("button", "Resume", page), 4000)).click();
+    await until("resumed", () => !page.querySelector('[role="status"]')?.textContent.startsWith("Paused"), 5000);
+    named(".footer-links button", "Board").click();
+  }
+  const line = await until("the run to finish", () => {
+    const l = document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-line')?.textContent;
+    return l && !l.includes("going on") && l;
+  }, 150000);
+  check("the run did both issues", line.startsWith("AFK run finished: 2 of 2 issues done"), line);
+  check("no unattended session waited for an approval", !document.querySelector(".board-needs .board-card"), document.querySelector(".board-needs")?.textContent.slice(0, 120));
+
+  // Ready for QA, each with its review, until QA'd.
+  (await until("Needs attention", () => document.querySelector(".attention-link"), 8000)).click();
+  const qa = () => all(".attention-qa");
+  await until("two issues ready for QA", () => qa().length === 2, 10000);
+  check("each issue waits for QA with its review", qa().every((s) => s.textContent.includes("Ready for QA") && s.textContent.includes("found nothing wrong")), qa().map((s) => s.textContent.slice(0, 80)).join(" | "));
+  withText("button", "QA done", qa()[0]).click();
+  await until("one QA'd", () => qa().length === 1, 8000);
+  check("QA done takes an issue off the list", qa().length === 1);
+});
+
 await step("the bypass setting", async () => {
   document.querySelector(".settings-link").click();
   (await until("the Permissions page", () => withText(".settings-nav button", "Permissions"))).click();
