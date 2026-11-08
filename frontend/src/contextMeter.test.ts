@@ -3,8 +3,9 @@ import { test } from "node:test";
 import { contextHigh, contextLabel, contextResent, contextTitle, parseLimit, shortTokens } from "./contextMeter.ts";
 
 test("the meter says a share with a window and a size without one", () => {
-  assert.equal(contextLabel({ tokens: 62_000, window: 100_000 }), "62 %");
-  assert.equal(contextLabel({ tokens: 100, window: 100_000 }), "<1 %");
+  assert.equal(contextLabel({ tokens: 62_000, window: 100_000 }), "62k · 62 %");
+  assert.equal(contextLabel({ tokens: 100, window: 100_000 }), "100 · <1 %");
+  assert.equal(contextLabel({ tokens: 840_000, window: 1_000_000 }), "840k · 84 %");
   assert.equal(contextLabel({ tokens: 140_000, window: 0 }), "140k");
   assert.equal(contextLabel({ tokens: 1_200_000, window: 0 }), "1.2M");
 });

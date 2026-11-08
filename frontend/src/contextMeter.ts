@@ -25,12 +25,13 @@ export function shortTokens(tokens: number): string {
   return String(tokens);
 }
 
-// contextLabel is the meter's text, or null when there is no figure: never a zero.
+// contextLabel is the meter's text, or null when there is no figure: never a zero. The
+// tokens come first, and the share of the window beside them when the window is known.
 export function contextLabel(c: ContextSize | null | undefined): string | null {
   if (!c || c.tokens <= 0) return null;
   if (c.window <= 0) return shortTokens(c.tokens);
   const percent = (100 * c.tokens) / c.window;
-  return percent < 1 ? "<1 %" : `${Math.round(percent)} %`;
+  return `${shortTokens(c.tokens)} · ${percent < 1 ? "<1 %" : `${Math.round(percent)} %`}`;
 }
 
 // contextHigh needs a window: a size alone does not say how close the limit is.

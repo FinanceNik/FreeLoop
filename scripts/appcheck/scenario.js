@@ -92,7 +92,7 @@ await step("a pane shows how full its context is", async () => {
   };
   await open("Check long");
   const low = await until("the meter", meter);
-  check("a session's context shows on its pane", /^(<1|\d+) %$/.test(low.textContent) && !low.classList.contains("context-high"), low.textContent);
+  check("a session's context shows on its pane", /^[\d.]+[kM]? · (<1|\d+) %$/.test(low.textContent) && !low.classList.contains("context-high"), low.textContent);
   check("the meter explains itself", /tokens/.test(low.title), low.title);
   check("an ordinary context offers no Compact", !compactButton());
   await open("Check agent");
@@ -106,7 +106,7 @@ await step("a pane shows how full its context is", async () => {
   await sleep(100);
   (await until("Send", () => { const b = named(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
   await until("the meter to rise", () => meter()?.classList.contains("context-high"), 30000);
-  check("a full context stands out", /^8\d %$/.test(meter().textContent), meter().textContent);
+  check("a full context stands out", /^[\d.]+[kM]? · 8\d %$/.test(meter().textContent), meter().textContent);
   check("a full context shows in the sidebar", rowMeter("Check full")?.classList.contains("context-high"), rowMeter("Check full")?.textContent);
   check("a quiet context stays out of the sidebar", !rowMeter("Check long"));
   const compact = await until("Compact to be enabled", () => { const b = compactButton(); return b && !b.disabled && b; }, 30000);
@@ -139,7 +139,7 @@ await step("a pane shows how full its context is", async () => {
   type(again, "[no steps] again");
   await sleep(100);
   (await until("Send", () => { const b = named(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
-  await until("the share of the new limit", () => /^\d+ %$/.test(meter()?.textContent ?? "") && parseInt(meter().textContent) >= 5, 15000);
+  await until("the share of the new limit", () => Number(/ · (\d+) %$/.exec(meter()?.textContent ?? "")?.[1] ?? 0) >= 5, 15000);
   check("a running session takes a new limit", true);
   await setLimit("");
   check("clearing a limit goes back to what is detected", field.placeholder === detected, field.placeholder);
