@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Freeloop
+GenericName=AI Coding Agents
+Comment=Run AI coding agents with your own models, harnesses, skills and environments
+Exec=freeloop
+Icon=freeloop
+Terminal=false
+Categories=Development;IDE;
+Keywords=agent;AI;code;LLM;
+StartupWMClass=freeloop

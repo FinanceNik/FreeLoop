@@ -1,0 +1,115 @@
+version: '3'
+
+# Linux (NFR-XPLAT-003): cgo with GTK 3 and WebKitGTK 4.1 (the gtk3 build tag),
+# so it builds natively on the target architecture: on a Linux machine with the
+# -dev packages, or in the image from build/linux/Dockerfile, which
+# `make linux-package` runs for each architecture (arm64 or amd64 emulated
+# through --platform). Adapted from the Wails v3.0.0 template.
+
+includes:
+  common: ../Taskfile.yml
+
+vars:
+  LINUX_ARCH: '{{.ARCH | default ARCH}}'
+  LINUX_OUT: '{{.BIN_DIR}}/linux-{{.LINUX_ARCH}}'
+  LINUX_BINARY: freeloop
+  LINUX_PACKAGE: '{{.APP_NAME}}-{{.VERSION}}-linux-{{.LINUX_ARCH}}'
+  # A pinned linuxdeploy (the Dockerfile puts it there); wails3 would otherwise
+  # download the moving "continuous" build.
+  LINUXDEPLOY: '{{.LINUXDEPLOY | default "/opt/linuxdeploy/linuxdeploy.AppImage"}}'
+
+tasks:
+  build:
+    summary: Builds bin/linux-<ARCH>/freeloop, frontend included
+    deps:
+      - task: common:go:mod:check
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          DEV:
+            ref: .DEV
+    cmds:
+      - task: build:binary
+    vars:
+      BUILD_FLAGS: '-tags gtk3{{if ne .DEV "true"}},production{{end}}'
+
+  build:binary:
+    summary: Compiles bin/linux-<ARCH>/freeloop from the frontend already in frontend/dist
+    preconditions:
+      - sh: '[ "{{.LINUX_ARCH}}" = "{{ARCH}}" ]'
+        msg: "Linux builds need cgo and build on their own architecture: ARCH={{.LINUX_ARCH}} on a {{ARCH}} machine (make linux-package runs each in Docker)"
+      - sh: test -f frontend/dist/index.html
+        msg: "frontend/dist is empty: build the frontend first (make linux-package does)"
+    cmds:
+      - mkdir -p "{{.LINUX_OUT}}"
+      - go build {{.BUILD_FLAGS}} -o "{{.LINUX_OUT}}/{{.LINUX_BINARY}}" {{.MAIN_PKG}}
+    vars:
+      # SHIPPED=1 (make linux-package, make release) makes the build users get, which
+      # reads no development switch (cmd/freeloop/devenv.go).
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-tags gtk3 -buildvcs=false -gcflags=all="-l"{{else}}-tags gtk3,production -trimpath -buildvcs=false -ldflags="-w -s{{if eq (.SHIPPED | default "") "1"}} -X main.shipped=1{{end}}"{{end}}'
+    env:
+      GOOS: linux
+      GOARCH: '{{.LINUX_ARCH}}'
+      CGO_ENABLED: 1
+
+  package:
+    summary: Builds the AppImage and the .deb for the host's architecture
+    deps:
+      - task: build
+    cmds:
+      - task: package:files
+
+  package:files:
+    summary: Makes the AppImage and the .deb from bin/linux-<ARCH>/freeloop
+    preconditions:
+      - sh: test -f "{{.LINUX_OUT}}/{{.LINUX_BINARY}}"
+        msg: "{{.LINUX_OUT}}/{{.LINUX_BINARY}} is missing: run the linux:build task first"
+    cmds:
+      - task: notices
+      - task: deb
+      - task: appimage
+
+  notices:
+    summary: Writes bin/linux-<ARCH>/THIRD_PARTY_NOTICES.txt from what its binary was built with
+    cmds:
+      - >-
+        go run ./cmd/freeloop-sbom -notices -modcache "$(go env GOMODCACHE)" -node-modules frontend/node_modules
+        -binary "{{.LINUX_OUT}}/{{.LINUX_BINARY}}" -version {{.VERSION}}
+        < frontend/package-lock.json > "{{.LINUX_OUT}}/THIRD_PARTY_NOTICES.txt"
+
+  deb:
+    summary: Makes bin/Freeloop-<version>-linux-<ARCH>.deb (nfpm inside wails3)
+    cmds:
+      # nfpm expands variables in some fields only, not in file paths: fill them in.
+      - >-
+        sed -e 's|${GOARCH}|{{.LINUX_ARCH}}|g' -e 's|${VERSION}|{{.VERSION}}|g' -e 's|${OUT_DIR}|{{.LINUX_OUT}}|g'
+        build/linux/nfpm/nfpm.yaml > "{{.LINUX_OUT}}/nfpm.yaml"
+      - wails3 tool package -name "{{.LINUX_PACKAGE}}" -format deb -config "{{.LINUX_OUT}}/nfpm.yaml" -out "{{.BIN_DIR}}"
+      - echo "{{.BIN_DIR}}/{{.LINUX_PACKAGE}}.deb"
+
+  appimage:
+    summary: Makes bin/Freeloop-<version>-linux-<ARCH>.AppImage (linuxdeploy with its GTK plugin)
+    preconditions:
+      - sh: test -x "{{.LINUXDEPLOY}}"
+        msg: "no linuxdeploy at {{.LINUXDEPLOY}}: build in the image (make linux-package) or set LINUXDEPLOY to a pinned linuxdeploy AppImage"
+    cmds:
+      - rm -rf "{{.LINUX_OUT}}/appimage"
+      - mkdir -p "{{.LINUX_OUT}}/appimage/build"
+      # linuxdeploy wants the icon named as the desktop file's Icon= key.
+      - cp build/linux/icons/256x256.png "{{.LINUX_OUT}}/appimage/{{.LINUX_BINARY}}.png"
+      - cp "{{.LINUXDEPLOY}}" "{{.LINUX_OUT}}/appimage/build/linuxdeploy-{{.APPIMAGE_ARCH}}.AppImage"
+      - >-
+        wails3 generate appimage -binary "{{.LINUX_OUT}}/{{.LINUX_BINARY}}"
+        -icon "{{.LINUX_OUT}}/appimage/{{.LINUX_BINARY}}.png" -desktopfile build/linux/freeloop.desktop
+        -outputdir "{{.LINUX_OUT}}/appimage" -builddir "{{.LINUX_OUT}}/appimage/build"
+      - mv "{{.LINUX_OUT}}/appimage/{{.LINUX_BINARY}}-{{.APPIMAGE_ARCH}}.AppImage" "{{.BIN_DIR}}/{{.LINUX_PACKAGE}}.AppImage"
+      - rm -rf "{{.LINUX_OUT}}/appimage"
+      - echo "{{.BIN_DIR}}/{{.LINUX_PACKAGE}}.AppImage"
+    vars:
+      APPIMAGE_ARCH: '{{if eq .LINUX_ARCH "arm64"}}aarch64{{else}}x86_64{{end}}'
+
+  run:
+    summary: Runs the built application
+    cmds:
+      - '"{{.LINUX_OUT}}/{{.LINUX_BINARY}}"'

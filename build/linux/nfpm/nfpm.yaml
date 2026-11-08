@@ -1,0 +1,72 @@
+# The .deb (NFR-XPLAT-003), written by `wails3 tool package` (nfpm inside the
+# pinned wails3) from build/linux/Taskfile.yml, which fills in the variables:
+#   GOARCH   amd64 or arm64
+#   VERSION  the app's version from build/config.yml (0.1.0-beta.1 becomes 0.1.0~beta.1)
+#   OUT_DIR  where the binary and its notices are (bin/linux-<arch>)
+# Paths are relative to the repository root, where the task runs.
+name: freeloop
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: "1"
+section: devel
+priority: optional
+maintainer: "The Freeloop Authors <91248623+FinanceNik@users.noreply.github.com>"
+vendor: "The Freeloop Authors"
+homepage: "https://github.com/FinanceNik/FreeLoop"
+license: Apache-2.0
+description: |-
+  Run AI coding agents with your own models
+  Freeloop is a desktop app for running AI coding agents with your own models,
+  switchable harnesses, Agent Skills, MCP servers and custom environments.
+
+contents:
+  - src: ${OUT_DIR}/freeloop
+    dst: /usr/bin/freeloop
+    file_info:
+      mode: 0755
+  - src: ./build/linux/freeloop.desktop
+    dst: /usr/share/applications/freeloop.desktop
+    file_info:
+      mode: 0644
+  - src: ./build/linux/icons/48x48.png
+    dst: /usr/share/icons/hicolor/48x48/apps/freeloop.png
+    file_info:
+      mode: 0644
+  - src: ./build/linux/icons/128x128.png
+    dst: /usr/share/icons/hicolor/128x128/apps/freeloop.png
+    file_info:
+      mode: 0644
+  - src: ./build/linux/icons/256x256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/freeloop.png
+    file_info:
+      mode: 0644
+  - src: ./build/linux/icons/512x512.png
+    dst: /usr/share/icons/hicolor/512x512/apps/freeloop.png
+    file_info:
+      mode: 0644
+  - src: ./LICENSE
+    dst: /usr/share/doc/freeloop/copyright
+    file_info:
+      mode: 0644
+  - src: ${OUT_DIR}/THIRD_PARTY_NOTICES.txt
+    dst: /usr/share/doc/freeloop/THIRD_PARTY_NOTICES.txt
+    file_info:
+      mode: 0644
+
+# The gtk3 build tag: GTK 3 and WebKitGTK 4.1 (Ubuntu 22.04+, Debian 12+). On
+# Ubuntu 24.04 the t64 packages provide these names.
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+# The sandbox (bubblewrap), a Secret Service for API keys, and git for the
+# project's state and the Diff tab.
+recommends:
+  - bubblewrap
+  - gnome-keyring | kwalletmanager
+  - git
+
+scripts:
+  postinstall: ./build/linux/nfpm/scripts/postinstall.sh
+  postremove: ./build/linux/nfpm/scripts/postremove.sh
