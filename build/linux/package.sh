@@ -17,8 +17,8 @@ cd /tmp/app
 # The notices read license files from the frontend's packages; the host's are
 # fine for that (only their native build tools differ by platform).
 ln -s /src/frontend/node_modules frontend/node_modules
-wails3 task linux:build:binary ARCH="$arch" SHIPPED=1
-wails3 task linux:package:files ARCH="$arch"
+ARCH="$arch" wails3 task linux:build:binary SHIPPED=1
+ARCH="$arch" wails3 task linux:package:files
 {
 	echo "linux/$arch built in build/linux/Dockerfile"
 	. /etc/os-release && echo "$PRETTY_NAME, glibc $(ldd --version | head -1 | sed 's/.* //')"

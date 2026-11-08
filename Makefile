@@ -67,10 +67,10 @@ windows-tools:
 
 windows-exe: frontend/node_modules bindings ## Cross-compile bin/windows-{amd64,arm64}/Freeloop.exe, the build users get
 	cd frontend && npm run build
-	for arch in $(WINDOWS_ARCHS); do $(WAILS) task windows:build:exe ARCH=$$arch SHIPPED=1 || exit 1; done
+	for arch in $(WINDOWS_ARCHS); do ARCH=$$arch $(WAILS) task windows:build:exe SHIPPED=1 || exit 1; done
 
 windows: windows-tools windows-exe ## Build the Windows installers and portable zips (amd64, arm64) into bin/
-	for arch in $(WINDOWS_ARCHS); do $(WAILS) task windows:package:files ARCH=$$arch || exit 1; done
+	for arch in $(WINDOWS_ARCHS); do ARCH=$$arch $(WAILS) task windows:package:files || exit 1; done
 
 # Linux packages build per architecture in the image from build/linux/Dockerfile
 # (cgo with GTK 3 and WebKitGTK 4.1): arm64 natively on Apple Silicon, amd64
@@ -127,11 +127,11 @@ release-windows: windows
 		go run ./cmd/freeloop-sbom -binary bin/windows-$$arch/Freeloop.exe -version $(VERSION) \
 			< frontend/package-lock.json > bin/release/Freeloop-windows-$$arch.sbom.cdx.json || exit 1; \
 	done
-	cp bin/windows-amd64/THIRD_PARTY_NOTICES.txt bin/release/THIRD_PARTY_NOTICES-windows.txt
+	cp bin/windows-$(firstword $(WINDOWS_ARCHS))/THIRD_PARTY_NOTICES.txt bin/release/THIRD_PARTY_NOTICES-windows.txt
 	{ echo "commit $$(git rev-parse HEAD)"; go version; echo "node $$(node --version)"; \
 		echo "GOOS=windows CGO_ENABLED=0 for $(WINDOWS_ARCHS)"; echo "makensis $$(makensis -VERSION)"; \
 		echo "wails3 $(WAILS_VERSION)"; } > bin/release/BUILDINFO-windows.txt
-	cd bin && find windows-amd64/Freeloop.exe windows-arm64/Freeloop.exe | LC_ALL=C sort | xargs $(SHA256) > release/WINDOWS-FILES.sha256
+	cd bin && ls $(foreach a,$(WINDOWS_ARCHS),windows-$(a)/Freeloop.exe) | LC_ALL=C sort | xargs $(SHA256) > release/WINDOWS-FILES.sha256
 
 # Linux: the AppImage and the .deb per architecture, a bill per binary, and what
 # the image built them with.
@@ -142,9 +142,11 @@ release-linux: linux-package
 		go run ./cmd/freeloop-sbom -binary bin/linux-$$arch/freeloop -version $(VERSION) \
 			< frontend/package-lock.json > bin/release/Freeloop-linux-$$arch.sbom.cdx.json || exit 1; \
 	done
-	cp bin/linux-amd64/THIRD_PARTY_NOTICES.txt bin/release/THIRD_PARTY_NOTICES-linux.txt
-	{ echo "commit $$(git rev-parse HEAD)"; echo "node $$(node --version), frontend built on the host"; echo "wails3 $(WAILS_VERSION)"; \
-		for arch in $(LINUX_ARCHS); do echo; cat bin/linux-$$arch/BUILDINFO.txt; done; } > bin/release/BUILDINFO-linux.txt
+	cp bin/linux-$(firstword $(LINUX_ARCHS))/THIRD_PARTY_NOTICES.txt bin/release/THIRD_PARTY_NOTICES-linux.txt
+	for arch in $(LINUX_ARCHS); do \
+		{ echo "commit $$(git rev-parse HEAD)"; echo "node $$(node --version), frontend built on the host"; \
+			cat bin/linux-$$arch/BUILDINFO.txt; } > bin/release/BUILDINFO-linux-$$arch.txt || exit 1; \
+	done
 
 # Checksums of every file in bin/release, files another machine built and copied
 # in included (CI's release job adds the Windows and Linux files that way).

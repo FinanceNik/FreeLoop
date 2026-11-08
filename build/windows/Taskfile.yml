@@ -2,7 +2,9 @@ version: '3'
 
 # Windows (NFR-XPLAT-003): pure Go (WebView2 through go-webview2, no cgo), so it
 # cross-compiles from macOS or Linux. Adapted from the Wails v3.0.0 template.
-# ARCH is amd64 (default) or arm64; on Windows itself it defaults to the host's.
+# ARCH, from the environment (`ARCH=arm64 wails3 task windows:package`: Task
+# does not show command-line variables to an included file's vars), is amd64
+# (default) or arm64; on Windows itself it defaults to the host's.
 
 includes:
   common: ../Taskfile.yml

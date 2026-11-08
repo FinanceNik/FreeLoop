@@ -4,7 +4,9 @@ version: '3'
 # so it builds natively on the target architecture: on a Linux machine with the
 # -dev packages, or in the image from build/linux/Dockerfile, which
 # `make linux-package` runs for each architecture (arm64 or amd64 emulated
-# through --platform). Adapted from the Wails v3.0.0 template.
+# through --platform). Adapted from the Wails v3.0.0 template. ARCH, from the
+# environment (Task does not show command-line variables to an included file's
+# vars), defaults to the host's and must match it.
 
 includes:
   common: ../Taskfile.yml
