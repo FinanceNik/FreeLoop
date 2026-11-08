@@ -163,3 +163,17 @@ func TestActedOnFile(t *testing.T) {
 		}
 	}
 }
+
+// Worktrees are beside the data folder, except on Windows, where a data folder in
+// the roaming AppData puts them in the local one.
+func TestWorktreesRootFor(t *testing.T) {
+	if got := worktreesRootFor("darwin", "/Users/a/Library/Application Support/freeloop", "", ""); got != "/Users/a/Library/Application Support/freeloop-worktrees" {
+		t.Errorf("darwin: %q", got)
+	}
+	if got := worktreesRootFor("windows", "/r/freeloop", "/R", "/l"); got != filepath.Join("/l", "freeloop-worktrees") {
+		t.Errorf("windows, roaming data folder: %q", got)
+	}
+	if got := worktreesRootFor("windows", "/scratch/freeloop", "/r", "/l"); got != filepath.Join("/scratch", "freeloop-worktrees") {
+		t.Errorf("windows, another data folder: %q", got)
+	}
+}

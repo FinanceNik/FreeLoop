@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"slices"
 	"strings"
 
@@ -29,7 +31,19 @@ const BranchPrefix = "freeloop/"
 
 // worktreesRoot is the folder that holds every session's worktree.
 func (e *Engine) worktreesRoot() string {
-	return filepath.Join(filepath.Dir(e.dataDir), filepath.Base(e.dataDir)+"-worktrees")
+	return worktreesRootFor(goruntime.GOOS, e.dataDir, os.Getenv("APPDATA"), os.Getenv("LOCALAPPDATA"))
+}
+
+// worktreesRootFor is beside the data folder, or on Windows, for a data folder in
+// the roaming AppData, in the local one: a roaming profile would copy every
+// worktree at each sign-in, and the shorter path leaves more of Windows' 260
+// characters to the repository.
+func worktreesRootFor(goos, dataDir, appData, localAppData string) string {
+	name := filepath.Base(dataDir) + "-worktrees"
+	if goos == "windows" && appData != "" && localAppData != "" && strings.EqualFold(filepath.Clean(filepath.Dir(dataDir)), filepath.Clean(appData)) {
+		return filepath.Join(localAppData, name)
+	}
+	return filepath.Join(filepath.Dir(dataDir), name)
 }
 
 func missingRoot(ses session.Session) error {
