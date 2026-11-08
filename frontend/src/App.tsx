@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { screenName } from "./a11y.ts";
 import { ariaKeys, bindingOf, keyLabel, pressed, setBindings } from "./shortcuts.ts";
+import { isMac, otherKey, primaryKey, primaryOnly } from "./platform.ts";
 import { Browser, Events, Window } from "@wailsio/runtime";
 import {
   CONFIG_EVENT_NAME,
@@ -559,10 +560,12 @@ export default function App() {
   // A pane chosen with the keyboard takes the keyboard: its composer.
   const focusActivePane = () => requestAnimationFrame(() => document.querySelector<HTMLElement>(".pane-active textarea")?.focus());
 
-  // ⌥⌘1 to ⌥⌘4 make a pane active, ⌥⌘← and ⌥⌘→ move between panes.
+  // ⌥⌘1 to ⌥⌘4 make a pane active, ⌥⌘← and ⌥⌘→ move between panes. Outside a Mac
+  // it is Alt and the digit or arrow: Ctrl+Alt is AltGr, which types characters on
+  // many keyboards.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (STANDALONE || !e.metaKey || !e.altKey || e.ctrlKey || e.shiftKey) return;
+      if (STANDALONE || !e.altKey || e.shiftKey || otherKey(e) || (isMac ? !e.metaKey : e.ctrlKey)) return;
       const w = workRef.current;
       const digit = /^Digit([1-4])$/.exec(e.code);
       if (digit && Number(digit[1]) <= w.layout) {
@@ -585,8 +588,9 @@ export default function App() {
     if (panel !== null) setPanelWidth(panel);
   }, []);
 
-  // ⌃⇧ and the arrows move between panes, as in tmux (SET-006). Caught on the way down,
-  // since a terminal in focus keeps its keys, and not while Settings records a key.
+  // ⌃⇧ and the arrows (Alt+Shift outside a Mac) move between panes, as in tmux
+  // (SET-006). Caught on the way down, since a terminal in focus keeps its keys, and
+  // not while Settings records a key.
   const tabbedRef = useRef(false);
   tabbedRef.current = tabbedPanes;
   useEffect(() => {
@@ -604,8 +608,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // ⌘1 to ⌘9 open the sessions listed first, ⌘0 the attention view
-  // (NFR-A11Y-001).
+  // ⌘1 to ⌘9 (Ctrl outside a Mac) open the sessions listed first, ⌘0 the attention
+  // view (NFR-A11Y-001).
   const listedRef = useRef<Session[]>([]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -615,7 +619,7 @@ export default function App() {
         setScreen({ kind: "attention" });
         return;
       }
-      if (!e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || !/^[1-9]$/.test(e.key)) return;
+      if (!primaryOnly(e) || !/^[1-9]$/.test(e.key)) return;
       e.preventDefault();
       const s = listedRef.current[Number(e.key) - 1];
       if (s) openRef.current(s.id);
@@ -1010,7 +1014,7 @@ export default function App() {
           group: "Session",
           detail: `${projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)} · ${STATUS_LABEL[s.status] ?? s.status}`,
           keywords: `${s.branch ?? ""} ${s.status === "archived" ? "archived" : ""}`,
-          shortcut: listed >= 0 && listed < 9 ? `⌘${listed + 1}` : undefined,
+          shortcut: listed >= 0 && listed < 9 ? keyLabel(`Meta+${listed + 1}`) : undefined,
           run: () => openSession(s.id),
         };
       }),
@@ -1359,13 +1363,13 @@ export default function App() {
                         aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
                         aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
                         data-shown={!STANDALONE && screen.kind === "session" && work.panes.includes(s.id) ? "" : undefined}
-                        title={[describeActivity(s.status, activities[s.id], rootsOf(s), new Date()), s.branch, (s.tags ?? []).map((t) => `#${t}`).join(" "), "⌘-click or drag to open it beside what is open"].filter(Boolean).join(" · ")}
+                        title={[describeActivity(s.status, activities[s.id], rootsOf(s), new Date()), s.branch, (s.tags ?? []).map((t) => `#${t}`).join(" "), `${isMac ? "⌘-click" : "Ctrl+click"} or drag to open it beside what is open`].filter(Boolean).join(" · ")}
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData(SESSION_DRAG_TYPE, s.id);
                           e.dataTransfer.effectAllowed = "move";
                         }}
-                        onClick={(e) => openSession(s.id, undefined, e.metaKey ? "new" : "active")}
+                        onClick={(e) => openSession(s.id, undefined, primaryKey(e) ? "new" : "active")}
                       >
                         <span className="session-line">
                           <SourceMark source={sourceOf(s)} detail={s.model || undefined} />
@@ -1446,7 +1450,7 @@ export default function App() {
           </button>
         )}
         {config?.network?.localOnly && (
-            <button className="link today" title="The app connects to nothing but this Mac; change it in Settings" onClick={() => setScreen({ kind: "network" })}>
+            <button className="link today" title="The app connects to nothing but this computer; change it in Settings" onClick={() => setScreen({ kind: "network" })}>
               Local only
             </button>
           )}

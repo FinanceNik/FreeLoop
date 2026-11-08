@@ -7,7 +7,8 @@ import SourceMarks from "./SourceMarks.tsx";
 import FontEditor from "./FontEditor.tsx";
 import type { ColorSet } from "./colors.ts";
 import type { FontChoice } from "./fonts.ts";
-import { bindingOf, keyLabel } from "./shortcuts.ts";
+import { approvalChord, bindingOf, keyLabel } from "./shortcuts.ts";
+import { inFileManager, secretStore } from "./platform.ts";
 import { Browser, Clipboard } from "@wailsio/runtime";
 import { PriceTable, UsageTable } from "./Costs.tsx";
 import BudgetTable from "./BudgetTable.tsx";
@@ -215,7 +216,7 @@ export default function Settings({ page, config, providers, harnesses, environme
       .catch(onError);
   };
 
-  // Changes save themselves, as in a Mac settings window, once the field being typed
+  // Changes save themselves, as in a system settings window, once the field being typed
   // in is left. Leaving the page saves too: it used to drop them without a word.
   const formBox = useRef<HTMLFormElement>(null);
   const [left, setLeft] = useState(0);
@@ -352,7 +353,10 @@ export default function Settings({ page, config, providers, harnesses, environme
         pageForm(
           <>
         <ShortcutsEditor value={form.ui.shortcuts ?? {}} onChange={(shortcuts) => setForm({ ...form, ui: { ...form.ui, shortcuts } })} />
-        <p className="muted">⌘1 to ⌘9 open the sessions listed first, and ⌘↩, ⌘⇧↩ and ⌘⇧⌫ answer an approval from anywhere; those stay as they are.</p>
+        <p className="muted">
+          {keyLabel("Meta+1")} to {keyLabel("Meta+9")} open the sessions listed first, and {approvalChord("allow_once")}, {approvalChord("allow_always")} and{" "}
+          {approvalChord("reject")} answer an approval from anywhere; those stay as they are.
+        </p>
 
           </>,
         )}
@@ -513,7 +517,7 @@ export default function Settings({ page, config, providers, harnesses, environme
             checked={!!form.network?.localOnly}
             onChange={(e) => setForm({ ...form, network: { ...form.network, localOnly: e.target.checked } })}
           />
-          Local only: the app connects to nothing but this Mac
+          Local only: the app connects to nothing but this computer
         </label>
         <p className="muted">
           Providers and MCP servers elsewhere become unreachable; local ones (Ollama, LM Studio, servers on localhost) keep working. Docker
@@ -552,7 +556,7 @@ export default function Settings({ page, config, providers, harnesses, environme
         </label>
         {(form.web?.searchHeader || form.web?.searchURL?.includes("{key}")) && (
           <label>
-            Key <span className="muted">(kept in the Keychain; saved at once)</span>
+            Key <span className="muted">(kept in {secretStore()}; saved at once)</span>
             <input
               type="password"
               autoComplete="off"
@@ -619,8 +623,8 @@ export default function Settings({ page, config, providers, harnesses, environme
       <div className="card">
         <h3>Backup</h3>
         <p className="muted">
-          Settings, providers, profiles, environments, rules, MCP servers and harness presets in one file. API keys and other secrets stay in the
-          Keychain and are not included; values you typed into config files as plain text are.
+          Settings, providers, profiles, environments, rules, MCP servers and harness presets in one file. API keys and other secrets stay in{" "}
+          {secretStore()} and are not included; values you typed into config files as plain text are.
         </p>
         <div className="row">
           <button type="button" onClick={backUp}>
@@ -657,7 +661,7 @@ export default function Settings({ page, config, providers, harnesses, environme
       <div className="card">
         <h3>Report a problem</h3>
         <p className="muted">
-          Copies Freeloop's version, this Mac's model and macOS version,{" "}
+          Copies Freeloop's version, this computer's model and system version,{" "}
           {reportSession ? <>the agent and provider of “{reportSession.title}”,</> : "the agent and provider of the session last open,"} and the log's last 200
           lines, for an issue. Secrets the app knows and your home folder's path are taken out, and nothing is sent anywhere. Read it before you share it.
         </p>
@@ -669,7 +673,7 @@ export default function Settings({ page, config, providers, harnesses, environme
             {report !== null ? "Hide what is copied" : "Show what is copied"}
           </button>
           <button type="button" onClick={() => EngineService.ShowLogs().catch(onError)}>
-            Show logs in Finder
+            Show logs {inFileManager()}
           </button>
           {reportCopied && <span className="ok" role="status">Copied to the clipboard.</span>}
         </div>

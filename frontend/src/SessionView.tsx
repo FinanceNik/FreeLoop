@@ -1,4 +1,6 @@
 import { Browser, Clipboard } from "@wailsio/runtime";
+import { inFileManager, primaryKey, showInFiles } from "./platform.ts";
+import { nameStart } from "./paths.ts";
 import { ask as askUser } from "./ask.ts";
 import { isDemo } from "./demo.ts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
@@ -418,7 +420,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const slashMatches = useMemo(() => (slash === null ? [] : matchCommands(slash, commands)), [slash, commands]);
   // The focus stays in the message box while a picker is open, so the entry
   // that lights up is announced.
-  const pickerNames = slash !== null && slashMatches.length > 0 ? slashMatches.map((c) => c.name) : mention ? matches.map((f) => f.slice(f.lastIndexOf("/") + 1)) : [];
+  const pickerNames = slash !== null && slashMatches.length > 0 ? slashMatches.map((c) => c.name) : mention ? matches.map((f) => f.slice(nameStart(f))) : [];
   const pickerOptions = pickerNames.length;
   const pickedName = pickerNames[pick] ?? "";
   useEffect(() => {
@@ -643,7 +645,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         setPick((p) => (p + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
         return;
       }
-      if ((e.key === "Enter" && !e.metaKey && !e.shiftKey) || e.key === "Tab") {
+      if ((e.key === "Enter" && !primaryKey(e) && !e.shiftKey) || e.key === "Tab") {
         e.preventDefault();
         chooseCommand(slashMatches[Math.min(pick, n - 1)]);
         return;
@@ -662,7 +664,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         setPick((p) => (p + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
         return;
       }
-      if ((e.key === "Enter" && !e.metaKey) || e.key === "Tab") {
+      if ((e.key === "Enter" && !primaryKey(e)) || e.key === "Tab") {
         e.preventDefault();
         choose(matches[Math.min(pick, n - 1)]);
         return;
@@ -674,8 +676,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
       setMention(null);
       return;
     }
-    // ⌘↩ answers a waiting approval (see shortcuts.ts) instead of sending.
-    if (e.metaKey && approvalWaiting) return;
+    // ⌘↩ (Ctrl+Enter outside a Mac) answers a waiting approval (see shortcuts.ts)
+    // instead of sending.
+    if (primaryKey(e) && approvalWaiting) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -848,7 +851,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         EngineService.ProblemReport(session.id)
           .then((text) => Clipboard.SetText(text))
           .catch(onError),
-      { keywords: "bug issue log crash", detail: "version, Mac, this session's agent, the log's end" },
+      { keywords: "bug issue log crash", detail: "version, system, this session's agent, the log's end" },
     ),
     act("panel", panelOpen ? "Hide the panel" : "Show the panel", togglePanel, { keywords: "right sidebar" }),
     ...(onClosePane ? [act("close-pane", "Close this pane", onClosePane, { keywords: "workspace split" })] : []),
@@ -1007,8 +1010,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
                     Run
                   </button>
                 )}
-                <button onClick={fromMenu(openFolder)} title={`Show ${session.worktree || session.projectRoot} in the Finder`}>
-                  Show in Finder
+                <button onClick={fromMenu(openFolder)} title={`Show ${session.worktree || session.projectRoot} ${inFileManager()}`}>
+                  {showInFiles()}
                 </button>
                 {onOpenWindow && <button onClick={fromMenu(onOpenWindow)}>Open in a new window</button>}
                 <hr />
@@ -1366,7 +1369,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   }}
                   onMouseEnter={() => setPick(i)}
                 >
-                  <span>{f.slice(f.lastIndexOf("/") + 1)}</span> <span className="muted">{f}</span>
+                  <span>{f.slice(nameStart(f))}</span> <span className="muted">{f}</span>
                 </li>
               ))}
             </ul>
@@ -1478,7 +1481,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
               <button
                 className="ghost composer-attach"
                 aria-label="Attach files"
-                title="Attach files from anywhere on your Mac: text goes in the message, pictures go to the model as pictures. You can also paste or drop them."
+                title="Attach files from anywhere on your computer: text goes in the message, pictures go to the model as pictures. You can also paste or drop them."
                 onClick={() => picker.current?.click()}
               >
                 <PaperclipIcon />

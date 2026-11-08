@@ -1,7 +1,7 @@
 import { pressed, type Keys } from "./shortcuts.ts";
 
 // The settings area: the configuration pages, grouped, behind one sidebar
-// entry. The pages share a column listing them, like a macOS settings
+// entry. The pages share a column listing them, like a system settings
 // window; the sidebar keeps its room for sessions.
 
 // The app's own settings, once one long General page, are pages of their own.
@@ -72,7 +72,7 @@ export function inSettings(kind: string): boolean {
   return AREA.has(kind);
 }
 
-// ⌘, opens the settings, as in every Mac app.
+// ⌘, opens the settings, as in every Mac app; Ctrl+, elsewhere, as in VS Code.
 export function isSettingsShortcut(k: Keys): boolean {
   return pressed(k, "settings");
 }
@@ -81,8 +81,8 @@ export function isSettingsShortcut(k: Keys): boolean {
 export const MIN_FONT_SIZE = 11;
 export const MAX_FONT_SIZE = 20;
 
-// textSizeAfter is the Font size that ⌘+ or ⌘- asks for, or null for any other
-// key (NFR-A11Y-002). ⌘+ is ⌘= without Shift, on most keyboards.
+// textSizeAfter is the Font size that ⌘+ or ⌘- (Ctrl outside a Mac) asks for, or
+// null for any other key (NFR-A11Y-002). ⌘+ is ⌘= without Shift, on most keyboards.
 export function textSizeAfter(k: Keys, current: number): number | null {
   if (pressed(k, "textLarger")) return Math.min(current + 1, MAX_FONT_SIZE);
   if (pressed(k, "textSmaller")) return Math.max(current - 1, MIN_FONT_SIZE);

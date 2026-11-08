@@ -4,6 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { EngineService, TERMINAL_EVENT_NAME, type Session, type TerminalInfo, type TerminalOutput } from "./api.ts";
 import { after, bytesOf, fitSize } from "./terminal.ts";
+import { terminalClipboard } from "./platform.ts";
 
 // TerminalPanel is the Terminal tab of the right panel (GUI-012): shells in
 // the session's environment, a container for a Docker session. The shells
@@ -116,7 +117,7 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
       // Two points under the app's text, as it was at the default of 14.
       fontSize: (parseFloat(getComputedStyle(document.documentElement).fontSize) || 14) - 2,
       cursorBlink: true,
-      // Lets VoiceOver read the output and the line being typed.
+      // Lets a screen reader read the output and the line being typed.
       screenReaderMode: true,
       scrollback: 5000,
       theme: themeColors(),
@@ -124,6 +125,8 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
     term.open(box.current!);
     // A shell takes Tab, so the keyboard needs another way out (NFR-A11Y-001).
     term.attachCustomKeyEventHandler((e) => {
+      // The system's copy and paste go to the browser, which hands them to xterm.
+      if (terminalClipboard(e, term.hasSelection())) return false;
       if (e.key !== "Escape" || !e.shiftKey) return true;
       if (e.type === "keydown") document.querySelector<HTMLElement>('.panel-tablist [role="tab"][aria-selected="true"]')?.focus();
       return false;

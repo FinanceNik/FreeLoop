@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_FONT_SIZE, MIN_FONT_SIZE, SETTINGS_GROUPS, inSettings, isGeneral, settingsStart, isSettingsShortcut, textSizeAfter, autoSaved, settingsKey } from "./settings.ts";
+import { setPlatform } from "./platform.ts";
+
+setPlatform("MacIntel");
 
 test("every configuration page is listed once", () => {
   const ids = SETTINGS_GROUPS.flatMap((g) => g.pages.map((p) => p.id));

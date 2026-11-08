@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { approvalHint, approvalShortcut, optionLabel, bindingOf, bindingProblem, comboOf, isTextField, keyLabel, optionKind, pressed, setBindings } from "./shortcuts.ts";
+import { setPlatform } from "./platform.ts";
+
+// These are the Mac's shortcuts; platform.test.ts has the others.
+setPlatform("MacIntel");
 
 const k = (key: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({
   key,

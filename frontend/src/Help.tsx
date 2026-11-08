@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "./Markdown.tsx";
 import { HELP_TOPICS, searchHelp, type HelpPlace } from "./help.ts";
+import { forPlatform } from "./platform.ts";
 
 // The help pages (GUI-047): Markdown files in src/help/, built into the app, so they
 // need no network and match the version installed. They go through the same parser as
 // an agent's replies, which never lets markup reach the page as HTML.
 const files = import.meta.glob("./help/*.md", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
-export const HELP_PAGES: Record<string, string> = Object.fromEntries(Object.entries(files).map(([path, text]) => [path.replace(/^.*\/([^/]+)\.md$/, "$1"), text]));
+// Written for a Mac, they are adapted to the system they are read on (forPlatform):
+// Ctrl for ⌘ on Windows and Linux, and {{mac|windows|linux}} words where they differ.
+export const HELP_PAGES: Record<string, string> = Object.fromEntries(Object.entries(files).map(([path, text]) => [path.replace(/^.*\/([^/]+)\.md$/, "$1"), forPlatform(text)]));
 
 // body is a page without its first-line title, which the screen shows as the page's
 // heading: the Markdown parser lowers headings for an agent's replies.

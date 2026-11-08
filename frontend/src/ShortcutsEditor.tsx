@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from "react";
-import { bindingProblem, comboOf, keyLabel, SHORTCUTS, type Bindings } from "./shortcuts.ts";
+import { bindingProblem, comboOf, defaultKey, keyLabel, SHORTCUTS, type Bindings } from "./shortcuts.ts";
 
 // ShortcutsEditor changes the app's own shortcuts (SET-006). A row listens while
 // its button is pressed; Escape leaves it as it was.
@@ -35,7 +35,7 @@ export default function ShortcutsEditor({ value, onChange }: Props) {
     }
     const key = letter ? combo.toLowerCase() : combo;
     const next = { ...value };
-    if (SHORTCUTS.find((s) => s.id === id)?.key === key) delete next[id];
+    if (defaultKey(id) === key) delete next[id];
     else next[id] = key;
     onChange(next);
     setProblem(null);

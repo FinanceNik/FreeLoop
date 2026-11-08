@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { chord, primaryKey } from "./platform.ts";
 import { ask } from "./ask.ts";
 import { EngineService, type ChangedFile, type Changes, type FileDiff, type Session } from "./api.ts";
 import { diffStats, parseDiff, type DiffRow } from "./diff.ts";
@@ -167,7 +168,7 @@ export default function DiffPanel({ session, gitKey, agentEdits, onReview, onErr
                   act(
                     EngineService.MergeRisks(session.id).then(async (risky) => {
                       const list = risky ?? [];
-                      if (list.length > 0 && !(await ask(`This merge brings in files that can run commands on your Mac:\n\n${list.join("\n")}\n\nCheck them in the diff first. Merge anyway?`))) return;
+                      if (list.length > 0 && !(await ask(`This merge brings in files that can run commands on your computer:\n\n${list.join("\n")}\n\nCheck them in the diff first. Merge anyway?`))) return;
                       const r = await EngineService.MergeWorktree(session.id, list.length > 0);
                       setMerged(r.message);
                       setMerging(false);
@@ -412,7 +413,7 @@ function FileRow({ file, sessionId, open, version, edit, busy, onToggle, onStage
                           value={body}
                           onChange={(e) => setBody(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter" && e.metaKey) {
+                            if (e.key === "Enter" && primaryKey(e)) {
                               e.preventDefault();
                               if (!e.repeat) add();
                             } else if (e.key === "Escape") {
@@ -422,7 +423,7 @@ function FileRow({ file, sessionId, open, version, edit, busy, onToggle, onStage
                           }}
                         />
                         <div className="row">
-                          <button className="primary" disabled={!body.trim()} onClick={add} title="⌘↩">
+                          <button className="primary" disabled={!body.trim()} onClick={add} title={chord("Enter")}>
                             Add comment
                           </button>
                           <button onClick={() => setWriting(null)}>Cancel</button>

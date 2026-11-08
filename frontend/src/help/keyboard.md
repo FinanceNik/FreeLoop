@@ -25,6 +25,8 @@ Type `/` first to search only the open session's commands: modes, the commands i
 
 ## Default shortcuts
 
+{{|On Windows and Linux, Ctrl takes the place of the Mac's Command key, and Alt of Option.}}
+
 | Action | Keys |
 | --- | --- |
 | Open the command palette | ⌘K |
@@ -32,7 +34,7 @@ Type `/` first to search only the open session's commands: modes, the commands i
 | Open Needs attention | ⌘0 |
 | Larger text | ⌘= |
 | Smaller text | ⌘- |
-| Move to the pane on the left, right, above, below | ⌃⇧← ⌃⇧→ ⌃⇧↑ ⌃⇧↓ |
+| Move to the pane on the left, right, above, below | {{⌃⇧← ⌃⇧→ ⌃⇧↑ ⌃⇧↓|Alt+Shift+← Alt+Shift+→ Alt+Shift+↑ Alt+Shift+↓}} |
 | Approval: allow once | Y |
 | Approval: allow always | A |
 | Approval: deny | N |
@@ -40,7 +42,8 @@ Type `/` first to search only the open session's commands: modes, the commands i
 Some shortcuts are fixed:
 
 - ⌘1 to ⌘9 open the sessions listed first in the sidebar.
-- ⌥⌘1 to ⌥⌘4 make a pane active, and ⌥⌘← and ⌥⌘→ move between panes.
+- {{⌥⌘1 to ⌥⌘4|Alt+1 to Alt+4}} make a pane active, and {{⌥⌘← and ⌥⌘→|Alt+← and Alt+→}} move between panes.
+- In a session's terminal, {{⌘C and ⌘V copy and paste, and ⌃C goes to the shell.|Ctrl+Shift+C and Ctrl+Shift+V copy and paste, and so do Ctrl+V and, with text selected, Ctrl+C. Otherwise Ctrl+C goes to the shell.|Ctrl+Shift+C and Ctrl+Shift+V copy and paste, and Ctrl+C goes to the shell.}}
 
 ## Change a shortcut
 
@@ -48,8 +51,8 @@ Open **Settings → Keyboard**, choose the key beside an action and press the ne
 
 Freeloop refuses a key that can't work and says why:
 
-- An app shortcut needs ⌘ or ⌃, so it works while you type.
-- Keys macOS and the app keep, such as ⌘C, ⌘V, ⌘Q and ⌘1 to ⌘9, can't be used.
+- An app shortcut needs {{⌘ or ⌃|Ctrl}}, or {{⌥|Alt}} with an arrow or another named key, so it works while you type.
+- Keys {{macOS|Windows|Linux}} and the app keep, such as ⌘C, ⌘V, {{⌘Q|⌘Y}} and ⌘1 to ⌘9, can't be used.
 - A key already used for another action is refused.
 - An approval shortcut is one letter with no modifier.
 
