@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  The application manifest linked into Freeloop.exe (`wails3 generate syso`,
+  build/windows/Taskfile.yml). winres re-reads it and keeps: the identity, the
+  supported OS, DPI awareness, long paths, the execution level and the
+  common-controls v6 dependency; anything else here is dropped.
+
+  Minimum Windows is 10 1809 (build 17763), for ConPTY and AF_UNIX sockets. A
+  manifest cannot name a build, only "Windows 10 and later", so the installer
+  checks the build (build/windows/installer.nsi) and the app itself fails clearly
+  when ConPTY is missing.
+-->
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
+    <assemblyIdentity type="win32" name="io.github.financenik.freeloop" version="0.0.0.0" processorArchitecture="*"/>
+    <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+        <application>
+            <!-- Windows 10, Windows 11 and Server 2016 and later. -->
+            <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+        </application>
+    </compatibility>
+    <dependency>
+        <dependentAssembly>
+            <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
+        </dependentAssembly>
+    </dependency>
+    <asmv3:application>
+        <asmv3:windowsSettings>
+            <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+            <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">permonitorv2,permonitor</dpiAwareness>
+            <!-- Repositories nest deep (node_modules); paths past MAX_PATH work where the system allows them. -->
+            <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+        </asmv3:windowsSettings>
+    </asmv3:application>
+    <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+        <security>
+            <requestedPrivileges>
+                <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+            </requestedPrivileges>
+        </security>
+    </trustInfo>
+</assembly>

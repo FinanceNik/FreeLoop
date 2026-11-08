@@ -1,0 +1,108 @@
+version: '3'
+
+# Windows (NFR-XPLAT-003): pure Go (WebView2 through go-webview2, no cgo), so it
+# cross-compiles from macOS or Linux. Adapted from the Wails v3.0.0 template.
+# ARCH is amd64 (default) or arm64; on Windows itself it defaults to the host's.
+
+includes:
+  common: ../Taskfile.yml
+
+vars:
+  WIN_ARCH: '{{if .ARCH}}{{.ARCH}}{{else if eq OS "windows"}}{{ARCH}}{{else}}amd64{{end}}'
+  WIN_OUT: '{{.BIN_DIR}}/windows-{{.WIN_ARCH}}'
+  WIN_SYSO: '{{.MAIN_PKG}}/freeloop_windows_{{.WIN_ARCH}}.syso'
+  WIN_SETUP: '{{.BIN_DIR}}/{{.APP_NAME}}-{{.VERSION}}-windows-{{.WIN_ARCH}}-setup.exe'
+  WIN_PORTABLE: '{{.BIN_DIR}}/{{.APP_NAME}}-{{.VERSION}}-windows-{{.WIN_ARCH}}-portable.zip'
+
+tasks:
+  build:
+    summary: Builds bin/windows-<ARCH>/Freeloop.exe, frontend included
+    deps:
+      - task: common:go:mod:check
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          DEV:
+            ref: .DEV
+    cmds:
+      - task: build:exe
+    vars:
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false{{end}}'
+
+  build:exe:
+    summary: Compiles bin/windows-<ARCH>/Freeloop.exe from the frontend already in frontend/dist
+    preconditions:
+      - sh: '[ "{{.WIN_ARCH}}" = amd64 ] || [ "{{.WIN_ARCH}}" = arm64 ]'
+        msg: "ARCH must be amd64 or arm64, got {{.WIN_ARCH}}"
+      - sh: test -f frontend/dist/index.html
+        msg: "frontend/dist is empty: build the frontend first (make windows does)"
+    cmds:
+      - mkdir -p "{{.WIN_OUT}}"
+      # The icon, version information and manifest (DPI awareness, common controls
+      # v6, Windows 10 and later), linked in as a .syso next to main; the _windows_<arch>
+      # suffix keeps it out of every other build, and it is removed afterwards.
+      - sed -e 's/@VERSION4@/{{.VERSION4}}/g' -e 's/@VERSION@/{{.VERSION}}/g' build/windows/info.json > "{{.WIN_OUT}}/info.json"
+      - wails3 generate syso -arch {{.WIN_ARCH}} -icon build/windows/icon.ico -manifest build/windows/freeloop.exe.manifest -info "{{.WIN_OUT}}/info.json" -out "{{.WIN_SYSO}}"
+      - defer: rm -f "{{.WIN_SYSO}}"
+      - go build {{.BUILD_FLAGS}} -o "{{.WIN_OUT}}/{{.APP_NAME}}.exe" {{.MAIN_PKG}}
+    vars:
+      # -H windowsgui: no console window. SHIPPED=1 (make windows, make release) makes
+      # the build users get, which reads no development switch (cmd/freeloop/devenv.go).
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui{{if eq (.SHIPPED | default "") "1"}} -X main.shipped=1{{end}}"{{end}}'
+    env:
+      GOOS: windows
+      GOARCH: '{{.WIN_ARCH}}'
+      CGO_ENABLED: 0
+
+  package:
+    summary: Builds the installer and the portable zip for ARCH
+    deps:
+      - task: build
+    cmds:
+      - task: package:files
+
+  package:files:
+    summary: Makes the installer and the portable zip from bin/windows-<ARCH>/Freeloop.exe
+    preconditions:
+      - sh: test -f "{{.WIN_OUT}}/{{.APP_NAME}}.exe"
+        msg: "{{.WIN_OUT}}/{{.APP_NAME}}.exe is missing: run the windows:build task first"
+      - sh: command -v makensis
+        msg: "makensis (NSIS 3) is missing: brew install makensis (macOS), apt install nsis (Debian, Ubuntu), https://nsis.sourceforge.io (Windows)"
+      - sh: command -v zip
+        msg: "zip is missing"
+    cmds:
+      - task: notices
+      # Microsoft's WebView2 bootstrapper, which the pinned wails3 carries.
+      - wails3 generate webview2bootstrapper -dir "{{.BIN_DIR}}/windows-nsis" >/dev/null
+      - >-
+        makensis -V2 -NOCD
+        -DARCH={{.WIN_ARCH}} -DVERSION={{.VERSION}} -DVERSION4={{.VERSION4}}
+        "-DBINARY={{.ROOT_DIR}}/{{.WIN_OUT}}/{{.APP_NAME}}.exe"
+        "-DNOTICES={{.ROOT_DIR}}/{{.WIN_OUT}}/THIRD_PARTY_NOTICES.txt"
+        "-DLICENSE_FILE={{.ROOT_DIR}}/LICENSE"
+        "-DWEBVIEW2={{.ROOT_DIR}}/{{.BIN_DIR}}/windows-nsis/MicrosoftEdgeWebview2Setup.exe"
+        "-DICON={{.ROOT_DIR}}/build/windows/icon.ico"
+        "-DOUTFILE={{.ROOT_DIR}}/{{.WIN_SETUP}}"
+        build/windows/installer.nsi
+      # The portable zip: the exe with its licenses in one folder, no installer.
+      - rm -rf "{{.WIN_OUT}}/zip" "{{.WIN_PORTABLE}}"
+      - mkdir -p "{{.WIN_OUT}}/zip/{{.APP_NAME}}"
+      - cp "{{.WIN_OUT}}/{{.APP_NAME}}.exe" "{{.WIN_OUT}}/THIRD_PARTY_NOTICES.txt" "{{.WIN_OUT}}/zip/{{.APP_NAME}}/"
+      - cp LICENSE "{{.WIN_OUT}}/zip/{{.APP_NAME}}/LICENSE.txt"
+      - cd "{{.WIN_OUT}}/zip" && zip -q -r -X "{{.ROOT_DIR}}/{{.WIN_PORTABLE}}" "{{.APP_NAME}}"
+      - rm -rf "{{.WIN_OUT}}/zip"
+      - echo "{{.WIN_SETUP}}" && echo "{{.WIN_PORTABLE}}"
+
+  notices:
+    summary: Writes bin/windows-<ARCH>/THIRD_PARTY_NOTICES.txt from what its exe was built with
+    cmds:
+      - >-
+        go run ./cmd/freeloop-sbom -notices -modcache "$(go env GOMODCACHE)" -node-modules frontend/node_modules
+        -binary "{{.WIN_OUT}}/{{.APP_NAME}}.exe" -version {{.VERSION}}
+        < frontend/package-lock.json > "{{.WIN_OUT}}/THIRD_PARTY_NOTICES.txt"
+
+  run:
+    summary: Runs the built application (on Windows)
+    cmds:
+      - '"{{.WIN_OUT}}/{{.APP_NAME}}.exe"'

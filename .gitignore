@@ -8,3 +8,6 @@
 /frontend/bindings/
 
 .DS_Store
+
+# Windows resources, generated next to main for one build (build/windows/Taskfile.yml)
+/cmd/freeloop/*.syso

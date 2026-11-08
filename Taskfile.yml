@@ -1,8 +1,11 @@
 version: '3'
 
-# Wails v3 build tasks, trimmed from the v3.0.0 react template to macOS only
-# (NFR-XPLAT-003 is later). The Makefile is the entry point for humans; these
-# tasks are what `wails3 dev` and `wails3 build` call.
+# Wails v3 build tasks, trimmed from the v3.0.0 react template to macOS, Windows
+# and Linux (NFR-XPLAT-003). The Makefile is the entry point for humans; these
+# tasks are what `wails3 dev` and `wails3 build` call, and what `make windows`
+# and `make linux-package` run. `build`, `package` and `run` pick the host's
+# platform; `windows:*` cross-compiles from anywhere, `linux:*` needs cgo with
+# GTK 3 and WebKitGTK 4.1 (the Docker image in build/linux on a Mac).
 
 vars:
   APP_NAME: "Freeloop"
@@ -10,26 +13,36 @@ vars:
   MAIN_PKG: "./cmd/freeloop"
   PACKAGE_MANAGER: "npm"
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  # The app's version, from build/config.yml; VERSION4 is its numbers as the four
+  # a Windows version resource takes (0.1.0-beta.1 is 0.1.0.0).
+  VERSION:
+    sh: >-
+      sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml
+  VERSION4:
+    sh: >-
+      v=$(sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml); v=${v%%-*}; echo "$v.0"
 
 includes:
   common: ./build/Taskfile.yml
   darwin: ./build/darwin/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
 
 tasks:
   build:
-    summary: Builds the application
+    summary: Builds the application for the host
     cmds:
-      - task: darwin:build
+      - task: '{{OS}}:build'
 
   package:
-    summary: Packages a production build of the application
+    summary: Packages a production build of the application for the host
     cmds:
-      - task: darwin:package
+      - task: '{{OS}}:package'
 
   run:
     summary: Runs the application
     cmds:
-      - task: darwin:run
+      - task: '{{OS}}:run'
 
   dev:
     summary: Runs the application in development mode

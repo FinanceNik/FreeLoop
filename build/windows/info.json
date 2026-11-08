@@ -1,0 +1,19 @@
+{
+	"fixed": {
+		"file_version": "@VERSION4@",
+		"product_version": "@VERSION4@"
+	},
+	"info": {
+		"0409": {
+			"CompanyName": "The Freeloop Authors",
+			"FileDescription": "Freeloop",
+			"FileVersion": "@VERSION@",
+			"InternalName": "Freeloop",
+			"LegalCopyright": "Copyright 2026 The Freeloop Authors. Apache-2.0.",
+			"OriginalFilename": "Freeloop.exe",
+			"ProductName": "Freeloop",
+			"ProductVersion": "@VERSION@",
+			"Comments": "Run AI coding agents with your own models, harnesses, skills and environments"
+		}
+	}
+}
