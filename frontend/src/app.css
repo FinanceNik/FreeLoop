@@ -1444,19 +1444,24 @@ button.ghost[aria-pressed="true"] {
 }
 
 /* Where the session is in its workflow, above the composer (WFL-008). */
+/* It sits in the composer's column, and in a narrow pane the stages shorten
+   with an ellipsis, the current one last, so the actions stay in view. */
 .workflow-strip {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
-  margin: 0 0 6px;
+  gap: 10px;
+  box-sizing: border-box;
+  width: calc(100% - 48px);
+  max-width: 760px;
+  margin: 0 auto 6px;
   font-size: calc(12rem / 14);
 }
 
 .workflow-steps {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
   gap: 4px;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1464,13 +1469,25 @@ button.ghost[aria-pressed="true"] {
 
 .workflow-step {
   display: inline-flex;
+  flex: 0 3 auto;
   align-items: center;
   gap: 4px;
+  min-width: 2.5em;
   padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--muted);
   white-space: nowrap;
+}
+
+.workflow-step-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workflow-step-mark {
+  flex: none;
 }
 
 .workflow-step-done {
@@ -1483,6 +1500,7 @@ button.ghost[aria-pressed="true"] {
 
 .workflow-step-running,
 .workflow-step-next {
+  flex-shrink: 1;
   color: var(--text);
   border-color: var(--accent);
 }
@@ -1497,16 +1515,21 @@ button.ghost[aria-pressed="true"] {
 
 .workflow-strip-actions {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex: none;
   align-items: center;
-  gap: 4px 10px;
+  gap: 10px;
   margin-left: auto;
-  min-width: 0;
+  white-space: nowrap;
+}
+
+.workflow-strip-actions > button {
+  flex: none;
 }
 
 .workflow-wrote {
+  min-width: 0;
   overflow: hidden;
-  max-width: 28rem;
+  max-width: 14rem;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -1524,7 +1547,11 @@ button.ghost[aria-pressed="true"] {
 }
 
 .workflow-strip-note {
+  min-width: 0;
   margin-left: auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* Where a workflow stage starts in the conversation: a turn-end line, but

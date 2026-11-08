@@ -34,14 +34,18 @@ export default function WorkflowStrip({ workflow, items, running, run, roots, on
                 {MARK[s.state]}
               </span>
             )}
-            {s.stage.title}
-            {s.detail && <span className="workflow-step-detail"> · {s.detail}</span>}
+            <span className="workflow-step-text">
+              {s.stage.title}
+              {s.detail && <span className="workflow-step-detail"> · {s.detail}</span>}
+            </span>
             <span className="sr-only">, {SAID[s.state]}</span>
           </li>
         ))}
       </ol>
       {workflow.reason ? (
-        <span className="workflow-strip-note error-text">{workflow.reason}</span>
+        <span className="workflow-strip-note error-text" title={workflow.reason}>
+          {workflow.reason}
+        </span>
       ) : (
         <span className="workflow-strip-actions">
           {wrote.length > 0 && (

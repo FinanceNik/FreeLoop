@@ -1382,11 +1382,22 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   await until("the workflow chosen", () => picker.value === "plan-slice-afk", 8000);
   // WFL-008: choosing it shows the stage strip, with the first stage next.
   const strip = await until("the stage strip", () => activePane().querySelector(".workflow-strip"), 8000);
-  const steps = () => all(".workflow-step", strip).map((s) => s.className.replace("workflow-step workflow-step-", "") + ":" + s.childNodes[s.childNodes.length - 2]?.textContent);
+  const steps = () => all(".workflow-step", strip).map((s) => s.className.replace("workflow-step workflow-step-", "") + ":" + s.querySelector(".workflow-step-text")?.firstChild?.textContent);
   check("the strip shows the path, the first stage next", steps().join("|") === "next:Grill the brief|todo:Write the PRD|todo:Slice into issues|todo:Run the AFK issues", steps().join("|"));
   check("its Next button names the first stage", withText(".workflow-next", "Next: Grill the brief", strip));
   const sr = strip.getBoundingClientRect(), cr = activePane().querySelector(".composer").getBoundingClientRect();
   check("the strip fits above the composer", sr.left >= cr.left - 1 && sr.right <= cr.right + 1 && sr.bottom <= cr.top + 1 && sr.height < 64 && strip.scrollWidth <= strip.clientWidth + 1, JSON.stringify({ strip: [sr.left, sr.right, sr.height, strip.scrollWidth, strip.clientWidth], composer: [cr.left, cr.right, cr.top] }));
+  // In a narrow pane the stages shorten and stay on one line, Next still in view.
+  {
+    const session = strip.closest(".session");
+    session.style.maxWidth = "380px";
+    await sleep(100);
+    const s = strip.getBoundingClientRect(), next = strip.querySelector(".workflow-next").getBoundingClientRect();
+    const inside = all("*", strip).every((e) => e.getBoundingClientRect().width === 0 || e.closest(".sr-only") || e.getBoundingClientRect().right <= s.right + 1);
+    check("in a narrow pane the strip keeps to one line and its button in view", inside && next.right <= s.right + 1 && s.height < 40, JSON.stringify({ strip: [s.left, s.right, s.height], next: [next.left, next.right] }));
+    session.style.maxWidth = "";
+    await sleep(100);
+  }
   const box = activePane().querySelector(".composer textarea");
   box.focus();
   type(box, "/");
