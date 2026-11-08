@@ -367,7 +367,7 @@ A check of the whole app against v1, then the fixes it asked for. What it found 
 - **A log**, `logs/freeloop.log`, redacted and rotated, with crash traces, and a button in Settings.
 - **A panic** ends that turn or tool call, not the app. **A lost context line** no longer cuts what follows it, and the user is told. **A crashed agent** starts again at the next message. **A stream that stalls** ends after five minutes and is retried; **one that ends early** is an error, not a finished reply.
 
-Not done: storage views and pruning, sharing checkpoints between sessions, a universal build.
+Not done: storage views and pruning, sharing checkpoints between sessions. A universal build was dropped on 2026-11-08: Apple Silicon only (NFR-XPLAT-001).
 
 ### Live usage (built 2026-11-03)
 
@@ -414,7 +414,7 @@ Not before those: features that copy a vendor app's. Token optimizers get no mor
 
 ## From here to 0.1.0 (planned 2026-11-07)
 
-Where it stands. The release plan above is built through phase 3, and its phase 4 tooling is written: a release job on tags, the version at `0.1.0-beta.1`, download steps in the README, and the MVP checklist in `docs/CHECKLIST-0.1.md`. The checklist has 33 rows automated, 41 partly covered (most of the rest needs a real account or a person), 8 for the user's runs and 1 gap (which Macs are supported). Since the release plan, stopping what a crash leaves running (NFR-REL-005), recording what each model call carries (NFR-PRIV-003), checking every event against the schema (EXT-002), and tests for SEC-010, HRN-008, GUI-004, NFR-PERF-003 and NFR-PERF-005 are built. What stands between this and a release is no longer code. It is three things: a CI the repository can afford, which the release job depends on; the user's runs on real accounts; and people other than the author using it.
+Where it stands. The release plan above is built through phase 3, and its phase 4 tooling is written: a release job on tags, the version at `0.1.0-beta.1`, download steps in the README, and the MVP checklist in `docs/CHECKLIST-0.1.md`. The checklist has 33 rows automated, 41 partly covered (most of the rest needs a real account or a person), 8 for the user's runs and 1 gap (which Macs are supported; closed 2026-11-08, Apple Silicon only, which leaves that row partly covered until macOS 14 itself is run). Since the release plan, stopping what a crash leaves running (NFR-REL-005), recording what each model call carries (NFR-PRIV-003), checking every event against the schema (EXT-002), and tests for SEC-010, HRN-008, GUI-004, NFR-PERF-003 and NFR-PERF-005 are built. What stands between this and a release is no longer code. It is three things: a CI the repository can afford, which the release job depends on; the user's runs on real accounts; and people other than the author using it.
 
 The private repository ran out of GitHub Actions minutes on 2026-11-06: macOS minutes count ten times, and a run takes about eight. Twelve commits wait unpushed for that reason, and the release job could not run.
 
@@ -456,7 +456,7 @@ Claude, meanwhile: fix what these find, first; then stage 3.
 
 ### Stage 4: beta 1 (the user decides, Claude prepares)
 
-1. **Decide which Macs**: "Apple Silicon, macOS 14 or later" for the beta (recommended, and NFR-XPLAT-001 reworded to it), or an Intel build in the release job (`GOARCH=amd64`, or a universal app with `lipo`), which then needs someone with an Intel Mac.
+1. **Decide which Macs.** *Decided 2026-11-08: Apple Silicon only, macOS 14 or later (NFR-XPLAT-001). The build is `arm64` alone, `make package` checks it, and `Info.plist` says so, so an Intel Mac refuses it with the system's own message.*
 2. **Tag `v0.1.0-beta.1`**, read the draft release, publish it.
 3. **Add three to five testers** to the private repository, with the release notes and a short note on what to try and how to report.
 4. **A weekly beta**: fixes go out as `0.1.0-beta.2` and on, each through the same tag and draft.

@@ -242,7 +242,7 @@ Decisions these requirements encode (from the planning interview, October 2026):
 
 ### Cross-platform (NFR-XPLAT)
 
-- **NFR-XPLAT-001** · MVP · Supported: macOS 14 and newer, Apple Silicon and Intel.
+- **NFR-XPLAT-001** · MVP · Supported: macOS 14 and newer, on Apple Silicon only (decided 2026-11-08). The app is built for `arm64` alone and says so in its `Info.plist`, so an Intel Mac refuses to open it with the system's own message. *Accept:* the packaged binary's only architecture is `arm64` (`lipo -archs`, checked by `make package`), and `LSMinimumSystemVersion` is 14.0.0.
 - **NFR-XPLAT-002** · MVP · No macOS-only code outside a platform package; Keychain, notifications and file dialogs are behind interfaces so Linux and Windows backends can be added without touching the engine.
 - **NFR-XPLAT-003** · later · Linux build; Windows build with WSL awareness.
 

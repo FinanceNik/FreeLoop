@@ -6,6 +6,8 @@ includes:
 vars:
   # OQ-021: macOS 14 is the minimum; keep in sync with LSMinimumSystemVersion.
   MACOS_MIN: "14.0"
+  # NFR-XPLAT-001: Apple Silicon only; keep in sync with LSArchitecturePriority.
+  MACOS_ARCH: arm64
 
 tasks:
   build:
@@ -29,7 +31,7 @@ tasks:
     env:
       GOOS: darwin
       CGO_ENABLED: 1
-      GOARCH: '{{.ARCH | default ARCH}}'
+      GOARCH: '{{.MACOS_ARCH}}'
       CGO_CFLAGS: "-mmacosx-version-min={{.MACOS_MIN}}"
       CGO_LDFLAGS: "-mmacosx-version-min={{.MACOS_MIN}}"
       MACOSX_DEPLOYMENT_TARGET: "{{.MACOS_MIN}}"
@@ -49,6 +51,7 @@ tasks:
       - cp build/darwin/icons.icns "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
+      - test "$(lipo -archs "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/{{.APP_NAME}}")" = "{{.MACOS_ARCH}}"
       - xattr -cr "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - codesign --force --deep --options runtime --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - codesign --verify --deep --strict "{{.BIN_DIR}}/{{.APP_NAME}}.app"

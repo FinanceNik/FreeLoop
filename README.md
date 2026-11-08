@@ -33,11 +33,11 @@ Releases are on the repository's Releases page; during the private beta, you see
 shasum -a 256 -c SHA256SUMS --ignore-missing
 ```
 
-Open the DMG and drag Freeloop to Applications. Releases are not signed or notarized, so macOS blocks a downloaded one the first time: try to open it, then choose Open Anyway in System Settings, under Privacy & Security. The Keychain asks again after each update, because the signature changes with every build. Needs macOS 14 or later.
+Open the DMG and drag Freeloop to Applications. Releases are not signed or notarized, so macOS blocks a downloaded one the first time: try to open it, then choose Open Anyway in System Settings, under Privacy & Security. The Keychain asks again after each update, because the signature changes with every build. Needs a Mac with Apple Silicon (M1 or later) and macOS 14 or later; there is no Intel build.
 
 ### Build from source
 
-On macOS 14 or later. You need Go, Node.js with npm and the Xcode command line tools.
+On a Mac with Apple Silicon and macOS 14 or later. You need Go, Node.js with npm and the Xcode command line tools.
 
 ```sh
 make tools     # once: install the pinned wails3 CLI
