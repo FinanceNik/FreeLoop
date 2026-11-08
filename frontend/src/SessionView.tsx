@@ -1456,7 +1456,6 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 onError={onError}
               />
               <span className="composer-spacer" />
-              {queued > 0 && <span className="muted">{queued} queued</span>}
               {(mcp?.resources ?? []).length > 0 && (
                 <button
                   title="Attach a resource of one of the session's MCP servers"
@@ -1486,15 +1485,24 @@ export default function SessionView({ session, events, focus, prices, initialDra
               >
                 <PaperclipIcon />
               </button>
-              <button
-                className="primary icon-button composer-send"
-                aria-label={view.running ? "Queue" : "Send"}
-                title={view.running ? "Queue for when this turn ends" : "Send"}
-                onClick={send}
-                disabled={(!draft.trim() && pictures.length === 0 && textFiles.length === 0) || accepting}
-              >
-                {view.running ? <QueueIcon /> : <SendIcon />}
-              </button>
+              {/* The count sits on the button, so a queued message never makes the row wrap,
+                  and outside it, so it stays clear while the button is dimmed. */}
+              <span className="composer-send-wrap">
+                <button
+                  className="primary icon-button composer-send"
+                  aria-label={`${view.running ? "Queue" : "Send"}${queued > 0 ? `, ${queued} queued` : ""}`}
+                  title={`${view.running ? "Queue for when this turn ends" : "Send"}${queued > 0 ? ` (${queued} queued)` : ""}`}
+                  onClick={send}
+                  disabled={(!draft.trim() && pictures.length === 0 && textFiles.length === 0) || accepting}
+                >
+                  {view.running ? <QueueIcon /> : <SendIcon />}
+                </button>
+                {queued > 0 && (
+                  <span className="composer-queued" aria-hidden="true">
+                    {queued}
+                  </span>
+                )}
+              </span>
             </div>
           </div>
         </div>

@@ -346,6 +346,25 @@ await step("a session opens", async () => {
   check("a session opens", true);
 });
 
+// The count of queued messages sits on the Send button: it never makes the row taller.
+await step("a queued message leaves the composer's size alone", async () => {
+  const pane = activePane();
+  const actions = await until("the composer's row", () => pane.querySelector(".composer-actions"));
+  const wrap = pane.querySelector(".composer-send-wrap");
+  const before = pane.querySelector(".composer").getBoundingClientRect().height;
+  const badge = document.createElement("span");
+  badge.className = "composer-queued";
+  badge.textContent = "12";
+  wrap.appendChild(badge);
+  const after = pane.querySelector(".composer").getBoundingClientRect().height;
+  const b = badge.getBoundingClientRect();
+  const send = wrap.querySelector(".composer-send").getBoundingClientRect();
+  badge.remove();
+  check("a queued count changes no height", after === before, `${before} → ${after}`);
+  check("the count sits on the Send button's corner", b.right > send.right - 4 && b.top < send.top + 4 && b.width < 30, JSON.stringify({ b: [b.left, b.top, b.width], send: [send.right, send.top] }));
+  check("the row did not wrap", actions.getBoundingClientRect().height < 60, actions.getBoundingClientRect().height);
+});
+
 // No demo session has subagents, so this goes by the rule, which a broader one has hidden.
 await step("subagents are indented under their parent", async () => {
   const list = document.createElement("ul");

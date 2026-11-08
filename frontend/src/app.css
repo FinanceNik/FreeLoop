@@ -5480,6 +5480,29 @@ table.hooks .hook-command {
   opacity: 0.45;
 }
 
+/* How many messages wait for the turn to end, as a badge on the button. */
+.composer-send-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.composer-queued {
+  pointer-events: none;
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--surface);
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: calc(10rem / 14);
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+}
+
 .composer-stop.icon-button {
   padding: 6px 9px;
   color: var(--danger);
