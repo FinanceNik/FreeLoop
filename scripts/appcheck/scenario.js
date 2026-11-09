@@ -1482,22 +1482,42 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   await until("the workflow chosen", () => picker.value === "plan-slice-afk", 8000);
   // WFL-008: choosing it shows the stage strip, with the first stage next.
   const strip = await until("the stage strip", () => activePane().querySelector(".workflow-strip"), 8000);
-  const steps = () => all(".workflow-step", strip).map((s) => s.className.replace("workflow-step workflow-step-", "") + ":" + s.querySelector(".workflow-step-text")?.firstChild?.textContent);
+  const steps = () => all(".workflow-step", strip).map((s) => [...s.classList].find((c) => /^workflow-step-(done|running|next|todo)$/.test(c)).replace("workflow-step-", "") + ":" + s.querySelector(".workflow-step-text")?.firstChild?.textContent);
   check("the strip shows the path, the first stage next", steps().join("|") === "next:Grill the brief|todo:Write the PRD|todo:Slice into issues|todo:Run the AFK issues", steps().join("|"));
   check("its Next button names the first stage", withText(".workflow-next", "Next: Grill the brief", strip));
   const sr = strip.getBoundingClientRect(), cr = activePane().querySelector(".composer").getBoundingClientRect();
   check("the strip fits above the composer", sr.left >= cr.left - 1 && sr.right <= cr.right + 1 && sr.bottom <= cr.top + 1 && sr.height < 64 && strip.scrollWidth <= strip.clientWidth + 1, JSON.stringify({ strip: [sr.left, sr.right, sr.height, strip.scrollWidth, strip.clientWidth], composer: [cr.left, cr.right, cr.top] }));
-  // In a narrow pane the stages shorten and stay on one line, Next still in view.
-  {
+  // In a narrow pane the stages shrink to dots and nothing lies on anything else (the
+  // strip's parts, as they are shown, never overlap, and none leaves the strip).
+  const parts = () => [...strip.querySelectorAll(".workflow-step, .workflow-wrote, .workflow-strip-actions > button")].filter((e) => e.getBoundingClientRect().width > 0);
+  const tangled = () => {
+    const r = parts().map((e) => [e.className.split(" ")[0], e.getBoundingClientRect()]);
+    const s = strip.getBoundingClientRect();
+    const out = [];
+    r.forEach(([n, a], i) => {
+      if (a.left < s.left - 1 || a.right > s.right + 1) out.push(`${n} leaves the strip`);
+      r.slice(i + 1).forEach(([m, b]) => {
+        if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) out.push(`${n} lies on ${m}`);
+      });
+    });
+    return out;
+  };
+  const narrow = async (label) => {
     const session = strip.closest(".session");
-    session.style.maxWidth = "380px";
-    await sleep(100);
-    const s = strip.getBoundingClientRect(), next = strip.querySelector(".workflow-next").getBoundingClientRect();
-    const inside = all("*", strip).every((e) => e.getBoundingClientRect().width === 0 || e.closest(".sr-only") || e.getBoundingClientRect().right <= s.right + 1);
-    check("in a narrow pane the strip keeps to one line and its button in view", inside && next.right <= s.right + 1 && s.height < 40, JSON.stringify({ strip: [s.left, s.right, s.height], next: [next.left, next.right] }));
+    for (const width of ["380px", "300px"]) {
+      session.style.maxWidth = width;
+      await sleep(150);
+      const dots = all(".workflow-step:not(.workflow-step-current)", strip).filter((e) => e.getBoundingClientRect().width > 0);
+      const current = strip.querySelector(".workflow-step-current")?.getBoundingClientRect();
+      check(`${label}: nothing in the strip overlaps at ${width}`, tangled().length === 0 && strip.getBoundingClientRect().height < 90, tangled().join("; ") + " " + strip.getBoundingClientRect().height);
+      check(`${label}: the other stages are dots and the current one is named at ${width}`, dots.every((e) => e.getBoundingClientRect().width <= 14) && (!current || current.width > 40), JSON.stringify({ dots: dots.map((e) => Math.round(e.getBoundingClientRect().width)), current: current && Math.round(current.width) }));
+      if (strip.querySelector(".workflow-next")) check(`${label}: the Next button stays in view at ${width}`, strip.querySelector(".workflow-next").getBoundingClientRect().right <= strip.getBoundingClientRect().right + 1);
+    }
     session.style.maxWidth = "";
-    await sleep(100);
-  }
+    await sleep(150);
+  };
+  await narrow("first stage next");
+  check("a wide strip keeps its stages as named pills", all(".workflow-step", strip).every((e) => e.getBoundingClientRect().width > 40) && tangled().length === 0, tangled().join("; "));
   const box = activePane().querySelector(".composer textarea");
   box.focus();
   type(box, "/");
@@ -1526,6 +1546,7 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   check("after slicing, the AFK run is next", steps().includes("next:Run the AFK issues"), steps().join("|"));
   const wrote = strip.querySelector(".workflow-wrote")?.textContent ?? "";
   check("the strip says what the stage wrote", wrote.includes("001-first-slice.md"), wrote);
+  await narrow("with what it wrote");
 
   // The run: its Next button opens the dialog with what it will want, allowed up
   // front, then both issues are done and reviewed.

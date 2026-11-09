@@ -1451,12 +1451,16 @@ button.ghost[aria-pressed="true"] {
 }
 
 /* Where the session is in its workflow, above the composer (WFL-008). */
-/* It sits in the composer's column, and in a narrow pane the stages shorten
-   with an ellipsis, the current one last, so the actions stay in view. */
+/* It sits in the composer's column. Nothing in it can overflow onto anything else:
+   the stages and the actions wrap onto a second line instead, and in a narrow
+   strip (a container query on the strip's own width) the stages that are not the
+   current one shrink to dots, so the path still reads at a glance. */
 .workflow-strip {
+  container-type: inline-size;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 4px 10px;
   box-sizing: border-box;
   width: calc(100% - 48px);
   max-width: 760px;
@@ -1467,8 +1471,9 @@ button.ghost[aria-pressed="true"] {
 .workflow-steps {
   display: flex;
   flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
-  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1476,10 +1481,10 @@ button.ghost[aria-pressed="true"] {
 
 .workflow-step {
   display: inline-flex;
-  flex: 0 3 auto;
+  flex: none;
   align-items: center;
   gap: 4px;
-  min-width: 2.5em;
+  max-width: 100%;
   padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -1507,7 +1512,6 @@ button.ghost[aria-pressed="true"] {
 
 .workflow-step-running,
 .workflow-step-next {
-  flex-shrink: 1;
   color: var(--text);
   border-color: var(--accent);
 }
@@ -1522,9 +1526,12 @@ button.ghost[aria-pressed="true"] {
 
 .workflow-strip-actions {
   display: inline-flex;
-  flex: none;
+  flex: 0 1 auto;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   margin-left: auto;
   white-space: nowrap;
 }
@@ -1534,6 +1541,7 @@ button.ghost[aria-pressed="true"] {
 }
 
 .workflow-wrote {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   max-width: 14rem;
@@ -1554,11 +1562,66 @@ button.ghost[aria-pressed="true"] {
 }
 
 .workflow-strip-note {
+  flex: 1 1 100%;
   min-width: 0;
-  margin-left: auto;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* A narrow strip: the path as dots with the current stage named, and the actions on a
+   line of their own, the written files giving way to the buttons. */
+@container (max-width: 34rem) {
+  .workflow-steps {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .workflow-step:not(.workflow-step-current) {
+    flex: none;
+    box-sizing: border-box;
+    width: 0.7rem;
+    height: 0.7rem;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+  }
+
+  .workflow-step-done:not(.workflow-step-current) {
+    background: var(--ok);
+    border-color: var(--ok);
+  }
+
+  .workflow-step-running:not(.workflow-step-current),
+  .workflow-step-next:not(.workflow-step-current) {
+    background: var(--accent);
+  }
+
+  /* Still read out, by name and state; only the sight of them shrinks. */
+  .workflow-step:not(.workflow-step-current) > * {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .workflow-step-current {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .workflow-strip-actions {
+    flex: 1 1 100%;
+  }
+
+  .workflow-wrote {
+    flex: 1 1 0;
+    max-width: none;
+    text-align: left;
+  }
 }
 
 /* Where a workflow stage starts in the conversation: a turn-end line, but

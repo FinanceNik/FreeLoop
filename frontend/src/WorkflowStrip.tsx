@@ -1,4 +1,4 @@
-import { stageOutputs, stageProgress, type ItemLike, type RunLike, type Stage, type StageState, type WorkflowLike } from "./workflows.ts";
+import { currentStep, stageOutputs, stageProgress, type ItemLike, type RunLike, type Stage, type StageState, type WorkflowLike } from "./workflows.ts";
 import { t, type PlainKey } from "./i18n.ts";
 
 // WorkflowStrip shows, above the composer, where the session is in its workflow
@@ -22,6 +22,8 @@ const SAID: Record<StageState, PlainKey> = { done: "workflow.state.done", runnin
 export default function WorkflowStrip({ workflow, items, running, run, roots, onNext, onShowRun }: Props) {
   const steps = stageProgress(workflow, items, running, run);
   const next = steps.find((s) => s.state === "next");
+  // In a narrow strip only this stage keeps its label; the others shrink to dots.
+  const current = currentStep(steps);
   const lastStage = items.filter((it) => it.kind === "stage").pop();
   const wrote = !running && lastStage ? stageOutputs(items) : [];
   const afk = steps.find((s) => s.stage.kind === "afk");
@@ -32,8 +34,8 @@ export default function WorkflowStrip({ workflow, items, running, run, roots, on
   return (
     <div className="workflow-strip" role="group" aria-label={t("workflow.label", { name: workflow.name })}>
       <ol className="workflow-steps">
-        {steps.map((s) => (
-          <li key={s.stage.command} className={`workflow-step workflow-step-${s.state}`} title={`/${s.stage.command}: ${s.stage.description || s.stage.title}`}>
+        {steps.map((s, i) => (
+          <li key={s.stage.command} className={`workflow-step workflow-step-${s.state}${i === current ? " workflow-step-current" : ""}`} title={`/${s.stage.command}: ${s.stage.description || s.stage.title}`}>
             {MARK[s.state] && (
               <span className="workflow-step-mark" aria-hidden="true">
                 {MARK[s.state]}

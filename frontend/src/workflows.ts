@@ -124,6 +124,16 @@ export function stageProgress(w: WorkflowLike | undefined, items: readonly ItemL
   return steps;
 }
 
+// currentStep is the stage the strip keeps a label for when it has little room: the one
+// running, else the one next, else the last one done; -1 for a path not begun.
+export function currentStep(steps: readonly { state: StageState }[]): number {
+  const at = (state: StageState) => steps.findIndex((s) => s.state === state);
+  for (const state of ["running", "next"] as const) {
+    if (at(state) >= 0) return at(state);
+  }
+  return steps.map((s) => s.state).lastIndexOf("done");
+}
+
 // stageOutputs are the files the last stage's turns wrote, for the handoff line:
 // the paths of the file edits that completed since the stage started.
 export function stageOutputs(items: readonly ItemLike[]): string[] {

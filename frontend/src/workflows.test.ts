@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { guided, stageAction, stageCall, stageCommands, stageOutputs, stageProgress, withoutStageSkills, type WorkflowLike } from "./workflows.ts";
+import { currentStep, guided, stageAction, stageCall, stageCommands, stageOutputs, stageProgress, withoutStageSkills, type StageState, type WorkflowLike } from "./workflows.ts";
 import { setLanguage } from "./i18n.ts";
 
 const w: WorkflowLike = {
@@ -108,4 +108,13 @@ test("the app's words about stages follow the language", () => {
   } finally {
     setLanguage("en");
   }
+});
+
+test("a narrow strip keeps the label of the stage running, else next, else the last done", () => {
+  const steps = (...states: StageState[]) => states.map((state) => ({ state }));
+  assert.equal(currentStep(steps("done", "running", "todo")), 1);
+  assert.equal(currentStep(steps("done", "done", "next", "todo")), 2);
+  assert.equal(currentStep(steps("done", "done", "done")), 2);
+  assert.equal(currentStep(steps("todo", "todo")), -1);
+  assert.equal(currentStep([]), -1);
 });
