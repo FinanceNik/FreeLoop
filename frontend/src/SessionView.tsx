@@ -55,6 +55,7 @@ import { itemForSeq } from "./search.ts";
 import { drawOnce, HOLD_PLACE, holdsPlace, READER_PAUSE, readerScrolling, scrollsByKey, scrollsUpByKey, settledPlace } from "./scrollPlace.ts";
 import { costText, estimate, formatCost, type PriceEntry } from "./cost.ts";
 import { trustLines, trustStep } from "./trust.ts";
+import { locale } from "./i18n.ts";
 
 interface Props {
   session: Session;
@@ -250,7 +251,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
       .catch(onError);
   };
   const view = useMemo(() => buildView(events), [events]);
-  // Estimated cost of the session and of each turn, by turn_end key.
+  // Estimated cost of the session and of each turn, by turn_end key, written in the
+  // locale (GUI-048).
+  const loc = locale();
   const costs = useMemo(() => {
     const own = { providerId: session.providerId, model: session.model };
     const turns = new Map<string, string>();
@@ -260,7 +263,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       if (e.unpriced < it.calls.length) turns.set(it.key, `≈ ${formatCost(e.cost)}${e.unpriced ? " + unpriced calls" : ""}`);
     }
     return { session: estimate(prices, view.calls, own), calls: view.calls.filter((c) => !c.adjustment).length, turns };
-  }, [view, prices, session.providerId, session.model]);
+  }, [view, prices, session.providerId, session.model, loc]);
 
   // Screen readers hear approvals and turn ends, not every streamed word
   // (NFR-A11Y-002).
@@ -1226,7 +1229,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
           {toolRuns(view.items).map((run) => {
             const one = (item: Item) => (
-              <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} roots={roots} onError={onError} onRewind={rewind} onFork={fork} />
+              <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} locale={loc} roots={roots} onError={onError} onRewind={rewind} onFork={fork} />
             );
             if (run.items.length === 1) return one(run.items[0]);
             return (
@@ -1362,7 +1365,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           {textFiles.length > 0 && (
             <ul className="attachments" aria-label="Files for the next message">
               {textFiles.map((f) => (
-                <li key={f.name} className="chip" title={`${f.text.length.toLocaleString()} characters`}>
+                <li key={f.name} className="chip" title={`${f.text.length.toLocaleString(locale())} characters`}>
                   {f.name}
                   <button className="link" aria-label={`Remove ${f.name}`} onClick={() => setTextFiles((list) => list.filter((x) => x !== f))} title="Remove">
                     <CloseIcon />
@@ -1583,7 +1586,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
   );
 }
 
-// ItemView re-renders only when its item changed (see Item.rev).
+// ItemView re-renders only when its item changed (see Item.rev), or the locale its times
+// and counts are written in (GUI-048).
 const ItemView = memo(
   function ItemView({
     sid,
@@ -1599,6 +1603,7 @@ const ItemView = memo(
     item: Item;
     focused: boolean;
     cost?: string;
+    locale: string;
     roots: string[];
     onError: (err: unknown) => void;
     onRewind: (seq: number, text: string) => void;
@@ -1612,7 +1617,7 @@ const ItemView = memo(
       </div>
     );
   },
-  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused && a.cost === b.cost,
+  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused && a.cost === b.cost && a.locale === b.locale,
 );
 
 function ItemBody({
@@ -1678,7 +1683,7 @@ function ItemBody({
         <div className={`turn-end ${item.stopReason !== "end_turn" ? "turn-end-warn" : ""}`}>
           {/* A turn that ended as usual says only when and what it cost (GUI-042). */}
           {item.stopReason === "end_turn" ? <span className="sr-only">Turn complete · </span> : `${STOP_LABEL[item.stopReason] ?? item.stopReason} · `}
-          {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          {new Date(item.ts).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}
           {cost && <span title="Estimated from the price table in Settings"> · {cost}</span>}
         </div>
       );
@@ -1735,7 +1740,7 @@ function ItemBody({
       return (
         <details className="compaction">
           <summary className="turn-end">
-            Context compacted{item.reason === "manual" ? "" : " automatically"}: {item.before.toLocaleString()} → about {item.after.toLocaleString()} tokens
+            Context compacted{item.reason === "manual" ? "" : " automatically"}: {item.before.toLocaleString(locale())} → about {item.after.toLocaleString(locale())} tokens
           </summary>
           <div className="md">
             <Markdown text={item.summary} />

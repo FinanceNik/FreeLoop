@@ -2,6 +2,7 @@
 // list prices, applied to model calls' tokens. Prices are US dollars per million
 // tokens; the first entry whose provider (when set) and model pattern match
 // applies, as in config.FindPrice.
+import { numberFormat } from "./i18n.ts";
 
 export interface PriceEntry {
   providerId: string;
@@ -115,9 +116,12 @@ export function estimate(prices: readonly PriceEntry[], calls: readonly ModelCal
   return { cost, unpriced };
 }
 
+// formatCost writes an amount in US dollars, as provider prices are, in the locale's
+// style: $146.51, 146,51 $, $ 146,51 (GUI-048).
 export function formatCost(n: number): string {
-  if (n > 0 && n < 0.01) return "<$0.01";
-  return `$${n.toFixed(2)}`;
+  const dollars = numberFormat({ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol" });
+  if (n > 0 && n < 0.01) return `<${dollars.format(0.01)}`;
+  return dollars.format(n);
 }
 
 // costText is a session's estimated cost in words (PRV-008): what the price table

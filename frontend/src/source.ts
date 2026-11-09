@@ -2,6 +2,7 @@
 // agent if it has one, else its provider. Colour alone would fail anyone who cannot tell
 // the colours apart, and vendor logos are not ours to use, so a mark is a colour and two
 // letters. Pure, so source.test.ts covers it.
+import { locale } from "./i18n.ts";
 
 export const SLOTS = 8;
 
@@ -39,7 +40,7 @@ export function sourceId(r: Runs): string {
 export function defaultLetters(name: string): string {
   const words = name.split(/[\s._/-]+/u).filter(Boolean);
   const letters = words.length >= 2 ? words[0][0] + words[1][0] : Array.from(words[0] ?? "?").slice(0, 2).join("");
-  return letters.toLocaleUpperCase();
+  return letters.toLocaleUpperCase(locale());
 }
 
 // validLetters is config.validSourceLetters: at most two letters or digits.

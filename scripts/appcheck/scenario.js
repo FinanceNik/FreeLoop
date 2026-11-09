@@ -1163,6 +1163,68 @@ await step("the usage pane cycles through its views", async () => {
   await sleep(200);
 });
 
+await step("the usage pane's numbers follow the language, without a reload", async () => {
+  // GUI-048: picked in Settings, Deutsch writes the pane's times 24-hour and its figures
+  // in German at once; English brings back what was there. A reload would lose the mark.
+  window.appcheckNotReloaded = true;
+  document.querySelector('.layout-switch button[aria-label="4 panes"]').click();
+  await sleep(300);
+  // The step before opened a session over the pane it showed the usage in.
+  if (!document.querySelector(".pane-usage")) (await until("an empty pane's Show usage", () => withText(".pane-empty button", "Show usage"))).click();
+  await until("the usage pane", () => document.querySelector(".pane-usage"));
+  // Settings goes back to the session in use, and the usage pane is none.
+  (await until("a session's pane", () => all(".pane").find((p) => p.querySelector(".composer")))).dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  await sleep(100);
+  const recent = async () => {
+    const usage = await until("the usage pane", () => document.querySelector(".pane-usage"));
+    for (let i = 0; i < 4 && usage.dataset.view !== "recent"; i++) {
+      usage.querySelector(".usage-view-step:not(.usage-view-previous)").click();
+      await sleep(150);
+    }
+    await until("the time axis", () => usage.querySelector("text.usage-axis"));
+    await sleep(200);
+    // The times are the bottom row; the values share the class up the left side.
+    const axis = all("text.usage-axis", usage);
+    const bottom = Math.max(...axis.map((t) => t.getBoundingClientRect().top));
+    const [tokens, cost] = all(".live-usage-strip strong", usage).map((s) => s.textContent);
+    return { times: axis.filter((t) => Math.abs(t.getBoundingClientRect().top - bottom) < 2).map((t) => t.textContent), tokens, cost };
+  };
+  const pick = async (value) => {
+    document.querySelector(".settings-link").click();
+    (await until("the Appearance page", () => withText(".settings-nav button", "Appearance") ?? withText(".settings-nav button", "Darstellung"))).click();
+    const select = await until("the language", () => document.querySelector(".settings-page select.language-select"));
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(`the page in ${value}`, () => document.documentElement.lang === value, 8000);
+    document.querySelector(".settings-nav .settings-back").click();
+    await until("the workspace", () => document.querySelector(".pane"));
+  };
+  try {
+    const english = await recent();
+    await pick("de");
+    const german = await recent();
+    check("the pane's times are 24-hour in German", german.times.length > 1 && german.times.every((s) => /^\d{1,2}:\d{2}$/.test(s)), german.times.join(" "));
+    check("the pane's tokens are written as German writes them", /^-?[\d.]+$|^\d+(,\d)?\s(Mio|Mrd)\.$/.test(german.tokens), `${english.tokens} became ${german.tokens}`);
+    check("the pane's cost is dollars as German writes them", !english.cost.includes("$") || /^<?[\d.]+,\d\d\s\$$/.test(german.cost), `${english.cost} became ${german.cost}`);
+    await pick("en");
+    const again = await recent();
+    // By form, not value: the axis may move on a step meanwhile.
+    const clock = (times) => [...new Set(times.map((s) => (/[ap]$/.test(s) ? "12-hour" : /^\d{1,2}:\d{2}$/.test(s) ? "24-hour" : s)))].join();
+    const unit = (s) => s.replace(/[\d.,]/g, "");
+    check("English writes them as before", clock(again.times) === clock(english.times) && unit(again.tokens) === unit(english.tokens), `${english.times.join(" ")}, ${english.tokens}; now ${again.times.join(" ")}, ${again.tokens}`);
+    check("no reload in between", window.appcheckNotReloaded === true);
+  } finally {
+    // Whatever happened, later steps find English, one pane and the session they expect.
+    if (document.documentElement.lang !== "en") await pick("en").catch(() => {});
+    if (document.querySelector(".settings-nav")) document.querySelector(".settings-nav .settings-back")?.click();
+    await sleep(100);
+    openSession("Check alpha");
+    await until("the workspace", () => document.querySelector(".pane")).catch(() => {});
+    document.querySelector('.layout-switch button[aria-label="One pane"]')?.click();
+    await sleep(200);
+  }
+});
+
 // The in-app demo (GUI-045): started from the palette, one scripted turn that meets each
 // answer of the policy, one demo at a time, and "Remove demo" leaves nothing behind. It
 // runs before the bypass step and removes what it made, so later steps find the app as
@@ -1461,7 +1523,9 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   // dialog said so, and the Queue page resumes it.
   if (queuePaused) {
     // Starting shows the Board, where the run and its first issue say why nothing moves.
-    const waiting = await until("the run waiting", () => document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-waiting')?.textContent, 10000);
+    // The run learns why on the schedule loop's next pass after queueing the issue, which
+    // can be its 30-second tick.
+    const waiting = await until("the run waiting", () => document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-waiting')?.textContent, 35000);
     check("the run says its issue waits for the paused queue", waiting.includes("001-first-slice waiting to start: the queue is paused"), waiting);
     const firstCard = document.querySelector('[aria-label="Backlog of workflow"] .backlog-card');
     check("the issue's card says so too", firstCard?.querySelector(".backlog-step-waiting")?.textContent.includes("AFK run: waiting to start"), firstCard?.textContent);

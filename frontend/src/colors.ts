@@ -1,6 +1,6 @@
 // The user's colors over the look's tokens (GUI-022), from colors.json or the
 // editor in Settings. Kept apart from the components so it can be tested.
-import { t, type PlainKey } from "./i18n.ts";
+import { numberFormat, t, type PlainKey } from "./i18n.ts";
 
 export type ColorMode = "light" | "dark";
 export type ColorMap = Record<string, string>;
@@ -149,7 +149,7 @@ export function hardToRead(get: (token: string) => string): string[] {
   const out: string[] = [];
   for (const [fg, bg, label] of READABLE) {
     const ratio = contrast(get(fg), get(bg));
-    if (ratio !== null && ratio < 4.5) out.push(`${t(label)}: ${ratio.toFixed(1)}:1`);
+    if (ratio !== null && ratio < 4.5) out.push(`${t(label)}: ${numberFormat({ minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(ratio)}:1`);
   }
   return out;
 }

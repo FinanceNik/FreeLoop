@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { costText, estimate, findPrice, formatCost, globMatch, type ModelCall, type PriceEntry } from "./cost.ts";
+import { setLanguage } from "./i18n.ts";
 
 test("globMatch follows path.Match", () => {
   assert.ok(globMatch("claude-*", "claude-big-5"));
@@ -81,4 +82,22 @@ test("a session's cost says how the agent counted it", () => {
   assert.equal(costText({ cost: 0.5, unpriced: 0 }, 3, none), "≈ $0.50");
   assert.equal(costText({ cost: 0, unpriced: 2 }, 2, { turns: 2, unreported: 0 }), "no price set, from the agent's turn totals");
   assert.equal(costText({ cost: 0.5, unpriced: 0 }, 2, { turns: 2, unreported: 1 }), "≈ $0.50, from the agent's turn totals; 1 turn not reported");
+});
+
+// GUI-048: costs stay in US dollars, written as the language writes an amount. The
+// space in German and Dutch is a no-break space, so the sign stays with its amount.
+test("a cost is in dollars, in the language's style", () => {
+  setLanguage("en");
+  assert.equal(formatCost(146.51), "$146.51");
+  assert.equal(formatCost(1250), "$1,250.00");
+  setLanguage("de");
+  assert.equal(formatCost(146.51), "146,51\u00a0$");
+  assert.equal(formatCost(1250), "1.250,00\u00a0$");
+  assert.equal(formatCost(0.004), "<0,01\u00a0$");
+  setLanguage("nl");
+  assert.equal(formatCost(146.51), "$\u00a0146,51");
+  // A region the system prefers keeps the dollar a dollar, not US$ or USD.
+  setLanguage("en", ["en-CA"]);
+  assert.equal(formatCost(146.51), "$146.51");
+  setLanguage("en");
 });

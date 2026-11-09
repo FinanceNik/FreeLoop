@@ -5,6 +5,7 @@ import { EngineService, EVENT_NAME, type UsageRow } from "./api.ts";
 import TokenFigures from "./TokenFigures.tsx";
 import UsageChart, { type Series } from "./UsageChart.tsx";
 import { PANE_RANGES, period } from "./usagePane.ts";
+import { locale } from "./i18n.ts";
 
 // The usage pane's views over days (GUI-038): the token figures with a chart per day, or
 // what each model and each provider or agent used. Cache reads count, as on the usage
@@ -13,7 +14,7 @@ import { PANE_RANGES, period } from "./usagePane.ts";
 type Named = { id: string; name: string };
 const SETTLE_MS = 2000;
 const TOP = 5;
-const day = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
+const day = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale(), { month: "short", day: "numeric" });
 
 export default function PaneRange({ view, providers, harnesses, onError }: { view: "tokens" | "models"; providers: readonly Named[]; harnesses: readonly Named[]; onError: (err: unknown) => void }) {
   const [range, setRange] = useState<(typeof PANE_RANGES)[number]>(30);

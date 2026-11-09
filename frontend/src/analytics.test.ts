@@ -85,6 +85,9 @@ test("change, ticks and compact numbers", () => {
   assert.equal(compact(12_940), "12.9K");
   assert.equal(compact(4_200_000), "4.2M");
   assert.equal(compact(250_000), "250K");
+  assert.equal(compact(-12_940), "-12.9K");
+  assert.equal(compact(1_000), "1K");
+  assert.equal(compact(0), "0");
 });
 
 test("weeks start on Monday", () => {

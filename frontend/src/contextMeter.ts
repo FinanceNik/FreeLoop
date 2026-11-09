@@ -1,5 +1,6 @@
 // How full a session's context is, in the few characters a pane's header has room for
 // (GUI-036). All from usage events the app already has: this makes no model call.
+import { locale, numberFormat } from "./i18n.ts";
 
 export interface ContextSize {
   tokens: number;
@@ -19,8 +20,10 @@ const RESEND_MIN_WRITTEN = 0.5;
 // smaller, the context grew by what was just added; if much larger, it was compacted.
 const RESEND_SAME_SIZE = 1.25;
 
+// shortTokens keeps to k and M with the locale's decimal sign (1.2M, 1,2M): the locale's
+// own short form writes German thousands out, too long for the header (GUI-048).
 export function shortTokens(tokens: number): string {
-  if (tokens >= 999_500) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 999_500) return `${numberFormat({ minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(tokens / 1_000_000)}M`;
   if (tokens >= 1000) return `${Math.round(tokens / 1000)}k`;
   return String(tokens);
 }
@@ -40,7 +43,7 @@ export function contextHigh(c: ContextSize | null | undefined): boolean {
 }
 
 export function contextTitle(c: ContextSize): string {
-  const size = c.window > 0 ? `${c.tokens.toLocaleString()} of ${c.window.toLocaleString()} tokens` : `${c.tokens.toLocaleString()} tokens`;
+  const size = c.window > 0 ? `${c.tokens.toLocaleString(locale())} of ${c.window.toLocaleString(locale())} tokens` : `${c.tokens.toLocaleString(locale())} tokens`;
   const what = `Context: ${size}. Every message sends this again, so a fuller context uses your limits faster.`;
   return c.window > 0 ? what : `${what} This model's limit is not known, so nothing warns or compacts by itself: set it under Context limit, on the Info tab of the right panel.`;
 }

@@ -410,8 +410,9 @@ export default function App() {
   };
 
   // The interface's language (GUI-048), from config.yaml or the system's. It is set
-  // while this renders, before anything below it writes a word, so a change shows at
-  // once; the system's list can change while the app runs.
+  // while this renders, before anything below it writes a word or a number, so a change
+  // shows at once; the system's list can change while the app runs, and gives the
+  // region numbers and dates are written for.
   const [systemLanguages, setSystemLanguages] = useState(preferredLanguages);
   useEffect(() => {
     const changed = () => setSystemLanguages(preferredLanguages());
@@ -419,7 +420,7 @@ export default function App() {
     return () => window.removeEventListener("languagechange", changed);
   }, []);
   const language = resolveLanguage(config?.ui.language, systemLanguages);
-  setLanguage(language);
+  setLanguage(language, systemLanguages);
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);

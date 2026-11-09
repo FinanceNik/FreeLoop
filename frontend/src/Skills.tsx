@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ask } from "./ask.ts";
 import { Events } from "@wailsio/runtime";
 import { EngineService, FILES_DROPPED_EVENT_NAME, type ProjectInfo, type ProviderInfo, type SkillCandidate, type SkillList, type SkillTest } from "./api.ts";
+import { locale } from "./i18n.ts";
 
 // Skills (SKL-002): every skill the app found, where it came from, and
 // switches globally and per project. The model sees only the names and
@@ -237,7 +238,7 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
                 {c.installed && c.status !== "new" && (
                   <div className="muted">
                     Installed from <code>{c.installed.source}</code>
-                    {c.installed.importedAt && !c.installed.importedAt.startsWith("0001") ? ` on ${new Date(c.installed.importedAt).toLocaleDateString()}` : ""}
+                    {c.installed.importedAt && !c.installed.importedAt.startsWith("0001") ? ` on ${new Date(c.installed.importedAt).toLocaleDateString(locale())}` : ""}
                   </div>
                 )}
               </div>

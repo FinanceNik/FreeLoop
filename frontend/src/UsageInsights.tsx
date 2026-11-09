@@ -6,6 +6,7 @@ import { EngineService } from "./api.ts";
 import { formatCost } from "./cost.ts";
 import Heatmap from "./Heatmap.tsx";
 import UsageChart, { type Series } from "./UsageChart.tsx";
+import { locale } from "./i18n.ts";
 
 // The dashboard's tabs beyond tokens (GUI-021). Each chart's numbers are also in
 // a table, and every tab follows the page's range and filters.
@@ -21,7 +22,7 @@ export function Tile({ label, value, note }: { label: string; value: string; not
 }
 
 const ONE: (label: string) => Series[] = (label) => [{ key: "v", label, color: "var(--series-1)" }];
-const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
+const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale(), { month: "short", day: "numeric" });
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 
 const REASONS: Record<string, string> = {
@@ -483,7 +484,7 @@ export function EfficiencyView<R extends EffRow>({ usage, allUsage, rows, today,
   if (models.length === 0) {
     return <Empty note="Efficiency compares model calls with the turns they made up.">No model calls in this range.</Empty>;
   }
-  const monthName = new Date(`${today}T12:00:00`).toLocaleDateString([], { month: "long" });
+  const monthName = new Date(`${today}T12:00:00`).toLocaleDateString(locale(), { month: "long" });
   return (
     <div className="usage-body">
       <div className="usage-figures">

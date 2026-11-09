@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
 // GUI-048: the Settings page and what it is made of write no text of their own; all of
@@ -68,4 +68,29 @@ test("every string on the Settings page comes from the catalogues", () => {
     const source = readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
     assert.deepEqual(untranslated(source), [], name);
   }
+});
+
+// GUI-048: numbers, dates and times are written in the locale of the language in force,
+// so every formatter takes it from the translation module: never the web view's own,
+// which a call without a locale (or with []) falls back to, and never a fixed one.
+const FORMATTER = /\.toLocale(?:String|DateString|TimeString|UpperCase|LowerCase)\(|\bIntl\.[A-Z]\w*\(/g;
+
+function withoutLocale(source: string): string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+  return [...code.matchAll(FORMATTER)].filter((m) => !code.startsWith("locale()", m.index + m[0].length)).map((m) => code.slice(m.index, m.index + m[0].length + 12));
+}
+
+test("the formatter check finds a call without the locale", () => {
+  assert.equal(withoutLocale("n.toLocaleString()").length, 1);
+  assert.equal(withoutLocale('d.toLocaleDateString([], { month: "short" })').length, 1);
+  assert.equal(withoutLocale('d.toLocaleTimeString("en")').length, 1);
+  assert.equal(withoutLocale("new Intl.NumberFormat(undefined, {})").length, 1);
+  assert.equal(withoutLocale("n.toLocaleString(locale())\nnew Intl.DateTimeFormat(locale(), {})\n// n.toLocaleString()").length, 0);
+});
+
+test("every number, date and time formatter takes the locale from the translation module", () => {
+  const dir = new URL("./", import.meta.url);
+  const sources = readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && !/\.(test|typetest)\.ts$/.test(f));
+  assert.ok(sources.length > 50);
+  for (const name of sources) assert.deepEqual(withoutLocale(readFileSync(new URL(name, dir), "utf8")), [], name);
 });

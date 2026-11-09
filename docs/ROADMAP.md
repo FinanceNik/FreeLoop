@@ -544,7 +544,8 @@ Not in: a native Windows sandbox (OQ-044), signing for Windows (SmartScreen warn
 The interface in German and Dutch, chosen in Settings (GUI-048; the PRD and issues are in `backlog/`). Our own small translation module, no dependency; only Freeloop's own text is translated.
 
 1. **The setting, the module and the Settings page (backlog 001).** *Built 2026-11-08.* `ui.language` in `config.yaml` (`internal/config`), `frontend/src/i18n.ts` with the catalogues in `frontend/src/i18n/`, the picker beside Theme, `<html lang>`; the Settings page and what it is made of (the column, shortcuts, colours, fonts, marks, prices, usage, budgets, hooks, what waits for approval, the native dialog's buttons). A `make check-app` step switches to Deutsch and back.
-2. **Formats (002), the views used all day (003), the remaining views (004), the help pages (005), the menu bar and notifications (006), the guards against untranslated text and clipped labels (007), and the user's review of the wording (008).** *Not built.*
+2. **Formats (backlog 002).** *Built 2026-11-09.* `locale()` in `frontend/src/i18n.ts`, which every number, date and time formatter takes (a source test holds them to it); tokens, costs (in US dollars), the charts' axis times and numbers in the catalogues' placeholders in the language's style. A `make check-app` step switches the usage pane to Deutsch and back.
+3. **The views used all day (003), the remaining views (004), the help pages (005), the menu bar and notifications (006), the guards against untranslated text and clipped labels (007), and the user's review of the wording (008).** *Not built.*
 
 ## Later (unscheduled)
 

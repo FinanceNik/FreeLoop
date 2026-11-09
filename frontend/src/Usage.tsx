@@ -15,6 +15,7 @@ import { basename } from "./paths.ts";
 import Limits from "./Limits.tsx";
 import CostSummaryPanel from "./CostSummary.tsx";
 import { costSummary } from "./costsummary.ts";
+import { locale } from "./i18n.ts";
 
 // The usage dashboard (GUI-018, PRV-008): tokens and estimated cost over a
 // range, by kind of token, model, agent or project, and the sessions that
@@ -67,7 +68,7 @@ const FILTER_PLURALS = { project: "projects", agent: "providers and agents", mod
 
 const SERIES = 5; // colours; a sixth group and beyond fold into Other
 
-const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
+const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale(), { month: "short", day: "numeric" });
 
 export default function Usage({ onShowInPane, projects, providers, harnesses, onOpenSession, onOpenPrices, onError }: Props) {
   const [range, setRange] = useState(30);

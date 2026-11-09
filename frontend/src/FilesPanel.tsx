@@ -4,6 +4,7 @@ import type { FileChange } from "./transcript.ts";
 import { isMarkdownFile, isPdfFile, relative } from "./paths.ts";
 import { Markdown } from "./Markdown.tsx";
 import PdfView from "./PdfView.tsx";
+import { locale } from "./i18n.ts";
 
 // FilesPanel is the Files tab of the right panel (GUI-013): a read-only
 // tree of the session's folder with the files the agent edited, and those
@@ -132,7 +133,7 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
             {isPdfFile(view.path) ? (
               <PdfView sessionId={session.id} path={view.path} />
             ) : view.binary ? (
-              <p className="muted">A binary file ({view.size.toLocaleString()} bytes).</p>
+              <p className="muted">A binary file ({view.size.toLocaleString(locale())} bytes).</p>
             ) : isMarkdownFile(view.path) && !source ? (
               <div className="file-markdown">
                 <Markdown text={view.text} />

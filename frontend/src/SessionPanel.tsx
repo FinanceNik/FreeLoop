@@ -13,6 +13,7 @@ import DiffPanel from "./DiffPanel.tsx";
 import { PlanPanel } from "./PlanReview.tsx";
 import { planVersions } from "./planView.ts";
 import FilesPanel from "./FilesPanel.tsx";
+import { locale } from "./i18n.ts";
 // xterm.js is large; it loads when a terminal is first shown.
 const TerminalPanel = lazy(() => import("./TerminalPanel.tsx"));
 import PreviewPanel from "./PreviewPanel.tsx";
@@ -385,9 +386,9 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
     ["Branch", view.git?.repo ? view.git.branch || "detached" : "not a git repository"],
     ["Base commit", session.baseCommit ? <code title={session.baseCommit}>{session.baseCommit.slice(0, 12)}</code> : "none"],
     ["Turns", turns],
-    ["Input tokens", u.inputTokens.toLocaleString()],
-    ["Cache reads / writes", `${u.cacheReadTokens.toLocaleString()} / ${u.cacheWriteTokens.toLocaleString()}`],
-    ["Output tokens", u.outputTokens.toLocaleString()],
+    ["Input tokens", u.inputTokens.toLocaleString(locale())],
+    ["Cache reads / writes", `${u.cacheReadTokens.toLocaleString(locale())} / ${u.cacheWriteTokens.toLocaleString(locale())}`],
+    ["Output tokens", u.outputTokens.toLocaleString(locale())],
     ...(view.context
       ? ([
           [
@@ -406,7 +407,7 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
           [
             "Token optimizer",
             `${optimized.rewritten} of ${optimized.commands} shell commands shortened` +
-              (savings ? `; ${savings.saved.toLocaleString()} of ${savings.input.toLocaleString()} tokens saved` : ""),
+              (savings ? `; ${savings.saved.toLocaleString(locale())} of ${savings.input.toLocaleString(locale())} tokens saved` : ""),
           ],
         ] as [string, ReactNode][])
       : []),

@@ -25,6 +25,7 @@ import { inheritedLabel, OPTIMIZER_OFF } from "./optimizers.ts";
 import { orderModels } from "./models.ts";
 import { trustLines } from "./trust.ts";
 import type { Defaults } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
+import { locale } from "./i18n.ts";
 
 interface Props {
   providers: ProviderInfo[];
@@ -570,7 +571,7 @@ export default function NewSession({ providers, projects, environments, profiles
           {capsState === "idle" && caps && caps.source !== "unknown" && caps.tools && (
             <span className="ok">
               Tool calling supported ({SOURCE[caps.source] ?? caps.source})
-              {caps.contextWindow > 0 && ` · ${caps.contextWindow.toLocaleString()} token context`}
+              {caps.contextWindow > 0 && ` · ${caps.contextWindow.toLocaleString(locale())} token context`}
               {caps.source === "override" && (
                 <>
                   {" "}

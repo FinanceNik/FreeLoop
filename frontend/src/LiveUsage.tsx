@@ -23,6 +23,7 @@ import UsageChart from "./UsageChart.tsx";
 import { CloseIcon, FilterIcon } from "./icons.tsx";
 import { useDismiss } from "./useDismiss.ts";
 import { Tile } from "./UsageInsights.tsx";
+import { locale } from "./i18n.ts";
 
 // LiveUsage is the last 12 or 24 hours of usage (GUI-023), on the usage page and
 // in a pane of its own beside sessions. It follows model calls as they finish, and
@@ -234,7 +235,7 @@ export default function LiveUsage({
         </>
       )}
       {compact ? (
-        <p className="live-usage-strip" title={`${formatTokens(totals.output)} output · ${totals.calls.toLocaleString()} model calls${priced && totals.unpriced > 0 ? ` · ${totals.unpriced} without a price` : ""}`}>
+        <p className="live-usage-strip" title={`${formatTokens(totals.output)} output · ${totals.calls.toLocaleString(locale())} model calls${priced && totals.unpriced > 0 ? ` · ${totals.unpriced} without a price` : ""}`}>
           <strong>{formatTokens(totals.tokens)}</strong> tokens · <strong>{priced ? formatCost(totals.cost) : "No price"}</strong>
           {priced && totals.unpriced > 0 && "+"}
         </p>
@@ -242,7 +243,7 @@ export default function LiveUsage({
         <div className="live-usage-tiles">
           <Tile label="Tokens" value={formatTokens(totals.tokens)} />
           <Tile label="Output" value={formatTokens(totals.output)} />
-          <Tile label="Model calls" value={totals.calls.toLocaleString()} />
+          <Tile label="Model calls" value={totals.calls.toLocaleString(locale())} />
           <Tile label="Estimated cost" value={priced ? formatCost(totals.cost) : "No price"} note={priced && totals.unpriced ? `${totals.unpriced} calls have no price` : undefined} />
         </div>
       )}

@@ -76,7 +76,7 @@ test("the editor's tokens exist in the style sheet", () => {
 test("the editor's names are in the language in force (GUI-048)", () => {
   setLanguage("de");
   const colors: Record<string, string> = { text: "#777777", bg: "#888888", "bg-app": "#000000", muted: "#000000", "accent-text": "#ffffff", accent: "#000000" };
-  assert.match(hardToRead((t) => colors[t])[0], /^Text auf der Unterhaltung: /);
+  assert.match(hardToRead((t) => colors[t])[0], /^Text auf der Unterhaltung: 1,\d:1$/);
   assert.equal(t(COLOR_GROUPS[0].title), "Hintergründe");
   assert.equal(t(COLOR_GROUPS[0].tokens[1].label), "Unterhaltung");
   setLanguage("en");

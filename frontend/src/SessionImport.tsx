@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { EngineService, type AgentSession, type ProjectInfo, type Profile } from "./api.ts";
 import { canImport, folderName, importResult, matchesImport } from "./sessionimport.ts";
+import { locale } from "./i18n.ts";
 
 // SessionImport brings an external agent's own sessions here (SES-020): the agent
 // lists them and copies the chosen ones, and each continues as a session here. It
@@ -157,7 +158,7 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
                 </label>
                 <div className="import-detail muted">
                   <span title={r.folder}>{folderName(r.folder)}</span>
-                  {r.updatedAt && !r.updatedAt.startsWith("0001") && ` · ${new Date(r.updatedAt).toLocaleString()}`}
+                  {r.updatedAt && !r.updatedAt.startsWith("0001") && ` · ${new Date(r.updatedAt).toLocaleString(locale())}`}
                   {r.sessionId && (
                     <>
                       {" · here already "}

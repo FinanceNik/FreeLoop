@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { EngineService } from "./api.ts";
 import { parseLimit } from "./contextMeter.ts";
+import { locale } from "./i18n.ts";
 
 // ContextLimit sets how large a model's context may be, for a model nothing reports it
 // for (GUI-036). Without one there is no share to show, no warning and no compaction.
@@ -50,7 +51,7 @@ export default function ContextLimit({ providerId, model, onChanged, onError }: 
         inputMode="numeric"
         spellCheck={false}
         value={text}
-        placeholder={detected > 0 ? `${detected.toLocaleString()} (detected)` : "Not known"}
+        placeholder={detected > 0 ? `${detected.toLocaleString(locale())} (detected)` : "Not known"}
         onChange={(e) => {
           setText(e.target.value);
           setDone(false);

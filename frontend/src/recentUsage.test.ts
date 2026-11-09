@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { recentChart, recentSeries, recentTotals, type RecentBucket, bucketsOf, filterRecent, groupedChart, NO_RECENT_FILTERS, recentKeys, recentOptions, shortTime } from "./recentUsage.ts";
+import { recentChart, recentSeries, recentTotals, type RecentBucket, bucketsOf, filterRecent, groupedChart, NO_RECENT_FILTERS, recentKeys, formatTokens, recentOptions, shortTime, timeLabel } from "./recentUsage.ts";
+import { setLanguage } from "./i18n.ts";
 
 const b = (start: number, over: Partial<RecentBucket> = {}): RecentBucket => ({ start, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0, cost: 0, unpriced: 0, ...over });
 
@@ -95,4 +96,36 @@ test("a time on the axis is short: AM and PM become a letter", () => {
   assert.equal(shortTime("1:15\u202fPM"), "1:15p");
   assert.equal(shortTime("10:00 p.m."), "10:00p");
   assert.equal(shortTime("23:45"), "23:45");
+});
+
+// GUI-048: the axis and the totals follow the language.
+test("the axis's times are 24-hour in German and Dutch and as before in English", () => {
+  const evening = new Date(2026, 10, 8, 18, 30).getTime();
+  const morning = new Date(2026, 10, 8, 9, 5).getTime();
+  setLanguage("en");
+  assert.equal(timeLabel(evening), "6:30p");
+  assert.equal(timeLabel(String(morning)), "9:05a");
+  setLanguage("de");
+  assert.equal(timeLabel(evening), "18:30");
+  assert.equal(timeLabel(morning), "9:05");
+  setLanguage("nl");
+  assert.equal(timeLabel(evening), "18:30");
+  setLanguage("en");
+});
+
+test("the token formatter writes the language's short form", () => {
+  setLanguage("en");
+  assert.equal(formatTokens(7_900_000), "7.9M");
+  assert.equal(formatTokens(12_940), "12.9K");
+  assert.equal(formatTokens(950), "950");
+  // The space before Mio. and mln. is a no-break space, so the unit stays with its number.
+  setLanguage("de");
+  assert.equal(formatTokens(7_900_000), "7,9 Mio.");
+  assert.equal(formatTokens(1_100_000_000), "1,1 Mrd.");
+  // German has no short form for thousands: they are written out.
+  assert.equal(formatTokens(12_940), "12.940");
+  setLanguage("nl");
+  assert.equal(formatTokens(7_900_000), "7,9 mln.");
+  assert.equal(formatTokens(12_940), "12,9K");
+  setLanguage("en");
 });

@@ -1,5 +1,6 @@
 // Words for scheduled sessions (SES-012). Pure, so schedules.test.ts
 // covers them.
+import { locale } from "./i18n.ts";
 
 export const REPEATS = [
   { id: "daily", name: "Every day" },
@@ -30,12 +31,12 @@ export function when(t: string | Date | undefined, now: Date = new Date()): stri
   if (!t) return "";
   const d = new Date(t);
   if (Number.isNaN(d.getTime()) || d.getFullYear() < 2000) return "";
-  const hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const hm = d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(d) - day(now)) / 86400000);
   if (diff === 0) return `today ${hm}`;
   if (diff === 1) return `tomorrow ${hm}`;
   if (diff === -1) return `yesterday ${hm}`;
   if (diff > 1 && diff < 7) return `${WEEKDAYS[d.getDay()]} ${hm}`;
-  return `${d.toLocaleDateString()} ${hm}`;
+  return `${d.toLocaleDateString(locale())} ${hm}`;
 }

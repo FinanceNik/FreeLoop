@@ -2,6 +2,7 @@
 // session writes of each kind of model call, made readable. Pure, so
 // modelContext.test.ts covers it. Everything here is shown as plain text: the project's
 // instructions come from the repository and must never reach the page as markup.
+import { locale } from "./i18n.ts";
 
 export interface ToolDef {
   name: string;
@@ -70,7 +71,7 @@ export function tokens(chars: number): number {
 // sizeText says how big something is, in words.
 export function sizeText(chars: number): string {
   const t = tokens(chars);
-  return `${chars.toLocaleString()} characters, about ${t.toLocaleString()} tokens`;
+  return `${chars.toLocaleString(locale())} characters, about ${t.toLocaleString(locale())} tokens`;
 }
 
 // latestByPurpose keeps the newest record of each kind of call, in display order, with
