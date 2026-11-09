@@ -1,4 +1,5 @@
 import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { t } from "./i18n.ts";
 
 // Splitter is a draggable line between two parts of the window (GUI-032). The arrow keys
 // move it too, and a double click puts it back.
@@ -53,7 +54,7 @@ export default function Splitter({
       aria-valuemin={Math.round(min)}
       aria-valuemax={Math.round(max)}
       tabIndex={0}
-      title={`${label}. Double-click to reset.`}
+      title={t("app.splitter.title", { label })}
       className={`splitter ${className}`}
       style={style}
       onPointerDown={(e: PointerEvent<HTMLDivElement>) => {

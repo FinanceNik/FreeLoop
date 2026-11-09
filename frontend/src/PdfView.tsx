@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { EngineService, errorText } from "./api.ts";
 import { PDF_FRAME_ID, pdfBytes, viewerDocument } from "./pdfview.ts";
+import { t } from "./i18n.ts";
 
 // PdfView shows a PDF of the session's folder (GUI-035), in the frames pdfview.ts explains.
 export default function PdfView({ sessionId, path }: { sessionId: string; path: string }) {
@@ -34,5 +35,5 @@ export default function PdfView({ sessionId, path }: { sessionId: string; path: 
 
   if (problem) return <p className="muted">{problem}</p>;
   // Keyed by the file: a frame that has shown one PDF starts clean for the next.
-  return <iframe key={path} ref={viewer} className="file-pdf" title={`PDF: ${path}`} srcDoc={viewerDocument()} onLoad={place} />;
+  return <iframe key={path} ref={viewer} className="file-pdf" title={t("files.pdf", { path })} srcDoc={viewerDocument()} onLoad={place} />;
 }

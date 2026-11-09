@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { assignSlots, defaultLetters, sourceColor, sourceIndex, sourceName, validLetters } from "./source.ts";
+import { setLanguage } from "./i18n.ts";
 
 const providers = [{ id: "custom-openai-compatible", name: "b.chat" }, { id: "anthropic", name: "Anthropic" }];
 const harnesses = [{ id: "builtin", name: "Built-in" }, { id: "claude-code", name: "Claude Code" }];
@@ -85,4 +86,12 @@ test("until the lists arrive, a session keeps its colour and does not look delet
   assert.equal(early.slot, sourceIndex(providers, harnesses, [session], null)(session).slot);
   const other = { harnessId: "builtin", providerId: "anthropic" };
   assert.ok(sourceIndex([], harnesses, [other], null)(other).slot >= 1);
+});
+
+test("a provider no longer known is named in the language in force (GUI-048)", () => {
+  setLanguage("de");
+  assert.equal(sourceName({ harnessId: "builtin", providerId: "" }, providers, harnesses), "Unbekannter Anbieter");
+  setLanguage("nl");
+  assert.equal(sourceName({ harnessId: "builtin", providerId: "" }, providers, harnesses), "Onbekende aanbieder");
+  setLanguage("en");
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { guided, stageAction, stageCall, stageCommands, stageOutputs, stageProgress, withoutStageSkills, type WorkflowLike } from "./workflows.ts";
+import { setLanguage } from "./i18n.ts";
 
 const w: WorkflowLike = {
   id: "plan-slice-afk",
@@ -92,4 +93,19 @@ test("the menu offers the stage, not the agent's own command for its skill", () 
   const cmds = [{ name: "freeloop:grill-the-brief" }, { name: "write-a-prd" }, { name: "compact" }, { name: "work-an-issue" }];
   assert.deepEqual(withoutStageSkills(cmds, flow).map((c) => c.name), ["compact", "work-an-issue"]);
   assert.equal(withoutStageSkills(cmds, undefined).length, 4);
+});
+
+// GUI-048: what a kind of stage does and how far a run got are the app's words, in the
+// language in force; the workflow's names and descriptions are shown as given.
+test("the app's words about stages follow the language", () => {
+  setLanguage("de");
+  try {
+    assert.equal(stageAction("afk"), "Startet einen AFK-Lauf");
+    assert.equal(stageAction(undefined), "Sendet seinen Prompt hierher");
+    const run = { state: "running", steps: [{ state: "qa" }, { state: "working" }] };
+    assert.equal(stageProgress(flow, [{ kind: "stage", command: "slice" }, { kind: "turn_end" }], false, run)[3].detail, "1 von 2 erledigt");
+    assert.equal(stageCommands(w)[0].description, "Plan, slice, run AFK: The agent interviews you");
+  } finally {
+    setLanguage("en");
+  }
 });

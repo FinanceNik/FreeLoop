@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { EngineService, MODES, errorText, type PolicyCheck, type PolicyOverview, type ProjectInfo, type Rule, type Session } from "./api.ts";
+import { EngineService, MODES, errorText, modeName, type PolicyCheck, type PolicyOverview, type ProjectInfo, type Rule, type Session } from "./api.ts";
 import { CHECK_TOOLS, headline, ruleWhere, toQuery } from "./policy.ts";
 
 interface Props {
@@ -184,7 +184,7 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
           <option value="">{at.startsWith("session:") ? "Its mode" : "The default mode"}</option>
           {MODES.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.name}
+              {modeName(m.id)}
             </option>
           ))}
         </select>
@@ -238,7 +238,7 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
             </p>
           ))}
           <p className="muted">
-            In {MODES.find((m) => m.id === verdict.mode)?.name ?? verdict.mode} mode, in {verdict.root}.
+            In {modeName(verdict.mode)} mode, in {verdict.root}.
           </p>
         </div>
       )}
@@ -274,7 +274,7 @@ function Overview({ session, projects, version }: { session: Session | null; pro
       )}
       {o.rulesUnreadable && <p className="error-text">Some rules cannot be read, so everything but reads in the project asks: {o.rulesUnreadable}</p>}
       <p className="muted">
-        {o.harnessName} in {MODES.find((m) => m.id === o.mode)?.name ?? o.mode} mode{o.sandboxed ? ", commands in the sandbox" : ""}. The project is{" "}
+        {o.harnessName} in {modeName(o.mode)} mode{o.sandboxed ? ", commands in the sandbox" : ""}. The project is{" "}
         {o.trusted ? "trusted, so its own rules and hooks apply" : "not trusted, so its own rules and hooks do not apply"}. A project's rules can only deny.
       </p>
       {scoped.map((s) => (

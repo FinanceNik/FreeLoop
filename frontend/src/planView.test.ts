@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { approveLabel, planBlocks, planChoices, planFeedback, planText, planVersions, quoteOf } from "./planView.ts";
 import type { Item } from "./transcript.ts";
+import { setLanguage } from "./i18n.ts";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
 const tool = (over: Partial<ToolItem>): ToolItem =>
@@ -80,4 +81,15 @@ test("an approving option is named by what follows", () => {
   assert.equal(approveLabel({ optionId: "a", name: "Yes, manually approve edits", kind: "allow_once" }), "Manually approve edits");
   assert.equal(approveLabel({ optionId: "a", name: "Approve and accept edits", kind: "allow_once" }), "Accept edits");
   assert.equal(approveLabel({ optionId: "a", name: "Yes", kind: "allow_once" }), "Approve");
+});
+
+// GUI-048: the app's own word is in the language in force; the agent's words are as given.
+test("an approving option without words of its own is named in the language", () => {
+  setLanguage("de");
+  try {
+    assert.equal(approveLabel({ optionId: "a", name: "Yes", kind: "allow_once" }), "Freigeben");
+    assert.equal(approveLabel({ optionId: "a", name: "Yes, and use auto mode", kind: "allow_always" }), "Use auto mode");
+  } finally {
+    setLanguage("en");
+  }
 });

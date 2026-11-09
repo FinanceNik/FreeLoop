@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { framed, parseAddress } from "./preview.ts";
+import { setLanguage } from "./i18n.ts";
 
 const app = "wails://wails.localhost";
 
@@ -17,6 +18,19 @@ test("anything else does not", () => {
     assert.ok("error" in parseAddress(bad, app), bad);
   }
   assert.ok("error" in parseAddress("34117", "http://localhost:34117"), "the app's own page");
+});
+
+test("why an address does not load is said in the interface's language", () => {
+  assert.deepEqual(parseAddress("", app), { error: "Enter a port or a localhost address." });
+  assert.deepEqual(parseAddress("[", app), { error: '"[" is not an address.' });
+  setLanguage("de");
+  try {
+    assert.deepEqual(parseAddress("", app), { error: "Einen Port oder eine localhost-Adresse eingeben." });
+    assert.deepEqual(parseAddress("[", app), { error: "„[“ ist keine Adresse." });
+    assert.deepEqual(parseAddress("https://example.com", app), { error: "Die Vorschau zeigt nur Server dieses Computers; alles andere im Browser öffnen." });
+  } finally {
+    setLanguage("en");
+  }
 });
 
 test("the app's page knows it is in a frame", () => {

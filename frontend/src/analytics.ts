@@ -1,6 +1,7 @@
 // The usage dashboard's numbers (PRV-008): totals, groups and the daily
 // series, from the engine's rows of one day, session and model. Pure, so
 // analytics.test.ts covers it.
+import { numberFormat } from "./i18n.ts";
 
 export interface Row {
   day: string;
@@ -160,17 +161,16 @@ export function niceTicks(max: number, count = 4): number[] {
   return out;
 }
 
-// compact writes a count the short way: 950, 12.9K, 4.2M, 1.1B.
+// compact writes a count the short way, as the locale shortens it (GUI-048): 950, 12.9K,
+// 4.2M, 1.1B in English, 7,9 Mio. in German, 7,9 mln. in Dutch. One decimal at most, and
+// none from 100 up; a count the locale has no short form for (German thousands) is
+// written whole.
 export function compact(n: number): string {
-  const a = Math.abs(n);
-  const unit = (d: number, s: string) => {
-    const v = n / d;
-    return `${Math.abs(v) >= 100 ? Math.round(v) : Number(v.toFixed(1))}${s}`;
-  };
-  if (a >= 1e9) return unit(1e9, "B");
-  if (a >= 1e6) return unit(1e6, "M");
-  if (a >= 1e3) return unit(1e3, "K");
-  return String(Math.round(n));
+  const short = numberFormat({ notation: "compact", maximumFractionDigits: 1 });
+  const parts = short.formatToParts(n);
+  if (!parts.some((p) => p.type === "compact")) return numberFormat({ maximumFractionDigits: 0 }).format(n);
+  const whole = parts.filter((p) => p.type === "integer").reduce((len, p) => len + p.value.length, 0);
+  return whole >= 3 ? numberFormat({ notation: "compact", maximumFractionDigits: 0 }).format(n) : short.format(n);
 }
 
 // weekStart returns the Monday on or before day (YYYY-MM-DD), for ranges

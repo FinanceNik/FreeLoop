@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { approvalHint, approvalShortcut, optionLabel, bindingOf, bindingProblem, comboOf, isTextField, keyLabel, optionKind, pressed, setBindings } from "./shortcuts.ts";
+import { approvalHint, approvalShortcut, formLabel, optionLabel, bindingOf, bindingProblem, comboOf, isTextField, keyLabel, optionKind, pressed, setBindings } from "./shortcuts.ts";
 import { setPlatform } from "./platform.ts";
 import { setLanguage } from "./i18n.ts";
 
@@ -92,6 +92,26 @@ test("an approval button says what its kind does, whatever the agent named it", 
   assert.equal(optionLabel("allow_always", "Deny"), "Allow always");
   assert.equal(optionLabel("reject_once", "Allow"), "Deny");
   assert.equal(optionLabel("other", "Something"), "Something");
+});
+
+// GUI-048: the buttons and the hint beside them are the app's words; a name an agent
+// gave an option of a kind the app does not know is shown as given.
+test("approval buttons and their hint follow the language", () => {
+  setLanguage("de");
+  assert.equal(optionLabel("allow_once", "Allow"), "Einmal erlauben");
+  assert.equal(optionLabel("allow_always", "Deny"), "Immer erlauben");
+  assert.equal(optionLabel("reject_always", "x"), "Immer ablehnen");
+  assert.equal(optionLabel("other", "Something"), "Something");
+  assert.equal(formLabel("allow"), "Senden");
+  assert.equal(formLabel("reject"), "Überspringen");
+  assert.equal(approvalHint("allow_once"), "Y oder ⌘↩");
+  setLanguage("nl");
+  assert.equal(optionLabel("reject_once", "x"), "Weigeren");
+  assert.equal(formLabel("reject"), "Overslaan");
+  assert.equal(approvalHint("reject"), "N of ⌘⇧⌫");
+  setLanguage("en");
+  assert.equal(formLabel("allow"), "Send");
+  assert.equal(approvalHint("allow_once"), "Y or ⌘↩");
 });
 
 test("the pane shortcuts start as ⌃⇧ and the arrows, and can be changed", () => {

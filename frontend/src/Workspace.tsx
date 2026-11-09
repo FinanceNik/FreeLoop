@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
+import { t } from "./i18n.ts";
 import { basename } from "./paths.ts";
 import Splitter from "./Splitter.tsx";
 import SourceMark from "./SourceMark.tsx";
@@ -81,13 +82,13 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
     if (!s) return null;
     return (
       <>
-        {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" />}
+        {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label={t("status.unread")} />}
         {s.status !== "idle" && <span className={`badge badge-${s.status}`}>{statusLabel[s.status] ?? s.status}</span>}
       </>
     );
   };
   const session = (sid: string | null) => (sid ? sessions.find((s) => s.id === sid) : undefined);
-  const titleOf = (sid: string | null) => (sid === USAGE_PANE ? "Usage" : (session(sid)?.title ?? "Empty"));
+  const titleOf = (sid: string | null) => (sid === USAGE_PANE ? t("app.usage") : (session(sid)?.title ?? t("workspace.empty")));
   // Sessions an empty pane offers: not shown yet, most recent first.
   const offered = sessions.filter((s) => !work.panes.includes(s.id) && s.status !== "archived" && !s.parentId).slice(0, MAX_OFFERED);
 
@@ -135,7 +136,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
   return (
     <div ref={box} className="workspace">
       {asTabs && (
-        <div className="pane-tabs" role="tablist" aria-label="Panes">
+        <div className="pane-tabs" role="tablist" aria-label={t("workspace.panes")}>
           {work.panes.map((sid, i) => (
             <button
               key={sid ?? `empty-${i}`}
@@ -171,7 +172,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
         {columnsApart && (
           <Splitter
             className="splitter-panes"
-            label="Width of the panes"
+            label={t("workspace.width")}
             style={{ left: `${share * 100}%` }}
             value={share * 100}
             min={clampSplit(0, width) * 100}
@@ -201,7 +202,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               data-position={i}
               style={{ order: i, ...(s ? { "--pane-source": sourceColor(sourceOf(s).slot) } : {}) } as CSSProperties}
               onDragEnd={endPaneDrag}
-              aria-label={split ? `Pane ${i + 1}: ${titleOf(sid)}` : undefined}
+              aria-label={split ? t("workspace.pane", { number: i + 1, title: titleOf(sid) }) : undefined}
               hidden={asTabs && !active}
               onPointerDownCapture={() => onActivate(i)}
               onFocusCapture={() => onActivate(i)}
@@ -226,7 +227,7 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
                 renderSession(s, active, split ? () => onClose(i) : undefined, split && !asTabs ? (e) => startPaneDrag(e, i) : undefined)
               ) : (
                 <div className="empty pane-empty">
-                  <p>{offered.length > 0 ? "Choose a session for this pane" : "Create a session for this pane"}</p>
+                  <p>{offered.length > 0 ? t("workspace.choose") : t("workspace.create")}</p>
                   {offered.length > 0 && (
                     <ul>
                       {offered.map((o) => (
@@ -239,9 +240,9 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
                     </ul>
                   )}
                   <div className="row">
-                    <button onClick={onNew}>New session</button>
-                    {!work.panes.includes(USAGE_PANE) && <button onClick={() => onPlace(USAGE_PANE, i)}>Show usage</button>}
-                    {split && <button onClick={() => onClose(i)}>Close this pane</button>}
+                    <button onClick={onNew}>{t("app.newSession")}</button>
+                    {!work.panes.includes(USAGE_PANE) && <button onClick={() => onPlace(USAGE_PANE, i)}>{t("workspace.showUsage")}</button>}
+                    {split && <button onClick={() => onClose(i)}>{t("workspace.close")}</button>}
                   </div>
                 </div>
               )}

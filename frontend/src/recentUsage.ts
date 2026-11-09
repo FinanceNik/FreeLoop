@@ -1,4 +1,5 @@
 import { compact, OTHER, type Day, type Metric } from "./analytics.ts";
+import { locale } from "./i18n.ts";
 import { sourceName } from "./source.ts";
 import { basename } from "./paths.ts";
 
@@ -56,10 +57,10 @@ export function recentTotals(buckets: RecentBucket[], cacheReads: boolean): Rece
   return t;
 }
 
-// timeLabel is a step's start on the axis: 11:30 in a 24-hour locale, 11:30a in one with
-// AM and PM, so labels stay short enough not to touch in a narrow pane.
+// timeLabel is a step's start on the axis: 18:30 in a 24-hour locale (German, Dutch),
+// 6:30p in one with AM and PM, so labels stay short enough not to touch in a narrow pane.
 export function timeLabel(start: string | number): string {
-  return shortTime(new Date(Number(start)).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+  return shortTime(new Date(Number(start)).toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" }));
 }
 
 // shortTime folds a time's AM or PM into one letter.
@@ -72,6 +73,7 @@ export function stepLabel(start: string | number, stepMinutes: number): string {
   return `${timeLabel(start)} to ${timeLabel(Number(start) + stepMinutes * 60_000)}`;
 }
 
+// formatTokens is a count of tokens the short way, in the locale's style: 7.9M, 7,9 Mio.
 export function formatTokens(v: number): string {
   return compact(v);
 }

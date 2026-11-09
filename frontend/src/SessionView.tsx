@@ -5,12 +5,13 @@ import { ask as askUser } from "./ask.ts";
 import { isDemo } from "./demo.ts";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
-import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
+import { matchCommands, modeCommands, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
 import { stageCall, stageCommands, withoutStageSkills } from "./workflows.ts";
 import WorkflowStrip from "./WorkflowStrip.tsx";
 import {
   EngineService,
   MODES,
+  modeName,
   type EnvironmentInfo,
   type OptimizerInfo,
   type AFKRun,
@@ -55,6 +56,8 @@ import { itemForSeq } from "./search.ts";
 import { drawOnce, HOLD_PLACE, holdsPlace, READER_PAUSE, readerScrolling, scrollsByKey, scrollsUpByKey, settledPlace } from "./scrollPlace.ts";
 import { costText, estimate, formatCost, type PriceEntry } from "./cost.ts";
 import { trustLines, trustStep } from "./trust.ts";
+import { locale, t, type PlainKey } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 interface Props {
   session: Session;
@@ -99,14 +102,20 @@ interface Props {
   source: Source;
 }
 
-const STOP_LABEL: Record<string, string> = {
-  end_turn: "Turn complete",
-  cancelled: "Cancelled",
-  max_tokens: "Stopped: output limit reached",
-  max_turns: "Stopped: turn limit reached",
-  refusal: "The model declined this request",
-  error: "Stopped by an error",
+const STOP_LABEL: Partial<Record<string, PlainKey>> = {
+  end_turn: "session.stop.endTurn",
+  cancelled: "session.stop.cancelled",
+  max_tokens: "session.stop.maxTokens",
+  max_turns: "session.stop.maxTurns",
+  refusal: "session.stop.refusal",
+  error: "session.stop.error",
 };
+
+// stopLabel says why a turn ended, or the reason as the harness gave it.
+function stopLabel(reason: string): string {
+  const key = STOP_LABEL[reason];
+  return key ? t(key) : reason;
+}
 
 // The right panel's open state is a per-viewer convenience; storage may be
 // unavailable, so every access is guarded. Without a stored choice the panel
@@ -149,7 +158,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const [panelTab, setPanelTab] = useState<PanelTab>("approvals");
   // The commands an untrusted project's hooks would run, shown before the
   // user trusts it (EXT-005).
-  const [trustLookup, setTrustLookup] = useState<string[] | null>(null);
+  // Kept as found and worded at each render, so a change of language shows at once.
+  const [trustSettings, setTrustSettings] = useState<Parameters<typeof trustLines>[0] | null>(null);
+  const trustLookup = trustSettings && trustLines(trustSettings);
   const trustHooks = trustLookup ?? [];
   const untrusted = !!project && !project.trusted && !project.missing;
   const canBypass = allowBypass && !!project?.trusted;
@@ -158,11 +169,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const canAuto = offersAuto && !!project?.trusted;
   const modeAllowed = (m: string) => (m === "bypass" ? canBypass : m === "auto" ? canAuto : true);
   useEffect(() => {
-    setTrustLookup(null);
+    setTrustSettings(null);
     if (!untrusted || !project) return;
     EngineService.ProjectSettings(project.root)
-      .then((s) => setTrustLookup(trustLines(s)))
-      .catch(() => setTrustLookup(null));
+      .then((s) => setTrustSettings(s))
+      .catch(() => setTrustSettings(null));
   }, [untrusted, project?.root]);
   const trustProject = async (ask: boolean) => {
     if (!project) return;
@@ -173,15 +184,15 @@ export default function SessionView({ session, events, focus, prices, initialDra
       EngineService.ProjectSettings(project.root)
         .then((s) => {
           const hooks = trustLines(s);
-          setTrustLookup(hooks);
-          if (hooks.length > 0) return onError(`Check what ${project.name} would run, then trust it again.`);
+          setTrustSettings(s);
+          if (hooks.length > 0) return onError(t("trust.checkFirst", { name: project.name }));
           return EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged);
         })
-        .catch((err) => onError(`${project.name} was not trusted: its hooks could not be read. ${err}`));
+        .catch((err) => onError(t("trust.unreadable", { name: project.name, error: String(err) })));
       return;
     }
     const list = trustHooks.join("\n");
-    if (step === "confirm" && !(await askUser(`Trusting ${project.name} lets it run or try these:\n\n${list}`))) return;
+    if (step === "confirm" && !(await askUser(t("trust.confirm", { name: project.name, list })))) return;
     EngineService.SetProjectTrust(project.root, true).then(onProjectsChanged).catch(onError);
   };
   // Trust is taken back as it is given, by the user: the project's instructions,
@@ -189,7 +200,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   // its hooks as they are then (SEC-006).
   const distrust = async () => {
     if (!project?.trusted) return;
-    if (!(await askUser(`Stop trusting ${project.name}? Its AGENTS.md, .freeloop/ settings, hooks and skills stop applying to its sessions until you trust it again.`))) return;
+    if (!(await askUser(t("trust.stopConfirm", { name: project.name })))) return;
     EngineService.SetProjectTrust(project.root, false).then(onProjectsChanged).catch(onError);
   };
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -236,12 +247,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const archived = session.status === "archived";
   const archive = () => EngineService.ArchiveSession(session.id, !archived).catch(onError);
   const remove = async () => {
-    if (!(await askUser(`Delete "${session.title}"? Its transcript is removed from disk. This cannot be undone.`))) return;
+    if (!(await askUser(t("session.deleteConfirm", { title: session.title })))) return;
     EngineService.DeleteSession(session.id).then(onDeleted).catch(onError);
   };
   const demo = isDemo(session);
   const removeDemo = async () => {
-    if (!(await askUser("Remove the demo? Its session, its scratch project folder and its project entry are deleted. Nothing else is touched."))) return;
+    if (!(await askUser(t("session.demo.removeConfirm")))) return;
     EngineService.RemoveDemo(session.id)
       .then(() => {
         onProjectsChanged();
@@ -249,7 +260,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
       })
       .catch(onError);
   };
-  const view = useMemo(() => buildView(events), [events]);
+  // The view's notices and fallback titles, and the costs below, are written in the
+  // language in force, so both follow a change of it (GUI-048).
+  const loc = locale();
+  const view = useMemo(() => buildView(events), [events, loc]);
   // Estimated cost of the session and of each turn, by turn_end key.
   const costs = useMemo(() => {
     const own = { providerId: session.providerId, model: session.model };
@@ -257,10 +271,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
     for (const it of view.items) {
       if (it.kind !== "turn_end" || it.calls.length === 0) continue;
       const e = estimate(prices, it.calls, own);
-      if (e.unpriced < it.calls.length) turns.set(it.key, `≈ ${formatCost(e.cost)}${e.unpriced ? " + unpriced calls" : ""}`);
+      if (e.unpriced < it.calls.length) turns.set(it.key, e.unpriced ? t("session.turnCost.unpriced", { cost: formatCost(e.cost) }) : `≈ ${formatCost(e.cost)}`);
     }
     return { session: estimate(prices, view.calls, own), calls: view.calls.filter((c) => !c.adjustment).length, turns };
-  }, [view, prices, session.providerId, session.model]);
+  }, [view, prices, session.providerId, session.model, loc]);
 
   // Screen readers hear approvals and turn ends, not every streamed word
   // (NFR-A11Y-002).
@@ -270,15 +284,15 @@ export default function SessionView({ session, events, focus, prices, initialDra
   useEffect(() => {
     const before = heard.current;
     const last = waitingTools[waitingTools.length - 1];
-    if (waitingTools.length > before.waiting && last?.kind === "tool") setAnnouncement(`Approval needed: ${last.title}`);
-    else if (before.running && !view.running) setAnnouncement(view.status === "error" ? "The turn stopped with an error" : "Turn finished");
+    if (waitingTools.length > before.waiting && last?.kind === "tool") setAnnouncement(t("session.announce.approval", { title: last.title }));
+    else if (before.running && !view.running) setAnnouncement(t(view.status === "error" ? "session.announce.error" : "session.announce.finished"));
     heard.current = { waiting: waitingTools.length, running: view.running };
   }, [waitingTools.length, view.running]);
   // Cleared after a moment: the same words again are only heard as a change.
   useEffect(() => {
     if (!announcement) return;
-    const t = setTimeout(() => setAnnouncement(""), 4000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setAnnouncement(""), 4000);
+    return () => clearTimeout(timer);
   }, [announcement]);
   // Kept until sent or deleted, wherever the user goes meanwhile (SES-023).
   const [draft, setDraft] = useState(() => initialDraft ?? draftOf(session.id));
@@ -364,22 +378,22 @@ export default function SessionView({ session, events, focus, prices, initialDra
         .then((b) => setAfkRun(b.run ?? null))
         .catch(() => setAfkRun(null));
     load();
-    const t = setInterval(load, 10000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 10000);
+    return () => clearInterval(timer);
   }, [workflow?.id, session.projectRoot, view.running]);
   const commands = useMemo<SlashCommand[]>(
     () => [
-      ...MODE_COMMANDS.filter((c) => modeAllowed(c.mode ?? "")),
+      ...modeCommands().filter((c) => modeAllowed(c.mode ?? "")),
       ...stageCommands(workflow),
       // The agent's own command for a stage's skill would duplicate the stage (WFL-008).
       ...withoutStageSkills(view.commands, workflow).map((c) => ({ name: c.name, description: c.description })),
       ...(mcp?.prompts ?? []).map((p) => ({
         name: p.command,
-        description: p.description || p.title || `Prompt from ${p.server}`,
+        description: p.description || p.title || t("session.promptFrom", { server: p.server }),
         prompt: { server: p.server, name: p.name, arguments: p.arguments ?? [] },
       })),
     ],
-    [view.commands, canBypass, canAuto, mcp, workflow],
+    [view.commands, canBypass, canAuto, mcp, workflow, loc],
   );
   // Resources attached to the next message, and the open prompt form.
   const keptExtras = extrasOf<ComposerExtras>(session.id);
@@ -390,7 +404,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const picker = useRef<HTMLInputElement>(null);
   const addPictures = (files: File[]) => {
     const take = files.filter((f) => f.type.startsWith("image/")).slice(0, room(pictures.length, files.length));
-    if (files.some((f) => f.type.startsWith("image/")) && take.length === 0) onError(new Error(`A message takes at most ${MAX_IMAGES} pictures.`));
+    if (files.some((f) => f.type.startsWith("image/")) && take.length === 0) onError(new Error(t("attach.tooManyPictures", { max: MAX_IMAGES })));
     for (const f of take) {
       prepareImage(f)
         .then((p) => setPictures((list) => (list.length >= MAX_IMAGES ? (URL.revokeObjectURL(p.url), list) : [...list, { ...p, id: ++pictureCount }])))
@@ -578,8 +592,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
     el.scrollIntoView({ block: "center" });
     setTimeout(() => el.scrollIntoView({ block: "center" }), 80);
     setFocused(key);
-    const t = setTimeout(() => setFocused(null), 2500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setFocused(null), 2500);
+    return () => clearTimeout(timer);
   }, [aim, view.items]);
 
   useEffect(() => {
@@ -792,8 +806,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const costLabel = costText(costs.session, costs.calls, view.measured);
 
   // Everything this view shows a control for, for the palette (GUI-014).
-  const showPanel = (t: PanelTab) => {
-    setPanelTab(t);
+  const showPanel = (tab: PanelTab) => {
+    setPanelTab(tab);
     if (!panelOpen) togglePanel();
   };
   // A plan's card opens the Plan tab (GUI-043).
@@ -834,44 +848,44 @@ export default function SessionView({ session, events, focus, prices, initialDra
     run,
     ...extra,
   });
-  const decideFirst = (t: Item, kind: "allow_once" | "reject") => {
+  const decideFirst = (tool: Item, kind: "allow_once" | "reject") => {
     // A form is sent from its card, with its answers.
-    if (t.kind !== "tool" || !t.permission || (t.permission.form && kind !== "reject")) return;
-    const opt = t.permission.options.find((o) => (kind === "reject" ? o.kind.startsWith("reject") : o.kind === kind));
-    if (opt) EngineService.Decide({ requestId: t.permission.requestId, optionId: opt.optionId, reason: "", scope: "session" }).catch(onError);
+    if (tool.kind !== "tool" || !tool.permission || (tool.permission.form && kind !== "reject")) return;
+    const opt = tool.permission.options.find((o) => (kind === "reject" ? o.kind.startsWith("reject") : o.kind === kind));
+    if (opt) EngineService.Decide({ requestId: tool.permission.requestId, optionId: opt.optionId, reason: "", scope: "session" }).catch(onError);
   };
   usePaletteActions(!active ? [] : [
-    ...waitingTools.flatMap((t) =>
-      t.kind !== "tool"
+    ...waitingTools.flatMap((tool) =>
+      tool.kind !== "tool"
         ? []
         : [
-            act(`allow:${t.toolCallId}`, `Allow once: ${t.title}`, () => decideFirst(t, "allow_once"), { group: "Approval", keywords: "approve yes" }),
-            act(`deny:${t.toolCallId}`, `Deny: ${t.title}`, () => decideFirst(t, "reject"), { group: "Approval", keywords: "reject no" }),
-            act(`show:${t.toolCallId}`, `Show the request: ${t.title}`, () => showTool(t.toolCallId), { group: "Approval" }),
+            act(`allow:${tool.toolCallId}`, t("session.palette.allowOnce", { title: tool.title }), () => decideFirst(tool, "allow_once"), { group: "Approval", keywords: "approve yes" }),
+            act(`deny:${tool.toolCallId}`, t("session.palette.deny", { title: tool.title }), () => decideFirst(tool, "reject"), { group: "Approval", keywords: "reject no" }),
+            act(`show:${tool.toolCallId}`, t("session.palette.showRequest", { title: tool.title }), () => showTool(tool.toolCallId), { group: "Approval" }),
           ],
     ),
-    ...(view.running ? [act("stop", "Stop the turn", () => EngineService.Cancel(session.id).catch(onError), { keywords: "cancel interrupt" })] : []),
-    act("compose", "Write a message", () => input.current?.focus(), { keywords: "composer prompt focus" }),
+    ...(view.running ? [act("stop", t("session.stopTurn"), () => EngineService.Cancel(session.id).catch(onError), { keywords: "cancel interrupt" })] : []),
+    act("compose", t("session.palette.compose"), () => input.current?.focus(), { keywords: "composer prompt focus" }),
     ...commands.map((c) =>
       act(`cmd:${c.name}`, `/${c.name}`, () => chooseCommand(c), { group: "Command", detail: c.description, keywords: c.prompt ? "slash mcp prompt" : "slash" }),
     ),
     ...(mcp?.resources ?? [])
       .filter((r) => !attached.some((a) => a.server === r.server && a.uri === r.uri))
       .map((r) =>
-        act(`attach:${r.server}:${r.uri}`, `Attach ${r.title || r.name}`, () => setAttached((list) => [...list, { server: r.server, uri: r.uri, name: r.title || r.name }]), {
+        act(`attach:${r.server}:${r.uri}`, t("session.palette.attach", { name: r.title || r.name }), () => setAttached((list) => [...list, { server: r.server, uri: r.uri, name: r.title || r.name }]), {
           group: "Resource",
           detail: `${r.server} · ${r.uri}`,
           keywords: `mcp ${r.description ?? ""}`,
         }),
       ),
-    ...MODES.filter((m) => m.id !== mode && modeAllowed(m.id)).map((m) => act(`mode:${m.id}`, `Mode: ${m.name}`, () => setMode(m.id), { keywords: "permission" })),
-    ...(session.providerId ? [act("model", "Switch model…", () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
+    ...MODES.filter((m) => m.id !== mode && modeAllowed(m.id)).map((m) => act(`mode:${m.id}`, t("session.modeLabel", { mode: modeName(m.id) }), () => setMode(m.id), { keywords: "permission" })),
+    ...(session.providerId ? [act("model", t("session.palette.switchModel"), () => setSwitching({ providerId: session.providerId, model: session.model }), { keywords: "provider" })] : []),
     ...workflows
       .filter((w) => w.id !== session.workflow)
       .map((w) =>
         act(
           `workflow:${w.id}`,
-          `Start a workflow: ${w.name}`,
+          t("session.palette.startWorkflow", { name: w.name }),
           () => {
             setWorkflow(w.id);
             const first = (w.stages ?? [])[0];
@@ -880,40 +894,44 @@ export default function SessionView({ session, events, focus, prices, initialDra
           { keywords: "workflow plan prd slice afk issues backlog", detail: w.reason || (w.stages ?? []).map((s) => `/${s.command}`).join(" ") },
         ),
       ),
-    ...(session.workflow ? [act("workflow:off", "Workflow: Off", () => setWorkflow(""), { keywords: "workflow" })] : []),
-    ...[{ id: "", name: "Off" }, ...optimizers]
+    ...(session.workflow ? [act("workflow:off", t("session.palette.workflowOff"), () => setWorkflow(""), { keywords: "workflow" })] : []),
+    ...[{ id: "", name: "" }, ...optimizers]
       .filter((o) => o.id !== session.optimizer)
-      .map((o) => act(`optimizer:${o.id}`, `Token optimizer: ${o.name}`, () => setOptimizer(o.id), { keywords: "tokens rtk compress output" })),
+      .map((o) =>
+        act(`optimizer:${o.id}`, o.id ? t("session.palette.optimizer", { name: o.name }) : t("session.palette.optimizerOff"), () => setOptimizer(o.id), {
+          keywords: "tokens rtk compress output",
+        }),
+      ),
     act(
       "report",
-      "Copy a problem report",
+      t("session.palette.report"),
       () =>
         EngineService.ProblemReport(session.id)
           .then((text) => Clipboard.SetText(text))
           .catch(onError),
-      { keywords: "bug issue log crash", detail: "version, system, this session's agent, the log's end" },
+      { keywords: "bug issue log crash", detail: t("session.palette.reportDetail") },
     ),
-    act("panel", panelOpen ? "Hide the panel" : "Show the panel", togglePanel, { keywords: "right sidebar" }),
-    ...(onClosePane ? [act("close-pane", "Close this pane", onClosePane, { keywords: "workspace split" })] : []),
-    act("approvals", "Show approvals", () => showPanel("approvals"), { keywords: "panel decided" }),
-    act("diff", "Show changes", () => showPanel("diff"), { keywords: "diff git commit stage panel" }),
-    act("files", "Show files", () => showPanel("files"), { keywords: "tree browse viewer open" }),
-    act("terminal", "Show the terminal", () => showPanel("terminal"), { keywords: "shell console pty command line" }),
-    act("preview", "Show the app preview", () => showPanel("preview"), { keywords: "browser dev server localhost port" }),
-    act("info", "Show session details", () => showPanel("info"), { keywords: "info panel tokens" }),
+    act("panel", t(panelOpen ? "session.palette.hidePanel" : "session.palette.showPanel"), togglePanel, { keywords: "right sidebar" }),
+    ...(onClosePane ? [act("close-pane", t("session.closePane"), onClosePane, { keywords: "workspace split" })] : []),
+    act("approvals", t("session.palette.approvals"), () => showPanel("approvals"), { keywords: "panel decided" }),
+    act("diff", t("session.palette.changes"), () => showPanel("diff"), { keywords: "diff git commit stage panel" }),
+    act("files", t("session.palette.files"), () => showPanel("files"), { keywords: "tree browse viewer open" }),
+    act("terminal", t("session.palette.terminal"), () => showPanel("terminal"), { keywords: "shell console pty command line" }),
+    act("preview", t("session.palette.preview"), () => showPanel("preview"), { keywords: "browser dev server localhost port" }),
+    act("info", t("session.palette.info"), () => showPanel("info"), { keywords: "info panel tokens" }),
     ...(project && !project.trusted && !project.missing
-      ? [act("trust", "Trust this project", () => trustProject(true), { detail: trustHooks.length ? `${project.root} · runs ${trustHooks.length} hook${trustHooks.length > 1 ? "s" : ""}` : project.root })]
+      ? [act("trust", t("trust.palette"), () => trustProject(true), { detail: trustHooks.length ? t("trust.paletteDetail", { root: project.root, count: trustHooks.length }) : project.root })]
       : []),
     ...rewindable.map((u, n) =>
-      act(`rewind:${u.key}`, n === 0 ? "Rewind to before the last message…" : `Rewind to before “${u.text.slice(0, 60)}”…`, async () => {
-        if ((await askUser("Restore the files to before this message and continue from there?"))) rewind(u.checkpointSeq!, u.text);
-      }, { keywords: `undo checkpoint restore ${n === 0 ? u.text.slice(0, 60) : ""}` }),
+      act(`rewind:${u.key}`, n === 0 ? t("session.palette.rewindLast") : t("session.palette.rewindTo", { text: u.text.slice(0, 60) }), async () => {
+        if ((await askUser(t("session.rewindConfirm")))) rewind(u.checkpointSeq!, u.text);
+      }, { keywords: ["undo checkpoint restore", n === 0 ? u.text.slice(0, 60) : ""].join(" ") }),
     ),
     ...(view.items.some((i) => i.kind === "user")
       ? [
           act(
             "fork",
-            "Fork before the last message",
+            t("session.palette.forkLast"),
             () => {
               const last = [...view.items].reverse().find((i) => i.kind === "user");
               if (last) fork(Number(last.key));
@@ -923,16 +941,16 @@ export default function SessionView({ session, events, focus, prices, initialDra
         ]
       : []),
     ...otherProfiles.map((p) =>
-      act(`continue:${p.id}`, `Continue with ${p.name}`, () => continueWith(p), { keywords: "switch profile harness handoff", detail: p.description || undefined }),
+      act(`continue:${p.id}`, t("session.palette.continueWith", { name: p.name }), () => continueWith(p), { keywords: "switch profile harness handoff", detail: p.description || undefined }),
     ),
-    ...(onOpenWindow ? [act("window", "Open in a new window", onOpenWindow, { keywords: "window separate detach" })] : []),
-    act("export-md", "Export as Markdown…", () => exportAs("markdown"), { keywords: "save share download" }),
-    act("export-json", "Export as JSON…", () => exportAs("json"), { keywords: "save download events" }),
-    act("rename", "Rename session", () => setRenaming(session.title), { keywords: "title" }),
-    act("tag", "Add a tag to this session", () => setTagging(true), { keywords: "label tags" }),
-    act("archive", archived ? "Unarchive session" : "Archive session", archive, { keywords: "hide" }),
-    ...(project?.trusted ? [act("distrust", "Stop trusting this project…", distrust, { keywords: "untrust distrust trust revoke" })] : []),
-    act("delete", "Delete session…", remove, { keywords: "remove" }),
+    ...(onOpenWindow ? [act("window", t("session.openWindow"), onOpenWindow, { keywords: "window separate detach" })] : []),
+    act("export-md", t("session.exportMarkdown"), () => exportAs("markdown"), { keywords: "save share download" }),
+    act("export-json", t("session.exportJson"), () => exportAs("json"), { keywords: "save download events" }),
+    act("rename", t("session.palette.rename"), () => setRenaming(session.title), { keywords: "title" }),
+    act("tag", t("session.palette.tag"), () => setTagging(true), { keywords: "label tags" }),
+    act("archive", t(archived ? "session.palette.unarchive" : "session.palette.archive"), archive, { keywords: "hide" }),
+    ...(project?.trusted ? [act("distrust", t("trust.stop"), distrust, { keywords: "untrust distrust trust revoke" })] : []),
+    act("delete", t("session.palette.delete"), remove, { keywords: "remove" }),
   ]);
 
   // The header's More menu closes once an action is picked.
@@ -941,10 +959,25 @@ export default function SessionView({ session, events, focus, prices, initialDra
   useDismiss(moreMenu);
   // What the header leaves to its tooltip and the Info tab.
   const headerDetails = [
-    session.worktree ? `Worktree of ${session.projectRoot}: ${session.worktree}` : session.projectRoot,
-    `Environment: ${environment?.name ?? session.environmentId ?? "Local"}`,
+    session.worktree ? t("session.header.worktreeOf", { root: session.projectRoot, worktree: session.worktree }) : session.projectRoot,
+    t("session.header.environment", { name: environment?.name ?? session.environmentId ?? t("settings.defaults.local") }),
     session.providerId ? `${provider?.name ?? session.providerId} · ${session.model}` : (harness?.name ?? session.harnessId),
   ].join("\n");
+  const compareTags = (session.tags ?? []).filter((tag) => tag.startsWith("compare-"));
+  const sendLabel = view.running
+    ? queued > 0
+      ? t("composer.queueQueued", { count: queued })
+      : t("composer.queue")
+    : queued > 0
+      ? t("composer.sendQueued", { count: queued })
+      : t("composer.send");
+  const sendTitle = view.running
+    ? queued > 0
+      ? t("composer.queueTipQueued", { count: queued })
+      : t("composer.queueTip")
+    : queued > 0
+      ? t("composer.sendTipQueued", { count: queued })
+      : t("composer.send");
   const fromMenu = (act: () => void) => () => {
     if (moreMenu.current) moreMenu.current.open = false;
     act();
@@ -963,7 +996,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 </span>
               )}
               {renaming === null ? (
-                <h2 onDoubleClick={() => setRenaming(session.title)} title={`${headerDetails}\nDouble-click to rename`}>
+                <h2 onDoubleClick={() => setRenaming(session.title)} title={t("session.header.titleTip", { details: headerDetails })}>
                   {session.title}
                 </h2>
               ) : (
@@ -973,69 +1006,67 @@ export default function SessionView({ session, events, focus, prices, initialDra
                     rename();
                   }}
                 >
-                  <input autoFocus aria-label="Session title" value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
+                  <input autoFocus aria-label={t("session.header.titleLabel")} value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={rename} />
                 </form>
               )}
               {(view.git?.repo || session.branch) && <GitMark branch={view.git?.repo ? view.git.branch : session.branch} />}
               <span
                 className="muted session-sub"
-                title={view.git?.repo ? `HEAD ${view.git.head.slice(0, 10)}, started at ${view.git.baseCommit.slice(0, 10)}` : undefined}
+                title={view.git?.repo ? t("session.header.gitTip", { head: view.git.head.slice(0, 10), base: view.git.baseCommit.slice(0, 10) }) : undefined}
               >
                 {source.name}
                 {view.git?.repo && (
                   <>
                     {" · "}
-                    {view.git.branch || "detached"}
-                    {session.worktree ? " (own worktree)" : ""}
-                    {view.git.dirty > 0 ? ` · ${view.git.dirty} changed` : ""}
+                    {view.git.branch || t("session.header.detached")}
+                    {session.worktree ? ` ${t("session.header.ownWorktree")}` : ""}
+                    {view.git.dirty > 0 ? ` · ${t("session.header.changed", { count: view.git.dirty })}` : ""}
                   </>
                 )}
                 {/* Last, so the narrowest pane loses it first. */}
                 {session.model && ` · ${session.model}`}
-                {switchingTo && ` · Handing over to ${switchingTo}…`}
+                {switchingTo && ` · ${t("session.header.handingOver", { name: switchingTo })}`}
               </span>
             </div>
             {session.parentId && (
               <p className="muted">
-                A subagent.{" "}
+                {t("session.header.subagent")}{" "}
                 <button className="link" onClick={() => openSessionEvent(session.parentId)}>
-                  Open the session that started it
+                  {t("session.header.openParent")}
                 </button>
               </p>
             )}
             <Tags tags={session.tags ?? []} known={knownTags} adding={tagging} onAdding={setTagging} onChange={setTags} />
             {onOpenCompare &&
-              (session.tags ?? [])
-                .filter((t) => t.startsWith("compare-"))
-                .map((t) => (
-                  <button key={t} className="link compare-link" onClick={() => onOpenCompare(t)}>
-                    Compare with the other runs
-                  </button>
-                ))}
+              compareTags.map((tag) => (
+                <button key={tag} className="link compare-link" onClick={() => onOpenCompare(tag)}>
+                  {t("session.header.compare")}
+                </button>
+              ))}
           </div>
           <div className="session-actions">
             {contextHigh(view.context) && view.commands.some((c) => c.name === "compact") && (
-              <button className="icon-button" aria-label="Compact context" disabled={view.running || accepting} onClick={compactNow} title="Compact context: summarise the conversation so far, so each message sends less">
+              <button className="icon-button" aria-label={t("session.compact")} disabled={view.running || accepting} onClick={compactNow} title={t("session.compactTip")}>
                 <CompactIcon />
               </button>
             )}
             {exported && (
               <span className="ok" role="status" title={exported}>
-                Exported
+                {t("session.exported")}
               </span>
             )}
-            <button className="icon-button" aria-label="Panel" onClick={togglePanel} aria-pressed={panelOpen && (active || !split)} title="Show or hide the right panel">
+            <button className="icon-button" aria-label={t("session.panel")} onClick={togglePanel} aria-pressed={panelOpen && (active || !split)} title={t("session.panelTip")}>
               <PanelRightIcon />
             </button>
             <details className="export-menu" ref={moreMenu}>
-              <summary className="icon-button" aria-label="More actions for this session" title="More actions">
+              <summary className="icon-button" aria-label={t("session.moreLabel")} title={t("session.more")}>
                 <MoreIcon />
               </summary>
               <div className="export-options">
                 {otherProfiles.length > 0 && (
                   <>
-                    <span className="muted export-group" title="A new session with another profile or harness, told what happened here">
-                      Continue with
+                    <span className="muted export-group" title={t("session.menu.continueWithTip")}>
+                      {t("session.menu.continueWith")}
                     </span>
                     {otherProfiles.map((p) => (
                       <button key={p.id} disabled={!!switchingTo || view.running} onClick={fromMenu(() => continueWith(p))}>
@@ -1046,29 +1077,29 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   </>
                 )}
                 {runCommand && (
-                  <button title={`Runs ${runCommand} in a terminal tab`} disabled={archived} onClick={fromMenu(runApp)}>
-                    Run
+                  <button title={t("session.menu.runTip", { command: runCommand })} disabled={archived} onClick={fromMenu(runApp)}>
+                    {t("session.menu.run")}
                   </button>
                 )}
-                <button onClick={fromMenu(openFolder)} title={`Show ${session.worktree || session.projectRoot} ${inFileManager()}`}>
+                <button onClick={fromMenu(openFolder)} title={t("session.menu.showTip", { path: session.worktree || session.projectRoot, where: inFileManager() })}>
                   {showInFiles()}
                 </button>
-                {onOpenWindow && <button onClick={fromMenu(onOpenWindow)}>Open in a new window</button>}
+                {onOpenWindow && <button onClick={fromMenu(onOpenWindow)}>{t("session.openWindow")}</button>}
                 <hr />
-                <button onClick={fromMenu(() => setRenaming(session.title))}>Rename</button>
-                <button onClick={fromMenu(() => setTagging(true))}>Add a tag</button>
-                <button onClick={fromMenu(() => exportAs("markdown"))}>Export as Markdown…</button>
-                <button onClick={fromMenu(() => exportAs("json"))}>Export as JSON…</button>
-                <button onClick={fromMenu(archive)}>{archived ? "Unarchive" : "Archive"}</button>
-                {project?.trusted && <button onClick={fromMenu(distrust)}>Stop trusting this project…</button>}
+                <button onClick={fromMenu(() => setRenaming(session.title))}>{t("session.menu.rename")}</button>
+                <button onClick={fromMenu(() => setTagging(true))}>{t("session.menu.tag")}</button>
+                <button onClick={fromMenu(() => exportAs("markdown"))}>{t("session.exportMarkdown")}</button>
+                <button onClick={fromMenu(() => exportAs("json"))}>{t("session.exportJson")}</button>
+                <button onClick={fromMenu(archive)}>{t(archived ? "session.menu.unarchive" : "session.menu.archive")}</button>
+                {project?.trusted && <button onClick={fromMenu(distrust)}>{t("trust.stop")}</button>}
                 <hr />
                 <button className="danger" onClick={fromMenu(remove)}>
-                  Delete…
+                  {t("session.menu.delete")}
                 </button>
               </div>
             </details>
             {onClosePane && (
-              <button className="icon-button pane-close" onClick={onClosePane} aria-label="Close this pane" title="Close this pane">
+              <button className="icon-button pane-close" onClick={onClosePane} aria-label={t("session.closePane")} title={t("session.closePane")}>
                 <CloseIcon />
               </button>
             )}
@@ -1078,7 +1109,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           <div className="banner optimizer-help" role="status">
             <p>{optimizerWarning}</p>
             <button className="link" onClick={() => setWarningDismissed(true)}>
-              Dismiss
+              {t("session.dismiss")}
             </button>
           </div>
         )}
@@ -1090,12 +1121,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </p>
             {optimizerHelp.canDownload && (
               <button className="primary" disabled={installing} onClick={() => install(optimizerHelp)}>
-                {installing ? "Installing…" : `Install ${optimizerHelp.name} and turn it on`}
+                {installing ? t("session.optimizer.installing") : t("session.optimizer.install", { name: optimizerHelp.name })}
               </button>
             )}
-            {optimizerHelp.install && <button onClick={() => typeInstall(optimizerHelp)}>Type it in the terminal</button>}
+            {optimizerHelp.install && <button onClick={() => typeInstall(optimizerHelp)}>{t("session.optimizer.typeInstall")}</button>}
             <button className="link" onClick={() => setOptimizerHelp(null)}>
-              Dismiss
+              {t("session.dismiss")}
             </button>
           </div>
         )}
@@ -1109,37 +1140,46 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 .catch(onError);
             }}
           >
-            <span>Next turn uses</span>
-            <select value={switching.providerId} onChange={(e) => setSwitching({ providerId: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? "" })} aria-label="Provider">
+            <span>{t("session.switch.label")}</span>
+            <select
+              value={switching.providerId}
+              onChange={(e) => setSwitching({ providerId: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? "" })}
+              aria-label={t("settings.defaults.provider")}
+            >
               {providers.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
             </select>
-            <input value={switching.model} onChange={(e) => setSwitching({ ...switching, model: e.target.value })} aria-label="Model" placeholder="Model ID" />
+            <input
+              value={switching.model}
+              onChange={(e) => setSwitching({ ...switching, model: e.target.value })}
+              aria-label={t("settings.defaults.model")}
+              placeholder={t("session.switch.modelId")}
+            />
             <button type="submit" className="primary" disabled={!switching.model.trim()}>
-              Switch
+              {t("session.switch.submit")}
             </button>
             <button type="button" onClick={() => setSwitching(null)}>
-              Cancel
+              {t("common.cancel")}
             </button>
           </form>
         )}
         {demo && (
           <div className="banner banner-slim demo-banner" role="status">
-            <span>This is the demo: a scripted agent in a scratch project. Nothing outside it is touched.</span>
-            <button onClick={removeDemo}>Remove demo</button>
+            <span>{t("session.demo.note")}</span>
+            <button onClick={removeDemo}>{t("session.demo.remove")}</button>
           </div>
         )}
         {untrusted && (
           <div className="banner warn row" role="status">
-            <span title="Without the project's AGENTS.md, .freeloop/ settings or git status.">
-              Untrusted project: global settings only.
+            <span title={t("trust.banner.tip")}>
+              {t("trust.banner")}
               {trustHooks.length > 0 && (
                 <>
                   {" "}
-                  Trusting it lets it run or try these:
+                  {t("trust.banner.lets")}
                   <ul>
                     {trustHooks.map((line, n) => (
                       <li key={n}>
@@ -1150,28 +1190,29 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 </>
               )}
             </span>
-            <button onClick={() => trustProject(false)}>Trust project</button>
+            <button onClick={() => trustProject(false)}>{t("trust.banner.button")}</button>
           </div>
         )}
         {mode === "auto" && (
-          <div className="banner warn banner-slim" role="status" title="What the agent does not ask about never reaches Freeloop, and your deny rules do not apply to it.">
-            <InfoIcon /> Auto mode: the agent approves its own tool calls.
+          <div className="banner warn banner-slim" role="status" title={t("session.auto.tip")}>
+            <InfoIcon /> {t("session.auto.banner")}
           </div>
         )}
-{view.stuck && !archived && (
+        {view.stuck && !archived && (
           <div className="banner warn row stuck-banner" role="status">
             <span>
-              Not getting on: {view.stuck.detail}.
-              {view.stuck.auto && view.stuck.profileName ? ` It continues on ${view.stuck.profileName} when this turn ends.` : ""}
+              {view.stuck.auto && view.stuck.profileName
+                ? t("session.stuck.handOff", { detail: view.stuck.detail, profile: view.stuck.profileName })
+                : t("session.stuck.detail", { detail: view.stuck.detail })}
             </span>
             {view.stuck.profileId && !view.stuck.auto && (
               <button className="primary" disabled={!!switchingTo} onClick={() => handOff(view.stuck!.profileId!)}>
-                Continue on {view.stuck.profileName}
+                {t("session.stuck.continueOn", { profile: view.stuck.profileName ?? "" })}
               </button>
             )}
             {otherProfiles.length > 0 && (
-              <select aria-label="Continue on another profile" value="" disabled={!!switchingTo} onChange={(e) => e.target.value && handOff(e.target.value)}>
-                <option value="">{view.stuck.profileId ? "Another profile…" : "Continue on a profile…"}</option>
+              <select aria-label={t("session.stuck.otherLabel")} value="" disabled={!!switchingTo} onChange={(e) => e.target.value && handOff(e.target.value)}>
+                <option value="">{t(view.stuck.profileId ? "session.stuck.another" : "session.stuck.choose")}</option>
                 {otherProfiles.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -1181,9 +1222,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
             )}
           </div>
         )}
-                {mode === "bypass" && (
-          <div className="banner error banner-slim" role="status" title="Protected paths and deny rules still hold.">
-            <InfoIcon /> Bypass: tool calls run without asking.
+        {mode === "bypass" && (
+          <div className="banner error banner-slim" role="status" title={t("session.bypass.tip")}>
+            <InfoIcon /> {t("session.bypass.banner")}
           </div>
         )}
 
@@ -1194,7 +1235,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           ref={conversation}
           className="conversation"
           role="region"
-          aria-label="Conversation"
+          aria-label={t("session.conversation")}
           onScroll={(e) => {
             const el = e.currentTarget;
             const byReader = readerScrolling(performance.now(), lastInput.current, pointerDown.current);
@@ -1223,16 +1264,16 @@ export default function SessionView({ session, events, focus, prices, initialDra
             else requestAnimationFrame(() => (holdBottom.current = settledPlace(holdBottom.current, toTheEnd(box))));
           }}
         >
-          {view.items.length === 0 && <p className="muted empty">Describe a task to start.</p>}
+          {view.items.length === 0 && <p className="muted empty">{t("session.empty")}</p>}
           {toolRuns(view.items).map((run) => {
             const one = (item: Item) => (
-              <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} roots={roots} onError={onError} onRewind={rewind} onFork={fork} />
+              <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} locale={loc} roots={roots} onError={onError} onRewind={rewind} onFork={fork} />
             );
             if (run.items.length === 1) return one(run.items[0]);
             return (
               // Opens for a search hit inside it; otherwise it is the user's.
               <details key={`run-${run.items[0].key}`} className="tool-run" open={run.items.some((i) => i.key === focused) || undefined}>
-                <summary className="muted">{run.items.length} tool calls</summary>
+                <summary className="muted">{t("session.toolCalls", { count: run.items.length })}</summary>
                 {run.items.map(one)}
               </details>
             );
@@ -1240,21 +1281,19 @@ export default function SessionView({ session, events, focus, prices, initialDra
           {accepting && !view.running && (
             <p className="muted working" role="status">
               {view.setup === "running"
-                ? "Waiting for the worktree setup to finish…"
+                ? t("session.working.setup")
                 : harness && !harness.usesProvider
-                  ? `Starting ${harness.name}… The first start can take a minute while it downloads.`
-                  : "Sending…"}
+                  ? t("session.working.starting", { name: harness.name })
+                  : t("session.working.sending")}
             </p>
           )}
-          {view.running && (
-            <p className="muted working">{view.status === "queued" ? "Waiting for a free slot on the provider…" : "Working…"}</p>
-          )}
+          {view.running && <p className="muted working">{t(view.status === "queued" ? "session.working.queued" : "session.working")}</p>}
         </div>
 
         {promptForm && promptForm.command.prompt && (
           <form
             className="banner prompt-form"
-            aria-label={`Arguments of /${promptForm.command.name}`}
+            aria-label={t("session.prompt.label", { name: promptForm.command.name })}
             onSubmit={(e) => {
               e.preventDefault();
               runPrompt(promptForm.command, promptForm.values);
@@ -1275,10 +1314,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
             ))}
             <div className="row">
               <button type="submit" className="primary">
-                Run prompt
+                {t("session.prompt.run")}
               </button>
               <button type="button" onClick={() => setPromptForm(null)}>
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </form>
@@ -1313,19 +1352,23 @@ export default function SessionView({ session, events, focus, prices, initialDra
         >
           {view.plan.length > 0 && <TodoList entries={view.plan} running={view.running} thisTurn={view.planThisTurn} />}
           {attaching !== null && (
-            <div className="mention-picker attach-picker" role="dialog" aria-label="Attach a resource">
+            <div className="mention-picker attach-picker" role="dialog" aria-label={t("composer.resourcePicker.label")}>
               <input
                 autoFocus
-                aria-label="Find a resource"
-                placeholder="Find a resource"
+                aria-label={t("composer.resourcePicker.find")}
+                placeholder={t("composer.resourcePicker.find")}
                 value={attaching}
                 onChange={(e) => setAttaching(e.target.value)}
                 onKeyDown={(e) => e.key === "Escape" && (e.preventDefault(), setAttaching(null))}
               />
-              <ul role="listbox" aria-label="Resources">
-                {mcp === null && <li className="muted">Asking the servers…</li>}
+              <ul role="listbox" aria-label={t("composer.resourcePicker.list")}>
+                {mcp === null && <li className="muted">{t("composer.resourcePicker.asking")}</li>}
                 {mcp !== null && (mcp.resources ?? []).length === 0 && (
-                  <li className="muted">None of this session's MCP servers offers resources{(mcp.problems ?? []).length ? ` (${(mcp.problems ?? []).join("; ")})` : ""}.</li>
+                  <li className="muted">
+                    {(mcp.problems ?? []).length
+                      ? t("composer.resourcePicker.noneProblems", { problems: (mcp.problems ?? []).join("; ") })
+                      : t("composer.resourcePicker.none")}
+                  </li>
                 )}
                 {(mcp?.resources ?? [])
                   .filter((r) => `${r.server} ${r.name} ${r.title ?? ""} ${r.uri} ${r.description ?? ""}`.toLowerCase().includes(attaching.trim().toLowerCase()))
@@ -1348,11 +1391,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </div>
           )}
           {pictures.length > 0 && (
-            <ul className="picture-strip" aria-label="Pictures for the next message">
+            <ul className="picture-strip" aria-label={t("composer.pictures")}>
               {pictures.map((p, i) => (
                 <li key={p.id}>
-                  <img src={p.url} alt={`Picture ${i + 1}`} />
-                  <button className="picture-remove" aria-label={`Remove picture ${i + 1}`} title="Remove" onClick={() => dropPicture(p.id)}>
+                  <img src={p.url} alt={t("composer.picture", { n: i + 1 })} />
+                  <button className="picture-remove" aria-label={t("composer.removePicture", { n: i + 1 })} title={t("common.remove")} onClick={() => dropPicture(p.id)}>
                     <CloseIcon />
                   </button>
                 </li>
@@ -1360,11 +1403,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </ul>
           )}
           {textFiles.length > 0 && (
-            <ul className="attachments" aria-label="Files for the next message">
+            <ul className="attachments" aria-label={t("composer.files")}>
               {textFiles.map((f) => (
-                <li key={f.name} className="chip" title={`${f.text.length.toLocaleString()} characters`}>
+                <li key={f.name} className="chip" title={t("composer.fileSize", { count: f.text.length })}>
                   {f.name}
-                  <button className="link" aria-label={`Remove ${f.name}`} onClick={() => setTextFiles((list) => list.filter((x) => x !== f))} title="Remove">
+                  <button className="link" aria-label={t("composer.remove", { name: f.name })} onClick={() => setTextFiles((list) => list.filter((x) => x !== f))} title={t("common.remove")}>
                     <CloseIcon />
                   </button>
                 </li>
@@ -1372,11 +1415,11 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </ul>
           )}
           {attached.length > 0 && (
-            <ul className="attachments" aria-label="Attached resources">
+            <ul className="attachments" aria-label={t("composer.attached")}>
               {attached.map((a) => (
                 <li key={`${a.server} ${a.uri}`} className="chip" title={a.uri}>
                   {a.server}: {a.name || a.uri}
-                  <button className="link" aria-label={`Remove ${a.name || a.uri}`} onClick={() => setAttached(attached.filter((x) => x !== a))} title="Remove">
+                  <button className="link" aria-label={t("composer.remove", { name: a.name || a.uri })} onClick={() => setAttached(attached.filter((x) => x !== a))} title={t("common.remove")}>
                     <CloseIcon />
                   </button>
                 </li>
@@ -1384,7 +1427,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </ul>
           )}
           {slash !== null && slashMatches.length > 0 && (
-            <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label="Commands">
+            <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label={t("composer.commands")}>
               {slashMatches.map((c, i) => (
                 <li
                   key={c.name}
@@ -1398,15 +1441,18 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   }}
                   onMouseEnter={() => setPick(i)}
                 >
-                  <span>/{c.name}</span> <span className="muted">{c.mode ? `Mode: ${c.description}` : c.prompt ? `MCP prompt · ${c.description}` : c.description}</span>
+                  <span>/{c.name}</span>{" "}
+                  <span className="muted">
+                    {c.mode ? t("session.modeLabel", { mode: c.description }) : c.prompt ? t("composer.mcpPrompt", { description: c.description }) : c.description}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
           {mention && (
-            <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label="Files">
-              {files === null && <li className="muted">Listing files…</li>}
-              {files !== null && matches.length === 0 && <li className="muted">No matching files</li>}
+            <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label={t("composer.fileList")}>
+              {files === null && <li className="muted">{t("composer.listing")}</li>}
+              {files !== null && matches.length === 0 && <li className="muted">{t("composer.noFiles")}</li>}
               {matches.map((f, i) => (
                 <li
                   key={f}
@@ -1428,7 +1474,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
           <div className="composer-box">
             <textarea
               ref={input}
-              aria-label="Message"
+              aria-label={t("composer.message")}
               aria-autocomplete="list"
               aria-controls={pickerOptions > 0 ? `composer-options-${session.id}` : undefined}
               aria-activedescendant={pickerOptions > 0 ? `composer-option-${pick}` : undefined}
@@ -1461,36 +1507,40 @@ export default function SessionView({ session, events, focus, prices, initialDra
               {/* Stop sits at the far end from Send, so a second click on Send
                   never stops the turn it started. */}
               {view.running && (
-                <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger composer-stop icon-button" aria-label="Stop" title="Stop the turn">
+                <button onClick={() => EngineService.Cancel(session.id).catch(onError)} className="danger composer-stop icon-button" aria-label={t("composer.stop")} title={t("session.stopTurn")}>
                   <StopIcon />
                 </button>
               )}
               <SessionControls
                 workflow={
-                  <label className="session-control" title="A workflow's stages are slash commands in this session: type / to see them.">
-                    <span className="sr-only">Workflow</span>
+                  <label className="session-control" title={t("composer.workflow.tip")}>
+                    <span className="sr-only">{t("composer.workflow")}</span>
                     <select value={session.workflow ?? ""} onChange={(e) => setWorkflow(e.target.value)} onFocus={loadWorkflows}>
-                      <option value="">Workflow off</option>
+                      <option value="">{t("composer.workflow.off")}</option>
                       {workflows.map((w) => (
                         <option key={w.id} value={w.id}>
-                          {w.reason ? `${w.name} (not approved)` : w.name}
+                          {w.reason ? t("composer.workflow.notApproved", { name: w.name }) : w.name}
                         </option>
                       ))}
-                      {session.workflow && !workflows.some((w) => w.id === session.workflow) && <option value={session.workflow}>{session.workflow} (no such workflow)</option>}
+                      {session.workflow && !workflows.some((w) => w.id === session.workflow) && (
+                        <option value={session.workflow}>{t("composer.workflow.missing", { name: session.workflow })}</option>
+                      )}
                     </select>
                   </label>
                 }
                 optimizer={
-                  <label className="session-control" title="Runs this session's shell commands through a program that shortens their output, to spend fewer tokens. You still approve the command as the model wrote it.">
-                    <span className="sr-only">Optimizer</span>
+                  <label className="session-control" title={t("composer.optimizer.tip")}>
+                    <span className="sr-only">{t("composer.optimizer")}</span>
                     <select value={session.optimizer} onChange={(e) => setOptimizer(e.target.value)} onFocus={loadOptimizers}>
-                      <option value="">Optimizer off</option>
+                      <option value="">{t("composer.optimizer.off")}</option>
                       {optimizers.map((o) => (
                         <option key={o.id} value={o.id}>
-                          {o.available ? o.name : `${o.name} (not available)`}
+                          {o.available ? o.name : t("composer.optimizer.unavailable", { name: o.name })}
                         </option>
                       ))}
-                      {session.optimizer && !optimizers.some((o) => o.id === session.optimizer) && <option value={session.optimizer}>{session.optimizer} (no such optimizer)</option>}
+                      {session.optimizer && !optimizers.some((o) => o.id === session.optimizer) && (
+                        <option value={session.optimizer}>{t("composer.optimizer.missing", { name: session.optimizer })}</option>
+                      )}
                     </select>
                   </label>
                 }
@@ -1509,13 +1559,13 @@ export default function SessionView({ session, events, focus, prices, initialDra
               <span className="composer-spacer" />
               {(mcp?.resources ?? []).length > 0 && (
                 <button
-                  title="Attach a resource of one of the session's MCP servers"
+                  title={t("composer.resource.tip")}
                   onClick={() => {
                     refreshMcp();
                     setAttaching(attaching === null ? "" : null);
                   }}
                 >
-                  MCP resource…
+                  {t("composer.resource")}
                 </button>
               )}
               <input
@@ -1530,8 +1580,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
               />
               <button
                 className="ghost composer-attach"
-                aria-label="Attach files"
-                title="Attach files from anywhere on your computer: text goes in the message, pictures go to the model as pictures. You can also paste or drop them."
+                aria-label={t("composer.attach")}
+                title={t("composer.attach.tip")}
                 onClick={() => picker.current?.click()}
               >
                 <PaperclipIcon />
@@ -1541,8 +1591,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
               <span className="composer-send-wrap">
                 <button
                   className="primary icon-button composer-send"
-                  aria-label={`${view.running ? "Queue" : "Send"}${queued > 0 ? `, ${queued} queued` : ""}`}
-                  title={`${view.running ? "Queue for when this turn ends" : "Send"}${queued > 0 ? ` (${queued} queued)` : ""}`}
+                  aria-label={sendLabel}
+                  title={sendTitle}
                   onClick={send}
                   disabled={(!draft.trim() && pictures.length === 0 && textFiles.length === 0) || accepting}
                 >
@@ -1583,7 +1633,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
   );
 }
 
-// ItemView re-renders only when its item changed (see Item.rev).
+// ItemView re-renders only when its item changed (see Item.rev), or the locale its times
+// and counts are written in (GUI-048).
 const ItemView = memo(
   function ItemView({
     sid,
@@ -1599,6 +1650,7 @@ const ItemView = memo(
     item: Item;
     focused: boolean;
     cost?: string;
+    locale: string;
     roots: string[];
     onError: (err: unknown) => void;
     onRewind: (seq: number, text: string) => void;
@@ -1607,12 +1659,12 @@ const ItemView = memo(
     const cls = [item.rewound && "rewound", focused && "found"].filter(Boolean).join(" ");
     return (
       <div data-item={item.key} className={cls || undefined}>
-        {item.rewound && <span className="sr-only">Rewound, no longer part of the conversation:</span>}
+        {item.rewound && <span className="sr-only">{t("session.item.rewound")}</span>}
         <ItemBody sid={sid} item={item} cost={cost} roots={roots} onError={onError} onRewind={onRewind} onFork={onFork} />
       </div>
     );
   },
-  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused && a.cost === b.cost,
+  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused && a.cost === b.cost && a.locale === b.locale,
 );
 
 function ItemBody({
@@ -1637,13 +1689,13 @@ function ItemBody({
       return (
         <div className="user-turn">
           <div className="msg msg-user">
-            <h3 className="sr-only">You</h3>
+            <h3 className="sr-only">{t("session.item.you")}</h3>
             {item.images && item.images.length > 0 && <AttachedImages sid={sid} images={item.images} />}
             {item.text}
             {item.files.length > 0 && (
-              <div className="attached" role="group" aria-label="Attached files">
+              <div className="attached" role="group" aria-label={t("session.item.attachedFiles")}>
                 {item.files.map((f) => (
-                  <code key={f} title="Attached to this message">
+                  <code key={f} title={t("session.item.attachedTip")}>
                     {f}
                   </code>
                 ))}
@@ -1660,14 +1712,14 @@ function ItemBody({
     case "agent":
       return (
         <div className="msg msg-agent">
-          <h3 className="sr-only">Agent</h3>
+          <h3 className="sr-only">{t("session.item.agent")}</h3>
           <Markdown text={item.text} />
         </div>
       );
     case "thought":
       return (
         <details className="thought">
-          <summary>Thinking</summary>
+          <summary>{t("session.item.thinking")}</summary>
           <div className="msg-thought">{item.text}</div>
         </details>
       );
@@ -1677,65 +1729,58 @@ function ItemBody({
       return (
         <div className={`turn-end ${item.stopReason !== "end_turn" ? "turn-end-warn" : ""}`}>
           {/* A turn that ended as usual says only when and what it cost (GUI-042). */}
-          {item.stopReason === "end_turn" ? <span className="sr-only">Turn complete · </span> : `${STOP_LABEL[item.stopReason] ?? item.stopReason} · `}
-          {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          {cost && <span title="Estimated from the price table in Settings"> · {cost}</span>}
+          {item.stopReason === "end_turn" ? <span className="sr-only">{t("session.stop.endTurn")} · </span> : `${stopLabel(item.stopReason)} · `}
+          {new Date(item.ts).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}
+          {cost && <span title={t("session.turnCost.tip")}> · {cost}</span>}
         </div>
       );
     case "error":
       return <div className="banner error">{item.message}</div>;
     case "stage":
-      return <div className="workflow-stage-marker">Workflow stage: {item.title}</div>;
+      return <div className="workflow-stage-marker">{t("session.item.stage", { title: item.title })}</div>;
     case "mode":
-      return <div className="turn-end">Mode changed to {MODES.find((m) => m.id === item.mode)?.name ?? item.mode}</div>;
+      return <div className="turn-end">{t("session.item.mode", { mode: modeName(item.mode) })}</div>;
     case "model":
-      return <div className="turn-end">Model changed to {item.model}</div>;
+      return <div className="turn-end">{t("session.item.model", { model: item.model })}</div>;
     case "notice":
       return <div className={item.warn ? "turn-end turn-end-warn" : "turn-end"}>{item.message}</div>;
     case "setup":
       return <SetupCard sid={sid} item={item} onError={onError} />;
-    case "pull_request":
-      return (
-        <div className="turn-end pr-opened">
-          Opened {item.draft ? "draft " : ""}pull request{" "}
-          {item.url.startsWith("https://") ? (
-            <a
-              href={item.url}
-              title={item.url}
-              onClick={(e) => {
-                e.preventDefault();
-                Browser.OpenURL(item.url).catch(() => {});
-              }}
-            >
-              {item.title}
-            </a>
-          ) : (
-            <strong>{item.title}</strong>
-          )}{" "}
-          ({item.head} into {item.base})
-        </div>
+    case "pull_request": {
+      const title = item.url.startsWith("https://") ? (
+        <a
+          href={item.url}
+          title={item.url}
+          onClick={(e) => {
+            e.preventDefault();
+            Browser.OpenURL(item.url).catch(() => {});
+          }}
+        >
+          {item.title}
+        </a>
+      ) : (
+        <strong>{item.title}</strong>
       );
+      return <div className="turn-end pr-opened">{tNodes(item.draft ? "session.item.prDraft" : "session.item.pr", { title, head: item.head, base: item.base })}</div>;
+    }
     case "handoff":
       return (
         <details className="handoff">
-          <summary>
-            Continues from <strong>{item.fromTitle}</strong>
-            {item.generated ? "" : " (the end of its transcript; no model was available for a summary)"}
-          </summary>
+          <summary>{tNodes(item.generated ? "session.item.handoff" : "session.item.handoffRaw", { title: <strong>{item.fromTitle}</strong> })}</summary>
           {item.generated ? <Markdown text={item.summary} /> : <pre>{item.summary}</pre>}
         </details>
       );
     case "cache_resend":
       return (
-        <p className="turn-end" title="Writing to the cache costs more than reading from it, and the whole context goes through it again">
-          The model's cache no longer held this conversation, so {shortTokens(item.tokens)} tokens were written to it again. This usually follows a pause of a few minutes or a change of model.
+        <p className="turn-end" title={t("session.item.resendTip")}>
+          {t("session.item.resend", { tokens: shortTokens(item.tokens) })}
         </p>
       );
     case "compaction":
       return (
         <details className="compaction">
           <summary className="turn-end">
-            Context compacted{item.reason === "manual" ? "" : " automatically"}: {item.before.toLocaleString()} → about {item.after.toLocaleString()} tokens
+            {t(item.reason === "manual" ? "session.item.compacted" : "session.item.compactedAuto", { before: item.before, after: item.after })}
           </summary>
           <div className="md">
             <Markdown text={item.summary} />
@@ -1761,27 +1806,32 @@ function MessageActions({ text, onFork, rewind }: { text: string; onFork?: () =>
       .catch(() => {});
   if (sure && rewind) {
     return (
-      <div className="msg-actions msg-actions-open" role="group" aria-label="Rewind to before this message">
-        <span className="muted">{rewind.filesOnly ? "Restore the files to before this message?" : "Restore the files and the conversation to before this message?"}</span>
-        <button className="danger" onClick={rewind.run} title={rewind.filesOnly ? "The conversation was compacted or rewound since, so the agent keeps its context" : undefined}>
-          Rewind
+      <div className="msg-actions msg-actions-open" role="group" aria-label={t("session.message.rewindLabel")}>
+        <span className="muted">{t(rewind.filesOnly ? "session.message.restoreFiles" : "session.message.restoreAll")}</span>
+        <button className="danger" onClick={rewind.run} title={rewind.filesOnly ? t("session.message.filesOnlyTip") : undefined}>
+          {t("session.message.rewind")}
         </button>
-        <button onClick={() => setSure(false)}>Keep</button>
+        <button onClick={() => setSure(false)}>{t("session.message.keep")}</button>
       </div>
     );
   }
   return (
-    <div className="msg-actions" role="group" aria-label="Message actions">
-      <button className="icon-button" onClick={copy} title={copied ? "Copied" : "Copy"} aria-label={copied ? "Copied" : "Copy message"}>
+    <div className="msg-actions" role="group" aria-label={t("session.message.actions")}>
+      <button
+        className="icon-button"
+        onClick={copy}
+        title={t(copied ? "session.message.copied" : "session.message.copy")}
+        aria-label={t(copied ? "session.message.copied" : "session.message.copyLabel")}
+      >
         {copied ? <CheckIcon /> : <CopyIcon />}
       </button>
       {rewind && (
-        <button className="icon-button" onClick={() => setSure(true)} title="Rewind to here: restore the files to before this message" aria-label="Rewind to here">
+        <button className="icon-button" onClick={() => setSure(true)} title={t("session.message.rewindTip")} aria-label={t("session.message.rewindHere")}>
           <RewindIcon />
         </button>
       )}
       {onFork && (
-        <button className="icon-button" onClick={onFork} title="Fork: a new session with the conversation up to this message" aria-label="Fork from here">
+        <button className="icon-button" onClick={onFork} title={t("session.message.forkTip")} aria-label={t("session.message.fork")}>
           <ForkIcon />
         </button>
       )}
@@ -1801,17 +1851,18 @@ function SetupCard({ sid, item, onError }: { sid: string; item: Extract<Item, { 
     p.catch(onError).finally(() => setBusy(false));
   };
   const parts = [
-    item.copied.length > 0 && `copied ${item.copied.join(", ")}`,
-    item.missing.length > 0 && `not in the main checkout: ${item.missing.join(", ")}`,
+    item.copied.length > 0 && t("session.setup.copied", { files: item.copied.join(", ") }),
+    item.missing.length > 0 && t("session.setup.missing", { files: item.missing.join(", ") }),
   ].filter(Boolean);
-  const title =
+  const title = t(
     item.status === "running"
-      ? "Setting up the worktree…"
+      ? "session.setup.running"
       : item.status === "done"
-        ? "Worktree set up"
+        ? "session.setup.done"
         : item.status === "skipped"
-          ? "Started without finishing the worktree setup"
-          : "The worktree setup failed";
+          ? "session.setup.skipped"
+          : "session.setup.failed",
+  );
   return (
     <div className={`setup-card setup-${item.status}`} role={item.status === "failed" ? "alert" : undefined}>
       <div>
@@ -1826,17 +1877,17 @@ function SetupCard({ sid, item, onError }: { sid: string; item: Extract<Item, { 
       {item.error && <div className="error-text">{item.error}</div>}
       {item.output && (
         <details open={item.status === "failed"}>
-          <summary className="muted">Output</summary>
+          <summary className="muted">{t("session.setup.output")}</summary>
           <pre className="setup-output">{item.output}</pre>
         </details>
       )}
       {item.status === "failed" && (
         <div className="row">
           <button className="primary" disabled={busy} onClick={() => act(EngineService.RetrySetup(sid))}>
-            Retry
+            {t("session.setup.retry")}
           </button>
           <button disabled={busy} onClick={() => act(EngineService.SkipSetup(sid))}>
-            Start anyway
+            {t("session.setup.skip")}
           </button>
         </div>
       )}
@@ -1854,7 +1905,8 @@ function TodoList({ entries, running, thisTurn }: { entries: { content: string; 
   return (
     <details className="todo-list" open={running}>
       <summary>
-        To-do · {done} of {entries.length} done{current ? ` · ${current.content}` : ""}
+        {t("session.todo", { done, total: entries.length })}
+        {current ? ` · ${current.content}` : ""}
       </summary>
       <ul>
         {entries.map((e, i) => (

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ask } from "./ask.ts";
 import { autoSaved, pageTitle, settingsKey, type GeneralPage } from "./settings.ts";
-import { LANGUAGES, list, t, type PlainKey } from "./i18n.ts";
+import { LANGUAGES, list, locale, t, type PlainKey } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
@@ -551,7 +551,7 @@ export default function Settings({ page, config, providers, harnesses, environme
             <ul>
               {[...blocked].reverse().map((b, i) => (
                 <li key={i}>
-                  {b.host} <span className="muted">{new Date(b.at).toLocaleString()}</span>
+                  {b.host} <span className="muted">{new Date(b.at).toLocaleString(locale())}</span>
                 </li>
               ))}
             </ul>

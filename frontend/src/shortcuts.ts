@@ -148,7 +148,7 @@ export function bindingProblem(id: string, combo: string, current: Bindings): st
 }
 
 export function approvalHint(kind: ApprovalKind): string {
-  return `${bindingOf(kind).toUpperCase()} or ${approvalChord(kind)}`;
+  return t("approval.hint", { letter: bindingOf(kind).toUpperCase(), chord: approvalChord(kind) });
 }
 
 // approvalChord is the fixed form of an approval shortcut: ⌘↩, ⌘⇧↩ and ⌘⇧⌫ on a
@@ -190,13 +190,13 @@ export function optionKind(kind: string): ApprovalKind | null {
 export function optionLabel(kind: string, name: string): string {
   switch (kind) {
     case "allow_once":
-      return "Allow once";
+      return t("approval.allowOnce");
     case "allow_always":
-      return "Allow always";
+      return t("approval.allowAlways");
     case "reject_once":
-      return "Deny";
+      return t("approval.deny");
     case "reject_always":
-      return "Always deny";
+      return t("approval.alwaysDeny");
   }
   return name;
 }
@@ -209,6 +209,6 @@ export function isTextField(el: EventTarget | null): boolean {
 // formLabel names a form's buttons (MCP-008, HRN-021): it answers, or it is skipped.
 // The kind decides, as for any approval.
 export function formLabel(kind: string): string {
-  return kind.startsWith("allow") ? "Send" : "Skip";
+  return t(kind.startsWith("allow") ? "approval.send" : "approval.skip");
 }
 

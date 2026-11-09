@@ -1,4 +1,5 @@
-import { stageOutputs, stageProgress, type ItemLike, type RunLike, type Stage, type WorkflowLike } from "./workflows.ts";
+import { stageOutputs, stageProgress, type ItemLike, type RunLike, type Stage, type StageState, type WorkflowLike } from "./workflows.ts";
+import { t, type PlainKey } from "./i18n.ts";
 
 // WorkflowStrip shows, above the composer, where the session is in its workflow
 // (WFL-008): each stage on the path, done, running, next or to do, with what the
@@ -15,8 +16,8 @@ interface Props {
   onShowRun?: () => void;
 }
 
-const MARK: Record<string, string> = { done: "✓", running: "●", next: "→", todo: "" };
-const SAID: Record<string, string> = { done: "done", running: "running", next: "next", todo: "to do" };
+const MARK: Record<StageState, string> = { done: "✓", running: "●", next: "→", todo: "" };
+const SAID: Record<StageState, PlainKey> = { done: "workflow.state.done", running: "workflow.state.running", next: "workflow.state.next", todo: "workflow.state.todo" };
 
 export default function WorkflowStrip({ workflow, items, running, run, roots, onNext, onShowRun }: Props) {
   const steps = stageProgress(workflow, items, running, run);
@@ -24,8 +25,12 @@ export default function WorkflowStrip({ workflow, items, running, run, roots, on
   const lastStage = items.filter((it) => it.kind === "stage").pop();
   const wrote = !running && lastStage ? stageOutputs(items) : [];
   const afk = steps.find((s) => s.stage.kind === "afk");
+  const files = wrote
+    .slice(0, 2)
+    .map((p) => relative(p, roots))
+    .join(", ");
   return (
-    <div className="workflow-strip" role="group" aria-label={`Workflow: ${workflow.name}`}>
+    <div className="workflow-strip" role="group" aria-label={t("workflow.label", { name: workflow.name })}>
       <ol className="workflow-steps">
         {steps.map((s) => (
           <li key={s.stage.command} className={`workflow-step workflow-step-${s.state}`} title={`/${s.stage.command}: ${s.stage.description || s.stage.title}`}>
@@ -38,7 +43,7 @@ export default function WorkflowStrip({ workflow, items, running, run, roots, on
               {s.stage.title}
               {s.detail && <span className="workflow-step-detail"> · {s.detail}</span>}
             </span>
-            <span className="sr-only">, {SAID[s.state]}</span>
+            <span className="sr-only">, {t(SAID[s.state])}</span>
           </li>
         ))}
       </ol>
@@ -50,18 +55,21 @@ export default function WorkflowStrip({ workflow, items, running, run, roots, on
         <span className="workflow-strip-actions">
           {wrote.length > 0 && (
             <span className="workflow-wrote muted" title={wrote.join("\n")}>
-              Wrote {wrote.slice(0, 2).map((p) => relative(p, roots)).join(", ")}
-              {wrote.length > 2 ? ` and ${wrote.length - 2} more` : ""}
+              {wrote.length > 2 ? t("workflow.wroteMore", { files, count: wrote.length - 2 }) : t("workflow.wrote", { files })}
             </span>
           )}
           {afk && afk.state !== "todo" && afk.state !== "next" && onShowRun && (
             <button className="link" onClick={onShowRun}>
-              Show the run
+              {t("workflow.showRun")}
             </button>
           )}
           {next && !running && (
-            <button className="workflow-next" onClick={() => onNext(next.stage)} title={next.stage.needsInput ? `Type what /${next.stage.command} is about, then send` : `Runs /${next.stage.command}`}>
-              Next: {next.stage.title}
+            <button
+              className="workflow-next"
+              onClick={() => onNext(next.stage)}
+              title={next.stage.needsInput ? t("workflow.nextNeedsInput", { command: next.stage.command }) : t("workflow.nextRuns", { command: next.stage.command })}
+            >
+              {t("workflow.next", { title: next.stage.title })}
             </button>
           )}
         </span>

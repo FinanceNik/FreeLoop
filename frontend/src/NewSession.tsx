@@ -5,7 +5,7 @@ import IssuePicker from "./IssuePicker.tsx";
 import {
   EngineService,
   type IssueBrief,
-  MODES,
+  modeName,
   STARTING_MODES,
   errorText,
   type EnvironmentInfo,
@@ -25,6 +25,7 @@ import { inheritedLabel, OPTIMIZER_OFF } from "./optimizers.ts";
 import { orderModels } from "./models.ts";
 import { trustLines } from "./trust.ts";
 import type { Defaults } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
+import { locale } from "./i18n.ts";
 
 interface Props {
   providers: ProviderInfo[];
@@ -570,7 +571,7 @@ export default function NewSession({ providers, projects, environments, profiles
           {capsState === "idle" && caps && caps.source !== "unknown" && caps.tools && (
             <span className="ok">
               Tool calling supported ({SOURCE[caps.source] ?? caps.source})
-              {caps.contextWindow > 0 && ` · ${caps.contextWindow.toLocaleString()} token context`}
+              {caps.contextWindow > 0 && ` · ${caps.contextWindow.toLocaleString(locale())} token context`}
               {caps.source === "override" && (
                 <>
                   {" "}
@@ -668,11 +669,11 @@ export default function NewSession({ providers, projects, environments, profiles
           Permission mode
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="">
-              {waits?.mode ? "Ask, until you approve the file's choice in Settings" : <>{profile?.mode ? "From the profile" : "From the environment"} ({MODES.find((m) => m.id === (profile?.mode || env?.defaultMode || "ask"))?.name})</>}
+              {waits?.mode ? "Ask, until you approve the file's choice in Settings" : <>{profile?.mode ? "From the profile" : "From the environment"} ({modeName(profile?.mode || env?.defaultMode || "ask")})</>}
             </option>
             {STARTING_MODES.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name}
+                {modeName(m.id)}
               </option>
             ))}
           </select>

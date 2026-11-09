@@ -2,6 +2,7 @@
 // list prices, applied to model calls' tokens. Prices are US dollars per million
 // tokens; the first entry whose provider (when set) and model pattern match
 // applies, as in config.FindPrice.
+import { numberFormat, t } from "./i18n.ts";
 
 export interface PriceEntry {
   providerId: string;
@@ -96,7 +97,7 @@ export function estimate(prices: readonly PriceEntry[], calls: readonly ModelCal
     const model = c.model || session.model;
     const base = findPrice(prices, providerId, model);
     if (!base) {
-      unpriced++;
+      unpriced += 1;
       continue;
     }
     const prompt = c.inputTokens + c.cacheReadTokens + c.cacheWriteTokens;
@@ -104,29 +105,27 @@ export function estimate(prices: readonly PriceEntry[], calls: readonly ModelCal
     const p = (long && findPrice(prices, providerId, model + LONG_PROMPT)) || base;
     const hour = c.cacheWrite1hTokens ?? 0;
     const write = p.cacheWrite ?? 0;
-    cost +=
-      (c.inputTokens * p.input +
-        c.outputTokens * p.output +
-        c.cacheReadTokens * (p.cacheRead ?? 0) +
-        (c.cacheWriteTokens - hour) * write +
-        hour * (p.cacheWrite1h || write)) /
-      1e6;
+    const perMillion = c.inputTokens * p.input + c.outputTokens * p.output + c.cacheReadTokens * (p.cacheRead ?? 0) + (c.cacheWriteTokens - hour) * write + hour * (p.cacheWrite1h || write);
+    cost += perMillion / 1e6;
   }
   return { cost, unpriced };
 }
 
+// formatCost writes an amount in US dollars, as provider prices are, in the locale's
+// style: $146.51, 146,51 $, $ 146,51 (GUI-048).
 export function formatCost(n: number): string {
-  if (n > 0 && n < 0.01) return "<$0.01";
-  return `$${n.toFixed(2)}`;
+  const dollars = numberFormat({ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol" });
+  if (n > 0 && n < 0.01) return `<${dollars.format(0.01)}`;
+  return dollars.format(n);
 }
 
 // costText is a session's estimated cost in words (PRV-008): what the price table
 // makes of its calls, and how the agent counted them, so a missing count never reads
 // as nothing spent.
 export function costText(e: Estimate, calls: number, measured: { turns: number; unreported: number }): string {
-  if (calls === 0) return measured.unreported > 0 ? "not reported by the agent" : "none yet";
-  let text = e.unpriced === calls ? "no price set" : `≈ ${formatCost(e.cost)}${e.unpriced ? "+" : ""}`;
-  if (measured.turns > 0) text += ", from the agent's turn totals";
-  if (measured.unreported > 0) text += `; ${measured.unreported === 1 ? "1 turn" : `${measured.unreported} turns`} not reported`;
+  if (calls === 0) return t(measured.unreported > 0 ? "cost.notReported" : "cost.noneYet");
+  let text = e.unpriced === calls ? t("cost.noPrice") : `≈ ${formatCost(e.cost)}${e.unpriced ? "+" : ""}`;
+  if (measured.turns > 0) text = t("cost.fromTurns", { cost: text });
+  if (measured.unreported > 0) text = t("cost.unreported", { text, count: measured.unreported });
   return text;
 }

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
 import { basename } from "./paths.ts";
 import { commandOutcome, defaultAllow } from "./afk.ts";
-import { EngineService, STARTING_MODES, type AFKPlan, type Defaults, type HarnessInfo, type Profile, type ProjectInfo, type ProviderInfo, type Schedule, type ScheduleInfo } from "./api.ts";
+import { EngineService, modeName, STARTING_MODES, type AFKPlan, type Defaults, type HarnessInfo, type Profile, type ProjectInfo, type ProviderInfo, type Schedule, type ScheduleInfo } from "./api.ts";
 import { describe, REPEATS, WEEKDAYS, when } from "./schedules.ts";
 
 // Schedules lists scheduled and recurring sessions (SES-012) and edits
@@ -261,7 +261,7 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
                 {STARTING_MODES.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {modeName(m.id)}
                   </option>
                 ))}
               </select>

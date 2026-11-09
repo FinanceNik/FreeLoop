@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { addText, isPicture, MAX_FILE_BYTES, MAX_FILES, textOf } from "./attach.ts";
+import { setLanguage } from "./i18n.ts";
 
 const bytes = (s: string) => new TextEncoder().encode(s);
 
@@ -32,6 +33,20 @@ test("a file is added, replaces one of its name, and is refused with a reason", 
   assert.match(addText(many, "one-more", bytes("x")).error ?? "", /at most/);
   const full = Array.from({ length: 5 }, (_, i) => ({ name: `f${i}`, text: "x".repeat(MAX_FILE_BYTES) }));
   assert.match(addText(full, "last", bytes("x")).error ?? "", /1 MB/);
+});
+
+// GUI-048: the reason a file is refused is in the language set.
+test("a refused file says why in the language set", () => {
+  setLanguage("de");
+  assert.equal(
+    addText([], "a.pdf", new Uint8Array([0, 1, 2])).error,
+    "a.pdf ist weder Text noch ein Bild und kann daher nicht in eine Nachricht. Besser ins Projekt legen und den Pfad nennen.",
+  );
+  const many = Array.from({ length: MAX_FILES }, (_, i) => ({ name: `f${i}`, text: "x" }));
+  assert.equal(addText(many, "one-more", bytes("x")).error, "Eine Nachricht fasst höchstens 20 Dateien.");
+  setLanguage("en");
+  assert.equal(addText(many, "one-more", bytes("x")).error, "A message takes at most 20 files.");
+  assert.equal(addText([], "big.log", new Uint8Array(MAX_FILE_BYTES + 1).fill(97)).error, "big.log is larger than 256 KB. Put it in the project and ask for the part you need.");
 });
 
 // A pasted picture once landed at the far edge of a wide window: its own margin

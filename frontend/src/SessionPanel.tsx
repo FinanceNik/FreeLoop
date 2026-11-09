@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Form
 import { visibleCommand } from "./a11y.ts";
 import { tabAfterKey } from "./a11y.ts";
 import { describeRule, RULE_TOOLS } from "./Rules.tsx";
-import { EngineService, MODES, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
+import { EngineService, modeName, type EnvironmentInfo, type ProviderInfo, type Rule, type Session } from "./api.ts";
 import { HELD_BY, optimizerCounts, panelData, type SessionView, type ToolItem } from "./transcript.ts";
 import { HOLD_PLACE } from "./scrollPlace.ts";
 import Splitter from "./Splitter.tsx";
@@ -13,6 +13,8 @@ import DiffPanel from "./DiffPanel.tsx";
 import { PlanPanel } from "./PlanReview.tsx";
 import { planVersions } from "./planView.ts";
 import FilesPanel from "./FilesPanel.tsx";
+import { locale, t, type PlainKey } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 // xterm.js is large; it loads when a terminal is first shown.
 const TerminalPanel = lazy(() => import("./TerminalPanel.tsx"));
 import PreviewPanel from "./PreviewPanel.tsx";
@@ -23,6 +25,32 @@ import PreviewPanel from "./PreviewPanel.tsx";
 // folded transcript as the conversation, so it never disagrees with it.
 
 export type Tab = "approvals" | "plan" | "diff" | "files" | "terminal" | "preview" | "info";
+
+// A rule's effect, and where a rule applies, as the list in the panel says them.
+const EFFECT: Record<string, PlainKey> = { allow: "panel.rule.allow", deny: "panel.rule.deny" };
+const LISTED_SCOPE: Record<string, PlainKey> = { session: "panel.rules.listed.session", global: "panel.rules.listed.global" };
+
+// How a decision went and who made it, as the engine names them.
+const OUTCOME = {
+  allowed: "panel.decided.allowed",
+  denied: "panel.decided.denied",
+  cancelled: "panel.decided.cancelled",
+} as const;
+const ACTOR: Record<string, PlainKey> = {
+  user: "panel.actor.user",
+  mode: "panel.actor.mode",
+  protected_path: "panel.actor.protectedPath",
+  policy: "panel.actor.policy",
+  rule: "panel.actor.rule",
+  hook: "panel.actor.hook",
+};
+const SAVED_SCOPE: Record<string, PlainKey> = { session: "panel.scope.session", global: "panel.scope.global", project: "panel.scope.project" };
+
+// decisionText says how a tool call was decided and by whom: "denied by rule".
+function decisionText(outcome: string, actor: string): string {
+  const who = ACTOR[actor] ? t(ACTOR[actor]) : actor;
+  return Object.hasOwn(OUTCOME, outcome) ? t(OUTCOME[outcome as keyof typeof OUTCOME], { actor: who }) : t("panel.decided.other", { outcome, actor: who });
+}
 
 interface Props {
   // Shows a moment of the session in the conversation.
@@ -78,10 +106,10 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
   };
 
   return (
-    <aside ref={panelBox} className={tab === "plan" || tab === "diff" || tab === "files" || tab === "terminal" || tab === "preview" ? "panel panel-wide" : "panel"} aria-label="Session panel">
+    <aside ref={panelBox} className={tab === "plan" || tab === "diff" || tab === "files" || tab === "terminal" || tab === "preview" ? "panel panel-wide" : "panel"} aria-label={t("panel.label")}>
       <Splitter
         className="splitter-panel"
-        label="Panel width"
+        label={t("panel.width")}
         value={width}
         min={PANEL_MIN}
         max={panelMax(available())}
@@ -98,7 +126,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
         <div
           className="panel-tablist"
           role="tablist"
-          aria-label="Panel views"
+          aria-label={t("panel.tabs")}
           onKeyDown={(e) => {
             const tabs = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
             const next = tabAfterKey(e.key, tabs.indexOf(e.target as HTMLElement), tabs.length);
@@ -108,30 +136,33 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
           }}
         >
           <TabButton id="approvals" tab={tab} setTab={setTab}>
-            Approvals{data.pending.length > 0 && <span className="badge badge-waiting_permission">{data.pending.length}</span>}
+            {t("panel.tab.approvals")}
+            {data.pending.length > 0 && <span className="badge badge-waiting_permission">{data.pending.length}</span>}
           </TabButton>
           {plans.length > 0 && (
             <TabButton id="plan" tab={tab} setTab={setTab}>
-              Plan{plans.at(-1)?.state === "waiting" && <span className="badge badge-waiting_permission">1</span>}
+              {t("panel.tab.plan")}
+              {plans.at(-1)?.state === "waiting" && <span className="badge badge-waiting_permission">1</span>}
             </TabButton>
           )}
           <TabButton id="diff" tab={tab} setTab={setTab}>
-            Diff{dirty > 0 && <span className="muted"> {dirty}</span>}
+            {t("panel.tab.diff")}
+            {dirty > 0 && <span className="muted"> {dirty}</span>}
           </TabButton>
           <TabButton id="files" tab={tab} setTab={setTab}>
-            Files
+            {t("panel.tab.files")}
           </TabButton>
           <TabButton id="terminal" tab={tab} setTab={setTab}>
-            Terminal
+            {t("panel.tab.terminal")}
           </TabButton>
           <TabButton id="preview" tab={tab} setTab={setTab}>
-            Preview
+            {t("panel.tab.preview")}
           </TabButton>
           <TabButton id="info" tab={tab} setTab={setTab}>
-            Info
+            {t("panel.tab.info")}
           </TabButton>
         </div>
-        <button className="panel-close" onClick={onClose} aria-label="Hide the panel" title="Hide the panel">
+        <button className="panel-close" onClick={onClose} aria-label={t("panel.hide")} title={t("panel.hide")}>
           ×
         </button>
       </div>
@@ -141,7 +172,7 @@ export default function SessionPanel({ session, tab, onTab: setTab, view, provid
         {tab === "diff" && <DiffPanel session={session} gitKey={JSON.stringify(view.git)} agentEdits={data.changes} onReview={onReview} onError={onError} />}
         {tab === "files" && <FilesPanel session={session} gitKey={JSON.stringify(view.git) + data.changes.length} agentEdits={data.changes} onError={onError} />}
         {tab === "terminal" && (
-          <Suspense fallback={<p className="muted">Loading…</p>}>
+          <Suspense fallback={<p className="muted">{t("panel.loading")}</p>}>
             <TerminalPanel key={terminalNonce} session={session} onError={onError} />
           </Suspense>
         )}
@@ -205,47 +236,47 @@ function SessionRules({ session, version, onError }: { session: Session; version
   const remove = (r: Rule) => (r.scope === "session" ? EngineService.DeleteSessionRule(session.id, r) : EngineService.DeleteRule(r)).then(load).catch(onError);
   return (
     <div data-rules={session.id}>
-      <h3>Rules</h3>
-      <p className="muted">These decide before you are asked. Deny rules win, and an allow rule never lifts plan mode or protected paths.</p>
-      {rules.length === 0 && <p className="muted">No rules yet.</p>}
+      <h3>{t("panel.rules.title")}</h3>
+      <p className="muted">{t("panel.rules.intro")}</p>
+      {rules.length === 0 && <p className="muted">{t("panel.rules.none")}</p>}
       <ul className="panel-list">
         {rules.map((r, i) => (
           <li key={i} className="row">
-            <span className={`decision decision-${r.effect === "deny" ? "denied" : "allowed"}`}>{r.effect}</span>
+            <span className={`decision decision-${r.effect === "deny" ? "denied" : "allowed"}`}>{EFFECT[r.effect] ? t(EFFECT[r.effect]) : r.effect}</span>
             <code>{describeRule(r)}</code>
-            <span className="muted">{r.scope === "session" ? "this session" : r.scope === "global" ? "all sessions" : String(r.scope)}</span>
-            {r.pending && <span className="muted">waits for approval in Settings</span>}
+            <span className="muted">{LISTED_SCOPE[r.scope] ? t(LISTED_SCOPE[r.scope]) : String(r.scope)}</span>
+            {r.pending && <span className="muted">{t("panel.rules.pending")}</span>}
             {(r.scope === "session" || r.scope === "global") && (
-              <button className="link" onClick={() => remove(r)} aria-label={`Remove the rule ${describeRule(r)}`}>
-                Remove
+              <button className="link" onClick={() => remove(r)} aria-label={t("panel.rules.remove", { rule: describeRule(r) })}>
+                {t("common.remove")}
               </button>
             )}
           </li>
         ))}
       </ul>
       <form className="session-rule-form" onSubmit={add}>
-        <select value={form.effect} onChange={(e) => setForm({ ...form, effect: e.target.value })} aria-label="Effect">
-          <option value="allow">Allow</option>
-          <option value="deny">Deny</option>
+        <select value={form.effect} onChange={(e) => setForm({ ...form, effect: e.target.value })} aria-label={t("panel.rules.effect")}>
+          <option value="allow">{t("panel.rules.allow")}</option>
+          <option value="deny">{t("panel.rules.deny")}</option>
         </select>
-        <select value={form.tool} onChange={(e) => setForm({ ...form, tool: e.target.value })} aria-label="Tool">
-          {RULE_TOOLS.map((t) => (
-            <option key={t} value={t}>
-              {t === "*" ? "any tool" : t}
+        <select value={form.tool} onChange={(e) => setForm({ ...form, tool: e.target.value })} aria-label={t("hooks.tool")}>
+          {RULE_TOOLS.map((tool) => (
+            <option key={tool} value={tool}>
+              {tool === "*" ? t("panel.rules.anyTool") : tool}
             </option>
           ))}
         </select>
         <input
-          aria-label={form.tool === "shell" ? "Command" : "Path pattern"}
+          aria-label={form.tool === "shell" ? t("hooks.command") : t("panel.rules.path")}
           placeholder={form.tool === "shell" ? "git *" : "src/**"}
           value={form.pattern}
           onChange={(e) => setForm({ ...form, pattern: e.target.value })}
         />
-        <select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} aria-label="Applies to">
-          <option value="session">This session</option>
-          <option value="global">All sessions</option>
+        <select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} aria-label={t("panel.rules.appliesTo")}>
+          <option value="session">{t("panel.rules.forSession")}</option>
+          <option value="global">{t("panel.rules.forAll")}</option>
         </select>
-        <button type="submit">Add</button>
+        <button type="submit">{t("panel.rules.add")}</button>
       </form>
     </div>
   );
@@ -266,65 +297,66 @@ function Approvals({
   decided: ToolItem[];
   onError: (err: unknown) => void;
 }) {
-  const saved = decided.filter((t) => t.permission?.decided?.persisted).length;
+  const saved = decided.filter((item) => item.permission?.decided?.persisted).length;
   // Quick answers only; the card in the conversation has the note, the
   // scope for "Allow always" and the keyboard shortcuts.
-  const decide = (t: ToolItem, kind: string) => {
-    const opt = t.permission?.options.find((o) => (kind === "reject" ? o.kind.startsWith("reject") : o.kind === kind));
+  const decide = (item: ToolItem, kind: string) => {
+    const opt = item.permission?.options.find((o) => (kind === "reject" ? o.kind.startsWith("reject") : o.kind === kind));
     // A form is sent from its card, with its answers.
-    if (!opt || (t.permission?.form && kind !== "reject")) return;
-    EngineService.Decide({ requestId: t.permission!.requestId, optionId: opt.optionId, reason: "", scope: "session" }).catch(onError);
+    if (!opt || (item.permission?.form && kind !== "reject")) return;
+    EngineService.Decide({ requestId: item.permission!.requestId, optionId: opt.optionId, reason: "", scope: "session" }).catch(onError);
   };
   return (
     <>
-      <h3>Waiting for you</h3>
-      {pending.length === 0 && <p className="muted">Nothing is waiting.</p>}
+      <h3>{t("panel.approvals.waiting")}</h3>
+      {pending.length === 0 && <p className="muted">{t("panel.approvals.nothing")}</p>}
       <ul className="panel-list">
-        {pending.map((t) => (
-          <li key={t.toolCallId} className="panel-pending">
-            <button className="link" onClick={() => showTool(t.toolCallId)}>
-              {visibleCommand(t.title)}
+        {pending.map((item) => (
+          <li key={item.toolCallId} className="panel-pending">
+            <button className="link" onClick={() => showTool(item.toolCallId)}>
+              {visibleCommand(item.title)}
             </button>
-            {t.permission?.command && <code>{visibleCommand(t.permission.command)}</code>}
-            {t.permission?.paths?.map((p) => (
+            {item.permission?.command && <code>{visibleCommand(item.permission.command)}</code>}
+            {item.permission?.paths?.map((p) => (
               <code key={p}>{p}</code>
             ))}
             <div className="row">
-              {t.permission?.form ? (
-                <button className="primary" onClick={() => showTool(t.toolCallId)}>
-                  Answer…
+              {item.permission?.form ? (
+                <button className="primary" onClick={() => showTool(item.toolCallId)}>
+                  {t("panel.approvals.answer")}
                 </button>
               ) : (
-                <button className="primary" onClick={() => decide(t, "allow_once")}>
-                  Allow once
+                <button className="primary" onClick={() => decide(item, "allow_once")}>
+                  {t("panel.approvals.allowOnce")}
                 </button>
               )}
-              <button className="danger" onClick={() => decide(t, "reject")}>
-                {t.permission?.form ? "Decline" : "Deny"}
+              <button className="danger" onClick={() => decide(item, "reject")}>
+                {item.permission?.form ? t("panel.approvals.decline") : t("panel.approvals.deny")}
               </button>
-              {!t.permission?.form && <button onClick={() => showTool(t.toolCallId)}>More…</button>}
+              {!item.permission?.form && <button onClick={() => showTool(item.toolCallId)}>{t("panel.approvals.more")}</button>}
             </div>
           </li>
         ))}
       </ul>
       <SessionRules session={session} version={`${configVersion} ${settings} ${saved}`} onError={onError} />
-      <h3>Decided</h3>
-      {decided.length === 0 && <p className="muted">No decisions yet. Calls allowed by the session's mode are not listed.</p>}
+      <h3>{t("panel.approvals.decided")}</h3>
+      {decided.length === 0 && <p className="muted">{t("panel.approvals.noDecisions")}</p>}
       <ul className="panel-list">
-        {decided.map((t) => {
-          const d = t.permission!.decided!;
+        {decided.map((item) => {
+          const d = item.permission!.decided!;
           return (
-            <li key={t.toolCallId}>
-              <button className="link" onClick={() => showTool(t.toolCallId)}>
-                {t.title}
+            <li key={item.toolCallId}>
+              <button className="link" onClick={() => showTool(item.toolCallId)}>
+                {item.title}
               </button>{" "}
-              <span className={`decision decision-${d.outcome}`}>
-                {d.outcome} by {d.actor}
-              </span>
+              <span className={`decision decision-${d.outcome}`}>{decisionText(d.outcome, d.actor)}</span>
               {d.reason && <div className="muted">{d.reason}</div>}
               {d.persisted && (
                 <div className="muted">
-                  Saved rule <code>{d.persisted.command || d.persisted.path || d.persisted.tool}</code> ({d.persisted.scope})
+                  {tNodes("panel.approvals.savedRule", {
+                    rule: <code>{d.persisted.command || d.persisted.path || d.persisted.tool}</code>,
+                    scope: SAVED_SCOPE[d.persisted.scope] ? t(SAVED_SCOPE[d.persisted.scope]) : d.persisted.scope,
+                  })}
                 </div>
               )}
             </li>
@@ -372,67 +404,72 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
 
   const mode = view.mode ?? session.mode;
   const u = view.usage;
-  const rows: [string, ReactNode][] = [
-    ["Status", view.status ?? session.status],
-    ["Harness", session.harnessId],
-    ["Profile", session.profileId || "default"],
-    ["Provider", provider?.name ?? session.providerId],
-    ["Model", <code>{session.model}</code>],
-    ["Permissions", MODES.find((m) => m.id === mode)?.name ?? mode],
-    ["Environment", environment?.name ?? (session.environmentId || "Local")],
-    ["Project", <code>{session.projectRoot}</code>],
-    ...(session.worktree ? ([["Worktree", <code>{session.worktree}</code>]] as [string, ReactNode][]) : []),
-    ["Branch", view.git?.repo ? view.git.branch || "detached" : "not a git repository"],
-    ["Base commit", session.baseCommit ? <code title={session.baseCommit}>{session.baseCommit.slice(0, 12)}</code> : "none"],
-    ["Turns", turns],
-    ["Input tokens", u.inputTokens.toLocaleString()],
-    ["Cache reads / writes", `${u.cacheReadTokens.toLocaleString()} / ${u.cacheWriteTokens.toLocaleString()}`],
-    ["Output tokens", u.outputTokens.toLocaleString()],
+  // Each row's label is a catalogue key, translated as it renders. The thousands of
+  // tokens are written as they always were, 1000k rather than 1,000k.
+  const rows: [PlainKey, ReactNode][] = [
+    ["panel.info.status", view.status ?? session.status],
+    ["panel.info.harness", session.harnessId],
+    ["settings.defaults.profile", session.profileId || t("panel.info.defaultProfile")],
+    ["settings.defaults.provider", provider?.name ?? session.providerId],
+    ["settings.defaults.model", <code>{session.model}</code>],
+    ["panel.info.permissions", modeName(mode)],
+    ["settings.defaults.environment", environment?.name ?? (session.environmentId || t("settings.defaults.local"))],
+    ["panel.info.project", <code>{session.projectRoot}</code>],
+    ...(session.worktree ? ([["panel.info.worktree", <code>{session.worktree}</code>]] as [PlainKey, ReactNode][]) : []),
+    ["panel.info.branch", view.git?.repo ? view.git.branch || t("panel.info.detached") : t("panel.info.noRepo")],
+    ["panel.info.baseCommit", session.baseCommit ? <code title={session.baseCommit}>{session.baseCommit.slice(0, 12)}</code> : t("panel.info.none")],
+    ["panel.info.turns", turns],
+    ["panel.info.inputTokens", u.inputTokens.toLocaleString(locale())],
+    ["panel.info.cacheTokens", `${u.cacheReadTokens.toLocaleString(locale())} / ${u.cacheWriteTokens.toLocaleString(locale())}`],
+    ["panel.info.outputTokens", u.outputTokens.toLocaleString(locale())],
     ...(view.context
       ? ([
           [
-            "Context",
-            view.context.window > 0 ? `${Math.round((100 * view.context.tokens) / view.context.window)} % of ${Math.round(view.context.window / 1000)}k` : `${Math.round(view.context.tokens / 1000)}k tokens`,
+            "panel.info.context",
+            view.context.window > 0
+              ? t("panel.info.contextShare", { share: Math.round((100 * view.context.tokens) / view.context.window), window: String(Math.round(view.context.window / 1000)) })
+              : t("panel.info.contextTokens", { tokens: String(Math.round(view.context.tokens / 1000)) }),
           ],
-        ] as [string, ReactNode][])
+        ] as [PlainKey, ReactNode][])
       : []),
     ...(session.providerId && session.model
-      ? ([["Context limit", <ContextLimit key={`${session.providerId}/${session.model}`} providerId={session.providerId} model={session.model} onError={onError} />]] as [string, ReactNode][])
+      ? ([["panel.info.contextLimit", <ContextLimit key={`${session.providerId}/${session.model}`} providerId={session.providerId} model={session.model} onError={onError} />]] as [PlainKey, ReactNode][])
       : []),
-    ["Estimated cost", costLabel],
-    ["Held by your policy", view.held.length === 0 ? "Nothing so far" : `${view.held.length} ${view.held.length === 1 ? "thing" : "things"}`],
+    ["panel.info.cost", costLabel],
+    ["panel.info.held", view.held.length === 0 ? t("panel.info.heldNone") : t("panel.info.heldCount", { count: view.held.length })],
     ...(session.optimizer
       ? ([
           [
-            "Token optimizer",
-            `${optimized.rewritten} of ${optimized.commands} shell commands shortened` +
-              (savings ? `; ${savings.saved.toLocaleString()} of ${savings.input.toLocaleString()} tokens saved` : ""),
+            "pending.kind.optimizer",
+            savings
+              ? t("panel.info.optimizerSaved", { rewritten: optimized.rewritten, commands: optimized.commands, saved: savings.saved, input: savings.input })
+              : t("panel.info.optimizer", { rewritten: optimized.rewritten, commands: optimized.commands }),
           ],
-        ] as [string, ReactNode][])
+        ] as [PlainKey, ReactNode][])
       : []),
-    ...(session.portBase > 0 ? ([["Ports", `${session.portBase}–${session.portBase + 9}`]] as [string, ReactNode][]) : []),
-    ["Session ID", <code>{session.id}</code>],
+    ...(session.portBase > 0 ? ([["panel.info.ports", `${session.portBase}–${session.portBase + 9}`]] as [PlainKey, ReactNode][]) : []),
+    ["panel.info.sessionId", <code>{session.id}</code>],
   ];
   return (
     <>
       <dl className="panel-info">
         {rows.map(([k, v]) => (
           <div key={k}>
-            <dt>{k}</dt>
+            <dt>{t(k)}</dt>
             <dd>{v}</dd>
           </div>
         ))}
       </dl>
       {view.held.length > 0 && (
         <>
-          <h3>Held by your policy</h3>
+          <h3>{t("panel.info.held")}</h3>
           <ul className="panel-list held-list">
             {view.held
               .slice(-HELD_SHOWN)
               .reverse()
               .map((h, i) => (
                 <li key={`${h.seq}-${i}`}>
-                  <button className="link" title="Show this in the conversation" onClick={() => onJump(h.seq)}>
+                  <button className="link" title={t("panel.held.show")} onClick={() => onJump(h.seq)}>
                     <code>{h.what}</code>
                   </button>
                   <div className="muted">
@@ -442,15 +479,15 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
                 </li>
               ))}
           </ul>
-          {view.held.length > HELD_SHOWN && <p className="muted">The latest {HELD_SHOWN} of {view.held.length}.</p>}
+          {view.held.length > HELD_SHOWN && <p className="muted">{t("panel.held.latest", { shown: HELD_SHOWN, total: view.held.length })}</p>}
         </>
       )}
-      <h3>Rules for this session</h3>
-      {rules.length === 0 && <p className="muted">None. "Allow always" with "this session" adds one.</p>}
+      <h3>{t("panel.sessionRules.title")}</h3>
+      {rules.length === 0 && <p className="muted">{t("panel.sessionRules.none")}</p>}
       <ul className="panel-list">
         {rules.map((r, i) => (
           <li key={i} className="row">
-            <span className={`decision decision-${r.effect === "deny" ? "denied" : "allowed"}`}>{r.effect}</span>
+            <span className={`decision decision-${r.effect === "deny" ? "denied" : "allowed"}`}>{EFFECT[r.effect] ? t(EFFECT[r.effect]) : r.effect}</span>
             <code>
               {r.tool}
               {r.command ? `: ${r.command}` : r.path ? `: ${r.path}` : ""}
@@ -458,7 +495,7 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
           </li>
         ))}
       </ul>
-      {rules.length > 0 && <p className="muted">Session rules last as long as the session; global rules are on the Rules page.</p>}
+      {rules.length > 0 && <p className="muted">{t("panel.sessionRules.note")}</p>}
       <ModelSees records={view.modelContext} />
     </>
   );

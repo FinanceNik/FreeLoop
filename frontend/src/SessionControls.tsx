@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { EngineService, MODES, type SessionOption, type SessionOptionsReport } from "./api.ts";
+import { EngineService, MODES, modeHint, type SessionOption, type SessionOptionsReport } from "./api.ts";
+import { t } from "./i18n.ts";
 
 // What can be changed in a session, beside where the next message is written
 // (PRV-014): the same controls for every harness (HRN-001). The engine says what
@@ -29,7 +30,7 @@ interface Props {
 // A value the engine reports that is not among its choices still shows.
 function grouped(o: SessionOption) {
   const listed = o.choices ?? [];
-  const choices = listed.some((c) => c.value === o.current) ? listed : [{ value: o.current, name: o.current.split("\n").pop() || "Default", description: "", group: "" }, ...listed];
+  const choices = listed.some((c) => c.value === o.current) ? listed : [{ value: o.current, name: o.current.split("\n").pop() || t("controls.default"), description: "", group: "" }, ...listed];
   const groups: { group: string; choices: typeof choices }[] = [];
   for (const c of choices) {
     const g = groups.find((x) => x.group === c.group);
@@ -69,7 +70,7 @@ export default function SessionControls({ sessionId, mode, canBypass, offersAuto
       .catch(onError)
       .finally(() => setLoading(false));
   };
-  const hint = MODES.find((m) => m.id === mode)?.hint;
+  const hint = modeHint(mode);
 
   return (
     <div className="session-controls">
@@ -94,32 +95,32 @@ export default function SessionControls({ sessionId, mode, canBypass, offersAuto
                 ))
               ),
             )}
-            {o.custom && <option value={OTHER}>Other…</option>}
+            {o.custom && <option value={OTHER}>{t("controls.other")}</option>}
           </select>
         </label>
       ))}
       {report?.unknown && (
-        <button onClick={load} disabled={loading} title="Starts the agent, which says what it offers. Your first message would start it too.">
-          {loading ? "Starting the agent…" : "Model and effort…"}
+        <button onClick={load} disabled={loading} title={t("controls.loadHint")}>
+          {loading ? t("controls.loading") : t("controls.load")}
         </button>
       )}
       {report?.note && <span className="muted session-control-note">{report.note}</span>}
       {workflow}
       {optimizer}
       <label className="session-control" data-mode={mode} title={hint}>
-        <span className="sr-only">Permissions</span>
+        <span className="sr-only">{t("settings.page.permissions")}</span>
         <select value={mode} onChange={(e) => (e.target.value === RULES ? onRules() : onMode(e.target.value))}>
           {MODES.filter((m) => m.id !== "auto" || offersAuto || mode === "auto").map((m) => {
             const blocked = m.id !== mode && ((m.id === "bypass" && !canBypass) || (m.id === "auto" && !canAuto));
-            const need = m.id === "bypass" && !bypassOn ? "turn it on in Settings" : "needs a trusted project";
+            const why = m.id === "bypass" && !bypassOn ? "controls.mode.needsSettings" : "controls.mode.needsTrust";
             return (
-              <option key={m.id} value={m.id} disabled={blocked} title={m.hint}>
-                {blocked ? `${m.name} (${need})` : m.name}
+              <option key={m.id} value={m.id} disabled={blocked} title={t(m.hint)}>
+                {blocked ? t(why, { mode: t(m.name) }) : t(m.name)}
               </option>
             );
           })}
-          <option value={RULES} title="See and change what this session allows and denies without asking">
-            Rules…
+          <option value={RULES} title={t("controls.rulesHint")}>
+            {t("controls.rules")}
           </option>
         </select>
       </label>

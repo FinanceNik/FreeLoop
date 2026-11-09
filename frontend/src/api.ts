@@ -17,17 +17,9 @@ export const OPEN_SESSION_EVENT_NAME = "freeloop:open-session";
 export const FILES_DROPPED_EVENT_NAME = "freeloop:files-dropped";
 export const TERMINAL_EVENT_NAME = "freeloop:terminal";
 
-export const MODES = [
-  { id: "ask", name: "Ask", hint: "Asks before anything that changes files or runs a command, unless a rule decides." },
-  { id: "accept_edits", name: "Accept edits", hint: "File edits in the project go ahead; commands still ask." },
-  { id: "plan", name: "Plan", hint: "Only reads, and proposes a plan for you to approve." },
-  { id: "auto", name: "Auto", hint: "The agent decides by itself what to run, for agents that have such a mode. What it does not ask about never reaches Freeloop." },
-  // Short, as the other modes, so it fits the composer's control; what it means is in the hint.
-  { id: "bypass", name: "Bypass", hint: "Skips permission prompts: nothing asks, except protected paths and deny rules." },
-];
-
-// A session never starts in these: the user chooses them in the session (SEC-001).
-export const STARTING_MODES = MODES.filter((m) => m.id !== "bypass" && m.id !== "auto");
+// The permission modes are the app's own and are named in the interface's language;
+// they live with the slash commands that choose them.
+export { MODES, STARTING_MODES, modeHint, modeName } from "./commands.ts";
 
 export function errorText(err: unknown): string {
   if (err instanceof Error) return err.message;

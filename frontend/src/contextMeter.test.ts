@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { contextHigh, contextLabel, contextResent, contextTitle, parseLimit, shortTokens } from "./contextMeter.ts";
+import { setLanguage } from "./i18n.ts";
 
 test("the meter says a share with a window and a size without one", () => {
   assert.equal(contextLabel({ tokens: 62_000, window: 100_000 }), "62k · 62 %");
@@ -32,6 +33,17 @@ test("shortTokens rounds up into the next unit at its edge", () => {
   assert.equal(shortTokens(999), "999");
   assert.equal(shortTokens(999_400), "999k");
   assert.equal(shortTokens(999_600), "1.0M");
+});
+
+// GUI-048: the header's few characters keep k and M, with the language's decimal comma.
+test("shortTokens and the tooltip write numbers in the language's style", () => {
+  setLanguage("de");
+  assert.equal(shortTokens(1_234_567), "1,2M");
+  assert.equal(shortTokens(200_000), "200k");
+  assert.equal(contextLabel({ tokens: 1_234_567, window: 2_000_000 }), "1,2M · 62 %");
+  assert.match(contextTitle({ tokens: 1000, window: 2000 }), /1\.000 .* 2\.000 /);
+  setLanguage("en");
+  assert.equal(shortTokens(1_234_567), "1.2M");
 });
 
 test("a resend is a large context, about the same size, written again", () => {
@@ -67,4 +79,19 @@ test("a limit can be typed as people write it", () => {
 test("with no limit, the tooltip says where to set one", () => {
   assert.match(contextTitle({ tokens: 1000, window: 0 }), /Context limit/);
   assert.doesNotMatch(contextTitle({ tokens: 1000, window: 2000 }), /Context limit/);
+});
+
+// GUI-048: the tooltip's words follow the language as well as its numbers.
+test("the tooltip is in the language set", () => {
+  setLanguage("de");
+  assert.equal(
+    contextTitle({ tokens: 1000, window: 2000 }),
+    "Kontext: 1.000 von 2.000 Token. Jede Nachricht sendet ihn erneut, ein vollerer Kontext verbraucht die Limits also schneller.",
+  );
+  assert.match(contextTitle({ tokens: 1000, window: 0 }), /^Kontext: 1\.000 Token\. .* „Kontextgrenze“/);
+  setLanguage("en");
+  assert.equal(
+    contextTitle({ tokens: 1000, window: 0 }),
+    "Context: 1,000 tokens. Every message sends this again, so a fuller context uses your limits faster. This model's limit is not known, so nothing warns or compacts by itself: set it under Context limit, on the Info tab of the right panel.",
+  );
 });

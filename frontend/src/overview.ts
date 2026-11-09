@@ -3,6 +3,7 @@
 
 import { days, tokensOf, type Row } from "./analytics.ts";
 import { weekdayIndex } from "./activity.ts";
+import { locale } from "./i18n.ts";
 
 export const OTHER_MODEL = "Other";
 // An agent need not say which model it ran, as with its default in the early rows.
@@ -122,7 +123,7 @@ export function monthLabels(weeks: (CalendarDay | null)[][]): { week: number; la
     if (month === seen) return;
     seen = month;
     if (out.length > 0 && i - out[out.length - 1].week < 3) out.pop();
-    out.push({ week: i, label: new Date(`${first}T12:00:00`).toLocaleDateString("en", { month: "short" }) });
+    out.push({ week: i, label: new Date(`${first}T12:00:00`).toLocaleDateString(locale(), { month: "short" }) });
   });
   return out;
 }

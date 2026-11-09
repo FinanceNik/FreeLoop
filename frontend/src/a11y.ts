@@ -1,36 +1,40 @@
 // Pure helpers for screen readers and the keyboard (NFR-A11Y-001, NFR-A11Y-002,
 // NFR-A11Y-003), kept apart from the components so they can be tested.
 
-const SCREEN_NAMES: Record<string, string> = {
-  attention: "Needs attention",
-  board: "Board",
-  compare: "Compare runs",
-  environments: "Environments",
-  import: "Import",
-  mcp: "MCP servers",
-  new: "New session",
-  onboarding: "Getting started",
-  optimizers: "Token optimizers",
-  profiles: "Profiles",
-  providers: "Providers",
-  rules: "Policy",
-  schedules: "Schedules",
-  appearance: "Appearance",
-  keyboard: "Keyboard",
-  sessions: "Sessions",
-  costs: "Costs",
-  permissions: "Permissions",
-  network: "Network",
-  data: "Data",
-  skills: "Skills",
-  usage: "Usage",
+import { t, type PlainKey } from "./i18n.ts";
+
+// Catalogue keys (GUI-048), looked up when a name is asked for.
+const SCREEN_NAMES: Record<string, PlainKey> = {
+  attention: "app.needsAttention",
+  board: "app.board",
+  compare: "a11y.screen.compare",
+  environments: "settings.page.environments",
+  import: "app.import.title",
+  mcp: "settings.page.mcp",
+  new: "app.newSession",
+  onboarding: "a11y.screen.onboarding",
+  optimizers: "settings.page.optimizers",
+  profiles: "settings.page.profiles",
+  providers: "settings.page.providers",
+  rules: "settings.page.rules",
+  schedules: "settings.page.schedules",
+  appearance: "settings.page.appearance",
+  keyboard: "settings.page.keyboard",
+  sessions: "settings.page.sessions",
+  costs: "settings.page.costs",
+  permissions: "settings.page.permissions",
+  network: "settings.page.network",
+  data: "settings.page.data",
+  skills: "settings.page.skills",
+  usage: "app.usage",
 };
 
 // screenName is what the window's title and an announcement call a screen; a
 // session goes by its own title.
 export function screenName(kind: string, sessionTitle?: string): string {
-  if (kind === "session") return sessionTitle || "Session";
-  return SCREEN_NAMES[kind] ?? "";
+  if (kind === "session") return sessionTitle || t("a11y.screen.session");
+  const key = SCREEN_NAMES[kind];
+  return key ? t(key) : "";
 }
 
 // tabAfterKey says which tab a key moves focus to, or -1 for a key that moves
@@ -53,16 +57,16 @@ export function tabAfterKey(key: string, index: number, count: number): number {
 
 // toolStatusLabel says in words what a tool card's coloured dot shows.
 export function toolStatusLabel(status: string, waiting: boolean): string {
-  if (waiting) return "Waiting for your approval:";
+  if (waiting) return t("a11y.tool.waiting");
   switch (status) {
     case "completed":
-      return "Done:";
+      return t("a11y.tool.done");
     case "failed":
-      return "Failed:";
+      return t("a11y.tool.failed");
     case "in_progress":
-      return "Running:";
+      return t("a11y.tool.running");
     case "pending":
-      return "Pending:";
+      return t("a11y.tool.pending");
   }
   return "";
 }
@@ -71,13 +75,13 @@ export function toolStatusLabel(status: string, waiting: boolean): string {
 // for any other call. It comes from the agent's tool kind, so every harness gets
 // it alike (HRN-001); a decision mark, when there is one, shows beside it.
 export function editMark(toolKind: string, status: string): string | null {
-  return toolKind === "edit" && status === "completed" ? "Edited a file" : null;
+  return toolKind === "edit" && status === "completed" ? t("a11y.editMark") : null;
 }
 
 // pickLabel announces the highlighted entry of a picker whose focus stays in
 // the message box, where a screen reader would not hear it change.
 export function pickLabel(name: string, index: number, count: number): string {
-  return count > 0 ? `${name}, ${index + 1} of ${count}` : "";
+  return count > 0 ? t("a11y.pick", { name, position: index + 1, count }) : "";
 }
 
 // Colour contrast, as WCAG 2 defines it, for the theme's tokens.

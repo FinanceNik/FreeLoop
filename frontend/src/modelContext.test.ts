@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { latestByPurpose, sections, sizeText } from "./modelContext.ts";
+import { latestByPurpose, PURPOSE_LABEL, sections, sizeText } from "./modelContext.ts";
+import { setLanguage, t } from "./i18n.ts";
 
 const prompt = `You are the built-in coding agent.
 
@@ -41,6 +42,20 @@ test("a prompt with no headings is one section, and an empty one none", () => {
 
 test("sizes say characters and roughly how many tokens", () => {
   assert.equal(sizeText(4000), "4,000 characters, about 1,000 tokens");
+});
+
+test("sizes, the introduction and the kinds of call are named in the interface's language", () => {
+  assert.equal(t(PURPOSE_LABEL.turn), "Each turn");
+  setLanguage("de");
+  try {
+    assert.equal(sizeText(4000), "4.000 Zeichen, etwa 1.000 Token");
+    assert.equal(sections("You write git commit messages.")[0].title, "Einleitung");
+    assert.equal(sections(prompt)[1].title, "Working");
+    assert.equal(t(PURPOSE_LABEL.turn), "Jede Runde");
+    assert.equal(t(PURPOSE_LABEL.commit_message), "Entwurf einer Commit-Nachricht");
+  } finally {
+    setLanguage("en");
+  }
 });
 
 test("the newest record of each kind of call, turns first, with how often each changed", () => {

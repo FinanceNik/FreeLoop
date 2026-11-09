@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CATALOGUES, LANGUAGES, language, list, resolveLanguage, setLanguage, t, tParts } from "./i18n.ts";
+import { CATALOGUES, LANGUAGES, language, list, locale, resolveLanguage, setLanguage, t, tParts } from "./i18n.ts";
 
 test("t fills placeholders in the language set", () => {
   setLanguage("en");
@@ -76,6 +76,35 @@ test("the language set is the one read back", () => {
   assert.equal(language(), "en");
 });
 
+test("the locale is the language, in the region the system prefers for it", () => {
+  setLanguage("de");
+  assert.equal(locale(), "de");
+  setLanguage("en", ["en-GB", "de-DE"]);
+  assert.equal(locale(), "en-GB");
+  setLanguage("de", ["en-GB", "de-AT"]);
+  assert.equal(locale(), "de-AT");
+  setLanguage("nl", ["nl_BE"]);
+  assert.equal(locale(), "nl-BE");
+  // A language the system does not list is written as the language writes it.
+  setLanguage("nl", ["en-US", "de-DE"]);
+  assert.equal(locale(), "nl");
+  setLanguage("de", ["not a tag", "de-"]);
+  assert.equal(locale(), "de");
+  setLanguage("en");
+  assert.equal(locale(), "en");
+});
+
+test("t writes a number in the locale's style", () => {
+  setLanguage("en");
+  assert.equal(t("settings.network.blocked", { count: 1250 }), "1,250 blocked connections");
+  setLanguage("de");
+  assert.equal(t("settings.network.blocked", { count: 1250 }), "1.250 blockierte Verbindungen");
+  assert.equal(t("settings.fontSize", { size: 13.5 }), "Schriftgröße: 13,5 pt");
+  setLanguage("nl");
+  assert.equal(t("settings.network.blocked", { count: 1250 }), "1.250 geblokkeerde verbindingen");
+  setLanguage("en");
+});
+
 test("the picker names each language in itself", () => {
   assert.deepEqual(
     LANGUAGES.map((l) => [l.id, l.name]),
@@ -105,10 +134,75 @@ test("each catalogue has the English keys, forms and placeholders", () => {
 });
 
 // Entries spelt as in English because the word is the language's own too, not English
-// left over: German says Agent, Text and Code, Dutch Agent, Code and Model, both OK.
+// left over: German says Agent, Text, Code, Status, Terminal and Branch, Dutch Agent,
+// Code, Model, Project and Context, all OK.
 const SAME_WORD = {
-  de: new Set(["common.ok", "pending.kind.agent", "colors.token.text", "fonts.text", "fonts.code"]),
-  nl: new Set(["common.ok", "pending.kind.agent", "fonts.code", "settings.defaults.model", "prices.model", "usage.model"]),
+  de: new Set([
+    "common.ok",
+    "pending.kind.agent",
+    "colors.token.text",
+    "fonts.text",
+    "fonts.code",
+    "sidebar.filter.status",
+    "sidebar.filter.tag",
+    "sidebar.savedFilter.namePlaceholder",
+    "search.hit.agent",
+    "tags.label",
+    "tags.add",
+    "app.board",
+    "session.item.agent",
+    "plan.versionLabel",
+    "panel.tab.plan",
+    "panel.tab.diff",
+    "panel.tab.terminal",
+    "panel.tab.info",
+    "panel.info.status",
+    "panel.info.worktree",
+    "panel.info.branch",
+    "panel.info.ports",
+    "panel.scope.global",
+    "terminal.list",
+    "terminal.shell",
+    "terminal.label",
+    "diff.commit.title",
+  ]),
+  nl: new Set([
+    "common.ok",
+    "pending.kind.agent",
+    "fonts.code",
+    "settings.defaults.model",
+    "prices.model",
+    "usage.model",
+    "sidebar.filters",
+    "sidebar.groupBy.project",
+    "sidebar.filter.status",
+    "sidebar.filter.tag",
+    "search.hit.agent",
+    "tags.label",
+    "tags.add",
+    "app.help",
+    "session.item.agent",
+    "tool.via",
+    "tool.viaCommand",
+    "panel.tab.plan",
+    "panel.tab.diff",
+    "panel.tab.terminal",
+    "panel.tab.info",
+    "panel.info.status",
+    "panel.info.project",
+    "panel.info.worktree",
+    "panel.info.branch",
+    "panel.info.context",
+    "panel.info.contextTokens",
+    "panel.rules.effect",
+    "panel.scope.project",
+    "terminal.list",
+    "terminal.shell",
+    "terminal.label",
+    "diff.commit.title",
+    "diff.file.agentEdit",
+    "pr.title",
+  ]),
 };
 
 test("German and Dutch translate every entry", () => {

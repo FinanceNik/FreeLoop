@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
-import { EngineService, STARTING_MODES, type Command, type HarnessInfo, type Issue, type OptimizerStatus, type Profile, type ProviderInfo, type WorkflowInfo } from "./api.ts";
+import { EngineService, modeName, STARTING_MODES, type Command, type HarnessInfo, type Issue, type OptimizerStatus, type Profile, type ProviderInfo, type WorkflowInfo } from "./api.ts";
 import { OPTIMIZER_OFF } from "./optimizers.ts";
 
 // Profiles (HRN-003): one YAML file each in profiles/. The form covers the
@@ -253,7 +253,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                 <option value="">From the environment</option>
                 {STARTING_MODES.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {modeName(m.id)}
                   </option>
                 ))}
               </select>

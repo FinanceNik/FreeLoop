@@ -3,6 +3,7 @@ import { compact, withoutCacheReads, type Row } from "./analytics.ts";
 import { duration, type ActivityRow } from "./activity.ts";
 import { EngineService } from "./api.ts";
 import { calendar, dayLevel, longestChat, modelName, monthLabels, OTHER_MODEL, usageOverview, type CalendarDay } from "./overview.ts";
+import { locale } from "./i18n.ts";
 
 // The overview at the top of the usage page (GUI-033): a year's totals and a calendar with
 // one square per day, in the colour of the model used most that day and as strong as the
@@ -12,7 +13,7 @@ const YEAR = 371; // the calendar's 53 weeks
 const WEEKDAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", ""];
 const STEP = [32, 48, 64, 80, 100];
 
-const dateLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString("en", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+const dateLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString(locale(), { weekday: "short", year: "numeric", month: "short", day: "numeric" });
 
 // compact is for the usage pane (GUI-038): its header names the view, the grid opens on
 // today, and the days as a table stay on the usage page.
@@ -53,7 +54,9 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
   const shown = useMemo(() => (rows ? (cacheReads ? rows : (withoutCacheReads(rows) as Row[])) : []), [rows, cacheReads]);
   const overview = useMemo(() => usageOverview(shown, today), [shown, today]);
   const weeks = useMemo(() => (today ? calendar(shown, today) : []), [shown, today]);
-  const months = useMemo(() => monthLabels(weeks), [weeks]);
+  // The month names are the locale's, so they change with the language.
+  const loc = locale();
+  const months = useMemo(() => monthLabels(weeks), [weeks, loc]);
   const chat = useMemo(() => longestChat(turns), [turns]);
   const max = overview.peak?.tokens ?? 0;
 
@@ -216,7 +219,7 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
               {activeDays.map((d) => (
                 <tr key={d.day}>
                   <td>{dateLabel(d.day)}</td>
-                  <td>{d.tokens.toLocaleString()}</td>
+                  <td>{d.tokens.toLocaleString(locale())}</td>
                   <td>{d.models.map((m) => `${m.model} ${compact(m.tokens)}`).join(", ")}</td>
                 </tr>
               ))}

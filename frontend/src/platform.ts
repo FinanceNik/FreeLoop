@@ -145,7 +145,7 @@ export function inFileManager(): string {
 
 // showInFiles is the label of a button that shows a folder or file there.
 export function showInFiles(): string {
-  return `Show in ${fileManager()}`;
+  return t(pick("platform.showIn.mac", "platform.showIn.windows", "platform.showIn.linux"));
 }
 
 // secretStore is where the app keeps keys and secrets, as used in a sentence.

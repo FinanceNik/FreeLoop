@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { optimizerCounts, apply, awaitingDecision, buildView, emptyTranscript, hookFailedText, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
+import { optimizerCounts, apply, awaitingDecision, buildView, emptyTranscript, HELD_BY, hookFailedText, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
+import { setLanguage } from "./i18n.ts";
 
 const ev = (seq: number, data: unknown = {}): TranscriptEvent => ({
   v: 1,
@@ -485,4 +486,41 @@ test("a workflow stage starting is an item of its own (WFL-008)", () => {
     v.items.map((i) => (i.kind === "stage" ? `${i.command}:${i.title}` : i.kind)),
     ["prd:Write the PRD", "go:/go"],
   );
+});
+
+// GUI-048: the app's own sentences in the conversation are written in the language in
+// force; what they quote (a hook's event, a command, what it said) is shown as given.
+test("the app's own words in the conversation follow the language", () => {
+  setLanguage("de");
+  try {
+    const v = buildView([
+      at(1, "optimizer_changed", { optimizer: "", name: "" }),
+      at(2, "hook_ran", { event: "pre_tool_use", tool: "shell", command: "./check.sh", exitCode: 2, blocked: true, stderr: "no curl\n" }),
+      at(3, "hook_ran", { event: "session_start", command: "sleep 99", exitCode: -1, timedOut: true }),
+      at(4, "mode_refused", { from: "plan", to: "bypass" }),
+      at(5, "effort_changed", { effort: "high" }),
+      at(6, "tool_call", { toolCallId: "c" }),
+      at(7, "error", {}),
+      at(8, "notice", { message: "From the engine." }),
+    ]);
+    assert.deepEqual(
+      v.items.map((i) => (i.kind === "notice" || i.kind === "error" ? i.message : i.kind === "tool" ? i.title : i.kind)),
+      [
+        "Token-Optimierer ausgeschaltet.",
+        "Der Hook-Befehl pre_tool_use für shell hat blockiert: no curl",
+        "Der Hook-Befehl session_start hat das Zeitlimit überschritten (sleep 99).",
+        "Der Agent versuchte, den Modus eigenmächtig von plan auf bypass zu ändern; der Modus bleibt plan.",
+        "Aufwand auf high gesetzt. Gilt ab dem nächsten Modellaufruf.",
+        "Werkzeugaufruf",
+        "Unbekannter Fehler",
+        "From the engine.",
+      ],
+    );
+    assert.equal(HELD_BY.user, "Manuell abgelehnt");
+    assert.equal(HELD_BY.unknown, undefined);
+    assert.match(hookFailedText("it timed out"), /^Rückfrage, weil ein prüfender Hook-Befehl nicht antwortete: it timed out\./);
+  } finally {
+    setLanguage("en");
+  }
+  assert.equal(HELD_BY.user, "You denied it");
 });

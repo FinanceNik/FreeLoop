@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-// GUI-048: the Settings page and what it is made of write no text of their own; all of
-// it comes from the catalogues in src/i18n/. A rough reading of the source, not a
-// parser: text between tags, text on a line of its own, words in a user-facing
-// attribute, and string literals that read like a label or a sentence.
-const SETTINGS_PAGE = [
+// GUI-048: the views translated so far write no text of their own; all of it comes from
+// the catalogues in src/i18n/. A rough reading of the source, not a parser: text
+// between tags, text on a line of its own, words in a user-facing attribute, and string
+// literals that read like a label or a sentence.
+const TRANSLATED = [
+  // The Settings page and what it is made of.
   "Settings.tsx",
   "SettingsNav.tsx",
   "ShortcutsEditor.tsx",
@@ -17,38 +18,117 @@ const SETTINGS_PAGE = [
   "Costs.tsx",
   "BudgetTable.tsx",
   "Hooks.tsx",
+  // The sidebar and its footer, and the panes.
+  "App.tsx",
+  "Workspace.tsx",
+  "Tags.tsx",
+  "GitMark.tsx",
+  "ContextMenu.tsx",
+  "Splitter.tsx",
+  "ActivityLine.tsx",
+  "sessionActivity.ts",
+  "filters.ts",
+  "unread.ts",
+  "source.ts",
+  "budgets.ts",
+  "search.ts",
+  // The session view and its composer.
+  "SessionView.tsx",
+  "composer.ts",
+  "attach.ts",
+  "imageprep.ts",
+  "images.ts",
+  "contextMeter.ts",
+  "trust.ts",
+  "cost.ts",
+  "drafts.ts",
+  "mentions.ts",
+  "scrollPlace.ts",
+  "commands.ts",
+  // The transcript: tool calls, thinking, permission prompts, plans.
+  "ToolView.tsx",
+  "PlanReview.tsx",
+  "AttachedImages.tsx",
+  "Markdown.tsx",
+  "SessionControls.tsx",
+  "WorkflowStrip.tsx",
+  "transcript.ts",
+  "planView.ts",
+  "workflows.ts",
+  "shortcuts.ts",
+  "a11y.ts",
+  // The right panel.
+  "SessionPanel.tsx",
+  "ContextLimit.tsx",
+  "ModelSees.tsx",
+  "PreviewPanel.tsx",
+  "TerminalPanel.tsx",
+  "preview.ts",
+  "terminal.ts",
+  "modelContext.ts",
+  "sizes.ts",
+  // The Diff and Files tabs. review.ts writes the message a review sends the agent,
+  // which stays English, and pdfview.ts the PDF frame's page, whose one word is PDF.
+  "DiffPanel.tsx",
+  "AgentReview.tsx",
+  "PullRequest.tsx",
+  "FilesPanel.tsx",
+  "PdfView.tsx",
+  "diff.ts",
 ];
 
-// What is not text to translate: a selector, a media query, a key's name.
-const NOT_TEXT = new Set(['input:not([type="checkbox"]), textarea', "(prefers-color-scheme: dark)", "Tab", "Escape"]);
+// What is not text to translate: a selector, a media query, the product's name, a key's
+// name as a key event gives it.
+const NOT_TEXT = new Set([
+  'input:not([type="checkbox"]), textarea',
+  "(prefers-color-scheme: dark)",
+  "(prefers-reduced-motion: reduce)",
+  "Freeloop",
+  ...["Tab", "Escape", "Enter", "Backspace", "Home", "End", "Meta", "Control", "Ctrl", "Alt", "Shift", "Super"],
+]);
 
 // A line of code that holds none of < > { } = and so could pass for text.
-const CODE_LINE = /^(\.|\?|:|&&|\|\||\)|\[|\]|\w+\??: |return\b|case\b|default\b|const\b|let\b|if\b|else\b|export\b|import\b|type\b|interface\b|function\b|await\b|throw\b|break\b|continue\b|delete\b)|[({[]$|^[\w.]+\(|^[a-z][A-Za-z]*[,;]?$/;
+const CODE_LINE =
+  /^(\.|\?|:|!|&&|\|\||\)|\[|\]|\w+\??: |return\b|case\b|default\b|const\b|let\b|if\b|else\b|for\b|while\b|export\b|import\b|type\b|interface\b|function\b|await\b|throw\b|break\b|continue\b|delete\b)|[({[]$|^[\w.?[\]]+\(|^[a-z][A-Za-z]*[,;]?$|^(type )?[A-Za-z_$][\w$]*,$|^[\w.]+(\+\+|--);?$/;
 
 // A capitalized word on its own or starting a phrase, and not a key such as Meta+1.
 const LABEL = /^[A-Z][a-z']+(?:$|[\s,.?!:…])/;
 
 function untranslated(source: string): string[] {
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|\s)\/\/.*$/gm, "$1")
+    // A regular expression, roughly: a slash where a value starts.
+    .replace(/(^|[=(,:!&|?;{[]|\breturn)(\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+\/[dgimsuvy]*/gm, "$1$2/re/");
   const found: string[] = [];
+  // What is said in code: a message for the developer, a palette group's id (palette.ts
+  // names the group), a CSS selector a query takes, a grid's columns, a case to match, a
+  // dragged item's type.
+  const notText = (at: number) =>
+    /(?:console\.\w+\(|\bgroup: |querySelector(?:All)?(?:<\w+>)?\(|\.closest\(|\.matches\(|gridTemplate\w*: |\bcase |\btypes\.includes\()$/.test(
+      code.slice(Math.max(0, at - 40), at),
+    );
+  const add = (s: string) => NOT_TEXT.has(s) || found.push(s);
   const words = (s: string) => /[A-Za-z]{2,}/.test(s);
   // Text between tags on one line, or after an expression up to a closing tag.
-  for (const m of code.matchAll(/[>}]([^<>{}\n]*)(?=<\/)/g)) if (words(m[1])) found.push(m[1].trim());
+  for (const m of code.matchAll(/[>}]([^<>{}\n]*)(?=<\/)/g)) if (words(m[1])) add(m[1].trim());
   // A line of text on its own, as between an opening and a closing tag.
   for (const line of code.split("\n")) {
     const s = line.trim();
-    if (words(s) && !/[<>{}="`]/.test(s) && !CODE_LINE.test(s)) found.push(s);
+    if (words(s) && !/[<>{}="`]/.test(s) && !CODE_LINE.test(s)) add(s);
   }
   // A user-facing attribute with words in it.
-  for (const m of code.matchAll(/\b(?:aria-label|title|placeholder|label|hint|alt)="([^"]*)"/g)) if (words(m[1])) found.push(m[1]);
+  for (const m of code.matchAll(/\b(?:aria-label|title|placeholder|label|hint|alt)="([^"]*)"/g)) if (words(m[1])) add(m[1]);
   // A string that starts like a label or reads like a sentence.
   for (const m of code.matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'/g)) {
     const s = m[1] ?? m[2];
-    if (NOT_TEXT.has(s)) continue;
-    if (LABEL.test(s) || (/\s/.test(s) && /[,.?!:…]/.test(s) && words(s))) found.push(s);
+    if (notText(m.index)) continue;
+    if (LABEL.test(s) || (/\s/.test(s) && /[,.?!:…]/.test(s) && words(s))) add(s);
   }
   for (const m of code.matchAll(/`([^`]*)`/g)) {
-    const s = m[1].replace(/\$\{[^}]*\}/g, "");
+    // A class list, not text.
+    if (/className=\{\s*$/.test(code.slice(Math.max(0, m.index - 20), m.index)) || notText(m.index)) continue;
+    const s = m[1].replace(/\$\{[^}]*\}/g, "").replace(/\bFreeloop\b/g, "");
     if (words(s) && (/\s/.test(s.trim()) || LABEL.test(s))) found.push(m[1]);
   }
   return [...new Set(found)];
@@ -61,11 +141,51 @@ test("the source reading finds English written into a component", () => {
   assert.deepEqual(untranslated('const x = ok ? "Checking…" : t("a");'), ["Checking…"]);
   assert.deepEqual(untranslated("const name = `Provider: ${source.name}`;"), ["Provider: ${source.name}"]);
   assert.deepEqual(untranslated('<span className="row settings-save">{t("a")}</span>\n  required\n  const [a, b] = useState<string | null>(null);'), []);
+  // Names in an import over several lines, and a class list built in a template.
+  assert.deepEqual(untranslated("import {\n  CONFIG_EVENT_NAME,\n  EngineService,\n  type Session,\n} from \"./api.ts\";"), []);
+  assert.deepEqual(untranslated("<span className={`status-dot status-${status}`} />"), []);
+  assert.deepEqual(untranslated("    back?.focus?.();\n    buttons[next].focus();"), []);
+  // Loops and counters, a message for the developer, a palette group's id, a key's name.
+  assert.deepEqual(untranslated("    for (const rel of open) load(rel);\n    settings++;\n    endA--;"), []);
+  assert.deepEqual(untranslated('console.error("markdown: rendering failed", err);'), []);
+  assert.deepEqual(untranslated('{ id: "diff", group: "Changes", run }'), []);
+  assert.deepEqual(untranslated('if (e.key === "Enter") send();'), []);
+  // A regular expression's backticks open no template.
+  assert.deepEqual(untranslated("const FENCE = /^\\s*(```|~~~)/;\nconst a = `${x}`;\nconst b = `${y} ${z}`;"), []);
+  assert.deepEqual(untranslated("const ok = /^Done/.test(s) ? `Done in ${n}` : x;"), ["Done in ${n}"]);
+  assert.deepEqual(untranslated("const where = `${provider}/${model}`;\nconst s = \"Saved.\";"), ["Saved."]);
+  assert.deepEqual(untranslated('document.querySelector<HTMLElement>(".pane-active textarea")?.focus();\ncase "Home":\n<h1>\n  Freeloop\n</h1>'), []);
 });
 
-test("every string on the Settings page comes from the catalogues", () => {
-  for (const name of SETTINGS_PAGE) {
-    const source = readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
-    assert.deepEqual(untranslated(source), [], name);
-  }
+test("every string in the translated views comes from the catalogues", () => {
+  const found = TRANSLATED.map((name) => [name, untranslated(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"))] as const);
+  assert.deepEqual(
+    found.filter(([, texts]) => texts.length > 0),
+    [],
+  );
+});
+
+// GUI-048: numbers, dates and times are written in the locale of the language in force,
+// so every formatter takes it from the translation module: never the web view's own,
+// which a call without a locale (or with []) falls back to, and never a fixed one.
+const FORMATTER = /\.toLocale(?:String|DateString|TimeString|UpperCase|LowerCase)\(|\bIntl\.[A-Z]\w*\(/g;
+
+function withoutLocale(source: string): string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+  return [...code.matchAll(FORMATTER)].filter((m) => !code.startsWith("locale()", m.index + m[0].length)).map((m) => code.slice(m.index, m.index + m[0].length + 12));
+}
+
+test("the formatter check finds a call without the locale", () => {
+  assert.equal(withoutLocale("n.toLocaleString()").length, 1);
+  assert.equal(withoutLocale('d.toLocaleDateString([], { month: "short" })').length, 1);
+  assert.equal(withoutLocale('d.toLocaleTimeString("en")').length, 1);
+  assert.equal(withoutLocale("new Intl.NumberFormat(undefined, {})").length, 1);
+  assert.equal(withoutLocale("n.toLocaleString(locale())\nnew Intl.DateTimeFormat(locale(), {})\n// n.toLocaleString()").length, 0);
+});
+
+test("every number, date and time formatter takes the locale from the translation module", () => {
+  const dir = new URL("./", import.meta.url);
+  const sources = readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && !/\.(test|typetest)\.ts$/.test(f));
+  assert.ok(sources.length > 50);
+  for (const name of sources) assert.deepEqual(withoutLocale(readFileSync(new URL(name, dir), "utf8")), [], name);
 });

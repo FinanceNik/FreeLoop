@@ -1,6 +1,7 @@
 // The English catalogue, the source the others are typed against (GUI-048). A key
 // names where its text is used; {name} is a placeholder t fills, and an entry with
 // forms is a plural, picked by its count.
+
 export const en = {
   "common.back": "Back",
   "common.cancel": "Cancel",
@@ -23,6 +24,10 @@ export const en = {
   "platform.inFileManager.mac": "in the Finder",
   "platform.inFileManager.windows": "in File Explorer",
   "platform.inFileManager.linux": "in the file manager",
+  // A button that shows a folder or file there.
+  "platform.showIn.mac": "Show in Finder",
+  "platform.showIn.windows": "Show in File Explorer",
+  "platform.showIn.linux": "Show in file manager",
 
   "settings.title": "Settings",
   "settings.group.models": "Models",
@@ -265,6 +270,31 @@ export const en = {
   "shortcut.allowAlways": "Approval: allow always",
   "shortcut.reject": "Approval: deny",
 
+  // An approval card's buttons, named after what each kind does (shortcuts.ts).
+  "approval.allowOnce": "Allow once",
+  "approval.allowAlways": "Allow always",
+  "approval.deny": "Deny",
+  "approval.alwaysDeny": "Always deny",
+  // A form's buttons: it answers, or it is skipped.
+  "approval.send": "Send",
+  "approval.skip": "Skip",
+  // Beside a button: its letter, or its fixed chord such as ⌘↩.
+  "approval.hint": "{letter} or {chord}",
+
+  // Said to a screen reader (a11y.ts): before a tool card's title, what its dot shows.
+  "a11y.tool.waiting": "Waiting for your approval:",
+  "a11y.tool.done": "Done:",
+  "a11y.tool.failed": "Failed:",
+  "a11y.tool.running": "Running:",
+  "a11y.tool.pending": "Pending:",
+  "a11y.editMark": "Edited a file",
+  // The entry highlighted in a picker: {position} of {count}.
+  "a11y.pick": "{name}, {position} of {count}",
+  // The window's title for a screen.
+  "a11y.screen.session": "Session",
+  "a11y.screen.compare": "Compare runs",
+  "a11y.screen.onboarding": "Getting started",
+
   "colors.which": "Which appearance to change",
   "colors.open": "Open colors.json",
   "colors.resetLight": "Reset light colors",
@@ -319,4 +349,1015 @@ export const en = {
   "marks.colour": "Colour {slot}",
   "marks.lettersFor": "Letters for {name}",
   "marks.reset": "Reset the mark of {name}",
+
+  // The permission modes: a name short enough for the composer's control, what the
+  // mode does, and what its slash command does.
+  "mode.ask": "Ask",
+  "mode.ask.hint": "Asks before anything that changes files or runs a command, unless a rule decides.",
+  "mode.ask.command": "Ask before edits and commands",
+  "mode.acceptEdits": "Accept edits",
+  "mode.acceptEdits.hint": "File edits in the project go ahead; commands still ask.",
+  "mode.acceptEdits.command": "Allow edits inside the project without asking",
+  "mode.plan": "Plan",
+  "mode.plan.hint": "Only reads, and proposes a plan for you to approve.",
+  "mode.plan.command": "Read and plan only; no changes",
+  "mode.auto": "Auto",
+  "mode.auto.hint": "The agent decides by itself what to run, for agents that have such a mode. What it does not ask about never reaches Freeloop.",
+  "mode.auto.command": "Let the agent decide by itself what to run",
+  "mode.bypass": "Bypass",
+  "mode.bypass.hint": "Skips permission prompts: nothing asks, except protected paths and deny rules.",
+  "mode.bypass.command": "Run tool calls without asking",
+
+  // A session's status, as its dot, a pane's badge, the status filter and the palette say it.
+  "status.running": "Running",
+  "status.waitingPermission": "Needs you",
+  "status.waitingInput": "Waiting",
+  "status.queued": "Queued",
+  "status.idle": "Idle",
+  "status.error": "Error",
+  "status.archived": "archived",
+  // How many sessions of a collapsed project have a status, on its heading.
+  "status.count.running": { one: "{count} running", other: "{count} running" },
+  "status.count.waitingPermission": { one: "{count} needs you", other: "{count} needs you" },
+  "status.count.waitingInput": { one: "{count} waiting", other: "{count} waiting" },
+  "status.count.queued": { one: "{count} queued", other: "{count} queued" },
+  "status.count.error": { one: "{count} error", other: "{count} error" },
+  // A session that finished work out of sight.
+  "status.unread": "Finished, not read yet",
+  // What a session is doing, in a line under its title (sessionActivity.ts); a tool
+  // call's own title is shown as the agent gave it.
+  "status.activity.thinking": "Thinking",
+  "status.activity.writing": "Writing",
+  "status.activity.toolCall": "Tool call",
+  "status.activity.needsYou": "Needs you: {what}",
+  "status.activity.queued": "Waiting for a slot",
+  "status.activity.working": "Working",
+  "status.activity.finished": "Finished",
+  "status.activity.stopped": "Stopped",
+  "status.activity.changed": { one: "{count} file changed", other: "{count} files changed" },
+  // How long a turn has been going, shortly.
+  "status.elapsed.seconds": "{seconds}s",
+  "status.elapsed.minutes": "{minutes}m",
+  "status.elapsed.hours": "{hours}h {minutes}m",
+
+  "sidebar.find": "Find a session",
+  "sidebar.filters": "Filters",
+  "sidebar.filters.count": { one: "Filters, {count} on", other: "Filters, {count} on" },
+  "sidebar.filters.title": "Status, tags, archived and saved filters",
+  "sidebar.filters.on": "Filters on",
+  // {label} is a status, a #tag or Archived.
+  "sidebar.filter.remove": "Remove the filter {label}",
+  "sidebar.groupBy": "Group by",
+  "sidebar.groupBy.project": "Project",
+  "sidebar.groupBy.date": "Last used",
+  "sidebar.filter.status": "Status",
+  "sidebar.filter.anyStatus": "Any status",
+  "sidebar.filter.tag": "Tag",
+  "sidebar.filter.anyTag": "Any tag",
+  "sidebar.filter.archived": "Archived",
+  "sidebar.savedFilters": "Saved filters",
+  "sidebar.savedFilter.remove": "Remove the saved filter {name}",
+  "sidebar.savedFilter.save": "Save filter…",
+  "sidebar.savedFilter.name": "Filter name",
+  "sidebar.savedFilter.namePlaceholder": "Name",
+  "sidebar.nav": "Projects and sessions",
+  // Sessions grouped by when they were last used.
+  "sidebar.date.today": "Today",
+  "sidebar.date.yesterday": "Yesterday",
+  "sidebar.date.week": "Previous 7 days",
+  "sidebar.date.month": "Previous 30 days",
+  "sidebar.date.older": "Older",
+  // A project whose folder is gone.
+  "sidebar.project.missing": "missing",
+  "sidebar.project.relink": "Relink…",
+  "sidebar.project.untrusted": "Untrusted",
+  "sidebar.project.untrustedLong": "Untrusted: global settings only",
+  "sidebar.project.untrustedRoot": "{root} (untrusted: global settings only)",
+  "sidebar.row.rename": "New name for {title}",
+  // A session row's tooltip; {click} is the click below for this system.
+  "sidebar.row.openBeside": "{click} or drag to open it beside what is open",
+  "sidebar.row.click.mac": "⌘-click",
+  "sidebar.row.click.other": "Ctrl+click",
+  "sidebar.row.unreadTitle": "Finished while you were away",
+  "sidebar.row.subagents": "Subagents of {title}",
+  "sidebar.empty.none": "No sessions yet.",
+  "sidebar.empty.noMatch": "No sessions match.",
+  "sidebar.update": "Version {version} is available",
+  "sidebar.localOnly.title": "The app connects to nothing but this computer; change it in Settings",
+  "sidebar.attention": "Attention",
+  "sidebar.attention.key": "Attention ({key})",
+  "sidebar.usage.title": "Usage. Drag to a pane to watch it beside your sessions.",
+  "sidebar.help.title": "Help: how Freeloop works",
+  "sidebar.cost.title":
+    "Today's estimated cost, from the price table in Settings; calls to models without a price and turns an agent did not report are left out. Opens the usage dashboard.",
+  "sidebar.settings.key": "Settings ({key})",
+  "sidebar.layout": "Sessions side by side",
+  "sidebar.layout.panes": { one: "{count} pane", other: "{count} panes" },
+  "sidebar.layout.oneSession": "One session",
+  "sidebar.layout.sessions": { one: "{count} session side by side", other: "{count} sessions side by side" },
+  "sidebar.width": "Sidebar width",
+  // A session row's menu.
+  "sidebar.menu.label": "Actions for {title}",
+  "sidebar.menu.rename": "Rename",
+  "sidebar.menu.openBeside": "Open beside what is open",
+  "sidebar.menu.openWindow": "Open in a new window",
+  "sidebar.menu.archive": "Archive",
+  "sidebar.menu.unarchive": "Unarchive",
+  "sidebar.menu.delete": "Delete…",
+  "sidebar.menu.deleteAsk": 'Delete "{title}"? Its transcript is removed from disk. This cannot be undone.',
+
+  "search.found": "Found in transcripts",
+  "search.heading": "In transcripts",
+  // Where a search hit was found: the user's own message, the agent's, and so on.
+  "search.hit.user": "You",
+  "search.hit.agent": "Agent",
+  "search.hit.thought": "Thinking",
+  "search.hit.tool": "Tool",
+  "search.hit.summary": "Summary",
+
+  "tags.label": "Tags",
+  "tags.remove": "Remove the tag {tag}",
+  "tags.new": "New tag",
+  // An example of what the field takes: tags separated by commas.
+  "tags.placeholder": "tag, another",
+  "tags.add": "+ Tag",
+
+  "workspace.panes": "Panes",
+  "workspace.width": "Width of the panes",
+  "workspace.pane": "Pane {number}: {title}",
+  "workspace.empty": "Empty",
+  "workspace.choose": "Choose a session for this pane",
+  "workspace.create": "Create a session for this pane",
+  "workspace.showUsage": "Show usage",
+  "workspace.close": "Close this pane",
+
+  "app.skip": "Skip to the main content",
+  "app.newSession": "New session",
+  "app.needsAttention": "Needs attention",
+  "app.board": "Board",
+  "app.queue": "Queue",
+  "app.usage": "Usage",
+  "app.help": "Help",
+  // A project's AFK run on the Board.
+  "app.afk.run": "Run AFK issues…",
+  "app.afk.pause": "Pause",
+  "app.afk.resume": "Resume",
+  "app.afk.stop": "Stop",
+  "app.afk.showRun": "Show the run",
+  "app.afk.archiveAsk": {
+    one: "Archive {count} finished backlog files of {project}? They are removed in a commit of their own, and git history keeps them.",
+    other: "Archive {count} finished backlog files of {project}? They are removed in a commit of their own, and git history keeps them.",
+  },
+  // Said to a screen reader when ⌘+ or ⌘- changes the text size.
+  "app.textSize.largest": "Text is at its largest",
+  "app.textSize.smallest": "Text is at its smallest",
+  "app.textSize.now": "Text size {size}",
+  "app.layout.onePane": "One pane",
+  "app.layout.panesSideBySide": { one: "{count} pane side by side", other: "{count} panes side by side" },
+  // The command palette's entries.
+  "app.palette.workflow": "Start a workflow…",
+  "app.palette.workflowDetail": "a new session with a workflow, at its first stage",
+  "app.palette.afk": "Run AFK issues: {project}",
+  "app.palette.afkDetail": "one fresh session per ready AFK issue in its backlog",
+  "app.palette.demo": "Try the demo",
+  "app.palette.waiting": { one: "{count} waiting", other: "{count} waiting" },
+  "app.palette.keyboard": "Keyboard shortcuts",
+  "app.palette.sessions": "Session defaults and notifications",
+  "app.palette.costs": "Prices and budgets",
+  "app.palette.usagePane": "Show usage in a pane",
+  "app.palette.usageToday": "today ≈ {cost}",
+  "app.palette.importSessions": "Import sessions",
+  "app.palette.backup": "Back up or restore the configuration",
+  "app.palette.guide": "Setup guide",
+  "app.palette.groupByProject": "Group sessions by project",
+  "app.palette.groupByDate": "Group sessions by last used",
+  "app.palette.showActive": "Show active sessions",
+  "app.palette.showArchived": "Show archived sessions",
+  "app.palette.showStatus": "Show sessions: {status}",
+  // Dimmed beside the filter in use.
+  "app.palette.current": "current",
+  "app.palette.showTag": "Show sessions tagged #{tag}",
+  "app.palette.compare": "Compare runs: {name}",
+  "app.palette.savedFilter": "Saved filter: {name}",
+  "app.palette.relink": "Relink {project}…",
+  "app.approvals.waiting": {
+    one: "One thing in the app's files waits for your approval and does nothing until then.",
+    other: "{count} things in the app's files wait for your approval and do nothing until then.",
+  },
+  "app.approvals.review": "Review",
+  "app.problems": "Configuration problems; using defaults where needed.",
+  "app.dismiss": "Dismiss",
+  "app.import.title": "Import",
+  "app.import.sessions": "Sessions",
+  "app.import.settings": "Settings from Claude Code",
+  "app.empty.gone": "This session no longer exists.",
+  "app.empty.select": "Select a session or create a new one.",
+  "app.empty.guide": "Open the setup guide",
+  "app.git.repo": "Git repository",
+  "app.git.onBranch": "Git repository, on {branch}",
+  // A draggable line between two parts of the window; {label} is its name.
+  "app.splitter.title": "{label}. Double-click to reset.",
+  "app.source.unknown": "Unknown provider",
+  // A budget (budgets.ts): {amount} and {cost} are in US dollars, {share} a percentage.
+  "app.budget.daily": "Daily budget, {amount}",
+  "app.budget.dailyFor": "Daily budget, {amount} for {profile}",
+  "app.budget.monthly": "Monthly budget, {amount}",
+  "app.budget.monthlyFor": "Monthly budget, {amount} for {profile}",
+  "app.budget.spent": "≈ {cost} spent, {share}%",
+  "app.budget.spentUnpriced": "≈ {cost} spent, {share}%, not counting models without a price",
+  "app.budget.spentUnreported": {
+    one: "≈ {cost} spent, {share}%, not counting {count} turn an agent did not report",
+    other: "≈ {cost} spent, {share}%, not counting {count} turns an agent did not report",
+  },
+  "app.budget.spentBoth": {
+    one: "≈ {cost} spent, {share}%, not counting models without a price or {count} turn an agent did not report",
+    other: "≈ {cost} spent, {share}%, not counting models without a price or {count} turns an agent did not report",
+  },
+  // {line} is one of the four above.
+  "app.budget.reached": "{line}. Reached: the queue waits, running sessions go on.",
+
+  // The message box's placeholder (composer.ts); the short forms fit a narrow pane whole.
+  "composer.placeholder": "Ask for a change, a fix, an explanation… Type @ to attach a file, / for commands.",
+  "composer.placeholder.short": "Ask for a change…",
+  "composer.placeholder.queue": "Queue a message for when this turn ends",
+  "composer.placeholder.queueShort": "Queue a message",
+  // The send button: its name, and its tooltip.
+  "composer.send": "Send",
+  "composer.sendQueued": "Send, {count} queued",
+  "composer.sendTipQueued": "Send ({count} queued)",
+  "composer.queue": "Queue",
+  "composer.queueQueued": "Queue, {count} queued",
+  "composer.queueTip": "Queue for when this turn ends",
+  "composer.queueTipQueued": "Queue for when this turn ends ({count} queued)",
+  "composer.stop": "Stop",
+  "composer.message": "Message",
+  "composer.attach": "Attach files",
+  "composer.attach.tip":
+    "Attach files from anywhere on your computer: text goes in the message, pictures go to the model as pictures. You can also paste or drop them.",
+  "composer.resource": "MCP resource…",
+  "composer.resource.tip": "Attach a resource of one of the session's MCP servers",
+  "composer.resourcePicker.label": "Attach a resource",
+  "composer.resourcePicker.find": "Find a resource",
+  "composer.resourcePicker.list": "Resources",
+  "composer.resourcePicker.asking": "Asking the servers…",
+  "composer.resourcePicker.none": "None of this session's MCP servers offers resources.",
+  // {problems} is what the servers reported, as given.
+  "composer.resourcePicker.noneProblems": "None of this session's MCP servers offers resources ({problems}).",
+  "composer.pictures": "Pictures for the next message",
+  "composer.picture": "Picture {n}",
+  "composer.removePicture": "Remove picture {n}",
+  "composer.files": "Files for the next message",
+  // A text file's size, in a tooltip.
+  "composer.fileSize": { one: "{count} character", other: "{count} characters" },
+  "composer.remove": "Remove {name}",
+  "composer.attached": "Attached resources",
+  // The slash-command and @-mention menus. {description} is a command's, as given.
+  "composer.commands": "Commands",
+  "composer.mcpPrompt": "MCP prompt · {description}",
+  "composer.fileList": "Files",
+  "composer.listing": "Listing files…",
+  "composer.noFiles": "No matching files",
+  // The workflow and token optimizer controls beside the mode; {name} is a workflow's or
+  // an optimizer's, as given.
+  "composer.workflow": "Workflow",
+  "composer.workflow.tip": "A workflow's stages are slash commands in this session: type / to see them.",
+  "composer.workflow.off": "Workflow off",
+  "composer.workflow.notApproved": "{name} (not approved)",
+  "composer.workflow.missing": "{name} (no such workflow)",
+  "composer.optimizer": "Optimizer",
+  "composer.optimizer.tip":
+    "Runs this session's shell commands through a program that shortens their output, to spend fewer tokens. You still approve the command as the model wrote it.",
+  "composer.optimizer.off": "Optimizer off",
+  "composer.optimizer.unavailable": "{name} (not available)",
+  "composer.optimizer.missing": "{name} (no such optimizer)",
+
+  // Why a file or picture cannot go in a message (attach.ts, imageprep.ts, the composer).
+  "attach.tooLarge": "{name} is larger than 256 KB. Put it in the project and ask for the part you need.",
+  "attach.notText": "{name} is not text or a picture, so it cannot go in a message. Put it in the project and name its path.",
+  "attach.tooMany": "A message takes at most {max} files.",
+  "attach.overLimit": "{name} would take this message over its 1 MB limit.",
+  "attach.tooManyPictures": "A message takes at most {max} pictures.",
+  // {type} is a media type, such as image/svg+xml.
+  "attach.notPictureType": "{type} is not a picture type agents read; use PNG, JPEG, GIF or WebP.",
+  "attach.notPicture": "This file is not a picture type agents read; use PNG, JPEG, GIF or WebP.",
+  "attach.cannotScale": "The picture could not be scaled down.",
+  "attach.tooLargePicture": "The picture is too large to send, even scaled down.",
+  "attach.cannotEncode": "The picture could not be encoded.",
+
+  // A session's estimated cost in words (cost.ts), after "Cost:" in the panel. {cost} is
+  // an amount such as "≈ $0.50", or the words for no price.
+  "cost.noneYet": "none yet",
+  "cost.notReported": "not reported by the agent",
+  "cost.noPrice": "no price set",
+  "cost.fromTurns": "{cost}, from the agent's turn totals",
+  // {text} is the cost so far, as above.
+  "cost.unreported": { one: "{text}; {count} turn not reported", other: "{text}; {count} turns not reported" },
+
+  // The context meter's tooltip (contextMeter.ts). "Context limit" and "Info" name a
+  // field and a tab of the right panel.
+  "context.title": "Context: {tokens} of {window} tokens. Every message sends this again, so a fuller context uses your limits faster.",
+  "context.titleNoLimit":
+    "Context: {tokens} tokens. Every message sends this again, so a fuller context uses your limits faster. This model's limit is not known, so nothing warns or compacts by itself: set it under Context limit, on the Info tab of the right panel.",
+
+  // What trusting a project lets run (trust.ts); {event}, {command}, {hooks} and {path}
+  // are from the project's files, as given.
+  "trust.hook": "Hook, {event}: {command}",
+  "trust.hookMatching": "Hook, {event} ({match}): {command}",
+  "trust.claudeHooks": "Claude Code hooks in {path}: {hooks}",
+  "trust.agentAllows": "{path} tells its agent not to ask. Freeloop's policy still decides.",
+  "trust.banner": "Untrusted project: global settings only.",
+  "trust.banner.tip": "Without the project's AGENTS.md, .freeloop/ settings or git status.",
+  "trust.banner.lets": "Trusting it lets it run or try these:",
+  "trust.banner.button": "Trust project",
+  "trust.confirm": "Trusting {name} lets it run or try these:\n\n{list}",
+  "trust.checkFirst": "Check what {name} would run, then trust it again.",
+  // {error} is the engine's, as given.
+  "trust.unreadable": "{name} was not trusted: its hooks could not be read. {error}",
+  "trust.stop": "Stop trusting this project…",
+  "trust.stopConfirm": "Stop trusting {name}? Its AGENTS.md, .freeloop/ settings, hooks and skills stop applying to its sessions until you trust it again.",
+  "trust.palette": "Trust this project",
+  "trust.paletteDetail": { one: "{root} · runs {count} hook", other: "{root} · runs {count} hooks" },
+
+  // Why a turn ended, at its end in the conversation.
+  "session.stop.endTurn": "Turn complete",
+  "session.stop.cancelled": "Cancelled",
+  "session.stop.maxTokens": "Stopped: output limit reached",
+  "session.stop.maxTurns": "Stopped: turn limit reached",
+  "session.stop.refusal": "The model declined this request",
+  "session.stop.error": "Stopped by an error",
+  // A turn's estimated cost; {cost} is an amount such as $0.50.
+  "session.turnCost.unpriced": "≈ {cost} + unpriced calls",
+  "session.turnCost.tip": "Estimated from the price table in Settings",
+  // Said to screen readers; {title} is a tool call's, as given.
+  "session.announce.approval": "Approval needed: {title}",
+  "session.announce.error": "The turn stopped with an error",
+  "session.announce.finished": "Turn finished",
+  // An MCP prompt with no description of its own.
+  "session.promptFrom": "Prompt from {server}",
+  // {mode} is a mode's name or what its command does.
+  "session.modeLabel": "Mode: {mode}",
+
+  // The command palette's entries for the session; {title} and {name} are as given.
+  "session.palette.allowOnce": "Allow once: {title}",
+  "session.palette.deny": "Deny: {title}",
+  "session.palette.showRequest": "Show the request: {title}",
+  "session.stopTurn": "Stop the turn",
+  "session.palette.compose": "Write a message",
+  "session.palette.attach": "Attach {name}",
+  "session.palette.switchModel": "Switch model…",
+  "session.palette.startWorkflow": "Start a workflow: {name}",
+  "session.palette.workflowOff": "Workflow: Off",
+  "session.palette.optimizer": "Token optimizer: {name}",
+  "session.palette.optimizerOff": "Token optimizer: Off",
+  "session.palette.report": "Copy a problem report",
+  "session.palette.reportDetail": "version, system, this session's agent, the log's end",
+  "session.palette.hidePanel": "Hide the panel",
+  "session.palette.showPanel": "Show the panel",
+  "session.closePane": "Close this pane",
+  "session.palette.approvals": "Show approvals",
+  "session.palette.changes": "Show changes",
+  "session.palette.files": "Show files",
+  "session.palette.terminal": "Show the terminal",
+  "session.palette.preview": "Show the app preview",
+  "session.palette.info": "Show session details",
+  "session.palette.rewindLast": "Rewind to before the last message…",
+  // {text} is the start of a message of the user's.
+  "session.palette.rewindTo": "Rewind to before “{text}”…",
+  "session.rewindConfirm": "Restore the files to before this message and continue from there?",
+  "session.palette.forkLast": "Fork before the last message",
+  "session.palette.continueWith": "Continue with {name}",
+  "session.openWindow": "Open in a new window",
+  "session.exportMarkdown": "Export as Markdown…",
+  "session.exportJson": "Export as JSON…",
+  "session.palette.rename": "Rename session",
+  "session.palette.tag": "Add a tag to this session",
+  "session.palette.archive": "Archive session",
+  "session.palette.unarchive": "Unarchive session",
+  "session.palette.delete": "Delete session…",
+  "session.deleteConfirm": "Delete \"{title}\"? Its transcript is removed from disk. This cannot be undone.",
+
+  // The session's header and its More menu.
+  "session.header.worktreeOf": "Worktree of {root}: {worktree}",
+  "session.header.environment": "Environment: {name}",
+  // {details} is the lines above: folder, environment, provider and model.
+  "session.header.titleTip": "{details}\nDouble-click to rename",
+  "session.header.titleLabel": "Session title",
+  "session.header.gitTip": "HEAD {head}, started at {base}",
+  // In place of a branch's name: git's detached HEAD.
+  "session.header.detached": "detached",
+  "session.header.ownWorktree": "(own worktree)",
+  "session.header.changed": "{count} changed",
+  "session.header.handingOver": "Handing over to {name}…",
+  "session.header.subagent": "A subagent.",
+  "session.header.openParent": "Open the session that started it",
+  "session.header.compare": "Compare with the other runs",
+  "session.compact": "Compact context",
+  "session.compactTip": "Compact context: summarise the conversation so far, so each message sends less",
+  "session.exported": "Exported",
+  "session.panel": "Panel",
+  "session.panelTip": "Show or hide the right panel",
+  "session.more": "More actions",
+  "session.moreLabel": "More actions for this session",
+  // A heading over the other profiles in the More menu.
+  "session.menu.continueWith": "Continue with",
+  "session.menu.continueWithTip": "A new session with another profile or harness, told what happened here",
+  "session.menu.run": "Run",
+  "session.menu.runTip": "Runs {command} in a terminal tab",
+  // {where} is "in the Finder" or as the system names its file manager.
+  "session.menu.showTip": "Show {path} {where}",
+  "session.menu.rename": "Rename",
+  "session.menu.tag": "Add a tag",
+  "session.menu.archive": "Archive",
+  "session.menu.unarchive": "Unarchive",
+  "session.menu.delete": "Delete…",
+
+  // Banners over the conversation.
+  "session.dismiss": "Dismiss",
+  "session.optimizer.installing": "Installing…",
+  "session.optimizer.install": "Install {name} and turn it on",
+  "session.optimizer.typeInstall": "Type it in the terminal",
+  // Before a provider and a model field, as one line.
+  "session.switch.label": "Next turn uses",
+  "session.switch.modelId": "Model ID",
+  "session.switch.submit": "Switch",
+  "session.demo.note": "This is the demo: a scripted agent in a scratch project. Nothing outside it is touched.",
+  "session.demo.remove": "Remove demo",
+  "session.demo.removeConfirm": "Remove the demo? Its session, its scratch project folder and its project entry are deleted. Nothing else is touched.",
+  "session.auto.banner": "Auto mode: the agent approves its own tool calls.",
+  "session.auto.tip": "What the agent does not ask about never reaches Freeloop, and your deny rules do not apply to it.",
+  "session.bypass.banner": "Bypass: tool calls run without asking.",
+  "session.bypass.tip": "Protected paths and deny rules still hold.",
+  // A session that does not get on (HRN-020); {detail} is the engine's, as given.
+  "session.stuck.detail": "Not getting on: {detail}.",
+  "session.stuck.handOff": "Not getting on: {detail}. It continues on {profile} when this turn ends.",
+  "session.stuck.continueOn": "Continue on {profile}",
+  "session.stuck.otherLabel": "Continue on another profile",
+  "session.stuck.another": "Another profile…",
+  "session.stuck.choose": "Continue on a profile…",
+
+  // The conversation.
+  "session.conversation": "Conversation",
+  "session.empty": "Describe a task to start.",
+  "session.toolCalls": { one: "{count} tool call", other: "{count} tool calls" },
+  "session.working.setup": "Waiting for the worktree setup to finish…",
+  "session.working.starting": "Starting {name}… The first start can take a minute while it downloads.",
+  "session.working.sending": "Sending…",
+  "session.working.queued": "Waiting for a free slot on the provider…",
+  "session.working": "Working…",
+  // The form for an MCP prompt's arguments.
+  "session.prompt.label": "Arguments of /{name}",
+  "session.prompt.run": "Run prompt",
+  // For screen readers, before an item rewound away.
+  "session.item.rewound": "Rewound, no longer part of the conversation:",
+  // Headings for screen readers over each message: the user's and the agent's.
+  "session.item.you": "You",
+  "session.item.agent": "Agent",
+  "session.item.attachedFiles": "Attached files",
+  "session.item.attachedTip": "Attached to this message",
+  "session.item.thinking": "Thinking",
+  "session.item.stage": "Workflow stage: {title}",
+  "session.item.mode": "Mode changed to {mode}",
+  "session.item.model": "Model changed to {model}",
+  // {title} is the pull request's title, a link; {head} and {base} are branches.
+  "session.item.pr": "Opened pull request {title} ({head} into {base})",
+  "session.item.prDraft": "Opened draft pull request {title} ({head} into {base})",
+  // {title} is the title of the session this one continues.
+  "session.item.handoff": "Continues from {title}",
+  "session.item.handoffRaw": "Continues from {title} (the end of its transcript; no model was available for a summary)",
+  "session.item.resend":
+    "The model's cache no longer held this conversation, so {tokens} tokens were written to it again. This usually follows a pause of a few minutes or a change of model.",
+  "session.item.resendTip": "Writing to the cache costs more than reading from it, and the whole context goes through it again",
+  "session.item.compacted": "Context compacted: {before} → about {after} tokens",
+  "session.item.compactedAuto": "Context compacted automatically: {before} → about {after} tokens",
+  // The buttons under a message of the user's.
+  "session.message.actions": "Message actions",
+  "session.message.copy": "Copy",
+  "session.message.copyLabel": "Copy message",
+  "session.message.copied": "Copied",
+  "session.message.rewindTip": "Rewind to here: restore the files to before this message",
+  "session.message.rewindHere": "Rewind to here",
+  "session.message.forkTip": "Fork: a new session with the conversation up to this message",
+  "session.message.fork": "Fork from here",
+  "session.message.rewindLabel": "Rewind to before this message",
+  "session.message.restoreFiles": "Restore the files to before this message?",
+  "session.message.restoreAll": "Restore the files and the conversation to before this message?",
+  "session.message.filesOnlyTip": "The conversation was compacted or rewound since, so the agent keeps its context",
+  "session.message.rewind": "Rewind",
+  "session.message.keep": "Keep",
+  // The setup of a session's own worktree; {files} are file names.
+  "session.setup.copied": "copied {files}",
+  "session.setup.missing": "not in the main checkout: {files}",
+  "session.setup.running": "Setting up the worktree…",
+  "session.setup.done": "Worktree set up",
+  "session.setup.skipped": "Started without finishing the worktree setup",
+  "session.setup.failed": "The worktree setup failed",
+  "session.setup.output": "Output",
+  "session.setup.retry": "Retry",
+  "session.setup.skip": "Start anyway",
+  // The agent's to-do list, folded to one line.
+  "session.todo": "To-do · {done} of {total} done",
+
+  // What the conversation writes itself (transcript.ts). A tool call without a title.
+  "transcript.toolCall": "Tool call",
+  "transcript.unknownError": "Unknown error",
+  // Something the policy held that has no name of its own.
+  "transcript.aRequest": "A request",
+  // Who held a request (SEC-014), in the Info tab and on the usage page.
+  "transcript.held.user": "You denied it",
+  "transcript.held.rule": "A rule denied it",
+  "transcript.held.mode": "The permission mode denied it",
+  "transcript.held.protectedPath": "A protected path",
+  "transcript.held.hook": "A hook blocked it",
+  "transcript.held.sandbox": "The sandbox denied it",
+  "transcript.held.policy": "Policy denied it",
+  "transcript.held.modeChange": "The agent changed the mode on its own",
+  // What an agent's own change of mode would have been, by the modes' ids.
+  "transcript.held.modeChangeWhat": "{from} to {to}",
+  // {mode} is a mode's id as the agent names it, such as bypass; {reason} is the
+  // engine's, in English.
+  "transcript.modeRefused.chosen": "You chose {mode} mode approving the plan, but {reason}. This session asks before changes instead.",
+  "transcript.modeRefused.chosenUnavailable": "You chose {mode} mode approving the plan, but it is not available here. This session asks before changes instead.",
+  "transcript.modeRefused.agent": "The agent tried to change the mode from {from} to {to} on its own; the mode stays {from}.",
+  // {detail} is the engine's, in English.
+  "transcript.stuck": "Not getting on: {detail}.",
+  // {title} is a session's title, {profile} a profile's name.
+  "transcript.handedOff": 'Continued in "{title}" on {profile}.',
+  "transcript.handedOffAnother": 'Continued in "{title}" on another profile.',
+  "transcript.rewound": "Rewound to before the dimmed turns: the files are restored and the conversation continues from there.",
+  "transcript.rewoundFiles": "Rewound the files to before the dimmed turns; the agent still remembers them.",
+  "transcript.env.ready": "Environment ready.",
+  "transcript.env.readyDetail": "Environment ready: {detail}.",
+  "transcript.env.unhealthy": "Environment unhealthy: {detail}",
+  // {effort} is the agent's name for the effort, such as high.
+  "transcript.effort": "Effort set to {effort}. It applies from the next model call.",
+  "transcript.optimizer.set": "Token optimizer set to {name}. It applies from the next command.",
+  "transcript.optimizer.off": "Token optimizer turned off.",
+  // Why a request was put to the user although the mode or a rule might have allowed it.
+  "transcript.hookFailed": "Asked because a guard hook did not answer: {why}. Without it, the mode or a rule might have allowed this.",
+  // A hook that blocked or failed (EXT-005): {event} is its event, such as pre_tool_use,
+  // {tool} the tool it ran for, {command} its command and {said} what it wrote.
+  "transcript.hook.blocked": "The {event} hook blocked it: {said}",
+  "transcript.hook.blockedFor": "The {event} hook for {tool} blocked it: {said}",
+  "transcript.hook.couldNotRun": "The {event} hook could not run ({command}): {error}",
+  "transcript.hook.couldNotRunFor": "The {event} hook for {tool} could not run ({command}): {error}",
+  "transcript.hook.timedOut": "The {event} hook timed out ({command}).",
+  "transcript.hook.timedOutFor": "The {event} hook for {tool} timed out ({command}).",
+  "transcript.hook.failed": "The {event} hook failed with exit code {code} ({command}).",
+  "transcript.hook.failedFor": "The {event} hook for {tool} failed with exit code {code} ({command}).",
+  "transcript.hook.failedSaid": "The {event} hook failed with exit code {code} ({command}): {said}",
+  "transcript.hook.failedSaidFor": "The {event} hook for {tool} failed with exit code {code} ({command}): {said}",
+  // Pictures attached to a message (AttachedImages.tsx).
+  "transcript.picture.missing": "[picture missing]",
+  "transcript.picture.loading": "Loading picture",
+  "transcript.picture.show": "Show picture {number} full size",
+  "transcript.picture.alt": "Picture {number}",
+  "transcript.picture.dialog": "Picture",
+  "transcript.picture.full": "Attached picture, full size",
+  "transcript.picture.close": "Close",
+
+  // A tool call (ToolView.tsx). The token optimizer that ran a command, by its name.
+  "tool.via": "via {name}",
+  "tool.viaCommand": "via {name}: {command}",
+  "tool.exit": "exit {code}",
+  // How a call was decided: in the sandbox, or {outcome} by {actor}.
+  "tool.decision.sandboxed": "sandboxed",
+  "tool.decision.sandboxTitle": "Ran in the sandbox",
+  "tool.decision.allowedBy": "allowed by {actor}",
+  "tool.decision.allowedByTitle": "Allowed by {actor}",
+  "tool.decision.denied": "denied by {actor}",
+  "tool.decision.cancelled": "cancelled by {actor}",
+  // An outcome the app does not know, by the engine's name for it.
+  "tool.decision.other": "{outcome} by {actor}",
+  // Who decided, in English by the engine's name for it.
+  "tool.actor.user": "user",
+  "tool.actor.rule": "rule",
+  "tool.actor.mode": "mode",
+  "tool.actor.protectedPath": "protected_path",
+  "tool.actor.hook": "hook",
+  "tool.actor.policy": "policy",
+  // A rule an approval saved: {rule} is its command, path or tool, {scope} where it holds.
+  "tool.savedRule": "Saved rule: {rule} ({scope})",
+  "tool.scope.session": "session",
+  "tool.scope.global": "global",
+  "tool.approvePlan": "Approve this plan",
+  "tool.approveCall": "Approve this tool call",
+  // {server} is an MCP server's name.
+  "tool.formAsks": "{server} asks for input",
+  "tool.runCommand": "Run {command}?",
+  "tool.note": "Note for the agent",
+  "tool.notePlaceholder": "Optional note for the agent",
+  // The scope of "Allow always".
+  "tool.alwaysScope": "Allow always applies to",
+  "tool.alwaysSession": "Always: this session",
+  "tool.alwaysGlobal": "Always: everywhere",
+  "tool.shortcut": "Shortcut: {keys}",
+  "tool.openSession": "Open the session",
+
+  // Reviewing a plan (PlanReview.tsx, GUI-043).
+  "plan.state.waiting": "Waiting for you",
+  "plan.state.approved": "Approved",
+  "plan.state.sentBack": "Sent back",
+  "plan.state.stopped": "Stopped",
+  "plan.state.shown": "Shown",
+  // The menu of what follows approving.
+  "plan.thenGoOn": "Then go on",
+  "plan.whatShouldChange": "What should change",
+  "plan.whatShouldChangePlaceholder": "What should change? Sent with Keep planning.",
+  "plan.keepPlanning": "Keep planning",
+  "plan.keepPlanningCount": { one: "Keep planning ({count} comment)", other: "Keep planning ({count} comments)" },
+  "plan.review": "Review in the panel",
+  "plan.none": "No plan in this session yet. In plan mode the agent shows its plan here before it changes anything.",
+  "plan.versionLabel": "Version",
+  "plan.version": "Version {number} of {total}: {state}",
+  "plan.changesSince": "Changes since version {number}",
+  // {quote} is the line of the plan a comment is about.
+  "plan.commentOn": "Comment on: {quote}",
+  "plan.commentPlaceholder": "Your comment on this part",
+  "plan.comment": "Comment",
+  // {reason} is what the user wrote.
+  "plan.sentBackWith": "Sent back with: {reason}",
+
+  // A code block in a reply (Markdown.tsx).
+  "markdown.copyCode": "Copy code",
+  "markdown.copy": "Copy",
+  "markdown.copied": "Copied",
+
+  // The composer's controls (SessionControls.tsx). A value with no name.
+  "controls.default": "Default",
+  // The last choice of a model menu, to type another model.
+  "controls.other": "Other…",
+  "controls.load": "Model and effort…",
+  "controls.loading": "Starting the agent…",
+  "controls.loadHint": "Starts the agent, which says what it offers. Your first message would start it too.",
+  // A mode that cannot be chosen yet, and why.
+  "controls.mode.needsSettings": "{mode} (turn it on in Settings)",
+  "controls.mode.needsTrust": "{mode} (needs a trusted project)",
+  "controls.rules": "Rules…",
+  "controls.rulesHint": "See and change what this session allows and denies without asking",
+
+  // The stage strip above the composer (WorkflowStrip.tsx, WFL-008); workflow and stage
+  // names are shown as given.
+  "workflow.label": "Workflow: {name}",
+  "workflow.state.done": "done",
+  "workflow.state.running": "running",
+  "workflow.state.next": "next",
+  "workflow.state.todo": "to do",
+  // {files} are the paths the last stage wrote, joined by commas.
+  "workflow.wrote": "Wrote {files}",
+  "workflow.wroteMore": { one: "Wrote {files} and {count} more", other: "Wrote {files} and {count} more" },
+  "workflow.showRun": "Show the run",
+  // {command} is the stage's slash command.
+  "workflow.nextNeedsInput": "Type what /{command} is about, then send",
+  "workflow.nextRuns": "Runs /{command}",
+  "workflow.next": "Next: {title}",
+  // How far an AFK run got.
+  "workflow.afkProgress": "{done} of {total} done",
+  // What each kind of stage does (workflows.ts), in the palette and Settings.
+  "workflow.action.afk": "Starts an AFK run",
+  "workflow.action.review": "Starts a review",
+  "workflow.action.cleanup": "Archives what is finished",
+  "workflow.action.prompt": "Sends its prompt here",
+
+  // The session's right panel: its landmark, its splitter and its tabs.
+  "panel.label": "Session panel",
+  "panel.width": "Panel width",
+  "panel.tabs": "Panel views",
+  "panel.tab.approvals": "Approvals",
+  "panel.tab.plan": "Plan",
+  "panel.tab.diff": "Diff",
+  "panel.tab.files": "Files",
+  "panel.tab.terminal": "Terminal",
+  "panel.tab.preview": "Preview",
+  "panel.tab.info": "Info",
+  "panel.hide": "Hide the panel",
+  "panel.loading": "Loading…",
+
+  // The Approvals tab: what waits, the session's rules, and what was decided.
+  "panel.approvals.waiting": "Waiting for you",
+  "panel.approvals.nothing": "Nothing is waiting.",
+  // Opens a question's card in the conversation, where it is answered.
+  "panel.approvals.answer": "Answer…",
+  "panel.approvals.allowOnce": "Allow once",
+  // Declines to answer an agent's question.
+  "panel.approvals.decline": "Decline",
+  "panel.approvals.deny": "Deny",
+  "panel.approvals.more": "More…",
+  "panel.approvals.decided": "Decided",
+  "panel.approvals.noDecisions": "No decisions yet. Calls allowed by the session's mode are not listed.",
+  // {rule} is the rule, as code; {scope} one of panel.scope.*.
+  "panel.approvals.savedRule": "Saved rule {rule} ({scope})",
+  // How a tool call was decided, and by whom: {actor} is one of panel.actor.*.
+  "panel.decided.allowed": "allowed by {actor}",
+  "panel.decided.denied": "denied by {actor}",
+  "panel.decided.cancelled": "cancelled by {actor}",
+  // An outcome the app does not know, as the engine names it.
+  "panel.decided.other": "{outcome} by {actor}",
+  "panel.actor.user": "user",
+  "panel.actor.mode": "mode",
+  // As the engine names it; English has always shown it so.
+  "panel.actor.protectedPath": "protected_path",
+  "panel.actor.policy": "policy",
+  "panel.actor.rule": "rule",
+  "panel.actor.hook": "hook",
+  // Where a saved rule applies.
+  "panel.scope.session": "session",
+  "panel.scope.global": "global",
+  "panel.scope.project": "project",
+
+  "panel.rules.title": "Rules",
+  "panel.rules.intro": "These decide before you are asked. Deny rules win, and an allow rule never lifts plan mode or protected paths.",
+  "panel.rules.none": "No rules yet.",
+  // A rule's effect, on its line in the list.
+  "panel.rule.allow": "allow",
+  "panel.rule.deny": "deny",
+  // Where a rule in the list applies.
+  "panel.rules.listed.session": "this session",
+  "panel.rules.listed.global": "all sessions",
+  "panel.rules.pending": "waits for approval in Settings",
+  "panel.rules.remove": "Remove the rule {rule}",
+  // The form that adds a rule.
+  "panel.rules.effect": "Effect",
+  "panel.rules.allow": "Allow",
+  "panel.rules.deny": "Deny",
+  "panel.rules.anyTool": "any tool",
+  "panel.rules.path": "Path pattern",
+  "panel.rules.appliesTo": "Applies to",
+  "panel.rules.forSession": "This session",
+  "panel.rules.forAll": "All sessions",
+  "panel.rules.add": "Add",
+
+  // The Info tab: what the session runs on, and its usage.
+  "panel.info.status": "Status",
+  "panel.info.harness": "Harness",
+  "panel.info.permissions": "Permissions",
+  "panel.info.project": "Project",
+  "panel.info.worktree": "Worktree",
+  "panel.info.branch": "Branch",
+  "panel.info.baseCommit": "Base commit",
+  "panel.info.turns": "Turns",
+  "panel.info.inputTokens": "Input tokens",
+  "panel.info.cacheTokens": "Cache reads / writes",
+  "panel.info.outputTokens": "Output tokens",
+  "panel.info.context": "Context",
+  "panel.info.contextLimit": "Context limit",
+  "panel.info.cost": "Estimated cost",
+  "panel.info.held": "Held by your policy",
+  "panel.info.ports": "Ports",
+  "panel.info.sessionId": "Session ID",
+  // The profile of a session without one of its own.
+  "panel.info.defaultProfile": "default",
+  // The branch when HEAD is on no branch.
+  "panel.info.detached": "detached",
+  "panel.info.noRepo": "not a git repository",
+  // No base commit.
+  "panel.info.none": "none",
+  // How full the context is: {share} a percentage, {window} thousands of tokens.
+  "panel.info.contextShare": "{share} % of {window}k",
+  // How large the context is, in thousands of tokens, for a model without a known limit.
+  "panel.info.contextTokens": "{tokens}k tokens",
+  "panel.info.heldNone": "Nothing so far",
+  "panel.info.heldCount": { one: "{count} thing", other: "{count} things" },
+  "panel.info.optimizer": "{rewritten} of {commands} shell commands shortened",
+  "panel.info.optimizerSaved": "{rewritten} of {commands} shell commands shortened; {saved} of {input} tokens saved",
+  "panel.held.show": "Show this in the conversation",
+  "panel.held.latest": "The latest {shown} of {total}.",
+  "panel.sessionRules.title": "Rules for this session",
+  // Names the permission card's "Allow always" button and its "this session" choice.
+  "panel.sessionRules.none": 'None. "Allow always" with "this session" adds one.',
+  "panel.sessionRules.note": "Session rules last as long as the session; global rules are on the Rules page.",
+
+  // Setting a model's context limit by hand.
+  "contextLimit.label": "Context limit of {model}, in tokens",
+  // The limit the app found, as the field's placeholder.
+  "contextLimit.detected": "{tokens} (detected)",
+  "contextLimit.unknown": "Not known",
+  "contextLimit.saved": "Saved. It applies from the next message.",
+  "contextLimit.hint": "Add the model's limit, such as 200k, to get a share, a warning and automatic compaction.",
+
+  // What the model sees besides the conversation, on the Info tab.
+  "modelSees.title": "What the model sees",
+  "modelSees.none":
+    "Nothing recorded yet. A built-in session records this at its first model call. An agent that builds its own requests, as an external agent does, records nothing here: Freeloop sees only the messages and tool calls in this conversation.",
+  "modelSees.intro": "Besides the conversation, each model call carries this system prompt and these tools. It is recorded in the transcript whenever it changes.",
+  // What a kind of model call is for.
+  "modelSees.purpose.turn": "Each turn",
+  "modelSees.purpose.compaction": "Compacting the conversation",
+  "modelSees.purpose.commitMessage": "Drafting a commit message",
+  "modelSees.purpose.pullRequest": "Drafting a pull request",
+  "modelSees.purpose.handoff": "Summarising for a handoff",
+  // The part of a system prompt before its first heading.
+  "modelSees.introduction": "Introduction",
+  // {model} is the model's name, {effort} its reasoning effort as the provider names it.
+  "modelSees.effort": "{model}, effort {effort}",
+  "modelSees.changed": { one: "changed {count} time", other: "changed {count} times" },
+  // {sent} says, in the engine's words, what else went with the call.
+  "modelSees.sent": "Also sent: {sent}.",
+  // {size} is modelSees.size.
+  "modelSees.systemPrompt": "System prompt, {size}",
+  "modelSees.size": "{chars} characters, about {tokens} tokens",
+  "modelSees.copy": "Copy",
+  "modelSees.copied": "Copied",
+  // A part of the system prompt taken from the project's AGENTS.md or CLAUDE.md.
+  "modelSees.fromRepository": "from the repository",
+  "modelSees.tools": { one: "{count} tool", other: "{count} tools" },
+  "modelSees.inputSchema": "Input schema",
+
+  // The Preview tab: the session's app in a frame.
+  "preview.address": "Address",
+  "preview.placeholder": "A port, such as 3000",
+  // Loads the address typed.
+  "preview.go": "Go",
+  "preview.reload": "Reload",
+  "preview.openInBrowser": "Open in browser",
+  "preview.empty": "Enter the port your app runs on. A session with its own worktree starts on its FREELOOP_PORT.",
+  "preview.notListening":
+    "Nothing is listening on port {port} yet. Start your app, with the session's Run button or in the Terminal tab; the preview loads it when it comes up.",
+  "preview.frameTitle": "Preview of {url}",
+  // Why an address typed does not load.
+  "preview.error.empty": "Enter a port or a localhost address.",
+  "preview.error.notAddress": '"{text}" is not an address.',
+  "preview.error.scheme": "Only http and https addresses load.",
+  "preview.error.notLocal": "The preview shows this computer's own servers only; open anything else in your browser.",
+  "preview.error.credentials": "An address with a user name or password does not load.",
+  "preview.error.ownPage": "That is Freeloop's own page.",
+  "preview.error.noPort": "That port does not exist.",
+
+  // The Terminal tab: shells in the session's environment.
+  "terminal.archived": "Unarchive the session to open a terminal in it.",
+  "terminal.starting": "Starting…",
+  "terminal.list": "Terminals",
+  // A shell's tab, numbered from 1.
+  "terminal.shell": "Shell {number}",
+  "terminal.close": "Close shell {number}",
+  "terminal.closeThis": "Close this shell",
+  "terminal.openAnother": "Open another shell",
+  "terminal.new": "+ New",
+  "terminal.leave": "Shift+Esc leaves the terminal",
+  "terminal.none": "No shell is open.",
+  "terminal.label": "Terminal",
+  "terminal.exited": "The shell exited.",
+  "terminal.exitedCode": "The shell exited with code {code}.",
+
+  // The Diff tab (DiffPanel.tsx).
+  "diff.loading": "Loading…",
+  "diff.notRepo": "The project is not a git repository.",
+  // {base} is the base commit's short hash, as code.
+  "diff.head.since": { one: "{count} file changed since {base}", other: "{count} files changed since {base}" },
+  "diff.head.sinceFirst": { one: "{count} file changed since the first commit", other: "{count} files changed since the first commit" },
+  "diff.refresh": "Refresh",
+  // A worktree session's bar; {branch} is the branch's name, as code.
+  "diff.worktree.on": "Own worktree on {branch}",
+  "diff.merge": "Merge…",
+  "diff.merge.title": "Merges the session's committed work into the branch the project's main checkout is on",
+  "diff.merge.confirm": "Merge into the main checkout",
+  // {files} is a list of paths, one per line.
+  "diff.merge.risky": "This merge brings in files that can run commands on your computer:\n\n{files}\n\nCheck them in the diff first. Merge anyway?",
+  // The bar of review comments waiting to be sent to the agent (GUI-019).
+  "diff.review.label": "Review",
+  "diff.review.count": { one: "{count} review comment", other: "{count} review comments" },
+  "diff.review.send": "Send review",
+  "diff.review.sendTitle": "Puts the review in the message box, to edit and send",
+  "diff.review.discard": "Discard",
+  "diff.review.discardQuestion": { one: "Discard the review comment?", other: "Discard {count} review comments?" },
+  "diff.review.hint": "Click a line number to comment on it; comments go to the agent together as a review.",
+  "diff.noChanges": "No changes against the session's base commit.",
+  "diff.stageAll": "Stage all",
+  "diff.unstageAll": "Unstage all",
+  // The heading above the commit message box.
+  "diff.commit.title": "Commit",
+  "diff.commit.message": "Commit message",
+  "diff.commit.button": "Commit {count} staged",
+  "diff.commit.suggest": "Suggest message",
+  "diff.commit.suggesting": "Suggesting…",
+  "diff.asksModel": "Asks the session's model; uses tokens",
+  // {hash} is the new commit's short hash, as code.
+  "diff.committed": "Committed {hash}.",
+  "diff.commit.noHooks": "Commits from the panel do not run git hooks.",
+  // The Diff tab's entries in the command palette (GUI-014).
+  "diff.palette.refresh": "Refresh changes",
+  "diff.palette.stageAll": "Stage all changes",
+  "diff.palette.unstageAll": "Unstage all changes",
+  "diff.palette.commit": "Commit {count} staged…",
+  // Beside the entry above, in lower case; Commit is its button.
+  "diff.palette.commitDetail": "write the message, then Commit",
+  "diff.palette.suggest": "Suggest a commit message",
+  "diff.palette.usesTokens": "uses tokens",
+  "diff.palette.merge": "Merge into the main checkout…",
+  "diff.palette.review": { one: "Send the review ({count} comment)", other: "Send the review ({count} comments)" },
+  "diff.palette.show": "Show the diff of {path}",
+  "diff.palette.unstage": "Unstage {path}",
+  "diff.palette.discard": "Discard changes to {path}…",
+  // A palette entry, and the label of a file's checkbox.
+  "diff.stageFile": "Stage {path}",
+  "diff.discardFile.question": "Discard the changes to {path}? This cannot be undone.",
+  // A changed file's row.
+  "diff.file.staged": "Staged",
+  "diff.file.notStaged": "Not staged",
+  "diff.file.partlyStaged": "Partly staged; click to stage all of it",
+  "diff.file.committed": "Committed since the session started",
+  // The tooltip of a file's status letter (A, M, D, U).
+  "diff.status.added": "added",
+  "diff.status.modified": "modified",
+  "diff.status.deleted": "deleted",
+  "diff.status.untracked": "untracked",
+  "diff.file.comments": "Review comments on this file",
+  // A small link beside a file the agent edited, to its latest edit.
+  "diff.file.agentEdit": "agent",
+  "diff.file.agentEditTitle": "Show the agent's latest edit",
+  "diff.file.delete": "Delete the file",
+  "diff.file.discardUncommitted": "Discard uncommitted changes",
+  "diff.file.keep": "Keep",
+  "diff.file.discard": "Discard…",
+  "diff.truncated": "The diff is longer than 1 MB and was cut.",
+  // A review comment's head: the line it is on, whether that line was removed, and
+  // whether the line has changed since the comment was written.
+  "diff.comment.line": "Line {line}",
+  "diff.comment.lineRemoved": "Line {line} (removed)",
+  "diff.comment.lineChanged": "Line {line}, on a line that has changed since",
+  "diff.comment.lineRemovedChanged": "Line {line} (removed), on a line that has changed since",
+  "diff.comment.remove": "Remove the comment",
+  // The box a comment is written in.
+  "diff.comment.editor": "Comment on line {line} of {path}",
+  "diff.comment.placeholder": "What should change here?",
+  "diff.comment.add": "Add comment",
+  // A line number, as the button that starts a comment there.
+  "diff.comment.onLine": "Comment on line {line}",
+  "diff.comment.onOldLine": "Comment on old line {line}",
+  "diff.comment.onThisLine": "Comment on this line",
+
+  // The review by a second agent (AgentReview.tsx, HRN-018).
+  "review.label": "Review by a second agent",
+  "review.title": "Second opinion",
+  "review.intro": "Another profile reads these changes in a read-only session of its own.",
+  // The picker of the profile that reviews.
+  "review.reviewer": "Reviewer",
+  "review.focus": "What to look at",
+  "review.focusPlaceholder": "Anything to look at? (optional)",
+  "review.ask": "Ask for a review",
+  "review.starting": "Starting…",
+  "review.reviewing": "Reviewing",
+  "review.done": "Done",
+  "review.open": "Open",
+  "review.use": "Use these findings",
+  "review.useTitle": "Puts the findings in the message box, to edit and send",
+
+  // The pull request section (PullRequest.tsx, SES-011, SES-018).
+  "pr.title": "Pull request",
+  // {link} is the pull request's title, as a link.
+  "pr.opened": "Opened from this session: {link}",
+  // {branch} is the session's branch, as code; {target} the field for the branch it goes
+  // into; {remote} the remote's name.
+  "pr.target": { one: "{branch} into {target} on {remote}: {count} commit", other: "{branch} into {target} on {remote}: {count} commits" },
+  "pr.targetBranch": "Target branch",
+  "pr.titleLabel": "Pull request title",
+  "pr.titlePlaceholder": "Title",
+  "pr.description": "Pull request description",
+  "pr.descriptionPlaceholder": "Description (Markdown)",
+  "pr.create": "Create pull request",
+  "pr.creating": "Creating…",
+  // gh pr create is a command, as typed.
+  "pr.createTitle": "Pushes {branch} to {remote} and runs gh pr create",
+  "pr.draftDescription": "Draft description",
+  "pr.drafting": "Drafting…",
+  // A checkbox: open the pull request as a draft.
+  "pr.draft": "Draft",
+  // {link} is the new pull request's address, as a link.
+  "pr.created": "Created {link}",
+  "pr.note": "Pushes without git hooks and opens the pull request with the GitHub CLI (gh), signed in on its own.",
+  // The pull request's CI checks.
+  "pr.checks": "Checks",
+  "pr.checks.none": "none reported yet",
+  "pr.checks.failed": "{count} failed",
+  "pr.checks.running": { one: "{count} running", other: "{count} running" },
+  "pr.checks.passed": "{count} passed",
+  // One check's state.
+  "pr.check.passed": "passed",
+  "pr.check.failed": "failed",
+  "pr.check.cancelled": "cancelled",
+  "pr.check.running": "running",
+  "pr.check.skipped": "skipped",
+  "pr.checks.sendTitle": "Puts the failing checks and the end of their logs in the message box",
+  "pr.checks.send": "Send failures to the agent",
+  "pr.checks.reading": "Reading the logs…",
+
+  // The Files tab (FilesPanel.tsx, PdfView.tsx).
+  "files.changedByAgent": "Changed by the agent",
+  "files.changedSinceCommit": "Changed since the last commit",
+  // Read out after a marked file's name.
+  "files.mark.agent": "changed by the agent",
+  "files.mark.git": "changed",
+  "files.label": "Files",
+  "files.empty": "The folder is empty.",
+  "files.choose": "Choose a file. Files the agent changed are marked.",
+  // Preview is the macOS app, by its name in the system's language.
+  "files.openPreview": "Open in Preview",
+  "files.openEditor": "Open in editor",
+  "files.show": "How to show the file",
+  // Markdown shown formatted, or as its source.
+  "files.formatted": "Formatted",
+  "files.source": "Source",
+  "files.binary": "A binary file ({size} bytes).",
+  "files.truncated": "Only the first 512 KB are shown.",
+  // The title of the frame a PDF shows in.
+  "files.pdf": "PDF: {path}",
 } as const;

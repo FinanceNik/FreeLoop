@@ -3,6 +3,7 @@ import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 import { EngineService, type DayCost, type Price, type ProviderInfo } from "./api.ts";
 import { formatCost } from "./cost.ts";
+import { shortTokens } from "./contextMeter.ts";
 
 // The price table and the usage per day on the Settings page (PRV-008).
 
@@ -127,8 +128,6 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
   );
 }
 
-const tokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
-
 // UsageTable lists the last 30 days. Costs come from the saved price
 // table, so they refresh when version (bumped on save) changes.
 export function UsageTable({ version, onPrice, onError }: { version: unknown; onPrice: (providerId: string, model: string) => void; onError: (err: unknown) => void }) {
@@ -193,8 +192,8 @@ export function UsageTable({ version, onPrice, onError }: { version: unknown; on
                 </td>
                 <td>{m.model || <span className="muted">{t("usage.unnamed")}</span>}</td>
                 <td>{m.calls}</td>
-                <td>{tokens(m.inputTokens + m.cacheReadTokens + m.cacheWriteTokens)}</td>
-                <td>{tokens(m.outputTokens)}</td>
+                <td>{shortTokens(m.inputTokens + m.cacheReadTokens + m.cacheWriteTokens)}</td>
+                <td>{shortTokens(m.outputTokens)}</td>
                 <td>{m.priced ? formatCost(m.cost) : <span className="muted">{t("usage.noPrice")}</span>}</td>
               </tr>
             )),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { EngineService, MODES, type AFKPlan, type AFKRun, type Profile, type ProfileModels } from "./api.ts";
+import { EngineService, modeName, type AFKPlan, type AFKRun, type Profile, type ProfileModels } from "./api.ts";
 import { commandFrom, commandOutcome, defaultAllow } from "./afk.ts";
 
 // Starting an AFK run (WFL-005): what it would do first, where, on which profiles,
@@ -63,7 +63,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
     else if (!extra.includes(c)) setExtra([...extra, c]);
     setTyped("");
   };
-  const mode = MODES.find((m) => m.id === plan?.mode)?.name ?? plan?.mode;
+  const mode = plan?.mode && modeName(plan.mode);
   return (
     <div className="palette-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="afk-dialog" role="dialog" aria-modal="true" aria-label="Run the AFK issues">
