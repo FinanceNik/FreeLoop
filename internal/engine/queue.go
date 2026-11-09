@@ -312,6 +312,13 @@ func (e *Engine) startTask(ctx context.Context, t config.Task) (string, error) {
 			return ses.ID, err
 		}
 	}
+	// The model chosen for it, switched as the session's own model list would (WFL-010).
+	// A model that cannot be had fails the task rather than run on a costlier one.
+	if t.ModelOption != "" && t.Model != "" {
+		if err := e.SetSessionOption(ctx, ses.ID, t.ModelOption, t.Model); err != nil {
+			return ses.ID, fmt.Errorf("its model %s could not be chosen: %w", modelName(t.Model), err)
+		}
+	}
 	note := "Started from the queue."
 	if t.RunID != "" {
 		note = "Started by an AFK run: it works on one issue unattended. Requests wait for you in Needs attention."

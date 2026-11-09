@@ -10,6 +10,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
@@ -23,7 +24,8 @@ import (
 func (e *Engine) reviewIssue(ctx context.Context, r config.AFKRun, s config.AFKStep, sid string, w config.Workflow, env environment.Environment) (string, error) {
 	b, _ := env.FS().ReadFile(s.Path)
 	focus := config.Render(w.Review.Focus, map[string]string{"backlog": w.BacklogDir(), "issue": s.Path, "issueText": strings.TrimSpace(backlog.Body(b))})
-	rev, err := e.RequestReview(ctx, ReviewRequest{SessionID: sid, ProfileID: r.ReviewProfileID, Label: s.Issue, Focus: strings.TrimSpace(focus)})
+	rev, err := e.RequestReview(ctx, ReviewRequest{SessionID: sid, ProfileID: r.ReviewProfileID, Label: s.Issue, Focus: strings.TrimSpace(focus),
+		model: harness.OptionValue{ID: r.ReviewModelOption, Value: r.ReviewModel}})
 	if err != nil {
 		return "", err
 	}

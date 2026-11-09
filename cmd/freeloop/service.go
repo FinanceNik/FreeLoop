@@ -587,6 +587,12 @@ func (s *EngineService) PrepareAFK(ctx context.Context, root, workflowID string)
 	return s.eng.PrepareAFK(ctx, root, workflowID)
 }
 
+// ProfileModels lists the models a profile's sessions can be switched to, for the
+// AFK run's dialog (WFL-010).
+func (s *EngineService) ProfileModels(ctx context.Context, root, profileID string) (engine.ProfileModels, error) {
+	return s.eng.ProfileModels(ctx, root, profileID)
+}
+
 func (s *EngineService) StartAFK(ctx context.Context, req engine.AFKStart) (config.AFKRun, error) {
 	return s.eng.StartAFK(ctx, req)
 }

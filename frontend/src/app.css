@@ -344,7 +344,14 @@ fieldset {
   display: grid;
   /* Never more than half the window, whatever was dragged in a wider one. */
   grid-template-columns: min(var(--sidebar-width, 264px), max(180px, 50vw)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
+  /* The page itself never scrolls: each part scrolls inside. Text for screen readers
+     only (.sr-only) is placed absolutely; with no positioned box above it, it was
+     placed on the page, below a list scrolled inside a part, and stretched the page,
+     which then scrolled in a short window. */
+  position: relative;
+  overflow: hidden;
   background: var(--bg-app);
 }
 

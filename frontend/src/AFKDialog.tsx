@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { EngineService, MODES, type AFKPlan, type AFKRun, type Profile } from "./api.ts";
+import { EngineService, MODES, type AFKPlan, type AFKRun, type Profile, type ProfileModels } from "./api.ts";
 import { commandFrom, commandOutcome, defaultAllow } from "./afk.ts";
 
 // Starting an AFK run (WFL-005): what it would do first, where, on which profiles,
@@ -22,6 +22,9 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   const [allow, setAllow] = useState<string[]>([]);
   const [profileId, setProfileId] = useState("");
   const [reviewId, setReviewId] = useState("");
+  // The models the issues and the reviews switch to; empty keeps the profile's (WFL-010).
+  const [model, setModel] = useState("");
+  const [reviewModel, setReviewModel] = useState("");
   const [busy, setBusy] = useState(false);
   // Commands the user types in to allow as well, such as a check the plan missed (WFL-009).
   const [extra, setExtra] = useState<string[]>([]);
@@ -47,7 +50,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   const start = () => {
     if (!plan) return;
     setBusy(true);
-    EngineService.StartAFK({ projectRoot: plan.projectRoot, workflowId: plan.workflowId, profileId, reviewProfileId: reviewId, allow, extra, startedBy })
+    EngineService.StartAFK({ projectRoot: plan.projectRoot, workflowId: plan.workflowId, profileId, reviewProfileId: reviewId, model, reviewModel, allow, extra, startedBy })
       .then(onStarted)
       .catch(onError)
       .finally(() => setBusy(false));
@@ -99,7 +102,13 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
             <div className="form afk-profiles">
               <label>
                 Profile for the issues
-                <select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
+                <select
+                  value={profileId}
+                  onChange={(e) => {
+                    setProfileId(e.target.value);
+                    setModel("");
+                  }}
+                >
                   {profiles.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
@@ -107,10 +116,17 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                   ))}
                 </select>
               </label>
+              <ModelPicker label="Model for the issues" root={plan.projectRoot} profileId={profileId} value={model} onChange={setModel} onError={onError} />
               {!plan.reviewOff && (
                 <label>
                   Profile for the reviews
-                  <select value={reviewId} onChange={(e) => setReviewId(e.target.value)}>
+                  <select
+                    value={reviewId}
+                    onChange={(e) => {
+                      setReviewId(e.target.value);
+                      setReviewModel("");
+                    }}
+                  >
                     {profiles.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
@@ -120,6 +136,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                   <span className="muted">A stronger model than the issues' catches more. Each finished issue is reviewed, read-only, before it waits for your QA.</span>
                 </label>
               )}
+              {!plan.reviewOff && <ModelPicker label="Model for the reviews" root={plan.projectRoot} profileId={reviewId} value={reviewModel} onChange={setReviewModel} onError={onError} />}
             </div>
             {(plan.commands ?? []).length > 0 && (
               <fieldset className="afk-commands">
@@ -170,5 +187,44 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
         </p>
       </div>
     </div>
+  );
+}
+
+// ModelPicker chooses the model a profile's sessions switch to for the run: the
+// built-in agent's provider models, or what an external agent last said it offers.
+function ModelPicker({ label, root, profileId, value, onChange, onError }: { label: string; root: string; profileId: string; value: string; onChange: (v: string) => void; onError: (err: unknown) => void }) {
+  const [models, setModels] = useState<ProfileModels | null>(null);
+  useEffect(() => {
+    setModels(null);
+    if (!profileId) return;
+    EngineService.ProfileModels(root, profileId)
+      .then(setModels)
+      .catch(onError);
+  }, [root, profileId]);
+  const choices = models?.choices ?? [];
+  const groups = [...new Set(choices.map((c) => c.group))];
+  const name = (v: string) => v.split("\n").pop() ?? v;
+  return (
+    <label>
+      {label}
+      <select value={value} disabled={choices.length === 0} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{models?.default ? `The profile's own (${models.default})` : "The profile's own"}</option>
+        {groups.map((g) => {
+          const items = choices.filter((c) => c.group === g).map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.name || name(c.value)}
+            </option>
+          ));
+          return g ? (
+            <optgroup key={g} label={g}>
+              {items}
+            </optgroup>
+          ) : (
+            items
+          );
+        })}
+      </select>
+      {models?.note && <span className="muted">{models.note}</span>}
+    </label>
   );
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/backlog"
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
+	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
@@ -359,6 +360,10 @@ type AFKStart struct {
 	// Extra are commands the user typed in to allow as well, such as a check the
 	// plan did not find (WFL-009).
 	Extra []string `json:"extra"`
+	// Model and ReviewModel are values of ProfileModels' choices for the two
+	// profiles; empty keeps each profile's own model (WFL-010).
+	Model       string `json:"model"`
+	ReviewModel string `json:"reviewModel"`
 	// StartedBy says where it was started, for the record.
 	StartedBy string `json:"startedBy"`
 }
@@ -406,7 +411,30 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 		}
 		review = req.ReviewProfileID
 	}
+	// A model is one the profile's sessions can be switched to, as offered.
+	pick := func(profileID, value string) (string, error) {
+		if value == "" {
+			return "", nil
+		}
+		m, err := e.ProfileModels(ctx, project.Root, profileID)
+		if err != nil {
+			return "", err
+		}
+		if !slices.ContainsFunc(m.Choices, func(c harness.OptionChoice) bool { return c.Value == value }) {
+			return "", fmt.Errorf("%s is not among the models offered for that profile", modelName(value))
+		}
+		return m.OptionID, nil
+	}
+	modelOption, err := pick(prof, req.Model)
+	if err != nil {
+		return config.AFKRun{}, err
+	}
+	reviewOption, err := pick(review, req.ReviewModel)
+	if err != nil {
+		return config.AFKRun{}, err
+	}
 	run := config.AFKRun{
+		ModelOption: modelOption, Model: req.Model, ReviewModelOption: reviewOption, ReviewModel: req.ReviewModel,
 		ID: fmt.Sprintf("afk_%d", time.Now().UnixNano()), WorkflowID: plan.WorkflowID, ProjectID: project.ID, ProjectRoot: project.Root,
 		ProfileID: prof, ReviewProfileID: review, EnvironmentID: plan.EnvironmentID, Mode: plan.Mode, Allow: allow,
 		MaxIssues: plan.MaxIssues, State: config.RunRunning, Steps: []config.AFKStep{}, StartedBy: req.StartedBy, StartedAt: time.Now().UTC(),
@@ -793,6 +821,7 @@ func (e *Engine) nextIssue(ctx context.Context, r config.AFKRun, w config.Workfl
 	task := config.Task{
 		Title: fmt.Sprintf("AFK %s: %s", next.ID, next.Title), Prompt: strings.TrimSpace(prompt), ProjectRoot: project.Root, ProfileID: r.ProfileID,
 		Mode: r.Mode, EnvironmentID: r.EnvironmentID, Workflow: r.WorkflowID, Allow: slices.Clone(r.Allow), RunID: r.ID, Tags: []string{AFKTag},
+		ModelOption: r.ModelOption, Model: r.Model,
 	}
 	if r.Anchor != "" {
 		task.ShareWorktreeOf = r.Anchor

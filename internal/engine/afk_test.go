@@ -387,3 +387,45 @@ func TestAFKRunOwnCommands(t *testing.T) {
 	}
 	e.StopAFK(ctx, run.ID)
 }
+
+// WFL-010: a run's issues and reviews can go to another model than the profile's,
+// switched through the session's own model option; one not offered is refused.
+func TestAFKRunOnAChosenModel(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	// A provider from the file, whose models the model option lists.
+	os.WriteFile(filepath.Join(e.dataDir, config.ProvidersFileName), []byte("version: 1\nproviders:\n  - id: s\n    name: Stand-in\n    type: scripted\n"), 0o600)
+	if err := e.loadProviders(); err != nil {
+		t.Fatal(err)
+	}
+	models, err := e.ProfileModels(ctx, root, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var values []string
+	for _, c := range models.Choices {
+		values = append(values, c.Value)
+	}
+	want := "s" + modelSeparator + "scripted"
+	if models.OptionID != optionModelID || !slices.Contains(values, want) || models.Default != "m" {
+		t.Fatalf("models = %+v", models)
+	}
+	if _, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, Model: "s" + modelSeparator + "nope"}); err == nil {
+		t.Error("a model not offered was taken")
+	}
+	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, Allow: []string{"git add *", "git commit *"}, Model: want, ReviewModel: want})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run = waitRun(t, e, run.ID)
+	if run.State != config.RunFinished || len(run.Steps) != 2 {
+		t.Fatalf("run = %+v", run)
+	}
+	for _, s := range run.Steps {
+		ses, _ := e.store.GetSession(ctx, s.SessionID)
+		rev, _ := e.store.GetSession(ctx, s.ReviewID)
+		if ses.Model != "scripted" || rev.Model != "scripted" {
+			t.Errorf("%s ran on %q, its review on %q", s.Issue, ses.Model, rev.Model)
+		}
+	}
+}

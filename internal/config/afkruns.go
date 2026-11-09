@@ -42,8 +42,14 @@ type AFKRun struct {
 	// The sessions' profile, the review's, their environment and mode.
 	ProfileID       string `json:"profileId"`
 	ReviewProfileID string `json:"reviewProfileId"`
-	EnvironmentID   string `json:"environmentId"`
-	Mode            string `json:"mode"`
+	// The models the issues' and the reviews' sessions switch to, as their model
+	// option's ID and value; empty keeps each profile's own.
+	ModelOption       string `json:"modelOption,omitempty"`
+	Model             string `json:"model,omitempty"`
+	ReviewModelOption string `json:"reviewModelOption,omitempty"`
+	ReviewModel       string `json:"reviewModel,omitempty"`
+	EnvironmentID     string `json:"environmentId"`
+	Mode              string `json:"mode"`
 	// Allow are the shell rule patterns the user allowed for the run's sessions
 	// when starting it; they become each session's own rules.
 	Allow     []string `json:"allow"`

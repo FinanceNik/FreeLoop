@@ -116,7 +116,9 @@ let app = NSApplication.shared
 // process's timers and the page's with them, which reads as a step that stalls (opening
 // a session took over 30 s in about one CI run in four; it never did here).
 let busy = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "running the app check")
-let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: 720), styleMask: [.borderless], backing: .buffered, defer: false)
+// APPCHECK_HEIGHT runs it in a shorter window, as a laptop's half screen is.
+let height = Double(ProcessInfo.processInfo.environment["APPCHECK_HEIGHT"] ?? "") ?? 720
+let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: height), styleMask: [.borderless], backing: .buffered, defer: false)
 let mouse = Mouse()
 let configuration = WKWebViewConfiguration()
 configuration.userContentController.addScriptMessageHandler(mouse, contentWorld: .page, name: "mouse")

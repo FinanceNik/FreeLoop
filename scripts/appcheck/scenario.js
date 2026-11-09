@@ -1439,6 +1439,13 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   const reviewProfile = all("label", dialog).find((l) => l.textContent.startsWith("Profile for the reviews"))?.querySelector("select");
   setSelect(afkProfile, "afk-demo");
   if (reviewProfile) setSelect(reviewProfile, "afk-demo");
+  // WFL-010: the issues can go to another model than the profile's.
+  const issuesModel = await until("the issues' models", () => {
+    const sel = all("label", dialog).find((l) => l.textContent.startsWith("Model for the issues"))?.querySelector("select");
+    return sel && sel.options.length > 1 && sel;
+  }, 8000);
+  check("the run offers the profile's models", [...issuesModel.options].some((o) => o.value.endsWith("\nscripted")), [...issuesModel.options].map((o) => o.textContent).join(", "));
+  setSelect(issuesModel, [...issuesModel.options].find((o) => o.value.endsWith("\nscripted")).value);
   // WFL-009: a command of the user's own joins the list, ticked.
   const another = dialog.querySelector('input[aria-label="Another command to allow"]');
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(another, "npm run e2e");
@@ -1494,6 +1501,21 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   withText("button", "QA done", qa()[0]).click();
   await until("one QA'd", () => qa().length === 1, 8000);
   check("QA done takes an issue off the list", qa().length === 1);
+});
+
+// However short the window, only the parts scroll, never the page: text for screen
+// readers below a scrolled list once stretched it.
+await step("the page itself never scrolls", async () => {
+  const pageFits = (where) => check(`the page fits the window on ${where}`, document.scrollingElement.scrollHeight <= window.innerHeight, `${document.scrollingElement.scrollHeight} > ${window.innerHeight}`);
+  openSession("Check long");
+  await until("the conversation", () => document.querySelector(".conversation"));
+  await sleep(300);
+  pageFits("a long session");
+  for (const name of ["Usage", "Help"]) {
+    named(".footer-links button", name).click();
+    await sleep(800);
+    pageFits(name);
+  }
 });
 
 await step("the bypass setting", async () => {

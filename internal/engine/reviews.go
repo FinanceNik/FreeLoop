@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
@@ -41,6 +42,9 @@ type ReviewRequest struct {
 	Label string `json:"label"`
 	// Focus is what the user wants looked at, if anything.
 	Focus string `json:"focus"`
+	// model switches the reviewer's model before it reads anything, as an AFK run
+	// chose it (WFL-010).
+	model harness.OptionValue
 }
 
 // ReviewInfo is one review of a session.
@@ -119,6 +123,11 @@ func (e *Engine) RequestReview(ctx context.Context, req ReviewRequest) (session.
 		return session.Session{}, err
 	}
 	e.SetTags(ctx, reviewer.ID, []string{ReviewTag})
+	if req.model.ID != "" && req.model.Value != "" {
+		if err := e.SetSessionOption(ctx, reviewer.ID, req.model.ID, req.model.Value); err != nil {
+			return reviewer, fmt.Errorf("the review's model %s could not be chosen: %w", modelName(req.model.Value), err)
+		}
+	}
 	var b strings.Builder
 	b.WriteString(reviewBrief)
 	if f := strings.TrimSpace(req.Focus); f != "" {

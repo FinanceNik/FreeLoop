@@ -46,15 +46,20 @@ type Task struct {
 	// Set by an AFK run (WFL-005): the session's mode, environment and workflow,
 	// shell commands allowed for it as session rules, tags beside "queued", the
 	// session whose worktree it shares, and the run.
-	Mode            string    `json:"mode,omitempty"`
-	EnvironmentID   string    `json:"environmentId,omitempty"`
-	Workflow        string    `json:"workflow,omitempty"`
-	Allow           []string  `json:"allow,omitempty"`
-	Tags            []string  `json:"tags,omitempty"`
-	ShareWorktreeOf string    `json:"shareWorktreeOf,omitempty"`
-	RunID           string    `json:"runId,omitempty"`
-	State           string    `json:"state"`
-	AddedAt         time.Time `json:"addedAt"`
+	Mode            string   `json:"mode,omitempty"`
+	EnvironmentID   string   `json:"environmentId,omitempty"`
+	Workflow        string   `json:"workflow,omitempty"`
+	Allow           []string `json:"allow,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	ShareWorktreeOf string   `json:"shareWorktreeOf,omitempty"`
+	// ModelOption and Model switch the session's model before its first message,
+	// through the session's own model option, as its model list does: the built-in
+	// agent's provider and model, or an external agent's own choice.
+	ModelOption string    `json:"modelOption,omitempty"`
+	Model       string    `json:"model,omitempty"`
+	RunID       string    `json:"runId,omitempty"`
+	State       string    `json:"state"`
+	AddedAt     time.Time `json:"addedAt"`
 	// Set once it started: its session, and what holds it back or went wrong.
 	SessionID string    `json:"sessionId,omitempty"`
 	StartedAt time.Time `json:"startedAt,omitempty"`
