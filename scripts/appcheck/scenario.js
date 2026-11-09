@@ -82,6 +82,21 @@ await step("a session shows what it runs on", async () => {
 });
 
 // A profile on an agent with its own sign-in hides the provider, and says how to get it.
+// The sidebar's footer: the four layout icons sit under the four icons above them,
+// whether or not the bell is shown, and Settings stands alone at the lower right.
+await step("the footer's icons line up, with Settings at the lower right", async () => {
+  const centre = (e) => { const r = e.getBoundingClientRect(); return Math.round(r.left + r.width / 2); };
+  const top = [...document.querySelector(".footer-links").children].filter((e) => !e.classList.contains("footer-cost")).slice(0, 4);
+  const layout = [...document.querySelectorAll(".layout-switch button")];
+  check("four icons above and four layout icons below", top.length === 4 && layout.length === 4, `${top.length} and ${layout.length}`);
+  check("each layout icon is under the one above it", top.every((e, i) => Math.abs(centre(e) - centre(layout[i])) <= 1), `${top.map(centre)} vs ${layout.map(centre)}`);
+  const settings = document.querySelector(".footer-row .settings-link").getBoundingClientRect();
+  const row = document.querySelector(".footer-row").getBoundingClientRect();
+  check("Settings is at the right end of the bottom row, after the layout icons", settings.left >= layout[3].getBoundingClientRect().right && Math.abs(settings.right - row.right) <= 2, `${settings.left}-${settings.right} in ${row.right}`);
+  const cost = document.querySelector(".footer-cost")?.getBoundingClientRect();
+  if (cost) check("Settings is under the cost", cost.right <= settings.right + 12 && cost.left < settings.right && cost.bottom <= settings.top, JSON.stringify([cost.left, cost.right, settings.left, settings.right]));
+});
+
 await step("a pane shows how full its context is", async () => {
   const meter = () => activePane().querySelector(".session-titleline .context-meter");
   const rowMeter = (title) => withText(".session-row", title)?.querySelector(".context-meter");

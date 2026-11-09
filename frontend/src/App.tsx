@@ -1511,6 +1511,9 @@ export default function App() {
           )}
           <footer>
             <div className="footer-links">
+              {/* With something waiting, the attention link above takes the bell's place; its
+                  cell stays, so the icons below remain in columns under these. */}
+              {attentionCount > 0 && <span className="footer-gap" aria-hidden="true" />}
               {attentionCount === 0 && (
                 <button
                   aria-current={screen.kind === "attention" ? "page" : undefined}
@@ -1558,16 +1561,6 @@ export default function App() {
               )}
             </div>
             <div className="footer-row">
-              <button
-                className="settings-link icon-button"
-                aria-label={t("settings.title")}
-                aria-current={inSettings(screen.kind) ? "page" : undefined}
-                aria-keyshortcuts={ariaKeys(bindingOf("settings"))}
-                title={bindingOf("settings") ? t("sidebar.settings.key", { key: keyLabel(bindingOf("settings")) }) : t("settings.title")}
-                onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen(settingsScreen()))}
-              >
-                <Icon name="general" />
-              </button>
               <div className="layout-switch" role="group" aria-label={t("sidebar.layout")}>
                 {([1, 2, 3, 4] as const).map((n) => (
                   <button
@@ -1582,6 +1575,18 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              {/* Alone at the lower right, under the cost, so it is always where the eye
+                  looks for it, and the four layout icons stay under the four above. */}
+              <button
+                className="settings-link icon-button"
+                aria-label={t("settings.title")}
+                aria-current={inSettings(screen.kind) ? "page" : undefined}
+                aria-keyshortcuts={ariaKeys(bindingOf("settings"))}
+                title={bindingOf("settings") ? t("sidebar.settings.key", { key: keyLabel(bindingOf("settings")) }) : t("settings.title")}
+                onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen(settingsScreen()))}
+              >
+                <Icon name="general" />
+              </button>
             </div>
           </footer>
           <Splitter
