@@ -22,7 +22,7 @@ const ReportLogLines = 200
 // do, and the home folder's path, which holds the user's name, reads ~.
 func (e *Engine) ProblemReport(ctx context.Context, sessionID string) (string, error) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Freeloop %s (%s/%s, %s)\n", AppVersion, goruntime.GOOS, goruntime.GOARCH, goruntime.Version())
+	fmt.Fprintf(&b, "Freeloop %s (%s/%s, %s)\n", Build().Label, goruntime.GOOS, goruntime.GOARCH, goruntime.Version())
 	system := "unknown"
 	if e.systemInfo != nil {
 		system = e.systemInfo()

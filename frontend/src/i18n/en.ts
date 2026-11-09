@@ -157,6 +157,11 @@ export const en = {
   },
   "settings.restore.waitingLabel": { one: "{count} would wait for approval", other: "{count} would wait for approval" },
   "settings.restore.needKeys": "You would enter the API keys for {providers} under Providers.",
+  "settings.build.title": "This build",
+  "settings.build.version": "Freeloop {version}",
+  "settings.build.intro": "Two computers on the same version run the same code only when their commits match.",
+  "settings.build.dirty": "Built from files with changes that were not committed.",
+  "settings.build.unknown": "This build does not say which commit it was made from.",
   "settings.report.title": "Report a problem",
   "settings.report.introNamed":
     "Copies Freeloop's version, this computer's model and system version, the agent and provider of “{title}”, and the log's last 200 lines, for an issue.",

@@ -157,6 +157,11 @@ export const nl = translationOf<typeof en>()({
   },
   "settings.restore.waitingLabel": { one: "{count} zou op goedkeuring wachten", other: "{count} zouden op goedkeuring wachten" },
   "settings.restore.needKeys": "De API-sleutels voor {providers} zouden onder Aanbieders moeten worden ingevuld.",
+  "settings.build.title": "Deze versie",
+  "settings.build.version": "Freeloop {version}",
+  "settings.build.intro": "Twee computers met dezelfde versie voeren alleen dezelfde code uit als hun commits overeenkomen.",
+  "settings.build.dirty": "Gebouwd uit bestanden met wijzigingen die niet zijn gecommit.",
+  "settings.build.unknown": "Deze versie geeft niet aan uit welke commit ze is gebouwd.",
   "settings.report.title": "Probleem melden",
   "settings.report.introNamed":
     "Kopieert de versie van Freeloop, het model en de systeemversie van deze computer, de agent en aanbieder van ‘{title}’ en de laatste 200 regels van het logboek, voor een probleemmelding.",

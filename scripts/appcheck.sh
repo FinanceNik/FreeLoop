@@ -129,7 +129,8 @@ done
 
 status=0
 # APPCHECK_SCENARIO runs another scenario on the same data, to try one step alone.
-cat "$HERE/appcheck/lib.js" "${APPCHECK_SCENARIO:-$HERE/appcheck/scenario.js}" > "$DATA/fresh.js"
+# headCommit is the commit this checkout is at, which the served build says it is from.
+{ echo "const headCommit = \"$(git -C "$ROOT" rev-parse --short=7 HEAD 2>/dev/null || true)\";"; cat "$HERE/appcheck/lib.js" "${APPCHECK_SCENARIO:-$HERE/appcheck/scenario.js}"; } > "$DATA/fresh.js"
 "$DATA/drive" "http://localhost:$PORT/" "$DATA/fresh.js" > "$OUT/results.txt" || status=$?
 cat "$OUT/results.txt"
 

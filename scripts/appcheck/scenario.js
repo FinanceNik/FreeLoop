@@ -819,6 +819,17 @@ await step("a problem report says what an issue needs", async () => {
   withText(".settings-nav button", "Data").click();
   await until("the Data page", () => document.querySelector(".settings-page h2")?.textContent === "Data");
   check("the Data page offers a report", !!withText(".settings-page h3", "Report a problem") && !!withText("button", "Copy a report"));
+  // Which build is running (NFR-REL-006): the version and the commit it was made from,
+  // so two machines on one version can be compared. The served build is made in this
+  // checkout, so its commit is the checkout's, with +dirty when it has changes.
+  const about = await until("the build's card", () => withText(".card", "This build"), 5000);
+  const line = about.querySelector("p")?.textContent ?? "";
+  check("Settings says the version of this build", /^Freeloop \d+\.\d+\.\d+/.test(line), line);
+  if (headCommit) check("Settings says the commit this build is from", line.includes(headCommit) && about.querySelector("code")?.textContent.startsWith(headCommit), `${line} (the checkout is at ${headCommit})`);
+  const report = await (async () => { withText("button", "Show what is copied").click(); return (await until("the report", () => document.querySelector(".report-preview"), 5000)).textContent; })();
+  if (headCommit) check("the report starts with the same commit", report.split("\n")[0].includes(headCommit), report.split("\n")[0]);
+  withText("button", "Hide what is copied").click();
+  await until("the report hidden", () => !document.querySelector(".report-preview"), 4000);
   withText("button", "Show what is copied").click();
   const pre = await until("the report", () => document.querySelector(".report-preview"), 5000);
   const text = pre.textContent;

@@ -138,6 +138,7 @@ test("each catalogue has the English keys, forms and placeholders", () => {
 // Code, Model, Project and Context, all OK.
 const SAME_WORD = {
   de: new Set([
+    "settings.build.version",
     "common.ok",
     "pending.kind.agent",
     "colors.token.text",
@@ -167,6 +168,7 @@ const SAME_WORD = {
     "diff.commit.title",
   ]),
   nl: new Set([
+    "settings.build.version",
     "common.ok",
     "pending.kind.agent",
     "fonts.code",

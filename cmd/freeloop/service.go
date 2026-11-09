@@ -539,6 +539,12 @@ func (s *EngineService) TypeOptimizerInstall(ctx context.Context, sessionID, id 
 	return s.eng.TypeOptimizerInstall(ctx, sessionID, id)
 }
 
+// AppBuild says which build is running: its version and the commit it was made from,
+// for Settings to show (so two machines can be compared).
+func (s *EngineService) AppBuild() engine.BuildInfo {
+	return engine.Build()
+}
+
 // ListWorkflows, ApproveWorkflow, InstallWorkflowSkills and SetDefaultWorkflow
 // back the Workflows page in Settings (WFL-001, WFL-003).
 func (s *EngineService) ListWorkflows(ctx context.Context) []engine.WorkflowStatus {

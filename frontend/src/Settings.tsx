@@ -16,7 +16,7 @@ import { PriceTable, UsageTable } from "./Costs.tsx";
 import BudgetTable from "./BudgetTable.tsx";
 import { HookTable, PendingCommands } from "./Hooks.tsx";
 import { groupPending, pendingLabel } from "./pending.ts";
-import { EngineService, type Blocked, type ConfigPreview, type ConfigRestore, type Config, type UpdateInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
+import { EngineService, type Blocked, type ConfigPreview, type ConfigRestore, type Config, type UpdateInfo, type BuildInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
 
 interface Props {
   // Which of the app's pages to show; one form holds them all, so moving between
@@ -205,6 +205,11 @@ export default function Settings({ page, config, providers, harnesses, environme
   // The opt-in update check (OQ-015).
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
+  // Which build is running: its version and the commit it was made from.
+  const [build, setBuild] = useState<BuildInfo | null>(null);
+  useEffect(() => {
+    EngineService.AppBuild().then(setBuild).catch(() => setBuild(null));
+  }, []);
   useEffect(() => {
     EngineService.UpdateStatus().then(setUpdate).catch(onError);
   }, [config]);
@@ -625,6 +630,22 @@ export default function Settings({ page, config, providers, harnesses, environme
         )}
       {page === "data" && (
         <>
+      {build && (
+        <div className="card build-info">
+          <h3>{t("settings.build.title")}</h3>
+          <p>
+            <strong>{t("settings.build.version", { version: build.version })}</strong>
+            {build.commit && (
+              <>
+                {" · "}
+                <code>{build.stamp}</code>
+              </>
+            )}
+          </p>
+          <p className="muted">{build.commit ? t("settings.build.intro") : t("settings.build.unknown")}</p>
+          {build.dirty && <p className="muted">{t("settings.build.dirty")}</p>}
+        </div>
+      )}
       <div className="card">
         <h3>{t("settings.import.title")}</h3>
         <p className="muted">{t("settings.import.intro")}</p>

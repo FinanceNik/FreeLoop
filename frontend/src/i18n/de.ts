@@ -158,6 +158,11 @@ export const de = translationOf<typeof en>()({
   },
   "settings.restore.waitingLabel": { one: "{count} würde auf Freigabe warten", other: "{count} würden auf Freigabe warten" },
   "settings.restore.needKeys": "Die API-Schlüssel für {providers} wären unter Anbieter einzutragen.",
+  "settings.build.title": "Diese Version",
+  "settings.build.version": "Freeloop {version}",
+  "settings.build.intro": "Zwei Computer mit derselben Version führen nur dann denselben Code aus, wenn ihre Commits übereinstimmen.",
+  "settings.build.dirty": "Aus Dateien mit nicht eingecheckten Änderungen gebaut.",
+  "settings.build.unknown": "Diese Version gibt nicht an, aus welchem Commit sie gebaut wurde.",
   "settings.report.title": "Problem melden",
   "settings.report.introNamed":
     "Kopiert die Version von Freeloop, Modell und Systemversion dieses Computers, Agent und Anbieter von „{title}“ und die letzten 200 Zeilen des Protokolls, für einen Fehlerbericht.",

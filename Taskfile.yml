@@ -22,6 +22,16 @@ vars:
     sh: >-
       v=$(sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml); v=${v%%-*}; echo "$v.0"
 
+  # The commit this build is made from, with "+dirty" after it when the files have
+  # changes that are not committed; empty outside a repository. Linked into the binary
+  # (engine.BuildCommit) and written into the Mac bundle, so a machine can say which
+  # build it runs. A development build (DEV=true) is not stamped.
+  COMMIT:
+    sh: >-
+      c=$(git -c safe.directory='*' rev-parse --short=7 HEAD 2>/dev/null) || exit 0;
+      if [ -n "$(git -c safe.directory='*' status --porcelain 2>/dev/null)" ]; then c="$c+dirty"; fi;
+      echo "$c"
+
 includes:
   common: ./build/Taskfile.yml
   darwin: ./build/darwin/Taskfile.yml

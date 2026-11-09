@@ -14,7 +14,7 @@ VERSION := $(shell sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml)
 # shasum on macOS; sha256sum where Perl's shasum is missing (Git for Windows). Same output.
 SHA256 := $(shell command -v shasum >/dev/null 2>&1 && echo "shasum -a 256" || echo sha256sum)
 
-.PHONY: help tools dev build package check-app dmg notices windows windows-exe windows-tools linux-package linux-package-arch release release-mac release-windows release-linux release-sums verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
+.PHONY: help tools dev build package install check-app dmg notices windows windows-exe windows-tools linux-package linux-package-arch release release-mac release-windows release-linux release-sums verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-19s %s\n", $$1, $$2}'
@@ -30,6 +30,9 @@ build: ## Build a production binary into bin/
 
 package: ## Build bin/Freeloop.app (ad-hoc signed; SHIPPED=1 for the build users get)
 	$(WAILS) package $(if $(filter 1,$(SHIPPED)),SHIPPED=1)
+
+install: ## Quit Freeloop, rebuild it from this commit and leave that as the only copy (INSTALL_DIR=~/Applications, OPEN=1)
+	scripts/install.sh
 
 # The DMG holds the app and a link to /Applications, compressed (UDZO). It is
 # as signed as the app inside: ad-hoc (OQ-009). Its app is the build users get,

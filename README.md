@@ -47,6 +47,8 @@ make dmg       # optional: bin/Freeloop.dmg with the app and a link to Applicati
 
 Move `bin/Freeloop.app` to Applications, or open the DMG and drag it there. A build you made yourself opens normally.
 
+To always open the current build, use `make install` instead of `make package`, from a terminal and not from inside Freeloop. It quits Freeloop, rebuilds it from the commit you have checked out, and leaves that as the only copy: the old one and any other Freeloop it finds go to the Trash. `make install INSTALL_DIR=~/Applications` puts the new one there. Settings → Data → "This build" says the version and the commit the running app was made from (`+dirty` if the files had uncommitted changes), so you can compare two computers; the same line starts a problem report, and `defaults read /path/to/Freeloop.app/Contents/Info FreeloopCommit` says it for a bundle on disk. A computer that updates by `git pull` needs `make install` after each pull, and has to quit the old app first, since opening an app that is already running only brings it forward.
+
 ## First run
 
 Want to see it first? "Try it with a demo" on the first-run screen, or "Try the demo" in the command palette later, runs a scripted agent in a scratch project with no key and no network. In one turn you see a read allowed, a write and a secret file asked about, a `git push` refused by a rule and a git hook refused as a protected path. "Remove demo" deletes it all.
