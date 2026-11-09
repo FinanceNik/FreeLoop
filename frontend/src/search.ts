@@ -1,5 +1,6 @@
 // Full-text search results (SES-007): the engine wraps matches in snippets
 // with control characters, which become marked text here, never markup.
+import { t, type PlainKey } from "./i18n.ts";
 
 export const SNIPPET_OPEN = "\x02";
 export const SNIPPET_CLOSE = "\x03";
@@ -43,10 +44,17 @@ export function itemForSeq(items: readonly { key: string }[], seq: number): stri
   return best;
 }
 
-export const HIT_LABEL: Record<string, string> = {
-  user: "You",
-  agent: "Agent",
-  thought: "Thinking",
-  tool: "Tool",
-  summary: "Summary",
+// Where a hit was found, by its kind.
+const HIT_LABEL: Record<string, PlainKey> = {
+  user: "search.hit.user",
+  agent: "search.hit.agent",
+  thought: "search.hit.thought",
+  tool: "search.hit.tool",
+  summary: "search.hit.summary",
 };
+
+// hitLabel names where a hit was found, in the language in force; a kind the app has
+// no word for is shown as the engine gave it.
+export function hitLabel(kind: string): string {
+  return Object.hasOwn(HIT_LABEL, kind) ? t(HIT_LABEL[kind]) : kind;
+}

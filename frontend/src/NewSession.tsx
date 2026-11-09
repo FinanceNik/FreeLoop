@@ -5,7 +5,7 @@ import IssuePicker from "./IssuePicker.tsx";
 import {
   EngineService,
   type IssueBrief,
-  MODES,
+  modeName,
   STARTING_MODES,
   errorText,
   type EnvironmentInfo,
@@ -669,11 +669,11 @@ export default function NewSession({ providers, projects, environments, profiles
           Permission mode
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="">
-              {waits?.mode ? "Ask, until you approve the file's choice in Settings" : <>{profile?.mode ? "From the profile" : "From the environment"} ({MODES.find((m) => m.id === (profile?.mode || env?.defaultMode || "ask"))?.name})</>}
+              {waits?.mode ? "Ask, until you approve the file's choice in Settings" : <>{profile?.mode ? "From the profile" : "From the environment"} ({modeName(profile?.mode || env?.defaultMode || "ask")})</>}
             </option>
             {STARTING_MODES.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name}
+                {modeName(m.id)}
               </option>
             ))}
           </select>

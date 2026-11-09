@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { trustLines, trustStep } from "./trust.ts";
+import { setLanguage } from "./i18n.ts";
 
 test("a project whose hooks are unknown is not trusted yet", () => {
   assert.equal(trustStep(null, true), "lookup");
@@ -34,3 +35,19 @@ test("trusting names every hook it would let run, and agent settings that try to
   assert.deepEqual(trustLines({}), []);
 });
 
+
+// GUI-048: the lines are in the language set; what comes from the project's files is not.
+test("what trusting lets run is said in the language set", () => {
+  setLanguage("de");
+  const lines = trustLines({
+    hooks: [{ event: "pre_tool_use", match: "bash", command: "./check.sh" }],
+    agentConfig: [{ path: ".claude/settings.json", hooks: ["SessionStart", "Stop"], allows: true }],
+  });
+  assert.deepEqual(lines, [
+    "Hook-Befehl, pre_tool_use (bash): ./check.sh",
+    "Hook-Befehle von Claude Code in .claude/settings.json: SessionStart, Stop",
+    ".claude/settings.json weist seinen Agenten an, nicht zu fragen. Die Richtlinie von Freeloop entscheidet trotzdem.",
+  ]);
+  setLanguage("en");
+  assert.equal(trustLines({ hooks: [{ event: "pre_tool_use", match: "bash", command: "./check.sh" }] })[0], "Hook, pre_tool_use (bash): ./check.sh");
+});

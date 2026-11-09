@@ -5,6 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 import { EngineService, TERMINAL_EVENT_NAME, type Session, type TerminalInfo, type TerminalOutput } from "./api.ts";
 import { after, bytesOf, fitSize } from "./terminal.ts";
 import { terminalClipboard } from "./platform.ts";
+import { t } from "./i18n.ts";
 
 // TerminalPanel is the Terminal tab of the right panel (GUI-012): shells in
 // the session's environment, a container for a Docker session. The shells
@@ -24,9 +25,9 @@ export default function TerminalPanel({ session, onError }: Props) {
 
   const open = () =>
     EngineService.OpenTerminal(session.id, 80, 24)
-      .then((t) => {
-        setTerms((list) => [...(list ?? []), t]);
-        setCurrent(t.id);
+      .then((shell) => {
+        setTerms((list) => [...(list ?? []), shell]);
+        setCurrent(shell.id);
       })
       .catch(onError);
 
@@ -48,40 +49,40 @@ export default function TerminalPanel({ session, onError }: Props) {
 
   const close = (id: string) => {
     EngineService.CloseTerminal(id).catch(() => {});
-    const rest = (terms ?? []).filter((t) => t.id !== id);
+    const rest = (terms ?? []).filter((shell) => shell.id !== id);
     setTerms(rest);
     if (current === id) setCurrent(rest.length ? rest[rest.length - 1].id : "");
   };
 
-  if (archived) return <p className="muted">Unarchive the session to open a terminal in it.</p>;
-  if (!terms) return <p className="muted">Starting…</p>;
-  const shown = terms.find((t) => t.id === current);
+  if (archived) return <p className="muted">{t("terminal.archived")}</p>;
+  if (!terms) return <p className="muted">{t("terminal.starting")}</p>;
+  const shown = terms.find((shell) => shell.id === current);
   return (
     <div className="terminal-panel">
-      <div className="row terminal-tabs" role="group" aria-label="Terminals">
-        {terms.map((t, i) => (
-          <span key={t.id} className={t.id === current ? "terminal-tab terminal-tab-on" : "terminal-tab"}>
-            <button aria-current={t.id === current ? "true" : undefined} className="link" onClick={() => setCurrent(t.id)}>
-              Shell {i + 1}
+      <div className="row terminal-tabs" role="group" aria-label={t("terminal.list")}>
+        {terms.map((shell, i) => (
+          <span key={shell.id} className={shell.id === current ? "terminal-tab terminal-tab-on" : "terminal-tab"}>
+            <button aria-current={shell.id === current ? "true" : undefined} className="link" onClick={() => setCurrent(shell.id)}>
+              {t("terminal.shell", { number: i + 1 })}
             </button>
-            <button className="link" aria-label={`Close shell ${i + 1}`} title="Close this shell" onClick={() => close(t.id)}>
+            <button className="link" aria-label={t("terminal.close", { number: i + 1 })} title={t("terminal.closeThis")} onClick={() => close(shell.id)}>
               ×
             </button>
           </span>
         ))}
-        <button className="link" onClick={open} title="Open another shell">
-          + New
+        <button className="link" onClick={open} title={t("terminal.openAnother")}>
+          {t("terminal.new")}
         </button>
       </div>
       {shown ? (
         <>
           <p className="muted terminal-where">
-            <code>{shown.where}</code> · Shift+Esc leaves the terminal
+            <code>{shown.where}</code> · {t("terminal.leave")}
           </p>
           <TerminalView key={shown.id} id={shown.id} onError={onError} />
         </>
       ) : (
-        <p className="muted">No shell is open.</p>
+        <p className="muted">{t("terminal.none")}</p>
       )}
     </div>
   );
@@ -173,7 +174,7 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
       .then((scr) => {
         shownTo = scr.offset;
         show(scr);
-        for (const out of early) show(out);
+        early.forEach(show);
         fit();
         term.focus();
       })
@@ -190,8 +191,8 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
 
   return (
     <>
-      <div className="terminal-box" ref={box} role="group" aria-label="Terminal" />
-      {exited !== null && <p className="muted">The shell exited{exited ? ` with code ${exited}` : ""}.</p>}
+      <div className="terminal-box" ref={box} role="group" aria-label={t("terminal.label")} />
+      {exited !== null && <p className="muted">{exited ? t("terminal.exitedCode", { code: String(exited) }) : t("terminal.exited")}</p>}
     </>
   );
 }

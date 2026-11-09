@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { matchCommands, MODE_COMMANDS, modeCommand, slashQuery } from "./commands.ts";
+import { matchCommands, modeCommands, modeCommand, modeHint, modeName, MODES, slashQuery } from "./commands.ts";
+import { setLanguage } from "./i18n.ts";
 
 test("slashQuery is the first word after a leading slash", () => {
   assert.equal(slashQuery("/", 1), "");
@@ -12,7 +13,7 @@ test("slashQuery is the first word after a leading slash", () => {
 });
 
 test("matchCommands puts prefix matches first", () => {
-  const list = [...MODE_COMMANDS, { name: "review", description: "" }, { name: "preview", description: "" }];
+  const list = [...modeCommands(), { name: "review", description: "" }, { name: "preview", description: "" }];
   assert.deepEqual(
     matchCommands("pl", list).map((c) => c.name),
     ["plan"],
@@ -30,4 +31,27 @@ test("modeCommand recognises a bare mode command only", () => {
   assert.equal(modeCommand("/plan the work"), null);
   assert.equal(modeCommand("/review"), null);
   assert.equal(modeCommand("plan"), null);
+});
+
+// GUI-048: the modes and their commands are the app's own, so they are named and
+// described in the language in force; a command's name is typed, so it stays.
+test("the app's modes and mode commands follow the language", () => {
+  setLanguage("de");
+  assert.equal(modeName("plan"), "Planen");
+  assert.equal(modeName("accept_edits"), "Änderungen annehmen");
+  assert.match(modeHint("ask") ?? "", /fragt/i);
+  const plan = modeCommands().find((c) => c.mode === "plan");
+  assert.equal(plan?.name, "plan");
+  assert.equal(plan?.description, "Nur lesen und planen; keine Änderungen");
+  setLanguage("nl");
+  assert.equal(modeName("ask"), "Vragen");
+  setLanguage("en");
+  assert.deepEqual(
+    MODES.map((m) => modeName(m.id)),
+    ["Ask", "Accept edits", "Plan", "Auto", "Bypass"],
+  );
+  assert.equal(modeCommands().find((c) => c.mode === "bypass")?.description, "Run tool calls without asking");
+  // A mode the app does not know, such as an agent's own, is shown as given.
+  assert.equal(modeName("yolo"), "yolo");
+  assert.equal(modeHint("yolo"), undefined);
 });

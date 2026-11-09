@@ -24,7 +24,7 @@ import {
   type SessionHits,
 } from "./api.ts";
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
-import { HIT_LABEL, snippetParts } from "./search.ts";
+import { hitLabel, snippetParts } from "./search.ts";
 import { formatCost, type PriceEntry } from "./cost.ts";
 import { windowSession } from "./windows.ts";
 import * as ws from "./workspace.ts";
@@ -74,7 +74,7 @@ import { ask } from "./ask.ts";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { applyFonts, type FontChoice } from "./fonts.ts";
-import { preferredLanguages, resolveLanguage, setLanguage } from "./i18n.ts";
+import { preferredLanguages, resolveLanguage, setLanguage, t, type PlainKey } from "./i18n.ts";
 import { inSettings, isGeneral, isSettingsShortcut, MAX_FONT_SIZE, settingsStart, textSizeAfter, type GeneralPage } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
 import SessionImport from "./SessionImport.tsx";
@@ -104,14 +104,40 @@ type Screen =
   | { kind: "help"; topic?: string }
   | { kind: "none" };
 
-const STATUS_LABEL: Record<string, string> = {
-  running: "Running",
-  waiting_permission: "Needs you",
-  waiting_input: "Waiting",
-  queued: "Queued",
-  idle: "Idle",
-  error: "Error",
+// How a session's status reads, translated where it shows (GUI-048).
+const STATUS_LABEL: Record<string, PlainKey> = {
+  running: "status.running",
+  waiting_permission: "status.waitingPermission",
+  waiting_input: "status.waitingInput",
+  queued: "status.queued",
+  idle: "status.idle",
+  error: "status.error",
+  archived: "status.archived",
 };
+
+// statusText is a status in words, or as the engine gave it when the app has none.
+const statusText = (status: string) => (Object.hasOwn(STATUS_LABEL, status) ? t(STATUS_LABEL[status]) : status);
+
+// How many sessions of a collapsed project have a status, on its heading.
+const STATUS_COUNT = {
+  running: "status.count.running",
+  waiting_permission: "status.count.waitingPermission",
+  waiting_input: "status.count.waitingInput",
+  queued: "status.count.queued",
+  error: "status.count.error",
+} as const;
+
+const statusCount = (status: string, count: number) =>
+  Object.hasOwn(STATUS_COUNT, status) ? t(STATUS_COUNT[status as keyof typeof STATUS_COUNT], { count }) : `${count} ${status}`;
+
+// The statuses the sidebar's filter offers, the first showing every one.
+const STATUS_CHOICES: [status: string, label: PlainKey][] = [
+  ["", "sidebar.filter.anyStatus"],
+  ["waiting_permission", "status.waitingPermission"],
+  ["running", "status.running"],
+  ["idle", "status.idle"],
+  ["error", "status.error"],
+];
 
 const PANE_SHORTCUT = { left: "paneLeft", right: "paneRight", up: "paneUp", down: "paneDown" };
 
@@ -145,12 +171,13 @@ const STANDALONE = windowSession(window.location.search);
 // project that needs something still shows it: an untrusted one by the same
 // ring as its heading, named in the tooltip.
 function RowProject({ session, project }: { session: Session; project?: ProjectInfo }) {
-  if (project?.missing) return <span className="badge badge-error">missing</span>;
+  if (project?.missing) return <span className="badge badge-error">{t("sidebar.project.missing")}</span>;
   const name = project?.name ?? basename(session.projectRoot);
   const untrusted = project && !project.trusted;
+  const root = project?.root ?? session.projectRoot;
   return (
-    <span className="muted session-project" title={`${project?.root ?? session.projectRoot}${untrusted ? " (untrusted: global settings only)" : ""}`}>
-      {untrusted && <span className="untrusted" role="img" aria-label="Untrusted" />}
+    <span className="muted session-project" title={untrusted ? t("sidebar.project.untrustedRoot", { root }) : root}>
+      {untrusted && <span className="untrusted" role="img" aria-label={t("sidebar.project.untrusted")} />}
       <span className="session-project-name">{name}</span>
     </span>
   );
@@ -159,7 +186,7 @@ function RowProject({ session, project }: { session: Session; project?: ProjectI
 // StatusDot is a session's status as a small dot before its title, named for the
 // tooltip and screen readers; an idle session has none.
 function StatusDot({ status }: { status: string }) {
-  const label = STATUS_LABEL[status] ?? status;
+  const label = statusText(status);
   if (status === "idle") return <span className="sr-only">{label}</span>;
   return <span className={`status-dot status-${status}`} role="img" aria-label={label} title={label} />;
 }
@@ -250,8 +277,8 @@ export default function App() {
   useEffect(() => {
     if (screen.kind !== "board" && runFor === null) return;
     refreshBacklogs();
-    const t = setInterval(refreshBacklogs, 5000);
-    return () => clearInterval(t);
+    const timer = setInterval(refreshBacklogs, 5000);
+    return () => clearInterval(timer);
   }, [screen.kind, runFor]);
   // The AFK run's dialog (WFL-005), for a project's backlog.
   const [afkFor, setAfkFor] = useState<{ root: string; workflowId?: string; startedBy: string } | null>(null);
@@ -269,20 +296,20 @@ export default function App() {
         <p className="row">
           {!going && (
             <button className="primary" onClick={() => setAfkFor({ root: b.projectRoot, workflowId: b.workflowId, startedBy: "the Board" })}>
-              Run AFK issues…
+              {t("app.afk.run")}
             </button>
           )}
           {going && (
-            <button onClick={() => EngineService.PauseAFK(r.id, r.state === "running").then(refreshBacklogs).catch(report)}>{r.state === "running" ? "Pause" : "Resume"}</button>
+            <button onClick={() => EngineService.PauseAFK(r.id, r.state === "running").then(refreshBacklogs).catch(report)}>{r.state === "running" ? t("app.afk.pause") : t("app.afk.resume")}</button>
           )}
           {going && (
             <button onClick={() => EngineService.StopAFK(r.id).then(refreshBacklogs).catch(report)}>
-              Stop
+              {t("app.afk.stop")}
             </button>
           )}
           {r && (
             <button className="link backlog-run-details" onClick={() => setRunFor(b.projectRoot)}>
-              Show the run
+              {t("app.afk.showRun")}
             </button>
           )}
         </p>
@@ -290,7 +317,7 @@ export default function App() {
     );
   };
   const archiveBacklog = async (b: BacklogInfo) => {
-    if (!(await ask(`Archive ${b.finished} finished backlog files of ${b.projectName}? They are removed in a commit of their own, and git history keeps them.`))) return;
+    if (!(await ask(t("app.afk.archiveAsk", { count: b.finished, project: b.projectName })))) return;
     EngineService.ArchiveBacklog(b.projectRoot, b.workflowId)
       .then(refreshBacklogs)
       .catch(report);
@@ -577,10 +604,10 @@ export default function App() {
   }, [sessionsLoaded]);
   useEffect(() => {
     if (!workLoaded.current) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       EngineService.SaveWorkspace({ layout: work.layout, panes: work.panes.map((x) => x ?? ""), active: work.active }).catch(() => {});
     }, 400);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [work]);
   useEffect(() => {
     if (sessionsLoaded) setWork((w) => ws.forget(w, (sid) => sessions.some((x) => x.id === sid)));
@@ -707,10 +734,10 @@ export default function App() {
       // Ahead of the View menu's page zoom, which would scale the layout too.
       e.preventDefault();
       if (next === current) {
-        setHeardScreen(next === MAX_FONT_SIZE ? "Text is at its largest" : "Text is at its smallest");
+        setHeardScreen(next === MAX_FONT_SIZE ? t("app.textSize.largest") : t("app.textSize.smallest"));
         return;
       }
-      setHeardScreen(`Text size ${next}`);
+      setHeardScreen(t("app.textSize.now", { size: next }));
       fontPending.current = next;
       setConfig({ ...now, ui: { ...now.ui, fontSize: next } });
       clearTimeout(fontSave.current);
@@ -864,7 +891,7 @@ export default function App() {
       matches(s, filter),
   );
   if (groupBy === "date") {
-    for (const d of dateGroups(visible, new Date())) groups.push({ key: `date:${d.label}`, name: d.label, sessions: d.sessions });
+    for (const d of dateGroups(visible, new Date())) groups.push({ key: `date:${d.id}`, name: d.label, sessions: d.sessions });
   } else {
     for (const s of visible) {
       const project = projects.find((p) => p.id === s.projectId);
@@ -900,9 +927,9 @@ export default function App() {
   // ⌘1 to ⌘9 go down the sessions that can be seen.
   listedRef.current = groups.filter((g) => !isCollapsed(g.key)).flatMap((g) => g.sessions);
   const filterChips = [
-    ...(statusFilter ? [{ label: STATUS_LABEL[statusFilter] ?? statusFilter, clear: () => setStatusFilter("") }] : []),
-    ...tagFilter.map((t) => ({ label: `#${t}`, clear: () => setTagFilter(tagFilter.filter((x) => x !== t)) })),
-    ...(showArchived ? [{ label: "Archived", clear: () => setShowArchived(false) }] : []),
+    ...(statusFilter ? [{ label: statusText(statusFilter), clear: () => setStatusFilter("") }] : []),
+    ...tagFilter.map((tag) => ({ label: `#${tag}`, clear: () => setTagFilter(tagFilter.filter((x) => x !== tag)) })),
+    ...(showArchived ? [{ label: t("sidebar.filter.archived"), clear: () => setShowArchived(false) }] : []),
   ];
   const openAttention = () => {
     refreshAttention();
@@ -919,110 +946,104 @@ export default function App() {
     const page = (id: string, title: string, go: () => void, extra: Partial<PaletteItem> = {}): PaletteItem => ({ id: `page:${id}`, title, group: "Page", run: go, ...extra });
     const items: PaletteItem[] = [
       ...collect(),
-      { id: "app:new", title: "New session", group: "Action", keywords: "create start", run: () => setScreen({ kind: "new" }) },
+      { id: "app:new", title: t("app.newSession"), group: "Action", keywords: "create start", run: () => setScreen({ kind: "new" }) },
       {
         id: "app:workflow",
-        title: "Start a workflow…",
+        title: t("app.palette.workflow"),
         group: "Action",
         keywords: "workflow plan prd slice afk issues backlog grill",
-        detail: "a new session with a workflow, at its first stage",
+        detail: t("app.palette.workflowDetail"),
         run: () => setScreen({ kind: "new", workflow: config?.defaults.workflow || "plan-slice-afk" }),
       },
       ...projects
         .filter((p) => p.trusted && !p.missing)
         .map((p) => ({
           id: `app:afk:${p.id}`,
-          title: `Run AFK issues: ${p.name}`,
+          title: t("app.palette.afk", { project: p.name }),
           group: "Action",
           keywords: "afk workflow backlog issues run unattended",
-          detail: "one fresh session per ready AFK issue in its backlog",
+          detail: t("app.palette.afkDetail"),
           run: () => setAfkFor({ root: p.root, startedBy: "the palette" }),
         })),
-      { id: "app:demo", title: "Try the demo", group: "Action", keywords: "tour example scripted no key policy", run: () => startDemo() },
-      page("attention", "Needs attention", () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: keyLabel(bindingOf("attention")), detail: attentionCount ? `${attentionCount} waiting` : undefined }),
+      { id: "app:demo", title: t("app.palette.demo"), group: "Action", keywords: "tour example scripted no key policy", run: () => startDemo() },
+      page("attention", t("app.needsAttention"), () => (refreshAttention(), setScreen({ kind: "attention" })), { shortcut: keyLabel(bindingOf("attention")), detail: attentionCount ? t("app.palette.waiting", { count: attentionCount }) : undefined }),
       ...(STANDALONE
         ? []
         : ([1, 2, 3, 4] as const).map((n) =>
-            page(`panes-${n}`, n === 1 ? "One pane" : `${n} panes side by side`, () => showWork(ws.chooseLayout(workRef.current, n)), { keywords: "workspace layout split columns grid" }),
+            page(`panes-${n}`, n === 1 ? t("app.layout.onePane") : t("app.layout.panesSideBySide", { count: n }), () => showWork(ws.chooseLayout(workRef.current, n)), { keywords: "workspace layout split columns grid" }),
           )),
-      page("board", "Board", () => setScreen({ kind: "board" }), { keywords: "cards overview columns kanban" }),
-      page("queue", "Queue", () => setScreen({ kind: "queue" }), { keywords: "tasks later batch" }),
-      page("providers", "Providers", () => setScreen({ kind: "providers" }), { keywords: "api keys models" }),
-      page("profiles", "Profiles", () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
-      page("skills", "Skills", () => setScreen({ kind: "skills" })),
-      page("mcp", "MCP servers", () => setScreen({ kind: "mcp" }), { keywords: "tools" }),
-      page("optimizers", "Token optimizers", () => setScreen({ kind: "optimizers" }), { keywords: "rtk tokens compress output default" }),
-      page("workflows", "Workflows", () => setScreen({ kind: "workflows" }), { keywords: "workflow prd slice afk backlog skills" }),
-      page("schedules", "Schedules", () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
-      page("environments", "Environments", () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
-      page("rules", "Policy", () => setScreen({ kind: "rules" }), { keywords: "permission rules allow deny would this be allowed check" }),
-      page("settings", "Settings", () => setScreen(settingsScreen()), { keywords: "preferences" }),
-      page("appearance", "Appearance", () => setScreen({ kind: "appearance" }), { keywords: "theme dark light font size colors provider marks" }),
-      page("keyboard", "Keyboard shortcuts", () => setScreen({ kind: "keyboard" }), { keywords: "keys bindings" }),
-      page("sessions", "Session defaults and notifications", () => setScreen({ kind: "sessions" }), { keywords: "default provider model environment profile notify mute" }),
-      page("costs", "Prices and budgets", () => setScreen({ kind: "costs" }), { keywords: "costs price budget spending limit" }),
-      page("permissions", "Permissions", () => setScreen({ kind: "permissions" }), { keywords: "bypass hooks approve approvals waiting" }),
-      page("network", "Network", () => setScreen({ kind: "network" }), { keywords: "local only offline web search updates" }),
-      page("usage-pane", "Show usage in a pane", () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new")), { keywords: "live tokens cost graph 12 24 hours side by side" }),
-      page("usage", "Usage", () => setScreen({ kind: "usage" }), { keywords: "cost tokens analytics dashboard spend", detail: today && (today.models ?? []).some((m) => m.priced) ? `today ≈ ${formatCost(today.cost)}` : undefined }),
-      page("import", "Import from Claude Code", () => setScreen({ kind: "import" })),
-      page("import-sessions", "Import sessions", () => setScreen({ kind: "import" }), { keywords: "claude code agent transcript history resume" }),
-      page("backup", "Back up or restore the configuration", () => setScreen({ kind: "data" }), { keywords: "export import settings providers profiles logs data" }),
-      page("guide", "Setup guide", () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
-      page("help", "Help", () => setScreen({ kind: "help" }), { keywords: "docs documentation guide manual how" }),
-      ...SHOWN_TOPICS.map((t) => ({ id: `help:${t.slug}`, title: t.title, group: "Help", keywords: "help docs guide how", run: () => setScreen({ kind: "help", topic: t.slug }) })),
-      page("report", "Report a problem", () => setScreen({ kind: "data" }), { keywords: "bug issue copy report logs crash help" }),
+      page("board", t("app.board"), () => setScreen({ kind: "board" }), { keywords: "cards overview columns kanban" }),
+      page("queue", t("app.queue"), () => setScreen({ kind: "queue" }), { keywords: "tasks later batch" }),
+      page("providers", t("settings.page.providers"), () => setScreen({ kind: "providers" }), { keywords: "api keys models" }),
+      page("profiles", t("settings.page.profiles"), () => setScreen({ kind: "profiles" }), { keywords: "harness agents" }),
+      page("skills", t("settings.page.skills"), () => setScreen({ kind: "skills" })),
+      page("mcp", t("settings.page.mcp"), () => setScreen({ kind: "mcp" }), { keywords: "tools" }),
+      page("optimizers", t("settings.page.optimizers"), () => setScreen({ kind: "optimizers" }), { keywords: "rtk tokens compress output default" }),
+      page("workflows", t("settings.page.workflows"), () => setScreen({ kind: "workflows" }), { keywords: "workflow prd slice afk backlog skills" }),
+      page("schedules", t("settings.page.schedules"), () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
+      page("environments", t("settings.page.environments"), () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
+      page("rules", t("settings.page.rules"), () => setScreen({ kind: "rules" }), { keywords: "permission rules allow deny would this be allowed check" }),
+      page("settings", t("settings.title"), () => setScreen(settingsScreen()), { keywords: "preferences" }),
+      page("appearance", t("settings.page.appearance"), () => setScreen({ kind: "appearance" }), { keywords: "theme dark light font size colors provider marks" }),
+      page("keyboard", t("app.palette.keyboard"), () => setScreen({ kind: "keyboard" }), { keywords: "keys bindings" }),
+      page("sessions", t("app.palette.sessions"), () => setScreen({ kind: "sessions" }), { keywords: "default provider model environment profile notify mute" }),
+      page("costs", t("app.palette.costs"), () => setScreen({ kind: "costs" }), { keywords: "costs price budget spending limit" }),
+      page("permissions", t("settings.page.permissions"), () => setScreen({ kind: "permissions" }), { keywords: "bypass hooks approve approvals waiting" }),
+      page("network", t("settings.page.network"), () => setScreen({ kind: "network" }), { keywords: "local only offline web search updates" }),
+      page("usage-pane", t("app.palette.usagePane"), () => showWork(ws.openIn(workRef.current, ws.USAGE_PANE, "new")), { keywords: "live tokens cost graph 12 24 hours side by side" }),
+      page("usage", t("app.usage"), () => setScreen({ kind: "usage" }), { keywords: "cost tokens analytics dashboard spend", detail: today && (today.models ?? []).some((m) => m.priced) ? t("app.palette.usageToday", { cost: formatCost(today.cost) }) : undefined }),
+      page("import", t("settings.import.title"), () => setScreen({ kind: "import" })),
+      page("import-sessions", t("app.palette.importSessions"), () => setScreen({ kind: "import" }), { keywords: "claude code agent transcript history resume" }),
+      page("backup", t("app.palette.backup"), () => setScreen({ kind: "data" }), { keywords: "export import settings providers profiles logs data" }),
+      page("guide", t("app.palette.guide"), () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
+      page("help", t("app.help"), () => setScreen({ kind: "help" }), { keywords: "docs documentation guide manual how" }),
+      ...SHOWN_TOPICS.map((topic) => ({ id: `help:${topic.slug}`, title: topic.title, group: "Help", keywords: "help docs guide how", run: () => setScreen({ kind: "help", topic: topic.slug }) })),
+      page("report", t("settings.report.title"), () => setScreen({ kind: "data" }), { keywords: "bug issue copy report logs crash help" }),
       {
         id: "app:find",
-        title: "Find a session",
+        title: t("sidebar.find"),
         group: "Action",
         keywords: "search filter transcripts",
         run: () => searchInput.current?.focus(),
       },
       {
         id: "app:group-by",
-        title: groupBy === "date" ? "Group sessions by project" : "Group sessions by last used",
+        title: groupBy === "date" ? t("app.palette.groupByProject") : t("app.palette.groupByDate"),
         group: "Filter",
         run: () => chooseGroupBy(groupBy === "date" ? "project" : "date"),
       },
       {
         id: "app:archived",
-        title: showArchived ? "Show active sessions" : "Show archived sessions",
+        title: showArchived ? t("app.palette.showActive") : t("app.palette.showArchived"),
         group: "Filter",
         run: () => setShowArchived(!showArchived),
       },
-      ...[
-        ["", "Any status"],
-        ["waiting_permission", "Needs you"],
-        ["running", "Running"],
-        ["idle", "Idle"],
-        ["error", "Error"],
-      ].map(([v, name]) => ({
+      ...STATUS_CHOICES.map(([v, name]) => ({
         id: `filter:${v}`,
-        title: `Show sessions: ${name}`,
+        title: t("app.palette.showStatus", { status: t(name) }),
         group: "Filter",
-        detail: statusFilter === v ? "current" : undefined,
+        detail: statusFilter === v ? t("app.palette.current") : undefined,
         run: () => setStatusFilter(v),
       })),
-      ...tagsInUse.map((t) => ({
-        id: `tag:${t}`,
-        title: `Show sessions tagged #${t}`,
+      ...tagsInUse.map((tag) => ({
+        id: `tag:${tag}`,
+        title: t("app.palette.showTag", { tag }),
         group: "Filter",
-        detail: tagFilter.includes(t) ? "current" : undefined,
-        run: () => setTagFilter([t]),
+        detail: tagFilter.includes(tag) ? t("app.palette.current") : undefined,
+        run: () => setTagFilter([tag]),
       })),
-      ...[...new Set(sessions.flatMap((s) => (s.tags ?? []).filter((t) => t.startsWith("compare-"))))].map((tag) => ({
+      ...[...new Set(sessions.flatMap((s) => (s.tags ?? []).filter((tag) => tag.startsWith("compare-"))))].map((tag) => ({
         id: `compare:${tag}`,
-        title: `Compare runs: ${sessions.find((s) => (s.tags ?? []).includes(tag))?.title.replace(/ · [^·]*$/, "") ?? tag}`,
+        title: t("app.palette.compare", { name: sessions.find((s) => (s.tags ?? []).includes(tag))?.title.replace(/ · [^·]*$/, "") ?? tag }),
         group: "Page",
         keywords: "compare profiles runs",
         run: () => setScreen({ kind: "compare", tag }),
       })),
       ...savedFilters.map((f) => ({
         id: `saved:${f.name}`,
-        title: `Saved filter: ${f.name}`,
+        title: t("app.palette.savedFilter", { name: f.name }),
         group: "Filter",
-        detail: sameFilter(f, filter) ? "current" : undefined,
+        detail: sameFilter(f, filter) ? t("app.palette.current") : undefined,
         run: () => applyFilter(f),
       })),
       ...projects.map((p) => ({
@@ -1035,14 +1056,14 @@ export default function App() {
       })),
       ...projects
         .filter((p) => p.missing)
-        .map((p) => ({ id: `relink:${p.id}`, title: `Relink ${p.name}…`, group: "Action", detail: p.root, keywords: "missing moved", run: () => relink(p) })),
+        .map((p) => ({ id: `relink:${p.id}`, title: t("app.palette.relink", { project: p.name }), group: "Action", detail: p.root, keywords: "missing moved", run: () => relink(p) })),
       ...sessions.map((s) => {
         const listed = listedRef.current.indexOf(s);
         return {
           id: `session:${s.id}`,
           title: s.title,
           group: "Session",
-          detail: `${projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)} · ${STATUS_LABEL[s.status] ?? s.status}`,
+          detail: `${projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)} · ${statusText(s.status)}`,
           keywords: `${s.branch ?? ""} ${s.status === "archived" ? "archived" : ""}`,
           shortcut: listed >= 0 && listed < 9 ? keyLabel(`Meta+${listed + 1}`) : undefined,
           run: () => openSession(s.id),
@@ -1125,16 +1146,16 @@ export default function App() {
   const rowMenuItems = (s: Session): MenuItem[] => {
     const archived = s.status === "archived";
     return [
-      { label: "Rename", run: () => setRenamingRow({ id: s.id, title: s.title }) },
-      { label: "Open beside what is open", run: () => openSession(s.id, undefined, "new") },
-      { label: "Open in a new window", run: () => openWindow(s.id) },
-      { label: archived ? "Unarchive" : "Archive", run: () => EngineService.ArchiveSession(s.id, !archived).catch(report), apart: true },
+      { label: t("sidebar.menu.rename"), run: () => setRenamingRow({ id: s.id, title: s.title }) },
+      { label: t("sidebar.menu.openBeside"), run: () => openSession(s.id, undefined, "new") },
+      { label: t("sidebar.menu.openWindow"), run: () => openWindow(s.id) },
+      { label: archived ? t("sidebar.menu.unarchive") : t("sidebar.menu.archive"), run: () => EngineService.ArchiveSession(s.id, !archived).catch(report), apart: true },
       {
-        label: "Delete…",
+        label: t("sidebar.menu.delete"),
         danger: true,
         apart: true,
         run: async () => {
-          if (!(await ask(`Delete "${s.title}"? Its transcript is removed from disk. This cannot be undone.`))) return;
+          if (!(await ask(t("sidebar.menu.deleteAsk", { title: s.title })))) return;
           EngineService.DeleteSession(s.id)
             .then(() => sessionDeleted(s.id))
             .catch(report);
@@ -1142,6 +1163,9 @@ export default function App() {
       },
     ];
   };
+
+  // The statuses in words, for the views that show them (the panes, the Board).
+  const statusLabels: Record<string, string> = Object.fromEntries(Object.keys(STATUS_LABEL).map((status) => [status, statusText(status)]));
 
   // What each session runs on, shown as a mark wherever it is (GUI-034).
   const sourceOf = useMemo(
@@ -1192,7 +1216,7 @@ export default function App() {
       </div>
       {!STANDALONE && (
         <button className="skip-link" onClick={() => mainBox.current?.focus()}>
-          Skip to the main content
+          {t("app.skip")}
         </button>
       )}
       {!STANDALONE && (
@@ -1202,7 +1226,7 @@ export default function App() {
               <Logo />
               Freeloop
             </h1>
-            <button className="icon-button new-session" aria-label="New session" title="New session" onClick={() => setScreen({ kind: "new" })}>
+            <button className="icon-button new-session" aria-label={t("app.newSession")} title={t("app.newSession")} onClick={() => setScreen({ kind: "new" })}>
               <NewSessionIcon />
             </button>
           </header>
@@ -1214,18 +1238,18 @@ export default function App() {
               title={keyLabel(bindingOf("attention"))}
               onClick={openAttention}
             >
-              Needs attention
+              {t("app.needsAttention")}
               <span className="badge badge-waiting_permission">{attentionCount}</span>
             </button>
           )}
           <div className="filters">
             <div className="filter-search">
-              <input ref={searchInput} type="search" placeholder="Find a session" aria-label="Find a session" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <input ref={searchInput} type="search" placeholder={t("sidebar.find")} aria-label={t("sidebar.find")} value={query} onChange={(e) => setQuery(e.target.value)} />
               <button
                 className="ghost filter-toggle"
                 aria-expanded={filtersOpen}
-                aria-label={filterChips.length > 0 ? `Filters, ${filterChips.length} on` : "Filters"}
-                title="Status, tags, archived and saved filters"
+                aria-label={filterChips.length > 0 ? t("sidebar.filters.count", { count: filterChips.length }) : t("sidebar.filters")}
+                title={t("sidebar.filters.title")}
                 onClick={() => setFiltersOpen(!filtersOpen)}
               >
                 <FilterIcon />
@@ -1233,11 +1257,11 @@ export default function App() {
               </button>
             </div>
             {!filtersOpen && filterChips.length > 0 && (
-              <div className="saved-filters" role="group" aria-label="Filters on">
+              <div className="saved-filters" role="group" aria-label={t("sidebar.filters.on")}>
                 {filterChips.map((c) => (
                   <span key={c.label} className="saved-filter saved-filter-on">
                     <span className="saved-filter-name">{c.label}</span>
-                    <button className="saved-filter-remove" aria-label={`Remove the filter ${c.label}`} onClick={c.clear}>
+                    <button className="saved-filter-remove" aria-label={t("sidebar.filter.remove", { label: c.label })} onClick={c.clear}>
                       ×
                     </button>
                   </span>
@@ -1246,57 +1270,57 @@ export default function App() {
             )}
             {filtersOpen && (
               <label className="row muted group-by">
-                Group by
+                {t("sidebar.groupBy")}
                 <select value={groupBy} onChange={(e) => chooseGroupBy(e.target.value as GroupBy)}>
-                  <option value="project">Project</option>
-                  <option value="date">Last used</option>
+                  <option value="project">{t("sidebar.groupBy.project")}</option>
+                  <option value="date">{t("sidebar.groupBy.date")}</option>
                 </select>
               </label>
             )}
             {filtersOpen && (
               <div className="row">
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-                  <option value="">Any status</option>
-                  <option value="waiting_permission">Needs you</option>
-                  <option value="running">Running</option>
-                  <option value="idle">Idle</option>
-                  <option value="error">Error</option>
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label={t("sidebar.filter.status")}>
+                  {STATUS_CHOICES.map(([v, name]) => (
+                    <option key={v} value={v}>
+                      {t(name)}
+                    </option>
+                  ))}
                 </select>
                 {tagsInUse.length > 0 && (
-                  <select value={tagFilter[0] ?? ""} onChange={(e) => setTagFilter(e.target.value ? [e.target.value] : [])} aria-label="Tag">
-                    <option value="">Any tag</option>
-                    {tagsInUse.map((t) => (
-                      <option key={t} value={t}>
-                        #{t}
+                  <select value={tagFilter[0] ?? ""} onChange={(e) => setTagFilter(e.target.value ? [e.target.value] : [])} aria-label={t("sidebar.filter.tag")}>
+                    <option value="">{t("sidebar.filter.anyTag")}</option>
+                    {tagsInUse.map((tag) => (
+                      <option key={tag} value={tag}>
+                        #{tag}
                       </option>
                     ))}
                   </select>
                 )}
                 <label className="row muted">
-                  <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Archived
+                  <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> {t("sidebar.filter.archived")}
                 </label>
               </div>
             )}
             {filtersOpen && (savedFilters.length > 0 || !isEmpty(filter)) && (
-              <div className="saved-filters" role="group" aria-label="Saved filters">
+              <div className="saved-filters" role="group" aria-label={t("sidebar.savedFilters")}>
                 {savedFilters.map((f) => (
                   <span key={f.name} className={`saved-filter ${sameFilter(f, filter) ? "saved-filter-on" : ""}`}>
                     <button
                       className="saved-filter-name"
                       aria-pressed={sameFilter(f, filter)}
-                      title={[f.query, f.status && (STATUS_LABEL[f.status] ?? f.status), ...(f.tags ?? []).map((t) => `#${t}`)].filter(Boolean).join(" · ")}
+                      title={[f.query, f.status && statusText(f.status), ...(f.tags ?? []).map((tag) => `#${tag}`)].filter(Boolean).join(" · ")}
                       onClick={() => (sameFilter(f, filter) ? applyFilter({ query: "", status: "", tags: [] }) : applyFilter(f))}
                     >
                       {f.name}
                     </button>
-                    <button className="saved-filter-remove" aria-label={`Remove the saved filter ${f.name}`} onClick={() => saveFilters(savedFilters.filter((x) => x !== f))}>
+                    <button className="saved-filter-remove" aria-label={t("sidebar.savedFilter.remove", { name: f.name })} onClick={() => saveFilters(savedFilters.filter((x) => x !== f))}>
                       ×
                     </button>
                   </span>
                 ))}
                 {!isEmpty(filter) && !savedFilters.some((f) => sameFilter(f, filter)) && filterName === null && (
                   <button className="link" onClick={() => setFilterName("")}>
-                    Save filter…
+                    {t("sidebar.savedFilter.save")}
                   </button>
                 )}
                 {filterName !== null && (
@@ -1311,22 +1335,22 @@ export default function App() {
                   >
                     <input
                       autoFocus
-                      aria-label="Filter name"
-                      placeholder="Name"
+                      aria-label={t("sidebar.savedFilter.name")}
+                      placeholder={t("sidebar.savedFilter.namePlaceholder")}
                       value={filterName}
                       maxLength={40}
                       onChange={(e) => setFilterName(e.target.value)}
                       onKeyDown={(e) => e.key === "Escape" && setFilterName(null)}
                     />
                     <button type="submit" disabled={!filterName.trim()}>
-                      Save
+                      {t("common.save")}
                     </button>
                   </form>
                 )}
               </div>
             )}
           </div>
-          <nav aria-label="Projects and sessions">
+          <nav aria-label={t("sidebar.nav")}>
             {groups.map((g) => (
               <section key={g.key} className="project-group">
                 <h2 className="project-name" title={g.project?.root ?? (groupBy === "date" ? undefined : g.key)}>
@@ -1337,17 +1361,17 @@ export default function App() {
                   {isCollapsed(g.key) &&
                     statusSummary(sessions.filter((s) => !isIdleOrDone(s) && g.sessions.some((x) => x.id === s.id || x.id === s.parentId))).map((c) => (
                       <span key={c.status} className={`badge badge-${c.status}`}>
-                        {c.count} {(STATUS_LABEL[c.status] ?? c.status).toLowerCase()}
+                        {statusCount(c.status, c.count)}
                       </span>
                     ))}
                   {g.project && !g.project.trusted && !g.project.missing && (
-                    <span className="untrusted" role="img" aria-label="Untrusted: global settings only" title="Untrusted: global settings only" />
+                    <span className="untrusted" role="img" aria-label={t("sidebar.project.untrustedLong")} title={t("sidebar.project.untrustedLong")} />
                   )}
                   {g.project?.missing && (
                     <>
-                      <span className="badge badge-error">missing</span>
+                      <span className="badge badge-error">{t("sidebar.project.missing")}</span>
                       <button className="link" onClick={() => relink(g.project!)}>
-                        Relink…
+                        {t("sidebar.project.relink")}
                       </button>
                     </>
                   )}
@@ -1365,7 +1389,7 @@ export default function App() {
                         >
                           <input
                             autoFocus
-                            aria-label={`New name for ${s.title}`}
+                            aria-label={t("sidebar.row.rename", { title: s.title })}
                             value={renamingRow.title}
                             onFocus={(e) => {
                               renameCancelled.current = false;
@@ -1394,7 +1418,7 @@ export default function App() {
                         aria-current={screen.kind === "session" && screen.id === s.id ? "true" : undefined}
                         aria-keyshortcuts={listedRef.current.indexOf(s) < 9 ? `Meta+${listedRef.current.indexOf(s) + 1}` : undefined}
                         data-shown={!STANDALONE && screen.kind === "session" && work.panes.includes(s.id) ? "" : undefined}
-                        title={[describeActivity(s.status, activities[s.id], rootsOf(s), new Date()), s.branch, (s.tags ?? []).map((t) => `#${t}`).join(" "), `${isMac ? "⌘-click" : "Ctrl+click"} or drag to open it beside what is open`].filter(Boolean).join(" · ")}
+                        title={[describeActivity(s.status, activities[s.id], rootsOf(s), new Date()), s.branch, (s.tags ?? []).map((tag) => `#${tag}`).join(" "), t("sidebar.row.openBeside", { click: isMac ? t("sidebar.row.click.mac") : t("sidebar.row.click.other") })].filter(Boolean).join(" · ")}
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData(SESSION_DRAG_TYPE, s.id);
@@ -1405,7 +1429,7 @@ export default function App() {
                         <span className="session-line">
                           <SourceMark source={sourceOf(s)} detail={s.model || undefined} />
                           <StatusDot status={s.status} />
-                          {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" title="Finished while you were away" />}
+                          {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label={t("status.unread")} title={t("sidebar.row.unreadTitle")} />}
                           <span className="session-title">{s.title}</span>
                           {s.branch && <GitMark branch={s.branch} />}
                           {contextHigh(activities[s.id]?.context) && (
@@ -1416,11 +1440,11 @@ export default function App() {
                           {groupBy === "date" && <RowProject session={s} project={projects.find((p) => p.id === s.projectId)} />}
                         </span>
                         {/* Tags are in the tooltip, the filter menu and the palette, not on a line of their own. */}
-                        {(s.tags ?? []).length > 0 && <span className="sr-only">{(s.tags ?? []).map((t) => `#${t}`).join(" ")}</span>}
+                        {(s.tags ?? []).length > 0 && <span className="sr-only">{(s.tags ?? []).map((tag) => `#${tag}`).join(" ")}</span>}
                       </button>
                       )}
                       {subagents(s.id).length > 0 && (
-                        <ul className="subagents" aria-label={`Subagents of ${s.title}`}>
+                        <ul className="subagents" aria-label={t("sidebar.row.subagents", { title: s.title })}>
                           {subagents(s.id).map((c) => (
                             <li key={c.id}>
                               <button
@@ -1441,11 +1465,11 @@ export default function App() {
                 </ul>
               </section>
             ))}
-            {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
-            {sessions.length > 0 && visible.length === 0 && !found?.results.length && <p className="muted">No sessions match.</p>}
+            {sessions.length === 0 && <p className="muted">{t("sidebar.empty.none")}</p>}
+            {sessions.length > 0 && visible.length === 0 && !found?.results.length && <p className="muted">{t("sidebar.empty.noMatch")}</p>}
             {found && found.query === query.trim() && found.results.length > 0 && (
-              <section className="project-group search-results" aria-label="Found in transcripts">
-                <h2 className="project-name">In transcripts</h2>
+              <section className="project-group search-results" aria-label={t("search.found")}>
+                <h2 className="project-name">{t("search.heading")}</h2>
                 <ul>
                   {found.results.map((r) => {
                     const s = sessions.find((x) => x.id === r.sessionId);
@@ -1454,13 +1478,13 @@ export default function App() {
                       <li key={r.sessionId}>
                         <span className="session-title search-session" title={s.projectRoot}>
                           {s.title}
-                          {s.status === "archived" && <span className="muted"> · archived</span>}
+                          {s.status === "archived" && <span className="muted"> · {t("status.archived")}</span>}
                         </span>
                         <ul>
                           {(r.hits ?? []).map((h, i) => (
                             <li key={i}>
                               <button className="search-hit" onClick={() => openSession(s.id, h.seq)}>
-                                <span className="muted search-kind">{HIT_LABEL[h.kind] ?? h.kind}</span>
+                                <span className="muted search-kind">{hitLabel(h.kind)}</span>
                                 <span className="search-snippet">
                                   {snippetParts(h.snippet).map((p, j) => (p.mark ? <mark key={j}>{p.text}</mark> : <span key={j}>{p.text}</span>))}
                                 </span>
@@ -1477,12 +1501,12 @@ export default function App() {
           </nav>
           {update?.newer && update.url && (
           <button className="link today" title={update.url} onClick={() => Browser.OpenURL(update.url!).catch(report)}>
-            Version {update.latest} is available
+            {t("sidebar.update", { version: update.latest ?? "" })}
           </button>
         )}
         {config?.network?.localOnly && (
-            <button className="link today" title="The app connects to nothing but this computer; change it in Settings" onClick={() => setScreen({ kind: "network" })}>
-              Local only
+            <button className="link today" title={t("sidebar.localOnly.title")} onClick={() => setScreen({ kind: "network" })}>
+              {t("settings.localOnly.title")}
             </button>
           )}
           <footer>
@@ -1491,22 +1515,22 @@ export default function App() {
                 <button
                   aria-current={screen.kind === "attention" ? "page" : undefined}
                   aria-keyshortcuts={ariaKeys(bindingOf("attention"))}
-                  title={bindingOf("attention") ? `Attention (${keyLabel(bindingOf("attention"))})` : "Attention"}
+                  title={bindingOf("attention") ? t("sidebar.attention.key", { key: keyLabel(bindingOf("attention")) }) : t("sidebar.attention")}
                   onClick={openAttention}
                   className="icon-button"
-                  aria-label="Attention"
+                  aria-label={t("sidebar.attention")}
                 >
                   <BellIcon />
                 </button>
               )}
-              <button className="icon-button" aria-label="Board" title="Board" aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
+              <button className="icon-button" aria-label={t("app.board")} title={t("app.board")} aria-current={screen.kind === "board" ? "page" : undefined} onClick={() => setScreen({ kind: "board" })}>
                 <BoardIcon />
               </button>
               <button
                 aria-current={screen.kind === "usage" ? "page" : undefined}
                 className="icon-button"
-                aria-label="Usage"
-                title="Usage. Drag to a pane to watch it beside your sessions."
+                aria-label={t("app.usage")}
+                title={t("sidebar.usage.title")}
                 draggable={!STANDALONE}
                 onDragStart={(e) => {
                   e.dataTransfer.setData(SESSION_DRAG_TYPE, ws.USAGE_PANE);
@@ -1516,7 +1540,7 @@ export default function App() {
               >
                 <UsageIcon />
               </button>
-              <button className="icon-button" aria-label="Help" title="Help: how Freeloop works" aria-current={screen.kind === "help" ? "page" : undefined} onClick={() => setScreen({ kind: "help" })}>
+              <button className="icon-button" aria-label={t("app.help")} title={t("sidebar.help.title")} aria-current={screen.kind === "help" ? "page" : undefined} onClick={() => setScreen({ kind: "help" })}>
                 <BookIcon />
               </button>
               {/* Shown once anything is priced today, and whenever a budget is near or reached (PRV-017). */}
@@ -1524,7 +1548,7 @@ export default function App() {
                 <button
                   className={`footer-cost${worst(budgets) ? ` footer-cost-${worst(budgets)}` : ""}`}
                   title={[
-                    "Today's estimated cost, from the price table in Settings; calls to models without a price and turns an agent did not report are left out. Opens the usage dashboard.",
+                    t("sidebar.cost.title"),
                     ...budgets.filter((b) => b.level).map((b) => `${budgetName(b)}: ${budgetLine(b)}`),
                   ].join("\n")}
                   onClick={() => setScreen({ kind: "usage" })}
@@ -1536,22 +1560,22 @@ export default function App() {
             <div className="footer-row">
               <button
                 className="settings-link icon-button"
-                aria-label="Settings"
+                aria-label={t("settings.title")}
                 aria-current={inSettings(screen.kind) ? "page" : undefined}
                 aria-keyshortcuts={ariaKeys(bindingOf("settings"))}
-                title={bindingOf("settings") ? `Settings (${keyLabel(bindingOf("settings"))})` : "Settings"}
+                title={bindingOf("settings") ? t("sidebar.settings.key", { key: keyLabel(bindingOf("settings")) }) : t("settings.title")}
                 onClick={() => (inSettings(screen.kind) ? leaveSettings() : setScreen(settingsScreen()))}
               >
                 <Icon name="general" />
               </button>
-              <div className="layout-switch" role="group" aria-label="Sessions side by side">
+              <div className="layout-switch" role="group" aria-label={t("sidebar.layout")}>
                 {([1, 2, 3, 4] as const).map((n) => (
                   <button
                     key={n}
                     className="ghost"
                     aria-pressed={work.layout === n}
-                    aria-label={n === 1 ? "One pane" : `${n} panes`}
-                    title={n === 1 ? "One session" : `${n} sessions side by side`}
+                    aria-label={n === 1 ? t("app.layout.onePane") : t("sidebar.layout.panes", { count: n })}
+                    title={n === 1 ? t("sidebar.layout.oneSession") : t("sidebar.layout.sessions", { count: n })}
                     onClick={() => showWork(ws.chooseLayout(work, n))}
                   >
                     <Icon name={`panes-${n}`} />
@@ -1562,7 +1586,7 @@ export default function App() {
           </footer>
           <Splitter
             className="splitter-sidebar"
-            label="Sidebar width"
+            label={t("sidebar.width")}
             value={sidebarWidth ?? 264}
             min={SIDEBAR_MIN}
             max={sidebarMax(window.innerWidth)}
@@ -1576,14 +1600,12 @@ export default function App() {
           />
         </aside>
       )}
-      {rowMenu && <ContextMenu x={rowMenu.x} y={rowMenu.y} label={`Actions for ${rowMenu.session.title}`} items={rowMenuItems(rowMenu.session)} onClose={() => setRowMenu(null)} />}
+      {rowMenu && <ContextMenu x={rowMenu.x} y={rowMenu.y} label={t("sidebar.menu.label", { title: rowMenu.session.title })} items={rowMenuItems(rowMenu.session)} onClose={() => setRowMenu(null)} />}
 
       <main className="main" ref={mainBox} tabIndex={-1}>
         {waitingApproval > 0 && (
           <div role="status" className="banner warn row">
-            <span>
-              {waitingApproval === 1 ? "One thing" : `${waitingApproval} things`} in the app's files {waitingApproval === 1 ? "waits" : "wait"} for your approval and {waitingApproval === 1 ? "does" : "do"} nothing until then.
-            </span>
+            <span>{t("app.approvals.waiting", { count: waitingApproval })}</span>
             <button
               type="button"
               onClick={() => {
@@ -1591,13 +1613,13 @@ export default function App() {
                 requestAnimationFrame(() => document.getElementById("pending-approvals")?.scrollIntoView({ block: "start" }));
               }}
             >
-              Review
+              {t("app.approvals.review")}
             </button>
           </div>
         )}
         {problems.length > 0 && (
           <div role="alert" className="banner warn">
-            <strong>Configuration problems; using defaults where needed.</strong>
+            <strong>{t("app.problems")}</strong>
             <ul>
               {problems.map((i, n) => (
                 <li key={n}>
@@ -1611,7 +1633,7 @@ export default function App() {
         )}
         {errors.map((line) => (
           <div key={line} role="alert" className="banner error">
-            {line} <button onClick={() => setErrors((list) => list.filter((l) => l !== line))}>Dismiss</button>
+            {line} <button onClick={() => setErrors((list) => list.filter((l) => l !== line))}>{t("app.dismiss")}</button>
           </div>
         ))}
 
@@ -1624,7 +1646,7 @@ export default function App() {
             sourceOf={sourceOf}
             activityOf={(s) => describeActivity(s.status, activities[s.id], rootsOf(s), new Date())}
             unread={unread}
-            statusLabel={STATUS_LABEL}
+            statusLabel={statusLabels}
             onTabbed={setTabbedPanes}
             projects={projects}
             providers={providers}
@@ -1734,12 +1756,12 @@ export default function App() {
               {screen.kind === "mcp" && <MCP configVersion={configVersion} onImport={() => setScreen({ kind: "import" })} onError={report} />}
               {screen.kind === "import" && (
                 <section className="page">
-                  <h2>Import</h2>
+                  <h2>{t("app.import.title")}</h2>
                   <section>
-                    <h3>Sessions</h3>
+                    <h3>{t("app.import.sessions")}</h3>
                     <SessionImport profiles={profiles} projects={projects} onOpen={(sid) => openSession(sid)} onImported={() => { refreshSessions(); refreshProjects(); }} onError={report} />
                   </section>
-                  <h3>Settings from Claude Code</h3>
+                  <h3>{t("app.import.settings")}</h3>
                   <ClaudeImport onError={report} />
                 </section>
               )}
@@ -1779,7 +1801,7 @@ export default function App() {
             markOf={(s) => <SourceMark source={sourceOf(s)} detail={s.model || undefined} />}
             sessions={visible.filter((s) => s.status !== "archived")}
             projectName={(s) => projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)}
-            statusLabel={STATUS_LABEL}
+            statusLabel={statusLabels}
             unread={unread}
             renderRequest={(sid) => {
               const req = attention.find((it) => it.session.id === sid)?.requests?.[0];
@@ -1802,12 +1824,12 @@ export default function App() {
             onError={report}
           />
         )}
-        {STANDALONE && screen.kind === "session" && !selected && sessionsLoaded && <div className="empty">This session no longer exists.</div>}
+        {STANDALONE && screen.kind === "session" && !selected && sessionsLoaded && <div className="empty">{t("app.empty.gone")}</div>}
         {!STANDALONE && screen.kind === "none" && (
           <div className="empty">
-            <p>Select a session or create a new one.</p>
+            <p>{t("app.empty.select")}</p>
             <button className="link" onClick={() => setScreen({ kind: "onboarding" })}>
-              Open the setup guide
+              {t("app.empty.guide")}
             </button>
           </div>
         )}

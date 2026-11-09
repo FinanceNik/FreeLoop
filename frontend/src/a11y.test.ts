@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { contrast, editMark, pickLabel, quietCommand, screenName, tabAfterKey, toolStatusLabel, visibleCommand } from "./a11y.ts";
+import { setLanguage } from "./i18n.ts";
 
 test("a screen has a name, and a session goes by its title", () => {
   assert.equal(screenName("board"), "Board");
@@ -30,6 +31,26 @@ test("a tool's status is said in words", () => {
 test("a picker's highlighted entry is announced with its place", () => {
   assert.equal(pickLabel("main.go", 1, 5), "main.go, 2 of 5");
   assert.equal(pickLabel("main.go", 0, 0), "");
+});
+
+// GUI-048: what a screen reader hears is the app's words, in the language set.
+test("screen names and spoken labels follow the language", () => {
+  setLanguage("de");
+  assert.equal(screenName("attention"), "Braucht Aufmerksamkeit");
+  assert.equal(screenName("keyboard"), "Tastatur");
+  assert.equal(screenName("session"), "Sitzung");
+  assert.equal(screenName("session", "Fix login"), "Fix login");
+  assert.equal(toolStatusLabel("completed", false), "Fertig:");
+  assert.equal(toolStatusLabel("pending", true), "Wartet auf Freigabe:");
+  assert.equal(editMark("edit", "completed"), "Eine Datei bearbeitet");
+  assert.equal(pickLabel("main.go", 1, 5), "main.go, 2 von 5");
+  setLanguage("nl");
+  assert.equal(screenName("new"), "Nieuwe sessie");
+  assert.equal(toolStatusLabel("failed", false), "Mislukt:");
+  assert.equal(pickLabel("main.go", 1, 5), "main.go, 2 van 5");
+  setLanguage("en");
+  assert.equal(screenName("compare"), "Compare runs");
+  assert.equal(screenName("onboarding"), "Getting started");
 });
 
 test("contrast follows WCAG's formula", () => {

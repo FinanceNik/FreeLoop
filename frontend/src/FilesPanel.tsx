@@ -4,7 +4,7 @@ import type { FileChange } from "./transcript.ts";
 import { isMarkdownFile, isPdfFile, relative } from "./paths.ts";
 import { Markdown } from "./Markdown.tsx";
 import PdfView from "./PdfView.tsx";
-import { locale } from "./i18n.ts";
+import { t } from "./i18n.ts";
 
 // FilesPanel is the Files tab of the right panel (GUI-013): a read-only
 // tree of the session's folder with the files the agent edited, and those
@@ -80,7 +80,7 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
           <button
             className={`file-row ${mark ? `file-${mark}` : ""} ${view?.path === f.path ? "file-on" : ""}`}
             style={{ paddingLeft: 6 + depth * 14 }}
-            title={mark === "agent" ? "Changed by the agent" : mark === "git" ? "Changed since the last commit" : f.path}
+            title={mark === "agent" ? t("files.changedByAgent") : mark === "git" ? t("files.changedSinceCommit") : f.path}
             aria-expanded={f.isDir ? open.has(f.path) : undefined}
             onClick={() => (f.isDir ? toggle(f.path) : show(f.path))}
           >
@@ -89,7 +89,7 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
             {mark && (
               <>
                 <span className="file-mark" aria-hidden="true" />
-                <span className="sr-only">{mark === "agent" ? "changed by the agent" : "changed"}</span>
+                <span className="sr-only">{mark === "agent" ? t("files.mark.agent") : t("files.mark.git")}</span>
               </>
             )}
           </button>
@@ -100,40 +100,40 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
 
   return (
     <div className="files-panel">
-      <ul className="file-tree" aria-label="Files">
+      <ul className="file-tree" aria-label={t("files.label")}>
         {tree("", 0)}
-        {folders[""]?.length === 0 && <li className="muted">The folder is empty.</li>}
+        {folders[""]?.length === 0 && <li className="muted">{t("files.empty")}</li>}
       </ul>
       <div className="file-view">
-        {!view && <p className="muted">Choose a file. Files the agent changed are marked.</p>}
+        {!view && <p className="muted">{t("files.choose")}</p>}
         {view && (
           <>
             <div className="row file-view-head">
               <code>{view.path}</code>
               {isPdfFile(view.path) ? (
                 <button className="link" onClick={() => EngineService.OpenPDF(session.id, view.path).catch(onError)}>
-                  Open in Preview
+                  {t("files.openPreview")}
                 </button>
               ) : (
                 <button className="link" onClick={() => EngineService.OpenFile(session.id, view.path).catch(onError)}>
-                  Open in editor
+                  {t("files.openEditor")}
                 </button>
               )}
             </div>
             {isMarkdownFile(view.path) && !view.binary && (
-              <div className="file-view-switch" role="group" aria-label="How to show the file">
+              <div className="file-view-switch" role="group" aria-label={t("files.show")}>
                 <button type="button" aria-pressed={!source} onClick={() => setSource(false)}>
-                  Formatted
+                  {t("files.formatted")}
                 </button>
                 <button type="button" aria-pressed={source} onClick={() => setSource(true)}>
-                  Source
+                  {t("files.source")}
                 </button>
               </div>
             )}
             {isPdfFile(view.path) ? (
               <PdfView sessionId={session.id} path={view.path} />
             ) : view.binary ? (
-              <p className="muted">A binary file ({view.size.toLocaleString(locale())} bytes).</p>
+              <p className="muted">{t("files.binary", { size: view.size })}</p>
             ) : isMarkdownFile(view.path) && !source ? (
               <div className="file-markdown">
                 <Markdown text={view.text} />
@@ -150,7 +150,7 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
                 ))}
               </pre>
             )}
-            {view.truncated && !isPdfFile(view.path) && <p className="muted">Only the first 512 KB are shown.</p>}
+            {view.truncated && !isPdfFile(view.path) && <p className="muted">{t("files.truncated")}</p>}
           </>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { IMAGE_TYPES } from "./images.ts";
+import { t } from "./i18n.ts";
 
 // Files attached to a message from anywhere on the Mac (SES-019). A picture goes
 // to the model as a picture and text goes in the message. Anything else cannot
@@ -30,10 +31,10 @@ export interface TextFile {
 
 // addText adds a file to those already attached, or says why it cannot be.
 export function addText(list: TextFile[], name: string, bytes: Uint8Array): { list: TextFile[]; error?: string } {
-  if (bytes.length > MAX_FILE_BYTES) return { list, error: `${name} is larger than 256 KB. Put it in the project and ask for the part you need.` };
+  if (bytes.length > MAX_FILE_BYTES) return { list, error: t("attach.tooLarge", { name }) };
   const text = textOf(bytes);
-  if (text === null) return { list, error: `${name} is not text or a picture, so it cannot go in a message. Put it in the project and name its path.` };
-  if (list.length >= MAX_FILES) return { list, error: `A message takes at most ${MAX_FILES} files.` };
-  if (list.reduce((n, f) => n + f.text.length, 0) + text.length > MAX_FILES_TOTAL) return { list, error: `${name} would take this message over its 1 MB limit.` };
+  if (text === null) return { list, error: t("attach.notText", { name }) };
+  if (list.length >= MAX_FILES) return { list, error: t("attach.tooMany", { max: MAX_FILES }) };
+  if (list.reduce((n, f) => n + f.text.length, 0) + text.length > MAX_FILES_TOTAL) return { list, error: t("attach.overLimit", { name }) };
   return { list: [...list.filter((f) => f.name !== name), { name, text }] };
 }

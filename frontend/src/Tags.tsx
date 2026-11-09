@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MAX_TAGS, normalizeTags } from "./filters.ts";
+import { t } from "./i18n.ts";
 
 // Tags edits a session's tags (SES-013): each one a chip that can be
 // removed, and a field that adds the tags typed into it, separated by
@@ -25,11 +26,11 @@ export default function Tags({
   };
   if (tags.length === 0 && !adding) return null;
   return (
-    <div className="tags" role="group" aria-label="Tags">
-      {tags.map((t) => (
-        <span key={t} className="tag tag-editable">
-          #{t}
-          <button aria-label={`Remove the tag ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))}>
+    <div className="tags" role="group" aria-label={t("tags.label")}>
+      {tags.map((tag) => (
+        <span key={tag} className="tag tag-editable">
+          #{tag}
+          <button aria-label={t("tags.remove", { tag })} onClick={() => onChange(tags.filter((x) => x !== tag))}>
             ×
           </button>
         </span>
@@ -44,8 +45,8 @@ export default function Tags({
           <input
             autoFocus
             className="tag-input"
-            aria-label="New tag"
-            placeholder="tag, another"
+            aria-label={t("tags.new")}
+            placeholder={t("tags.placeholder")}
             list="known-tags"
             value={draft}
             maxLength={200}
@@ -63,16 +64,16 @@ export default function Tags({
           />
           <datalist id="known-tags">
             {known
-              .filter((t) => !tags.includes(t))
-              .map((t) => (
-                <option key={t} value={t} />
+              .filter((tag) => !tags.includes(tag))
+              .map((tag) => (
+                <option key={tag} value={tag} />
               ))}
           </datalist>
         </form>
       ) : (
         tags.length < MAX_TAGS && (
           <button className="link tag-add" onClick={() => onAdding(true)}>
-            + Tag
+            {t("tags.add")}
           </button>
         )
       )}

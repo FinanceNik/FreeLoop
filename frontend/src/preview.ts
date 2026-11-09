@@ -1,5 +1,6 @@
 // The app preview's address (GUI-020). Only this computer's own addresses load,
 // never the app's own page. Pure, so preview.test.ts covers it.
+import { t } from "./i18n.ts";
 
 const LOCAL = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -12,20 +13,20 @@ export interface PreviewAddress {
 // address. It returns the address, or why it will not load.
 export function parseAddress(input: string, appOrigin: string): PreviewAddress | { error: string } {
   const text = input.trim();
-  if (!text) return { error: "Enter a port or a localhost address." };
+  if (!text) return { error: t("preview.error.empty") };
   const raw = /^\d+$/.test(text) ? `http://localhost:${text}` : /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`;
   let u: URL;
   try {
     u = new URL(raw);
   } catch {
-    return { error: `"${text}" is not an address.` };
+    return { error: t("preview.error.notAddress", { text }) };
   }
-  if (u.protocol !== "http:" && u.protocol !== "https:") return { error: "Only http and https addresses load." };
-  if (!LOCAL.has(u.hostname)) return { error: "The preview shows this computer's own servers only; open anything else in your browser." };
-  if (u.username || u.password) return { error: "An address with a user name or password does not load." };
-  if (u.origin === appOrigin) return { error: "That is Freeloop's own page." };
+  if (u.protocol !== "http:" && u.protocol !== "https:") return { error: t("preview.error.scheme") };
+  if (!LOCAL.has(u.hostname)) return { error: t("preview.error.notLocal") };
+  if (u.username || u.password) return { error: t("preview.error.credentials") };
+  if (u.origin === appOrigin) return { error: t("preview.error.ownPage") };
   const port = u.port ? Number(u.port) : u.protocol === "https:" ? 443 : 80;
-  if (!(port >= 1 && port <= 65535)) return { error: "That port does not exist." };
+  if (!(port >= 1 && port <= 65535)) return { error: t("preview.error.noPort") };
   return { url: u.href, port };
 }
 

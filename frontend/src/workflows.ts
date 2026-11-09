@@ -1,9 +1,10 @@
 // A session's workflow stages as slash commands (WFL-002). A stage's command,
 // with whatever follows it, goes to the engine, which sends the stage's prompt,
-// starts a run or a review. This module has no runtime imports so `node --test`
-// can run it.
+// starts a run or a review. Its only runtime import is the translation module, so
+// `node --test` can run it. Workflow names and stage titles are shown as given.
 
 import type { SlashCommand } from "./commands.ts";
+import { t } from "./i18n.ts";
 
 export interface Stage {
   command: string;
@@ -37,17 +38,17 @@ export function stageCall(text: string, w: WorkflowLike | undefined): { command:
   return { command: m[1], input: (m[2] ?? "").trim() };
 }
 
-// What each kind of stage does, for the palette and Settings.
+// What each kind of stage does, for the palette and Settings, in the language in force.
 export function stageAction(kind: string | undefined): string {
   switch (kind) {
     case "afk":
-      return "Starts an AFK run";
+      return t("workflow.action.afk");
     case "review":
-      return "Starts a review";
+      return t("workflow.action.review");
     case "cleanup":
-      return "Archives what is finished";
+      return t("workflow.action.cleanup");
     default:
-      return "Sends its prompt here";
+      return t("workflow.action.prompt");
   }
 }
 
@@ -74,7 +75,8 @@ export type StageState = "done" | "running" | "next" | "todo";
 export interface StageStep {
   stage: Stage;
   state: StageState;
-  // A word on how far it got, such as an AFK run's "2 of 8 done".
+  // A word on how far it got, such as an AFK run's "2 of 8 done", in the language in
+  // force when stageProgress ran.
   detail?: string;
 }
 
@@ -112,7 +114,7 @@ export function stageProgress(w: WorkflowLike | undefined, items: readonly ItemL
     const done = all.filter((s) => s.state === "qa" || s.state === "qa_done").length;
     const going = run.state === "running" || run.state === "paused";
     afk.state = going ? "running" : "done";
-    afk.detail = `${done} of ${all.length} done`;
+    afk.detail = t("workflow.afkProgress", { done, total: all.length });
     last = Math.max(last, stages.indexOf(afk.stage));
   }
   if (!steps.some((s) => s.state === "running")) {

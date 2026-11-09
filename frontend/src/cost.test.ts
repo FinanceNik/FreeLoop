@@ -101,3 +101,17 @@ test("a cost is in dollars, in the language's style", () => {
   assert.equal(formatCost(146.51), "$146.51");
   setLanguage("en");
 });
+
+// GUI-048: a session's cost in words follows the language, its amount too.
+test("a session's cost is said in the language set", () => {
+  setLanguage("de");
+  const none = { turns: 0, unreported: 0 };
+  assert.equal(costText({ cost: 0, unpriced: 0 }, 0, none), "noch keine");
+  assert.equal(costText({ cost: 0, unpriced: 0 }, 0, { turns: 0, unreported: 2 }), "vom Agenten nicht gemeldet");
+  assert.equal(costText({ cost: 0, unpriced: 2 }, 2, { turns: 2, unreported: 0 }), "kein Preis festgelegt, aus den Rundensummen des Agenten");
+  assert.equal(costText({ cost: 0.5, unpriced: 1 }, 2, { turns: 2, unreported: 3 }), "≈ 0,50\u00a0$+, aus den Rundensummen des Agenten; 3 Runden nicht gemeldet");
+  setLanguage("nl");
+  assert.equal(costText({ cost: 0.5, unpriced: 0 }, 2, { turns: 0, unreported: 1 }), "≈ $\u00a00,50; 1 beurt niet gemeld");
+  setLanguage("en");
+  assert.equal(costText({ cost: 0.5, unpriced: 0 }, 2, { turns: 0, unreported: 3 }), "≈ $0.50; 3 turns not reported");
+});

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { describeActivity, elapsed, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
+import { setLanguage } from "./i18n.ts";
 
 const at = (min: number) => new Date(2026, 10, 4, 10, min).toISOString();
 const run = (events: [string, unknown?][], from: Activity = NO_ACTIVITY) =>
@@ -66,4 +67,24 @@ test("the sidebar's context follows usage and compaction", () => {
   assert.deepEqual(a.context, { tokens: 85, window: 100 });
   const after = foldActivity(a, { seq: a.seq + 1, ts: at(9), type: "compaction_update", data: { status: "completed", afterTokens: 10 } });
   assert.deepEqual(after.context, { tokens: 10, window: 100 });
+});
+
+test("the line is in the language in force, and what the agent named stays as it named it (GUI-048)", () => {
+  // Folded in one language and written in another: the line follows the language.
+  const thinking = run([["turn_started"], ["agent_thought_chunk"]]);
+  const unnamed = run([["turn_started"], ["tool_call", { toolCallId: "1" }]]);
+  assert.equal(describeActivity("running", unnamed, [], now), "Tool call · 30m");
+  const asking = run([["turn_started"], ["tool_call", { toolCallId: "1", title: "Push" }], ["permission_requested", { requestId: "r", toolCallId: "1", command: "git push" }]]);
+  const finished = run([["turn_started"], ["git_state", { dirty: 3 }], ["turn_ended", { stopReason: "end_turn" }]]);
+  setLanguage("de");
+  assert.equal(describeActivity("running", thinking, [], now), "Denkt nach · 30 min");
+  assert.equal(describeActivity("running", unnamed, [], now), "Werkzeugaufruf · 30 min");
+  assert.equal(describeActivity("running", run([["turn_started"], ["tool_call", { toolCallId: "1", title: "make test" }]]), [], now), "make test · 30 min");
+  assert.equal(describeActivity("queued", undefined, [], now), "Wartet auf einen freien Platz");
+  assert.equal(describeActivity("waiting_permission", asking, [], now), "Freigabe nötig: git push");
+  assert.ok(describeActivity("idle", finished, [], now).startsWith("Fertig · 3 Dateien geändert · "));
+  assert.equal(elapsed(new Date(2026, 10, 4, 8, 10).toISOString(), now), "2 h 20 min");
+  setLanguage("nl");
+  assert.equal(describeActivity("running", run([["turn_started"]]), [], now), "Werkt · 30 min");
+  setLanguage("en");
 });

@@ -1,5 +1,6 @@
 // Sidebar filters and session tags (SES-004, SES-013). Pure, so
 // filters.test.ts covers them.
+import { t, type PlainKey } from "./i18n.ts";
 
 export type SessionFilter = { query: string; status: string; tags: string[] };
 
@@ -15,9 +16,9 @@ const MAX_TAG_LEN = 32;
 export function normalizeTags(tags: string[]): string[] {
   const out: string[] = [];
   for (const raw of tags) {
-    let t = raw.trim().replace(/^#+/, "").toLowerCase().split(/\s+/).filter(Boolean).join("-");
-    t = Array.from(t).slice(0, MAX_TAG_LEN).join("");
-    if (t && !out.includes(t)) out.push(t);
+    let tag = raw.trim().replace(/^#+/, "").toLowerCase().split(/\s+/).filter(Boolean).join("-");
+    tag = Array.from(tag).slice(0, MAX_TAG_LEN).join("");
+    if (tag && !out.includes(tag)) out.push(tag);
   }
   return out.sort();
 }
@@ -37,7 +38,7 @@ export function matches(s: Filterable, f: SessionFilter): boolean {
   if (f.status && s.status !== f.status) return false;
   const { text, tags } = parseQuery(f.query);
   const have = s.tags ?? [];
-  if (![...f.tags, ...tags].every((t) => have.includes(t))) return false;
+  if (![...f.tags, ...tags].every((tag) => have.includes(tag))) return false;
   const q = text.toLowerCase();
   return !q || s.title.toLowerCase().includes(q) || s.projectRoot.toLowerCase().includes(q) || (s.branch ?? "").toLowerCase().includes(q);
 }
@@ -45,7 +46,7 @@ export function matches(s: Filterable, f: SessionFilter): boolean {
 // allTags lists the tags in use, the most used first.
 export function allTags(sessions: { tags?: string[] | null }[]): string[] {
   const count = new Map<string, number>();
-  for (const s of sessions) for (const t of s.tags ?? []) count.set(t, (count.get(t) ?? 0) + 1);
+  for (const s of sessions) for (const tag of s.tags ?? []) count.set(tag, (count.get(tag) ?? 0) + 1);
   return [...count.keys()].sort((a, b) => count.get(b)! - count.get(a)! || a.localeCompare(b));
 }
 
@@ -80,26 +81,28 @@ export function statusSummary(sessions: { status: string }[]): { status: string;
 // dateGroups sorts sessions into calendar days counted back from now, by when
 // each was last used (SES-021), most recent first and empty groups left out.
 // Within a group the order moves by the minute, so that sessions streaming at
-// the same time do not keep swapping places under the pointer.
-export function dateGroups<T extends { id: string; updatedAt: unknown }>(sessions: T[], now: Date): { label: string; sessions: T[] }[] {
+// the same time do not keep swapping places under the pointer. Each group has an
+// id that stays the same in every language, and a label in the language in force.
+export function dateGroups<T extends { id: string; updatedAt: unknown }>(sessions: T[], now: Date): { id: string; label: string; sessions: T[] }[] {
   const dayStart = (back: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - back).getTime();
-  const edges: [string, number][] = [
-    ["Today", dayStart(0)],
-    ["Yesterday", dayStart(1)],
-    ["Previous 7 days", dayStart(7)],
-    ["Previous 30 days", dayStart(30)],
-    ["Older", -Infinity],
+  const edges: [id: string, label: PlainKey, from: number][] = [
+    ["today", "sidebar.date.today", dayStart(0)],
+    ["yesterday", "sidebar.date.yesterday", dayStart(1)],
+    ["week", "sidebar.date.week", dayStart(7)],
+    ["month", "sidebar.date.month", dayStart(30)],
+    ["older", "sidebar.date.older", -Infinity],
   ];
   const used = (s: T) => {
-    const t = new Date(s.updatedAt as string).getTime();
-    return Number.isNaN(t) ? -Infinity : t;
+    const at = new Date(s.updatedAt as string).getTime();
+    return Number.isNaN(at) ? -Infinity : at;
   };
   const minute = (s: T) => Math.floor(used(s) / 60000);
   const sorted = [...sessions].sort((a, b) => minute(b) - minute(a) || a.id.localeCompare(b.id));
   return edges
-    .map(([label, from], i) => ({
-      label,
-      sessions: sorted.filter((s) => used(s) >= from && (i === 0 || used(s) < edges[i - 1][1])),
+    .map(([id, label, from], i) => ({
+      id,
+      label: t(label),
+      sessions: sorted.filter((s) => used(s) >= from && (i === 0 || used(s) < edges[i - 1][2])),
     }))
     .filter((g) => g.sessions.length > 0);
 }

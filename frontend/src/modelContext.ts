@@ -2,7 +2,7 @@
 // session writes of each kind of model call, made readable. Pure, so
 // modelContext.test.ts covers it. Everything here is shown as plain text: the project's
 // instructions come from the repository and must never reach the page as markup.
-import { locale } from "./i18n.ts";
+import { t, type PlainKey } from "./i18n.ts";
 
 export interface ToolDef {
   name: string;
@@ -28,12 +28,13 @@ export interface PromptSection {
   fromRepository: boolean;
 }
 
-export const PURPOSE_LABEL: Record<string, string> = {
-  turn: "Each turn",
-  compaction: "Compacting the conversation",
-  commit_message: "Drafting a commit message",
-  pull_request: "Drafting a pull request",
-  handoff: "Summarising for a handoff",
+// What each kind of call is for, as catalogue keys: translated where it is shown.
+export const PURPOSE_LABEL: Record<string, PlainKey> = {
+  turn: "modelSees.purpose.turn",
+  compaction: "modelSees.purpose.compaction",
+  commit_message: "modelSees.purpose.commitMessage",
+  pull_request: "modelSees.purpose.pullRequest",
+  handoff: "modelSees.purpose.handoff",
 };
 
 // The order the kinds of call are shown in.
@@ -43,7 +44,7 @@ export const PURPOSE_ORDER = ["turn", "compaction", "commit_message", "pull_requ
 // before the first heading is the introduction.
 export function sections(system: string): PromptSection[] {
   const out: PromptSection[] = [];
-  let title = "Introduction";
+  let title = t("modelSees.introduction");
   let lines: string[] = [];
   const flush = () => {
     const text = lines.join("\n").trim();
@@ -70,8 +71,7 @@ export function tokens(chars: number): number {
 
 // sizeText says how big something is, in words.
 export function sizeText(chars: number): string {
-  const t = tokens(chars);
-  return `${chars.toLocaleString(locale())} characters, about ${t.toLocaleString(locale())} tokens`;
+  return t("modelSees.size", { chars, tokens: tokens(chars) });
 }
 
 // latestByPurpose keeps the newest record of each kind of call, in display order, with

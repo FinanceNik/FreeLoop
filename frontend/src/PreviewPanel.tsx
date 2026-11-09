@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Browser } from "@wailsio/runtime";
 import { EngineService, type Session } from "./api.ts";
 import { parseAddress } from "./preview.ts";
+import { t } from "./i18n.ts";
 
 // PreviewPanel is the Preview tab (GUI-020): the session's running app in a
 // frame, by default on its own port. The frame is a page the agent may have
@@ -37,10 +38,10 @@ export default function PreviewPanel({ session, onError }: { session: Session; o
         })
         .catch(() => {});
     check();
-    const t = setInterval(check, 2500);
+    const timer = setInterval(check, 2500);
     return () => {
       live = false;
-      clearInterval(t);
+      clearInterval(timer);
     };
   }, [port]);
 
@@ -59,22 +60,22 @@ export default function PreviewPanel({ session, onError }: { session: Session; o
           go();
         }}
       >
-        <input aria-label="Address" placeholder="A port, such as 3000" value={text} onChange={(e) => setText(e.target.value)} />
-        <button type="submit">Go</button>
+        <input aria-label={t("preview.address")} placeholder={t("preview.placeholder")} value={text} onChange={(e) => setText(e.target.value)} />
+        <button type="submit">{t("preview.go")}</button>
         <button type="button" disabled={!url} onClick={() => setReloads((n) => n + 1)}>
-          Reload
+          {t("preview.reload")}
         </button>
         <button type="button" disabled={!url} onClick={() => Browser.OpenURL(url).catch(onError)}>
-          Open in browser
+          {t("preview.openInBrowser")}
         </button>
       </form>
-      {"error" in address && <p className="muted preview-note">{shown ? address.error : "Enter the port your app runs on. A session with its own worktree starts on its FREELOOP_PORT."}</p>}
-      {url && listening === false && <p className="muted preview-note">Nothing is listening on port {port} yet. Start your app, with the session's Run button or in the Terminal tab; the preview loads it when it comes up.</p>}
+      {"error" in address && <p className="muted preview-note">{shown ? address.error : t("preview.empty")}</p>}
+      {url && listening === false && <p className="muted preview-note">{t("preview.notListening", { port: String(port) })}</p>}
       {url && listening && (
         <iframe
           key={`${url}#${reloads}`}
           className="preview-frame"
-          title={`Preview of ${url}`}
+          title={t("preview.frameTitle", { url })}
           src={url}
           sandbox="allow-scripts allow-forms allow-same-origin"
           referrerPolicy="no-referrer"

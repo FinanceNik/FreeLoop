@@ -1,4 +1,5 @@
 import { awaitingDecision, type Item, type PermissionOption } from "./transcript.ts";
+import { t } from "./i18n.ts";
 
 // A plan an agent asks the user to approve (GUI-043): the built-in agent's present_plan
 // and an external agent's switch_mode request both carry it as `plan` in their input,
@@ -97,8 +98,8 @@ export function planChoices(options: readonly PermissionOption[]): { approve: Pe
 }
 
 // approveLabel names an approving option for the menu: the agent's words for what
-// follows, without its own "Yes,".
+// follows, without its own "Yes,", or the app's own word when that is all it said.
 export function approveLabel(o: PermissionOption): string {
   const words = o.name.replace(/^\s*(yes|approve)\s*[,:-]?\s*(and\s+)?/i, "").trim();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Approve";
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : t("pending.approve");
 }

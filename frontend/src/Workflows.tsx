@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { EngineService, MODES, type Config, type WorkflowSkill, type WorkflowStatus } from "./api.ts";
+import { EngineService, modeName, type Config, type WorkflowSkill, type WorkflowStatus } from "./api.ts";
 import { stageAction } from "./workflows.ts";
 
 // The Settings page for workflows (WFL-001, WFL-003): what each one's stages do,
@@ -23,8 +23,8 @@ const SKILL_STATE: Record<string, string> = {
   missing: "not installed",
 };
 
-function modeName(id: string | undefined): string {
-  return MODES.find((m) => m.id === id)?.name ?? "the session's mode";
+function stageMode(id: string | undefined): string {
+  return id ? modeName(id) : "the session's mode";
 }
 
 export default function Workflows({ config, version, onSaved, onError }: Props) {
@@ -103,7 +103,7 @@ export default function Workflows({ config, version, onSaved, onError }: Props) 
                 <span className="muted">
                   {" "}
                   · {stageAction(s.kind)}
-                  {s.mode ? `, in ${modeName(s.mode)} mode` : ""}
+                  {s.mode ? `, in ${stageMode(s.mode)} mode` : ""}
                   {s.skill ? `, with the skill ${s.skill}` : ""}
                 </span>
               </li>
@@ -135,7 +135,7 @@ export default function Workflows({ config, version, onSaved, onError }: Props) 
             <>
               <h4>AFK run</h4>
               <p className="muted">
-                One fresh session per unblocked AFK issue, one at a time, in a worktree of the run's own, in {modeName(w.afk.mode || "accept_edits")} mode
+                One fresh session per unblocked AFK issue, one at a time, in a worktree of the run's own, in {stageMode(w.afk.mode || "accept_edits")} mode
                 {w.afk.sandbox ? ", sandboxed where your system offers it" : ""}, at most {w.afk.maxIssues || 10} issues a run. {w.review.off ? "Finished issues are not reviewed." : "Each finished issue is reviewed by a second agent before it waits for your QA."}
               </p>
               {(w.afk.commands ?? []).length > 0 && (

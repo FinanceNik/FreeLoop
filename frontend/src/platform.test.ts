@@ -191,10 +191,12 @@ test("where secrets are kept and what shows a folder are said in the language in
   setPlatform("MacIntel");
   assert.equal(secretStore(), "dem macOS-Schlüsselbund");
   assert.equal(inFileManager(), "im Finder");
+  assert.equal(showInFiles(), "Im Finder zeigen");
   setPlatform("Win32");
   assert.equal(secretStore(), "der Windows-Anmeldeinformationsverwaltung");
   setLanguage("nl");
   assert.equal(inFileManager(), "in Verkenner");
+  assert.equal(showInFiles(), "Weergeven in Verkenner");
   setPlatform("Linux x86_64");
   assert.equal(secretStore(), "de sleutelbos van het systeem");
   setLanguage("en");

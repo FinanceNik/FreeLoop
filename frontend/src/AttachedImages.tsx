@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { EngineService } from "./api.ts";
+import { t } from "./i18n.ts";
 
 // The pictures a user message carried (SES-015), loaded from the session's
 // attachments once and kept for the rest of the app's run. They are the
@@ -44,11 +45,11 @@ export default function AttachedImages({ sid, images }: { sid: string; images: {
     <div className="msg-pictures">
       {images.map((img, i) => {
         const src = pictureCache.get(`${sid}/${img.name}`);
-        if (src === "") return <span key={img.name} className="muted">[picture missing]</span>;
-        if (!src) return <span key={img.name} className="msg-picture msg-picture-loading" aria-label="Loading picture" />;
+        if (src === "") return <span key={img.name} className="muted">{t("transcript.picture.missing")}</span>;
+        if (!src) return <span key={img.name} className="msg-picture msg-picture-loading" aria-label={t("transcript.picture.loading")} />;
         return (
-          <button key={img.name} className="msg-picture" onClick={() => setOpen(src)} aria-label={`Show picture ${i + 1} full size`}>
-            <img src={src} alt={`Picture ${i + 1}`} />
+          <button key={img.name} className="msg-picture" onClick={() => setOpen(src)} aria-label={t("transcript.picture.show", { number: i + 1 })}>
+            <img src={src} alt={t("transcript.picture.alt", { number: i + 1 })} />
           </button>
         );
       })}
@@ -57,7 +58,7 @@ export default function AttachedImages({ sid, images }: { sid: string; images: {
           className="picture-view"
           role="dialog"
           aria-modal="true"
-          aria-label="Picture"
+          aria-label={t("transcript.picture.dialog")}
           onClick={close}
           onKeyDown={(e) => {
             if (e.key === "Escape") close();
@@ -65,9 +66,9 @@ export default function AttachedImages({ sid, images }: { sid: string; images: {
             if (e.key === "Tab") e.preventDefault();
           }}
         >
-          <img src={open} alt="Attached picture, full size" />
+          <img src={open} alt={t("transcript.picture.full")} />
           <button ref={closer} className="picture-close" onClick={close}>
-            Close
+            {t("transcript.picture.close")}
           </button>
         </div>
       )}

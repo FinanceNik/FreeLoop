@@ -759,6 +759,44 @@ await step("the Settings page follows the language chosen, at once", async () =>
   await sleep(100);
 });
 
+await step("the session and its composer follow the language, without a reload", async () => {
+  // GUI-048: in Deutsch the composer's placeholder and the app's own mode names are
+  // German, and the sidebar's landmarks too; English brings them back.
+  window.appcheckNotReloaded = true;
+  openSession("Check alpha");
+  const box = () => activePane().querySelector(".composer textarea");
+  await until("the message box", box);
+  const modes = () => all("option", activePane().querySelector(".session-control[data-mode] select")).map((o) => o.textContent);
+  const nav = () => document.querySelector(".sidebar nav")?.getAttribute("aria-label");
+  const english = { placeholder: box().placeholder, modes: modes(), nav: nav() };
+  const pick = async (value) => {
+    document.querySelector(".settings-link").click();
+    (await until("the Appearance page", () => withText(".settings-nav button", "Appearance") ?? withText(".settings-nav button", "Darstellung"))).click();
+    const select = await until("the language", () => document.querySelector(".settings-page select.language-select"));
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(`the page in ${value}`, () => document.documentElement.lang === value, 8000);
+    document.querySelector(".settings-nav .settings-back").click();
+    await until("the session again", box);
+  };
+  try {
+    check("the composer starts in English", english.placeholder.startsWith("Ask for a change") && english.modes.includes("Ask") && english.modes.includes("Plan"), `${english.placeholder}; ${english.modes.join(", ")}`);
+    await pick("de");
+    const placeholder = box().placeholder;
+    check("Deutsch turns the composer's placeholder German", placeholder && placeholder !== english.placeholder && !placeholder.startsWith("Ask") && placeholder.includes("@") && placeholder.includes("/"), placeholder);
+    check("the app's own mode names are German", modes().includes("Fragen") && modes().includes("Planen") && !modes().includes("Ask") && !modes().includes("Plan"), modes().join(", "));
+    check("the sidebar's landmarks are German", nav() && nav() !== english.nav, nav());
+    await pick("en");
+    check("English comes back", box().placeholder === english.placeholder && modes().join() === english.modes.join() && nav() === english.nav, `${box().placeholder}; ${modes().join(", ")}; ${nav()}`);
+    check("no reload in between", window.appcheckNotReloaded === true);
+  } finally {
+    // Later steps find English and the session they expect.
+    if (document.documentElement.lang !== "en") await pick("en").catch(() => {});
+    if (document.querySelector(".settings-nav")) document.querySelector(".settings-nav .settings-back")?.click();
+    await sleep(100);
+  }
+});
+
 await step("a problem report says what an issue needs", async () => {
   // Shown, not copied: a copy here would replace the clipboard of whoever runs the check.
   document.querySelector(".settings-link").click();

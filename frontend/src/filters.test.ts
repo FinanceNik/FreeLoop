@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { allTags, isEmpty, matches, normalizeTags, parseQuery, sameFilter, saveFilter, statusSummary, dateGroups } from "./filters.ts";
+import { setLanguage } from "./i18n.ts";
 
 const s = (title: string, tags: string[], status = "idle") => ({ title, projectRoot: "/code/app", branch: "main", status, tags });
 
@@ -81,4 +82,29 @@ test("dateGroups keeps its order among sessions used in the same minute", () => 
   const b = { id: "b", updatedAt: new Date(2026, 10, 3, 9, 0, 40).toISOString() };
   assert.deepEqual(dateGroups([b, a], now)[0].sessions.map((s) => s.id), ["a", "b"]);
   assert.deepEqual(dateGroups([{ ...a, updatedAt: new Date(2026, 10, 3, 9, 0, 59).toISOString() }, b], now)[0].sessions.map((s) => s.id), ["a", "b"]);
+});
+
+test("dateGroups names its days in the language in force, and keeps an id that does not change with it (GUI-048)", () => {
+  const now = new Date(2026, 10, 3, 9, 30);
+  const list = [
+    { id: "today", updatedAt: new Date(2026, 10, 3, 9, 0).toISOString() },
+    { id: "yesterday", updatedAt: new Date(2026, 10, 2, 9, 0).toISOString() },
+    { id: "week", updatedAt: new Date(2026, 9, 30, 9, 0).toISOString() },
+    { id: "month", updatedAt: new Date(2026, 9, 10, 9, 0).toISOString() },
+    { id: "older", updatedAt: new Date(2026, 5, 1).toISOString() },
+  ];
+  const english = dateGroups(list, now).map((g) => g.id);
+  setLanguage("de");
+  const german = dateGroups(list, now);
+  assert.deepEqual(
+    german.map((g) => g.label),
+    ["Heute", "Gestern", "Letzte 7 Tage", "Letzte 30 Tage", "Älter"],
+  );
+  assert.deepEqual(german.map((g) => g.id), english);
+  setLanguage("nl");
+  assert.deepEqual(
+    dateGroups(list, now).map((g) => g.label),
+    ["Vandaag", "Gisteren", "Afgelopen 7 dagen", "Afgelopen 30 dagen", "Ouder"],
+  );
+  setLanguage("en");
 });

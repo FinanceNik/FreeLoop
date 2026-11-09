@@ -1,7 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { EngineService } from "./api.ts";
 import { parseLimit } from "./contextMeter.ts";
-import { locale } from "./i18n.ts";
+import { t } from "./i18n.ts";
 
 // ContextLimit sets how large a model's context may be, for a model nothing reports it
 // for (GUI-036). Without one there is no share to show, no warning and no compaction.
@@ -47,11 +47,11 @@ export default function ContextLimit({ providerId, model, onChanged, onError }: 
   return (
     <div className="context-limit">
       <input
-        aria-label={`Context limit of ${model}, in tokens`}
+        aria-label={t("contextLimit.label", { model })}
         inputMode="numeric"
         spellCheck={false}
         value={text}
-        placeholder={detected > 0 ? `${detected.toLocaleString(locale())} (detected)` : "Not known"}
+        placeholder={detected > 0 ? t("contextLimit.detected", { tokens: detected }) : t("contextLimit.unknown")}
         onChange={(e) => {
           setText(e.target.value);
           setDone(false);
@@ -60,11 +60,11 @@ export default function ContextLimit({ providerId, model, onChanged, onError }: 
       />
       {text !== saved && (
         <button type="button" disabled={limit === null} onClick={save}>
-          Save
+          {t("common.save")}
         </button>
       )}
-      {done && text === saved && <span className="ok">Saved. It applies from the next message.</span>}
-      {!known && !done && <span className="muted">Add the model's limit, such as 200k, to get a share, a warning and automatic compaction.</span>}
+      {done && text === saved && <span className="ok">{t("contextLimit.saved")}</span>}
+      {!known && !done && <span className="muted">{t("contextLimit.hint")}</span>}
     </div>
   );
 }

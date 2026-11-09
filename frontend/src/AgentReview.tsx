@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EngineService, type Profile, type ReviewInfo, type Session } from "./api.ts";
 import { openSessionEvent } from "./ToolView.tsx";
+import { t } from "./i18n.ts";
 
 // AgentReview is the Diff tab's review by a second agent (HRN-018): another
 // profile reads the session's changes in a read-only session of its own,
@@ -34,8 +35,8 @@ export default function AgentReview({ session, gitKey, onMessage, onError }: { s
   const waiting = reviews.some((r) => WORKING.has(r.session.status) || !r.reply);
   useEffect(() => {
     if (!waiting) return;
-    const t = setInterval(load, 3000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 3000);
+    return () => clearInterval(timer);
   }, [waiting, session.id]);
 
   const ask = () => {
@@ -51,20 +52,20 @@ export default function AgentReview({ session, gitKey, onMessage, onError }: { s
   const useFindings = (id: string) => EngineService.ReviewFindings(id).then(onMessage).catch(onError);
 
   return (
-    <section className="agent-review" aria-label="Review by a second agent">
-      <h3>Second opinion</h3>
-      <p className="muted">Another profile reads these changes in a read-only session of its own.</p>
+    <section className="agent-review" aria-label={t("review.label")}>
+      <h3>{t("review.title")}</h3>
+      <p className="muted">{t("review.intro")}</p>
       <div className="row wrap">
-        <select aria-label="Reviewer" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
+        <select aria-label={t("review.reviewer")} value={profileId} onChange={(e) => setProfileId(e.target.value)}>
           {profiles.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
         </select>
-        <input aria-label="What to look at" placeholder="Anything to look at? (optional)" value={focus} onChange={(e) => setFocus(e.target.value)} />
+        <input aria-label={t("review.focus")} placeholder={t("review.focusPlaceholder")} value={focus} onChange={(e) => setFocus(e.target.value)} />
         <button disabled={busy || !profileId} onClick={ask}>
-          {busy ? "Starting…" : "Ask for a review"}
+          {busy ? t("review.starting") : t("review.ask")}
         </button>
       </div>
       {reviews.length > 0 && (
@@ -73,16 +74,16 @@ export default function AgentReview({ session, gitKey, onMessage, onError }: { s
             <li key={r.session.id}>
               <div className="row">
                 <strong>{r.session.title.replace(/^Review: /, "")}</strong>
-                <span className={`badge badge-${r.session.status}`}>{WORKING.has(r.session.status) || !r.reply ? "Reviewing" : "Done"}</span>
+                <span className={`badge badge-${r.session.status}`}>{WORKING.has(r.session.status) || !r.reply ? t("review.reviewing") : t("review.done")}</span>
               </div>
               {r.reply && <p className="agent-review-reply">{r.reply}</p>}
               <div className="row">
                 <button className="link" onClick={() => openSessionEvent(r.session.id)}>
-                  Open
+                  {t("review.open")}
                 </button>
                 {r.reply && !WORKING.has(r.session.status) && (
-                  <button onClick={() => useFindings(r.session.id)} title="Puts the findings in the message box, to edit and send">
-                    Use these findings
+                  <button onClick={() => useFindings(r.session.id)} title={t("review.useTitle")}>
+                    {t("review.use")}
                   </button>
                 )}
               </div>

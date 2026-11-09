@@ -1,10 +1,13 @@
 import { contextResent } from "./contextMeter.ts";
 import type { ModelCall } from "./cost.ts";
 import type { ModelContext } from "./modelContext.ts";
+import { t, type PlainKey } from "./i18n.ts";
 
 // A session's transcript in the UI is a pure function of its events. Replay
 // from disk and the live stream both go through apply, so they cannot drift.
-// This module has no runtime imports so `node --test` can run it directly.
+// Its runtime imports are plain modules, so `node --test` can run it directly.
+// What the app writes itself is in the language in force when the events are
+// folded (GUI-048), so the view is folded again when the language changes.
 
 export interface TranscriptEvent {
   v: number;
@@ -29,25 +32,25 @@ export interface ApplyResult {
   missingAfter: number | null;
 }
 
-// apply appends the events that extend t contiguously, ignores ones already
+// apply appends the events that extend tr contiguously, ignores ones already
 // seen, and stops at the first gap.
-export function apply(t: Transcript, incoming: readonly TranscriptEvent[]): ApplyResult {
+export function apply(tr: Transcript, incoming: readonly TranscriptEvent[]): ApplyResult {
   const sorted = [...incoming].sort((a, b) => a.seq - b.seq);
   const added: TranscriptEvent[] = [];
-  let lastSeq = t.lastSeq;
+  let lastSeq = tr.lastSeq;
   for (const ev of sorted) {
     if (ev.seq <= lastSeq) continue;
     if (ev.seq !== lastSeq + 1) {
-      return { transcript: extend(t, added, lastSeq), missingAfter: lastSeq };
+      return { transcript: extend(tr, added, lastSeq), missingAfter: lastSeq };
     }
     added.push(ev);
     lastSeq = ev.seq;
   }
-  return { transcript: extend(t, added, lastSeq), missingAfter: null };
+  return { transcript: extend(tr, added, lastSeq), missingAfter: null };
 }
 
-function extend(t: Transcript, added: TranscriptEvent[], lastSeq: number): Transcript {
-  return added.length === 0 ? t : { events: [...t.events, ...added], lastSeq };
+function extend(tr: Transcript, added: TranscriptEvent[], lastSeq: number): Transcript {
+  return added.length === 0 ? tr : { events: [...tr.events, ...added], lastSeq };
 }
 
 // summary renders an event's payload as one line of text for the M0 view.
@@ -222,17 +225,23 @@ export interface Held {
   reason: string;
 }
 
-// HELD_BY says who held it, by a decision's actor or "mode_change".
-export const HELD_BY: Record<string, string> = {
-  user: "You denied it",
-  rule: "A rule denied it",
-  mode: "The permission mode denied it",
-  protected_path: "A protected path",
-  hook: "A hook blocked it",
-  sandbox: "The sandbox denied it",
-  policy: "Policy denied it",
-  mode_change: "The agent changed the mode on its own",
+const HELD_KEYS: Record<string, PlainKey> = {
+  user: "transcript.held.user",
+  rule: "transcript.held.rule",
+  mode: "transcript.held.mode",
+  protected_path: "transcript.held.protectedPath",
+  hook: "transcript.held.hook",
+  sandbox: "transcript.held.sandbox",
+  policy: "transcript.held.policy",
+  mode_change: "transcript.held.modeChange",
 };
+
+// HELD_BY says who held it, by a decision's actor or "mode_change", in the language
+// in force when it is read (GUI-048); a kind it does not know is undefined.
+export const HELD_BY: Readonly<Record<string, string>> = Object.defineProperties(
+  {},
+  Object.fromEntries(Object.entries(HELD_KEYS).map(([kind, key]) => [kind, { get: () => t(key), enumerable: true }])),
+);
 
 export interface PlanEntry {
   content: string;
@@ -367,7 +376,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           rev,
           toolCallId: d.toolCallId,
           tool: d.tool ?? "",
-          title: d.title ?? d.tool ?? "Tool call",
+          title: d.title ?? d.tool ?? t("transcript.toolCall"),
           toolKind: d.kind ?? "other",
           status: d.status ?? "pending",
           input: d.rawInput,
@@ -423,11 +432,12 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       case "mode_refused":
         // The user chose the mode approving a plan, and the app does not allow it here.
         if (d.chosen) {
-          items.push({ kind: "notice", key, rev, message: `You chose ${d.to} mode approving the plan, but ${d.reason || "it is not available here"}. This session asks before changes instead.`, warn: true });
+          const message = d.reason ? t("transcript.modeRefused.chosen", { mode: String(d.to), reason: String(d.reason) }) : t("transcript.modeRefused.chosenUnavailable", { mode: String(d.to) });
+          items.push({ kind: "notice", key, rev, message, warn: true });
           break;
         }
-        items.push({ kind: "notice", key, rev, message: `The agent tried to change the mode from ${d.from} to ${d.to} on its own; the mode stays ${d.from}.`, warn: false });
-        denied.push({ seq: ev.seq, kind: "mode_change", what: `${d.from} to ${d.to}`, reason: "" });
+        items.push({ kind: "notice", key, rev, message: t("transcript.modeRefused.agent", { from: String(d.from), to: String(d.to) }), warn: false });
+        denied.push({ seq: ev.seq, kind: "mode_change", what: t("transcript.held.modeChangeWhat", { from: String(d.from), to: String(d.to) }), reason: "" });
         break;
       case "turn_started":
         running = true;
@@ -436,14 +446,20 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "stuck":
         stuck = { reason: d.reason ?? "", detail: d.detail ?? "", profileId: d.profileId, profileName: d.profileName, auto: !!d.auto };
-        items.push({ kind: "notice", key, rev, message: `Not getting on: ${d.detail ?? d.reason}.`, warn: true });
+        items.push({ kind: "notice", key, rev, message: t("transcript.stuck", { detail: String(d.detail ?? d.reason) }), warn: true });
         break;
       case "workflow_stage":
         items.push({ kind: "stage", key, rev, command: d.command ?? "", title: d.title || `/${d.command ?? ""}` });
         break;
       case "handed_off":
         stuck = null;
-        items.push({ kind: "notice", key, rev, message: `Continued in "${d.toTitle ?? ""}" on ${d.profileName ?? "another profile"}.`, warn: false });
+        items.push({
+          kind: "notice",
+          key,
+          rev,
+          message: d.profileName != null ? t("transcript.handedOff", { title: String(d.toTitle ?? ""), profile: String(d.profileName) }) : t("transcript.handedOffAnother", { title: String(d.toTitle ?? "") }),
+          warn: false,
+        });
         break;
       case "turn_ended":
         running = false;
@@ -501,21 +517,17 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           kind: "notice",
           key,
           rev,
-          message: d.context
-            ? "Rewound to before the dimmed turns: the files are restored and the conversation continues from there."
-            : "Rewound the files to before the dimmed turns; the agent still remembers them.",
+          message: d.context ? t("transcript.rewound") : t("transcript.rewoundFiles"),
           warn: false,
         });
         break;
-      case "env_health":
-        items.push({
-          kind: "notice",
-          key,
-          rev,
-          message: d.status === "healthy" ? `Environment ready${d.detail ? `: ${d.detail}` : ""}.` : `Environment unhealthy: ${d.detail ?? ""}`,
-          warn: d.status !== "healthy",
-        });
+      case "env_health": {
+        const healthy = d.status === "healthy";
+        const detail = String(d.detail ?? "");
+        const message = !healthy ? t("transcript.env.unhealthy", { detail }) : detail ? t("transcript.env.readyDetail", { detail }) : t("transcript.env.ready");
+        items.push({ kind: "notice", key, rev, message, warn: !healthy });
         break;
+      }
       case "compaction_update":
         if (d.status === "completed") {
           items.push({ kind: "compaction", key, rev, reason: d.reason ?? "", before: d.contextTokens ?? 0, after: d.afterTokens ?? 0, summary: d.summary ?? "" });
@@ -539,7 +551,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "effort_changed":
         settings++;
-        items.push({ kind: "notice", key, rev, message: `Effort set to ${d.effort}. It applies from the next model call.`, warn: false });
+        items.push({ kind: "notice", key, rev, message: t("transcript.effort", { effort: String(d.effort) }), warn: false });
         break;
       case "config_option_update":
         settings++;
@@ -548,7 +560,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         settings++;
         break;
       case "optimizer_changed":
-        items.push({ kind: "notice", key, rev, optimizer: d.optimizer ?? "", message: d.name ? `Token optimizer set to ${d.name}. It applies from the next command.` : "Token optimizer turned off.", warn: false });
+        items.push({ kind: "notice", key, rev, optimizer: d.optimizer ?? "", message: d.name ? t("transcript.optimizer.set", { name: String(d.name) }) : t("transcript.optimizer.off"), warn: false });
         break;
       case "session_status":
         status = d.status ?? status;
@@ -557,7 +569,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         git = { repo: !!d.repo, branch: d.branch ?? "", head: d.head ?? "", dirty: d.dirty ?? 0, baseCommit: d.baseCommit ?? "" };
         break;
       case "error":
-        items.push({ kind: "error", key, rev, message: d.message ?? "Unknown error" });
+        items.push({ kind: "error", key, rev, message: d.message ?? t("transcript.unknownError") });
         break;
     }
   }
@@ -574,7 +586,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   }
   const held = denied.map(({ toolCallId, ...h }) => {
     const tool = toolCallId ? tools.get(toolCallId) : undefined;
-    return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || "A request" };
+    return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || t("transcript.aRequest") };
   });
   return { items, usage, calls, measured, modelContext, git, mode, status, running, commands, context, setup, plan, planThisTurn, settings, held, stuck };
 }
@@ -592,7 +604,7 @@ function replaceTool(
 // hookFailedText says why a request reached the user although the mode or a rule
 // might have allowed it: a guard hook did not answer (EXT-005).
 export function hookFailedText(why: string): string {
-  return `Asked because a guard hook did not answer: ${why}. Without it, the mode or a rule might have allowed this.`;
+  return t("transcript.hookFailed", { why });
 }
 
 // pendingRequest returns the permission the user still has to answer.
@@ -623,7 +635,7 @@ export interface DiffLine {
 // lineDiff is a small diff for edit previews: common leading and trailing
 // lines are trimmed to `context` lines, the rest shows as removed then added.
 export function lineDiff(oldText: string, newText: string, context = 2): DiffLine[] {
-  const lines = (t: string) => (t === "" ? [] : t.replace(/\n$/, "").split("\n"));
+  const lines = (text: string) => (text === "" ? [] : text.replace(/\n$/, "").split("\n"));
   const a = lines(oldText);
   const b = lines(newText);
   let start = 0;
@@ -704,12 +716,17 @@ export function optimizerCounts(view: { items: Item[] }, on: boolean): { command
 // hookMessage describes a hook that blocked or failed, or returns "" for
 // one that passed.
 export function hookMessage(d: Record<string, any>): string {
-  const what = `${d.event ?? "A"} hook${d.tool ? ` for ${d.tool}` : ""}`;
+  // The engine always names the event; without one, English said "The A hook".
+  const v = { event: String(d.event ?? "A"), tool: String(d.tool ?? ""), command: String(d.command ?? "") };
   const said = String(d.stderr || d.stdout || "").trim();
   if (d.stopped) return "";
-  if (d.blocked) return `The ${what} blocked it: ${said || d.command}`;
-  if (d.error) return `The ${what} could not run (${d.command}): ${d.error}`;
-  if (d.timedOut) return `The ${what} timed out (${d.command}).`;
-  if (d.exitCode) return `The ${what} failed with exit code ${d.exitCode} (${d.command})${said ? `: ${said}` : "."}`;
+  if (d.blocked) return t(d.tool ? "transcript.hook.blockedFor" : "transcript.hook.blocked", { ...v, said: said || v.command });
+  if (d.error) return t(d.tool ? "transcript.hook.couldNotRunFor" : "transcript.hook.couldNotRun", { ...v, error: String(d.error) });
+  if (d.timedOut) return t(d.tool ? "transcript.hook.timedOutFor" : "transcript.hook.timedOut", v);
+  if (d.exitCode) {
+    const code = String(d.exitCode);
+    if (said) return t(d.tool ? "transcript.hook.failedSaidFor" : "transcript.hook.failedSaid", { ...v, code, said });
+    return t(d.tool ? "transcript.hook.failedFor" : "transcript.hook.failed", { ...v, code });
+  }
   return "";
 }

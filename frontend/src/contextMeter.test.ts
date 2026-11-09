@@ -80,3 +80,18 @@ test("with no limit, the tooltip says where to set one", () => {
   assert.match(contextTitle({ tokens: 1000, window: 0 }), /Context limit/);
   assert.doesNotMatch(contextTitle({ tokens: 1000, window: 2000 }), /Context limit/);
 });
+
+// GUI-048: the tooltip's words follow the language as well as its numbers.
+test("the tooltip is in the language set", () => {
+  setLanguage("de");
+  assert.equal(
+    contextTitle({ tokens: 1000, window: 2000 }),
+    "Kontext: 1.000 von 2.000 Token. Jede Nachricht sendet ihn erneut, ein vollerer Kontext verbraucht die Limits also schneller.",
+  );
+  assert.match(contextTitle({ tokens: 1000, window: 0 }), /^Kontext: 1\.000 Token\. .* „Kontextgrenze“/);
+  setLanguage("en");
+  assert.equal(
+    contextTitle({ tokens: 1000, window: 0 }),
+    "Context: 1,000 tokens. Every message sends this again, so a fuller context uses your limits faster. This model's limit is not known, so nothing warns or compacts by itself: set it under Context limit, on the Info tab of the right panel.",
+  );
+});

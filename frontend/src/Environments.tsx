@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { secretStore } from "./platform.ts";
 import { ask } from "./ask.ts";
-import { EngineService, MODES, STARTING_MODES, type EnvironmentInfo } from "./api.ts";
+import { EngineService, modeName, STARTING_MODES, type EnvironmentInfo } from "./api.ts";
 
 interface Props {
   environments: EnvironmentInfo[];
@@ -179,7 +179,7 @@ export default function Environments({ environments, onChanged, onError }: Props
                 {(env.disabledTools ?? []).length > 0 && ` · tools off: ${(env.disabledTools ?? []).join(", ")}`}
                 {(env.rules ?? []).length > 0 &&
                   ` · rules: ${(env.rules ?? []).map((r) => `${r.effect} ${r.tool}${r.command ? `(${r.command})` : r.path ? `(${r.path})` : ""}`).join(", ")} (edit environments/${env.id}.yaml)`}
-                {env.defaultMode && ` · starts in ${MODES.find((m) => m.id === env.defaultMode)?.name ?? env.defaultMode}`}
+                {env.defaultMode && ` · starts in ${modeName(env.defaultMode)}`}
               </div>
             </div>
             <div className="row">
@@ -379,7 +379,7 @@ export default function Environments({ environments, onChanged, onError }: Props
               <option value="">Ask (default)</option>
               {STARTING_MODES.filter((m) => m.id !== "ask").map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name}
+                  {modeName(m.id)}
                 </option>
               ))}
             </select>

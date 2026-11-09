@@ -8,9 +8,34 @@ import { awaitingDecision, hookFailedText, lineDiff, type Item, type PermissionO
 import { planText } from "./planView.ts";
 import { agentQuestions } from "./forms.ts";
 import { PlanCard, PlanDecision } from "./PlanReview.tsx";
+import { t, type PlainKey } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 // ToolView is one tool call in the conversation: what it asked and did and,
 // while it waits, the approval card (GUI-006).
+
+// Who decided a call, by the engine's name; one the app does not know shows as named.
+const ACTOR: Record<string, PlainKey> = {
+  user: "tool.actor.user",
+  rule: "tool.actor.rule",
+  mode: "tool.actor.mode",
+  protected_path: "tool.actor.protectedPath",
+  hook: "tool.actor.hook",
+  policy: "tool.actor.policy",
+};
+const actorName = (actor: string) => (ACTOR[actor] ? t(ACTOR[actor]) : actor);
+
+// What a saved rule's scope is called; another scope shows as named.
+const SCOPE: Record<string, PlainKey> = { session: "tool.scope.session", global: "tool.scope.global" };
+
+// decisionText says how a call that did not go ahead was decided: "denied by rule".
+function decisionText(outcome: string, actor: string): string {
+  if (actor === "sandbox") return t("tool.decision.sandboxed");
+  const name = actorName(actor);
+  if (outcome === "denied") return t("tool.decision.denied", { actor: name });
+  if (outcome === "cancelled") return t("tool.decision.cancelled", { actor: name });
+  return t("tool.decision.other", { outcome, actor: name });
+}
 
 export default function ToolView({ item, roots = [], onError }: { item: Extract<Item, { kind: "tool" }>; roots?: string[]; onError: (err: unknown) => void }) {
   const waiting = awaitingDecision(item);
@@ -70,17 +95,20 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
         {/* What waits for a decision shows all of the command. */}
         <span className="tool-title">{visibleCommand(waiting ? item.title : quietCommand(item.title, roots))}</span>
         {!item.tool.startsWith("acp:") && <span className="muted"> {item.tool}</span>}
-        {via && <span className="muted"> · via {via}</span>}
+        {via && <span className="muted"> · {t("tool.via", { name: via })}</span>}
         {shownDecision &&
           (decided.outcome === "allowed" ? (
             // What went ahead is a small mark; what the policy held keeps its words (GUI-042).
-            <span className={`decision decision-allowed decision-icon`} role="img" aria-label={decided.actor === "sandbox" ? "sandboxed" : `allowed by ${decided.actor}`} title={decided.actor === "sandbox" ? "Ran in the sandbox" : `Allowed by ${decided.actor}`}>
+            <span
+              className={`decision decision-allowed decision-icon`}
+              role="img"
+              aria-label={decided.actor === "sandbox" ? t("tool.decision.sandboxed") : t("tool.decision.allowedBy", { actor: actorName(decided.actor) })}
+              title={decided.actor === "sandbox" ? t("tool.decision.sandboxTitle") : t("tool.decision.allowedByTitle", { actor: actorName(decided.actor) })}
+            >
               {decided.actor === "rule" ? <RuleIcon /> : <AllowedIcon />}
             </span>
           ) : (
-            <span className={`decision decision-${decided.outcome}`}>
-              {decided.actor === "sandbox" ? "sandboxed" : `${decided.outcome} by ${decided.actor}`}
-            </span>
+            <span className={`decision decision-${decided.outcome}`}>{decisionText(decided.outcome, decided.actor)}</span>
           ))}
         {edited && (
           // A file edit that went through gets a pen, whatever allowed it.
@@ -114,21 +142,22 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
       {shownDecision && decided.reason && <p className="muted">{decided.reason}</p>}
       {decided?.persisted && (
         <p className="muted">
-          Saved rule: <code>{decided.persisted.command || decided.persisted.path || decided.persisted.tool}</code> ({decided.persisted.scope})
+          {tNodes("tool.savedRule", {
+            rule: <code>{decided.persisted.command || decided.persisted.path || decided.persisted.tool}</code>,
+            scope: SCOPE[decided.persisted.scope] ? t(SCOPE[decided.persisted.scope]) : decided.persisted.scope,
+          })}
         </p>
       )}
       {waiting && plan !== null && (
-        <div className="approval plan-approval" role="group" aria-label="Approve this plan" ref={box}>
+        <div className="approval plan-approval" role="group" aria-label={t("tool.approvePlan")} ref={box}>
           <PlanDecision item={item} onError={onError} />
         </div>
       )}
       {waiting && plan === null && (
-        <div className="approval" role="group" aria-label={form ? `${form.server} asks for input` : "Approve this tool call"} ref={box}>
+        <div className="approval" role="group" aria-label={form ? t("tool.formAsks", { server: form.server }) : t("tool.approveCall")} ref={box}>
           {form && <McpFormView form={form} state={mcpForm} />}
           {item.permission?.command && (
-            <p>
-              Run <code>{item.permission.command}</code>?
-            </p>
+            <p>{tNodes("tool.runCommand", { command: <code>{item.permission.command}</code> })}</p>
           )}
           {item.permission?.paths?.map((p) => (
             <p key={p} className="muted">
@@ -136,12 +165,12 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
             </p>
           ))}
           {item.permission?.hookFailed && <p className="warn-text">{hookFailedText(item.permission.hookFailed)}</p>}
-          {!form && <input aria-label="Note for the agent" placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />}
+          {!form && <input aria-label={t("tool.note")} placeholder={t("tool.notePlaceholder")} value={reason} onChange={(e) => setReason(e.target.value)} />}
           <div className="approval-buttons">
             {offersAlways && (
-              <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Allow always applies to">
-                <option value="session">Always: this session</option>
-                <option value="global">Always: everywhere</option>
+              <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label={t("tool.alwaysScope")}>
+                <option value="session">{t("tool.alwaysSession")}</option>
+                <option value="global">{t("tool.alwaysGlobal")}</option>
               </select>
             )}
             {item.permission!.options.map((o) => {
@@ -152,7 +181,7 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
                   key={o.optionId}
                   className={o.kind.startsWith("allow") ? "primary" : "danger"}
                   onClick={() => choose(o)}
-                  title={hint && !form ? `Shortcut: ${hint}` : undefined}
+                  title={hint && !form ? t("tool.shortcut", { keys: hint }) : undefined}
                 >
                   {form ? formLabel(o.kind) : optionLabel(o.kind, o.name)}
                   {hint && !form && <kbd aria-hidden="true">{hint.split(" ")[0]}</kbd>}
@@ -185,8 +214,8 @@ function ContentView({ c }: { c: ToolContent }) {
     return (
       <pre className="tool-output">
         <span className="muted">
-          exit {c.exitCode}
-          {c.via && ` · via ${c.via}: ${c.command}`}
+          {t("tool.exit", { code: String(c.exitCode ?? "") })}
+          {c.via && ` · ${t("tool.viaCommand", { name: c.via, command: String(c.command) })}`}
         </span>
         {"\n"}
         {c.output}
@@ -198,7 +227,7 @@ function ContentView({ c }: { c: ToolContent }) {
     const sid = c.content.uri.slice(SESSION_URI.length);
     return (
       <button className="link" onClick={() => openSessionEvent(sid)}>
-        {c.content.name || "Open the session"}
+        {c.content.name || t("tool.openSession")}
       </button>
     );
   }
