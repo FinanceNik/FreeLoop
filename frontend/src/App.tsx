@@ -39,7 +39,7 @@ import Optimizers from "./Optimizers.tsx";
 import Workflows from "./Workflows.tsx";
 import AFKDialog from "./AFKDialog.tsx";
 import AFKRunView from "./AFKRunView.tsx";
-import { runCostLine, runLine, waitingStep } from "./afk.ts";
+
 import Usage from "./Usage.tsx";
 import Compare from "./Compare.tsx";
 import Providers from "./Providers.tsx";
@@ -296,40 +296,31 @@ export default function App() {
   // The AFK run's dialog (WFL-005), for a project's backlog.
   // fromSession is the session it is started from, where its work was planned (WFL-015).
   const [afkFor, setAfkFor] = useState<{ root: string; workflowId?: string; startedBy: string; fromSession?: string } | null>(null);
+  // A row's run controls on the Board; the Board itself says how the run stands.
   const backlogActions = (b: BacklogInfo) => {
     const r = b.run;
     const going = r && (r.state === "running" || r.state === "paused");
     return (
-      <div className="backlog-run">
+      <>
         {r && (
-          // A run whose issue waits says so plainly: until it starts, nothing else moves.
-          <p className={waitingStep(r) ? "backlog-run-line backlog-run-waiting" : "muted backlog-run-line"} role="status">
-            {runLine(r)}
-          </p>
+          <button className="link backlog-run-details" onClick={() => setRunFor(b.projectRoot)}>
+            {t("app.afk.showRun")}
+          </button>
         )}
-        {/* What it cost, by part and model (WFL-015). */}
-        {b.runCost && runCostLine(b.runCost) && <p className="muted backlog-run-cost">{runCostLine(b.runCost)}</p>}
-        <p className="row">
-          {!going && (
-            <button className="primary" onClick={() => setAfkFor({ root: b.projectRoot, workflowId: b.workflowId, startedBy: "the Board" })}>
-              {t("app.afk.run")}
-            </button>
-          )}
-          {going && (
-            <button onClick={() => EngineService.PauseAFK(r.id, r.state === "running").then(refreshBacklogs).catch(report)}>{r.state === "running" ? t("app.afk.pause") : t("app.afk.resume")}</button>
-          )}
-          {going && (
-            <button onClick={() => EngineService.StopAFK(r.id).then(refreshBacklogs).catch(report)}>
-              {t("app.afk.stop")}
-            </button>
-          )}
-          {r && (
-            <button className="link backlog-run-details" onClick={() => setRunFor(b.projectRoot)}>
-              {t("app.afk.showRun")}
-            </button>
-          )}
-        </p>
-      </div>
+        {going && (
+          <button onClick={() => EngineService.PauseAFK(r.id, r.state === "running").then(refreshBacklogs).catch(report)}>{r.state === "running" ? t("app.afk.pause") : t("app.afk.resume")}</button>
+        )}
+        {going && (
+          <button onClick={() => EngineService.StopAFK(r.id).then(refreshBacklogs).catch(report)}>
+            {t("app.afk.stop")}
+          </button>
+        )}
+        {!going && (
+          <button className="primary" onClick={() => setAfkFor({ root: b.projectRoot, workflowId: b.workflowId, startedBy: "the Board" })}>
+            {t("app.afk.run")}
+          </button>
+        )}
+      </>
     );
   };
   // Trusting a project from its row on the Board, as from its session: the hooks its

@@ -201,11 +201,16 @@ func (e *Engine) pullRequestCost(ctx context.Context, sid string) string {
 		}
 		var models []string
 		for _, m := range p.part.Models {
-			if !slices.Contains(models, m.Model) {
+			// An agent that names no model adds no empty name.
+			if m.Model != "" && !slices.Contains(models, m.Model) {
 				models = append(models, m.Model)
 			}
 		}
-		parts = append(parts, fmt.Sprintf("%s %s on %s", p.name, costWords(p.part.Cost, p.part.Unpriced), strings.Join(models, ", ")))
+		line := fmt.Sprintf("%s %s", p.name, costWords(p.part.Cost, p.part.Unpriced))
+		if len(models) > 0 {
+			line += " on " + strings.Join(models, ", ")
+		}
+		parts = append(parts, line)
 	}
 	if len(parts) == 0 {
 		return ""

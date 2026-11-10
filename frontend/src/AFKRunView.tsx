@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { EngineService, type AttentionItem, type BacklogInfo } from "./api.ts";
-import { runLine, stepLabel } from "./afk.ts";
+import { runCostLine, runLine, stepLabel } from "./afk.ts";
 import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 
@@ -45,6 +45,8 @@ export default function AFKRunView({ backlog, attention, onOpen, onClose, onChan
             </>
           )}
         </p>
+        {/* What it cost, by part and model (WFL-015). */}
+        {backlog.runCost && runCostLine(backlog.runCost) && <p className="muted afk-run-cost">{runCostLine(backlog.runCost)}</p>}
         <ol className="afk-run-steps">
           {steps.map((s) => {
             const waiting = s.state === "working" && !!s.waiting;

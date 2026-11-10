@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { capDone, cardMeta, LANES, type Lane, laneTitle, placeIssues, readCollapsed, rowsFor, rowState, waitingIssues, writeCollapsed, type IssueCard } from "./board.ts";
-import { stepLabel } from "./afk.ts";
+import { costAmount, runCostLine, runLine, stepLabel, waitingStep } from "./afk.ts";
 import { counts } from "./backlog.ts";
 import type { BacklogInfo } from "./api.ts";
 import { ChevronIcon } from "./icons.tsx";
@@ -144,7 +144,7 @@ export default function Board({
           const { open, forced } = rowState(collapsed.includes(b.projectId), waitingIssues(cols));
           const done = capDone(cols.done, allDone.includes(b.projectId));
           return (
-            <section key={b.projectId} className="board-lane" aria-label={t("board.backlogOf", { project: b.projectName })}>
+            <section key={b.projectId} className={open ? "board-lane board-lane-open" : "board-lane"} aria-label={t("board.backlogOf", { project: b.projectName })}>
               <header className="board-lane-head">
                 <div className="board-lane-title">
                   <button
@@ -164,13 +164,31 @@ export default function Board({
                     {b.uncommitted ? ` · ${t("board.notCommitted")}` : ""}
                   </span>
                 </div>
-                {backlogActions?.(b)}
-                {b.finished > 0 && onArchive && (
-                  <button className="link board-lane-archive" onClick={() => onArchive(b)} title={t("board.archiveTitle")}>
-                    {t("board.archive", { count: b.finished })}
-                  </button>
-                )}
+                <div className="board-lane-actions">
+                  {b.finished > 0 && onArchive && (
+                    <button className="link board-lane-archive" onClick={() => onArchive(b)} title={t("board.archiveTitle")}>
+                      {t("board.archive", { count: b.finished })}
+                    </button>
+                  )}
+                  {backlogActions?.(b)}
+                </div>
               </header>
+              {b.run && (
+                // How the run stands, in one quiet line: a run whose issue waits says so in
+                // the warning colour, since nothing else moves until it starts; what it cost
+                // is its total, the parts and models in its tooltip (WFL-015).
+                <p className="board-lane-status" role="status">
+                  <span className={waitingStep(b.run) ? "backlog-run-line backlog-run-waiting" : "backlog-run-line"}>{runLine(b.run)}</span>
+                  {b.runCost && runCostLine(b.runCost) && (
+                    <>
+                      {" · "}
+                      <span className="backlog-run-cost" title={runCostLine(b.runCost)}>
+                        {t("board.runCost", { cost: costAmount({ cost: b.runCost.total, unpriced: b.runCost.unpriced, models: null }) })}
+                      </span>
+                    </>
+                  )}
+                </p>
+              )}
               {forced && <p className="muted board-lane-note">{t("board.openBecauseWaiting")}</p>}
               {open && (
               <div className="board-lane-columns">

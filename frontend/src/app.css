@@ -2453,6 +2453,7 @@ button.issue-title:hover {
    narrower than four columns of cards, rather than squeeze them (GUI-016). */
 .board-lanes {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 18px;
   overflow-x: auto;
@@ -2460,7 +2461,9 @@ button.issue-title:hover {
 }
 
 .board-lane {
+  display: flex;
   flex: none;
+  flex-direction: column;
   min-width: calc(4 * 14rem + 3 * 12px + 24px);
   background: var(--bg-side);
   border: 1px solid var(--border);
@@ -2468,22 +2471,41 @@ button.issue-title:hover {
   padding: 10px 12px 12px;
 }
 
+/* The last open row reaches the bottom of the page, its columns with it, so the
+   Board reads as one board however few cards it has. */
+.board-lane-open:last-child {
+  flex-grow: 1;
+}
+
+/* The row's header is one line: the project and its counts at the left, what can be
+   done at the right, the main action last. */
 .board-lane-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 14px;
-  margin: 0 0 8px;
+  gap: 6px 14px;
+  margin: 0 0 4px;
+}
+
+.board-lane-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-left: auto;
+}
+
+/* How the run stands, quietly, under the header. */
+.board-lane-status {
+  margin: 0 4px 10px 30px;
+  font-size: calc(12rem / 14);
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .board-lane-title {
   font-size: calc(13rem / 14);
   overflow-wrap: anywhere;
-}
-
-.board-lane-head .backlog-run {
-  flex: 1 1 auto;
-  min-width: 0;
 }
 
 .board-lane-title {
@@ -2536,15 +2558,23 @@ button.issue-title:hover {
 }
 
 .board-lane-archive {
-  margin-left: auto;
   font-size: calc(12rem / 14);
 }
 
+/* Each column a faint well, as tall as the row, so the four read as columns. */
 .board-lane-columns {
   display: grid;
+  flex: 1 0 auto;
   grid-template-columns: repeat(4, minmax(14rem, 1fr));
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
+}
+
+.board-col {
+  min-width: 0;
+  padding: 6px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface) 35%, transparent);
 }
 
 .board-col h3 {
@@ -2679,10 +2709,6 @@ button.issue-title:hover {
   background: var(--accent-soft, var(--surface));
 }
 
-.backlog-run-line {
-  margin: 0 4px 6px;
-  font-size: calc(12rem / 14);
-}
 
 /* A run whose issue has not started, and that issue's card, say so in the
    warning colour: until it starts, nothing else moves. */
@@ -2691,9 +2717,6 @@ button.issue-title:hover {
   color: var(--warn);
 }
 
-.backlog-run .row {
-  margin: 0 4px 8px;
-}
 
 .attention-qa-badge {
   margin-right: 4px;

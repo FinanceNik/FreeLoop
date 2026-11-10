@@ -127,14 +127,16 @@ export function costAmount(p: CostPartLike): string {
   return p.unpriced ? `${formatCost(p.cost)} ${t("afk.cost.unpriced")}` : formatCost(p.cost);
 }
 
-const models = (p: CostPartLike) => [...new Set((p.models ?? []).map((m) => m.model))].join(", ");
+// The models a part ran on; an agent that named none adds no name.
+const models = (p: CostPartLike) => [...new Set((p.models ?? []).map((m) => m.model).filter(Boolean))].join(", ");
 
 // runCostLine sums a run's cost up: each part with its models, then the total;
 // nothing before anything was used.
 export function runCostLine(rc: { planning: CostPartLike; issues: CostPartLike; reviews: CostPartLike; total: number; unpriced: boolean }): string {
   const parts: string[] = [];
   for (const [key, p] of [["afk.cost.planning", rc.planning], ["afk.cost.issues", rc.issues], ["afk.cost.reviews", rc.reviews]] as const) {
-    if ((p.models ?? []).length) parts.push(t("afk.cost.part", { part: t(key), cost: costAmount(p), models: models(p) }));
+    if (!(p.models ?? []).length) continue;
+    parts.push(models(p) ? t("afk.cost.part", { part: t(key), cost: costAmount(p), models: models(p) }) : t("afk.cost.partNoModel", { part: t(key), cost: costAmount(p) }));
   }
   if (!parts.length) return "";
   parts.push(t("afk.cost.total", { cost: costAmount({ cost: rc.total, unpriced: rc.unpriced, models: null }) }));
@@ -143,7 +145,7 @@ export function runCostLine(rc: { planning: CostPartLike; issues: CostPartLike; 
 
 // issueCostLine is an issue's session and review together, and its commit.
 export function issueCostLine(ic: CostPartLike & { commit: string }): string {
-  const parts = [(ic.models ?? []).length ? t("afk.cost.issue", { cost: costAmount(ic), models: models(ic) }) : t("afk.cost.none")];
+  const parts = [!(ic.models ?? []).length ? t("afk.cost.none") : models(ic) ? t("afk.cost.issue", { cost: costAmount(ic), models: models(ic) }) : t("afk.cost.issueNoModel", { cost: costAmount(ic) })];
   if (ic.commit) parts.push(t("afk.cost.commit", { commit: ic.commit.slice(0, 7) }));
   return parts.join(" · ");
 }

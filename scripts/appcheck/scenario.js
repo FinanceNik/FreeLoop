@@ -1817,8 +1817,11 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   check("the run did both issues", line.startsWith("AFK run finished: 2 of 2 issues done"), line);
   check("the run's line says where its issues went", line.includes("Issues on small (Demo small) · low"), line);
   // WFL-015: what it cost, by part and model; the demo's models have no price, which it says.
-  const costLine = await until("the run's cost", () => document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-cost')?.textContent, 8000).catch(() => "");
-  check("the run says what its issues and reviews cost, unpriced as such", /Issues unpriced on small/.test(costLine) && /Reviews unpriced on /.test(costLine) && /total unpriced$/.test(costLine) && !costLine.includes("$0"), costLine);
+  // The row says the total; its tooltip, the parts and their models.
+  const costEl = await until("the run's cost", () => document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-cost'), 8000).catch(() => null);
+  const costLine = costEl?.title ?? "";
+  check("the run says what it cost, unpriced as such", costEl?.textContent === "cost: unpriced", costEl?.textContent);
+  check("and what its issues and reviews cost, by model", /Issues unpriced on small/.test(costLine) && /Reviews unpriced on /.test(costLine) && /total unpriced$/.test(costLine) && !costLine.includes("$0"), costLine);
   // And the Usage page groups by workflow run.
   named(".footer-links button", "Usage").click();
   (await until("the tokens tab", () => document.querySelector("#usage-tab-tokens"), 8000)).click();

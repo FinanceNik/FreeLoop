@@ -58,4 +58,7 @@ test("a run's cost in one line, and an issue's", () => {
   assert.equal(runCostLine({ ...rc, planning: part(0, false) }), "Issues $0.08 on qwen · Reviews unpriced on b · total $1.28 + unpriced");
   assert.equal(runCostLine({ planning: part(0, false), issues: part(0, false), reviews: part(0, false), total: 0, unpriced: false }), "");
   assert.equal(issueCostLine({ ...part(0.3, false, "qwen", "b"), commit: "0123456789abcdef" }), "Cost $0.30 on qwen, b · commit 0123456");
+  // An agent that names no model adds no empty name.
+  assert.equal(runCostLine({ ...rc, planning: part(0, false), issues: part(6.22, true, "", "sonnet") }), "Issues $6.22 + unpriced on sonnet · Reviews unpriced on b · total $1.28 + unpriced");
+  assert.equal(runCostLine({ ...rc, planning: part(0, false), reviews: part(0, false), issues: part(1, false, "") }), "Issues $1.00 · total $1.28 + unpriced");
 });
