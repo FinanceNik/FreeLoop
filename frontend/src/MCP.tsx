@@ -4,7 +4,9 @@ import { ask } from "./ask.ts";
 import { Browser } from "@wailsio/runtime";
 import { EngineService, type MCPServer, type MCPServerInfo, type RegistryOption, type RegistryServer } from "./api.ts";
 import McpRegistry from "./McpRegistry.tsx";
-import { added as alreadyAdded, MCP_SUGGESTIONS, type McpSuggestion } from "./mcpSuggestions.ts";
+import { added as alreadyAdded, AUTH_HEADER, MCP_SUGGESTIONS, type McpSuggestion } from "./mcpSuggestions.ts";
+import { list, t, type PlainKey } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 // MCP servers (MCP-001, MCP-005): stdio commands and Streamable HTTP
 // endpoints in mcp.yaml. A server runs only after the user approves exactly
@@ -32,7 +34,8 @@ interface Form {
   enabled: boolean;
   secretNames: string[];
   remove: string[];
-  added: { name: string; value: string; hint?: string }[];
+  // hint is a catalogue key, translated where the field shows.
+  added: { name: string; value: string; hint?: PlainKey }[];
 }
 
 function toForm(s?: MCPServerInfo): Form {
@@ -107,11 +110,11 @@ export function registryId(name: string): string {
 function pairs(text: string, sep: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of text.split("\n")) {
-    const t = line.trim();
-    if (!t) continue;
-    const i = t.indexOf(sep);
-    if (i <= 0) throw new Error(`"${t}" is not name${sep}value`);
-    out[t.slice(0, i).trim()] = t.slice(i + sep.length).trim();
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const i = trimmed.indexOf(sep);
+    if (i <= 0) throw new Error(t(sep === "=" ? "mcp.notPair.env" : "mcp.notPair.header", { line: trimmed }));
+    out[trimmed.slice(0, i).trim()] = trimmed.slice(i + sep.length).trim();
   }
   return out;
 }
@@ -120,6 +123,14 @@ function pairs(text: string, sep: string): Record<string, string> {
 function commandLine(s: MCPServer): string {
   return [s.command, ...(s.args ?? [])].map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(" ");
 }
+
+// The states a server reports, as their words; others (sign_in has its own) show as given.
+const STATE: Record<string, PlainKey> = {
+  stopped: "mcp.state.stopped",
+  starting: "mcp.state.starting",
+  running: "mcp.state.running",
+  error: "mcp.state.error",
+};
 
 export default function MCP({ configVersion, onImport, onError }: Props) {
   const [servers, setServers] = useState<MCPServerInfo[]>([]);
@@ -136,8 +147,8 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
   // Starting servers change state in the background.
   useEffect(() => {
     if (!servers.some((s) => s.status.state === "starting")) return;
-    const t = setTimeout(load, 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(load, 1000);
+    return () => clearTimeout(timer);
   }, [servers]);
 
   const run = (id: string, p: Promise<unknown>) => {
@@ -199,101 +210,101 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
     const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm({ ...form, [k]: v });
     return (
       <section className="page">
-        <h2>{form.isNew ? "Add an MCP server" : `Edit ${form.name || form.id}`}</h2>
+        <h2>{form.isNew ? t("mcp.form.addTitle") : t("mcp.form.editTitle", { name: form.name || form.id })}</h2>
         <form className="card form" onSubmit={save}>
           {form.isNew && (
             <label>
-              ID <span className="muted">(its tools are named mcp__ID__tool)</span>
+              {t("mcp.form.id")} <span className="muted">{t("mcp.form.idHint")}</span>
               <input value={form.id} onChange={(e) => set("id", e.target.value)} placeholder="github" required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
             </label>
           )}
           <label>
-            Name
+            {t("mcp.form.name")}
             <input value={form.name} onChange={(e) => set("name", e.target.value)} />
           </label>
           <label>
-            Transport
+            {t("mcp.form.transport")}
             <select value={form.transport} onChange={(e) => set("transport", e.target.value)}>
-              <option value="stdio">Command (stdio)</option>
-              <option value="http">Remote (Streamable HTTP)</option>
+              <option value="stdio">{t("mcp.form.stdio")}</option>
+              <option value="http">{t("mcp.form.http")}</option>
             </select>
           </label>
           {form.transport === "stdio" ? (
             <>
               <label>
-                Command
+                {t("mcp.form.command")}
                 <input value={form.command} onChange={(e) => set("command", e.target.value)} placeholder="npx" required />
               </label>
               <label>
-                Arguments <span className="muted">(one per line)</span>
+                {t("mcp.form.args")} <span className="muted">{t("mcp.form.argsHint")}</span>
                 <textarea rows={3} value={form.args} onChange={(e) => set("args", e.target.value)} placeholder={"-y\n@modelcontextprotocol/server-github@1.0.0"} />
               </label>
               <label>
-                Variables <span className="muted">(KEY=value per line; use secrets for keys)</span>
+                {t("mcp.form.env")} <span className="muted">{t("mcp.form.envHint")}</span>
                 <textarea rows={2} value={form.env} onChange={(e) => set("env", e.target.value)} />
               </label>
             </>
           ) : (
             <>
               <label>
-                URL
+                {t("mcp.form.url")}
                 <input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://example.com/mcp" required />
               </label>
               <label>
-                OAuth client ID <span className="muted">(optional; only for servers that want a pre-registered client)</span>
+                {t("mcp.form.oauthClientId")} <span className="muted">{t("mcp.form.oauthClientIdHint")}</span>
                 <input value={form.oauthClientId} onChange={(e) => set("oauthClientId", e.target.value)} />
               </label>
               <label>
-                Headers <span className="muted">(Name: value per line; use secrets for tokens)</span>
+                {t("mcp.form.headers")} <span className="muted">{t("mcp.form.headersHint")}</span>
                 <textarea rows={2} value={form.headers} onChange={(e) => set("headers", e.target.value)} />
               </label>
             </>
           )}
           <fieldset>
-            <legend>Secrets {form.transport === "http" ? "(sent as headers)" : "(passed as variables)"}</legend>
+            <legend>{form.transport === "http" ? t("mcp.form.secretsHeaders") : t("mcp.form.secretsVariables")}</legend>
             {form.secretNames
               .filter((n) => !form.remove.includes(n))
               .map((n) => (
                 <div key={n} className="row">
-                  <code>{n}</code> <span className="muted">stored in {secretStore()}</span>
+                  <code>{n}</code> <span className="muted">{t("mcp.form.storedIn", { store: secretStore() })}</span>
                   <button type="button" onClick={() => set("remove", [...form.remove, n])}>
-                    Remove
+                    {t("common.remove")}
                   </button>
                 </div>
               ))}
             {form.added.map((s, i) => (
               <div key={i} className="row">
                 <input
-                  placeholder={form.transport === "http" ? "Authorization" : "GITHUB_TOKEN"}
+                  placeholder={form.transport === "http" ? AUTH_HEADER : "GITHUB_TOKEN"}
                   value={s.name}
                   onChange={(e) => set("added", form.added.map((x, n) => (n === i ? { ...x, name: e.target.value } : x)))}
-                  aria-label="Secret name"
+                  aria-label={t("mcp.form.secretName")}
                 />
                 <input
                   type="password"
-                  placeholder={s.hint ?? "value"}
+                  placeholder={s.hint ? t(s.hint) : t("mcp.form.valuePlaceholder")}
                   value={s.value}
                   onChange={(e) => set("added", form.added.map((x, n) => (n === i ? { ...x, value: e.target.value } : x)))}
-                  aria-label="Secret value"
+                  aria-label={t("mcp.form.secretValue")}
                 />
               </div>
             ))}
             <div>
               <button type="button" onClick={() => set("added", [...form.added, { name: "", value: "" }])}>
-                Add a secret
+                {t("mcp.form.addSecret")}
               </button>
             </div>
           </fieldset>
           <label className="row">
-            <input type="checkbox" checked={form.enabled} onChange={(e) => set("enabled", e.target.checked)} /> Offer its tools in every session
-            <span className="muted">(profiles can add servers that are off)</span>
+            <input type="checkbox" checked={form.enabled} onChange={(e) => set("enabled", e.target.checked)} /> {t("mcp.form.enabled")}
+            <span className="muted">{t("mcp.form.enabledHint")}</span>
           </label>
           <div className="row">
             <button type="submit" className="primary">
-              Save
+              {t("common.save")}
             </button>
             <button type="button" onClick={() => setForm(null)}>
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>
@@ -303,12 +314,9 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
 
   return (
     <section className="page">
-      <h2>MCP servers</h2>
-      <p className="muted">
-        Tools from Model Context Protocol servers, offered to the built-in agent as <code>mcp__server__tool</code>. Every call asks unless a rule
-        allows it, such as <code>mcp__github__*</code>. Servers run with your privileges; prefer ones you can read and pin their versions.
-      </p>
-      {servers.length === 0 && <p className="muted">No servers yet.</p>}
+      <h2>{t("settings.page.mcp")}</h2>
+      <p className="muted">{tNodes("mcp.intro", { pattern: <code>mcp__server__tool</code>, example: <code>mcp__github__*</code> })}</p>
+      {servers.length === 0 && <p className="muted">{t("mcp.none")}</p>}
       <ul className="provider-list">
         {servers.map((s) => (
           <li key={s.id} className="card mcp-server">
@@ -316,32 +324,32 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
               <div>
                 <strong>{s.name || s.id}</strong> <span className="muted">{s.id}</span>{" "}
                 <span className={`badge mcp-${s.needsApproval ? "approval" : s.status.state}`}>
-                  {s.needsApproval ? "needs approval" : s.status.state === "sign_in" ? "needs sign-in" : s.status.state}
+                  {s.needsApproval ? t("mcp.badge.approval") : s.status.state === "sign_in" ? t("mcp.badge.signIn") : STATE[s.status.state] ? t(STATE[s.status.state]) : s.status.state}
                 </span>
-                {s.signedIn && <span className="muted"> · signed in</span>}
-                {!s.enabled && <span className="muted"> · off by default</span>}
+                {s.signedIn && <span className="muted"> · {t("mcp.signedIn")}</span>}
+                {!s.enabled && <span className="muted"> · {t("mcp.offByDefault")}</span>}
               </div>
               <code className="mcp-cmd">{s.transport === "http" ? s.url : commandLine(s)}</code>
-              {s.source && <div className="muted">Imported from {s.source}</div>}
+              {s.source && <div className="muted">{t("mcp.importedFrom", { source: s.source })}</div>}
               {s.status.state === "running" && (
                 <details>
                   <summary className="muted">
-                    {(s.status.tools ?? []).length} tools · protocol {s.status.protocol}
+                    {t("mcp.tools", { count: (s.status.tools ?? []).length, protocol: s.status.protocol })}
                   </summary>
                   <ul>
-                    {(s.status.tools ?? []).map((t) => (
-                      <li key={t.name}>
-                        <code>{t.name}</code> <span className="muted">{t.description}</span>
+                    {(s.status.tools ?? []).map((tool) => (
+                      <li key={tool.name}>
+                        <code>{tool.name}</code> <span className="muted">{tool.description}</span>
                       </li>
                     ))}
                   </ul>
                 </details>
               )}
               {s.status.error && s.status.state !== "sign_in" && <div className="error-text">{s.status.error}</div>}
-              {s.status.state === "sign_in" && busy !== s.id && <div className="muted">This server wants you to sign in. Sign in opens its page in your browser.</div>}
+              {s.status.state === "sign_in" && busy !== s.id && <div className="muted">{t("mcp.signInNeeded")}</div>}
               {s.signInUrl && (
                 <div className="muted">
-                  Waiting for the sign-in in your browser.{" "}
+                  {t("mcp.signInWaiting")}{" "}
                   <a
                     href={s.signInUrl}
                     onClick={(e) => {
@@ -349,22 +357,27 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
                       Browser.OpenURL(s.signInUrl!).catch(onError);
                     }}
                   >
-                    Open the page again
+                    {t("mcp.signInAgain")}
                   </a>
                 </div>
               )}
               {s.needsApproval && (
                 <div className="banner warn mcp-approve">
-                  <strong>Approve before it runs.</strong> It will {s.transport === "http" ? "connect to" : "run"}:
+                  <strong>{t("mcp.approve.title")}</strong> {s.transport === "http" ? t("mcp.approve.connect") : t("mcp.approve.run")}
                   <pre>{s.transport === "http" ? s.url : commandLine(s)}</pre>
                   {Object.keys(s.env ?? {}).length + (s.secretNames ?? []).length > 0 && (
                     <div className="muted">
-                      With {s.transport === "http" ? "headers" : "variables"}: {[...Object.keys(s.transport === "http" ? (s.headers ?? {}) : (s.env ?? {})), ...(s.secretNames ?? []).map((n) => `${n} (secret)`)].join(", ")}
+                      {t(s.transport === "http" ? "mcp.approve.withHeaders" : "mcp.approve.withVariables", {
+                        names: list([
+                          ...Object.keys(s.transport === "http" ? (s.headers ?? {}) : (s.env ?? {})),
+                          ...(s.secretNames ?? []).map((n) => t("mcp.approve.secret", { name: n })),
+                        ]),
+                      })}
                     </div>
                   )}
                   {s.warning && <div className="error-text">{s.warning}</div>}
                   <button className="primary" disabled={busy === s.id} onClick={() => run(s.id, EngineService.ApproveMCPServer(s.id, s.fingerprint))}>
-                    Approve and start
+                    {t("mcp.approve.start")}
                   </button>
                 </div>
               )}
@@ -372,35 +385,35 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
             <div className="mcp-actions">
               {!s.needsApproval && s.status.state === "sign_in" && (
                 <button className="primary" disabled={busy === s.id} onClick={() => run(s.id, EngineService.SignInMCPServer(s.id))}>
-                  {busy === s.id ? "Signing in…" : "Sign in…"}
+                  {busy === s.id ? t("mcp.signingIn") : t("mcp.signIn")}
                 </button>
               )}
               {!s.needsApproval && s.status.state !== "running" && s.status.state !== "sign_in" && (
                 <button disabled={busy === s.id} onClick={() => run(s.id, EngineService.StartMCPServer(s.id))}>
-                  {busy === s.id ? "Starting…" : "Start"}
+                  {busy === s.id ? t("mcp.starting") : t("mcp.start")}
                 </button>
               )}
               {s.signedIn && (
                 <button
-                  onClick={async () => (await ask(`Sign out of ${s.name || s.id}? Its tokens are removed from ${secretStore()}.`)) && run(s.id, EngineService.SignOutMCPServer(s.id))}
+                  onClick={async () => (await ask(t("mcp.signOutAsk", { name: s.name || s.id, store: secretStore() }))) && run(s.id, EngineService.SignOutMCPServer(s.id))}
                 >
-                  Sign out
+                  {t("mcp.signOut")}
                 </button>
               )}
               {s.status.state === "running" && (
                 <>
                   <button disabled={busy === s.id} onClick={() => run(s.id, EngineService.StartMCPServer(s.id).then(() => undefined))}>
-                    Refresh
+                    {t("mcp.refresh")}
                   </button>
-                  <button onClick={() => run(s.id, EngineService.StopMCPServer(s.id))}>Stop</button>
+                  <button onClick={() => run(s.id, EngineService.StopMCPServer(s.id))}>{t("mcp.stop")}</button>
                 </>
               )}
-              <button onClick={() => setForm(toForm(s))}>Edit</button>
+              <button onClick={() => setForm(toForm(s))}>{t("mcp.edit")}</button>
               <button
                 className="danger"
-                onClick={async () => (await ask(`Delete ${s.name || s.id}? Its secrets are removed from ${secretStore()}.`)) && run(s.id, EngineService.DeleteMCPServer(s.id))}
+                onClick={async () => (await ask(t("mcp.deleteAsk", { name: s.name || s.id, store: secretStore() }))) && run(s.id, EngineService.DeleteMCPServer(s.id))}
               >
-                Delete
+                {t("mcp.delete")}
               </button>
             </div>
           </li>
@@ -408,16 +421,14 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
       </ul>
       <div className="row">
         <button className="primary" onClick={() => setForm(toForm())}>
-          Add a server
+          {t("mcp.add")}
         </button>
-        <button onClick={() => setBrowsing(true)}>Browse a registry…</button>
-        <button onClick={onImport}>Import from Claude Code…</button>
+        <button onClick={() => setBrowsing(true)}>{t("mcp.browse")}</button>
+        <button onClick={onImport}>{t("settings.import.button")}</button>
       </div>
 
-      <h3>Suggested</h3>
-      <p className="muted">
-        Common servers, built into the app. Nothing runs or connects until you add one, save it and approve it, as any other server.
-      </p>
+      <h3>{t("mcp.suggested")}</h3>
+      <p className="muted">{t("mcp.suggestedIntro")}</p>
       <ul className="mcp-suggestions">
         {MCP_SUGGESTIONS.map((s) => {
           const there = alreadyAdded(s, servers);
@@ -425,17 +436,17 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
             <li key={s.id} className="card mcp-suggestion">
               <div className="row mcp-suggestion-head">
                 <strong>{s.name}</strong>
-                <span className="badge">{s.transport === "http" ? "remote" : "runs locally"}</span>
-                <span className="muted">{s.signIn === "oauth" ? "signs in with OAuth" : s.signIn === "token" ? "needs a token" : "no sign-in"}</span>
+                <span className="badge">{s.transport === "http" ? t("mcp.suggest.remote") : t("mcp.suggest.local")}</span>
+                <span className="muted">{s.signIn === "oauth" ? t("mcp.suggest.oauth") : s.signIn === "token" ? t("mcp.suggest.token") : t("mcp.suggest.none")}</span>
               </div>
-              <p>{s.description}</p>
-              <p className="muted">{s.reach}</p>
+              <p>{t(s.description)}</p>
+              <p className="muted">{t(s.reach)}</p>
               <div className="row">
-                <button onClick={() => setForm(suggestionForm(s))} disabled={there} aria-label={there ? `${s.name} is added` : `Add ${s.name}`}>
-                  {there ? "Added" : "Add…"}
+                <button onClick={() => setForm(suggestionForm(s))} disabled={there} aria-label={there ? t("mcp.suggest.isAdded", { name: s.name }) : t("mcp.suggest.addNamed", { name: s.name })}>
+                  {there ? t("mcp.suggest.added") : t("mcp.suggest.add")}
                 </button>
                 <button className="link" onClick={() => Browser.OpenURL(s.docs)}>
-                  About {s.name}
+                  {t("mcp.suggest.about", { name: s.name })}
                 </button>
               </div>
             </li>

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { language, setLanguage } from "./i18n.ts";
 import { change, compact, daily, days, groupBy, niceTicks, OTHER, topKeys, totals, weekStart, weeks, byType, dailyByType, perCall, withoutCacheReads, type Row } from "./analytics.ts";
 
 const row = (p: Partial<Row>): Row => ({
@@ -122,4 +123,14 @@ test("without cache reads", () => {
   assert.equal(r.cacheReadTokens, 0);
   assert.equal(r.cost, 0.75);
   assert.equal(totals([r]).cacheShare, 0);
+});
+
+test("the kinds of token are named in the language", () => {
+  const before = language();
+  assert.deepEqual(byType([]).map((x) => x.label), ["Input", "Output", "Cache write", "Cache read"]);
+  setLanguage("de");
+  assert.deepEqual(byType([]).map((x) => x.label), ["Eingabe", "Ausgabe", "Cache schreiben", "Cache lesen"]);
+  setLanguage("nl");
+  assert.equal(byType([])[0].label, "Invoer");
+  setLanguage(before);
 });

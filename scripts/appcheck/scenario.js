@@ -812,6 +812,46 @@ await step("the session and its composer follow the language, without a reload",
   }
 });
 
+await step("the attention view and the Board follow the language, without a reload", async () => {
+  // GUI-048: in Nederlands the attention view's and the Board's headings are Dutch, and
+  // so are the Board's columns; English brings them back.
+  window.appcheckNotReloaded = true;
+  const pick = async (value) => {
+    document.querySelector(".settings-link").click();
+    (await until("the Appearance page", () => withText(".settings-nav button", "Appearance") ?? withText(".settings-nav button", "Weergave"))).click();
+    const select = await until("the language", () => document.querySelector(".settings-page select.language-select"));
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(`the page in ${value}`, () => document.documentElement.lang === value, 8000);
+    document.querySelector(".settings-nav .settings-back").click();
+    await sleep(100);
+  };
+  const heading = (sel) => document.querySelector(`${sel} h2`)?.textContent ?? "";
+  const columns = () => all(".board-column h3").map((h) => h.textContent.trim());
+  try {
+    await pick("nl");
+    (document.querySelector(".attention-link") ?? named(".footer-links button", "Aandacht")).click();
+    const attention = await until("the attention view in Dutch", () => heading(".page.attention") === "Vraagt aandacht", 8000).catch(() => false);
+    check("Nederlands turns the attention view's heading Dutch", attention, heading(".page.attention"));
+    const board = named(".footer-links button", "Bord");
+    check("the sidebar names the Board in Dutch", !!board, all(".footer-links button").map((b) => b.getAttribute("aria-label")).join(", "));
+    board?.click();
+    const shown = await until("the Board in Dutch", () => heading(".board-page") === "Bord", 8000).catch(() => false);
+    check("Nederlands turns the Board's heading Dutch", shown, heading(".board-page"));
+    check("the Board's columns are Dutch", columns().length > 0 && !columns().some((c) => /^(Needs you|Running|Idle)\b/.test(c)), columns().join(" | "));
+    await pick("en");
+    named(".footer-links button", "Board").click();
+    await until("the Board in English", () => heading(".board-page") === "Board", 8000).catch(() => {});
+    check("English comes back", heading(".board-page") === "Board" && columns().some((c) => c.startsWith("Running")), `${heading(".board-page")}; ${columns().join(" | ")}`);
+    check("no reload in between", window.appcheckNotReloaded === true);
+  } finally {
+    // Later steps find English and the session they expect.
+    if (document.documentElement.lang !== "en") await pick("en").catch(() => {});
+    openSession("Check alpha");
+    await until("the conversation", () => document.querySelector(".conversation"));
+  }
+});
+
 await step("a problem report says what an issue needs", async () => {
   // Shown, not copied: a copy here would replace the clipboard of whoever runs the check.
   document.querySelector(".settings-link").click();

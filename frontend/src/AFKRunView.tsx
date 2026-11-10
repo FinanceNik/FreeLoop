@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { EngineService, type AttentionItem, type BacklogInfo } from "./api.ts";
 import { runLine, stepLabel } from "./afk.ts";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 // AFKRunView is a project's AFK run in full (WFL-009): each issue it took on, with
 // its state, why it waits, its session and review, the approvals its session waits
@@ -32,14 +34,14 @@ export default function AFKRunView({ backlog, attention, onOpen, onClose, onChan
   const act = (p: Promise<unknown>) => p.then(onChanged).catch(onError);
   return (
     <div className="palette-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="afk-dialog afk-run-view" role="dialog" aria-modal="true" aria-label={`AFK run of ${backlog.projectName}`}>
-        <h2>AFK run of {backlog.projectName}</h2>
+      <div className="afk-dialog afk-run-view" role="dialog" aria-modal="true" aria-label={t("afk.run.title", { project: backlog.projectName })}>
+        <h2>{t("afk.run.title", { project: backlog.projectName })}</h2>
         <p className="muted" role="status">
           {runLine(run)}
           {run.branch && (
             <>
-              {" · on "}
-              <code>{run.branch}</code>
+              {" · "}
+              {tNodes("afk.run.onBranch", { branch: <code>{run.branch}</code> })}
             </>
           )}
         </p>
@@ -57,20 +59,20 @@ export default function AFKRunView({ backlog, attention, onOpen, onClose, onChan
                 <div className="row afk-run-step-actions">
                   {n > 0 && (
                     <button className="primary" onClick={() => onOpen(s.sessionId!)}>
-                      {n === 1 ? "1 approval waits" : `${n} approvals wait`}
+                      {t("afk.run.approvals", { count: n })}
                     </button>
                   )}
                   {s.sessionId && (
                     <button className="link" onClick={() => onOpen(s.sessionId!)}>
-                      Open its session
+                      {t("afk.run.openSession")}
                     </button>
                   )}
                   {s.reviewId && (
                     <button className="link" onClick={() => onOpen(s.reviewId!)}>
-                      Open its review
+                      {t("afk.run.openReview")}
                     </button>
                   )}
-                  {s.state === "qa" && <button onClick={() => act(EngineService.QADone(run.id, s.issue))}>QA done</button>}
+                  {s.state === "qa" && <button onClick={() => act(EngineService.QADone(run.id, s.issue))}>{t("afk.run.qaDone")}</button>}
                 </div>
               </li>
             );
@@ -78,20 +80,20 @@ export default function AFKRunView({ backlog, attention, onOpen, onClose, onChan
         </ol>
         {toCome.length > 0 && (
           <>
-            <h3>Still to come</h3>
+            <h3>{t("afk.run.toCome")}</h3>
             <ul className="afk-run-to-come">
               {toCome.map((it) => (
                 <li key={it.id}>
-                  {it.title} <span className="muted">{it.state === "ready" ? "ready" : "blocked"}</span>
+                  {it.title} <span className="muted">{it.state === "ready" ? t("afk.run.ready") : t("afk.run.blocked")}</span>
                 </li>
               ))}
             </ul>
           </>
         )}
         <p className="row afk-actions">
-          {going && <button onClick={() => act(EngineService.PauseAFK(run.id, run.state === "running"))}>{run.state === "running" ? "Pause" : "Resume"}</button>}
-          {going && <button onClick={() => act(EngineService.StopAFK(run.id))}>Stop</button>}
-          <button onClick={onClose}>Close</button>
+          {going && <button onClick={() => act(EngineService.PauseAFK(run.id, run.state === "running"))}>{run.state === "running" ? t("app.afk.pause") : t("app.afk.resume")}</button>}
+          {going && <button onClick={() => act(EngineService.StopAFK(run.id))}>{t("app.afk.stop")}</button>}
+          <button onClick={onClose}>{t("afk.run.close")}</button>
         </p>
       </div>
     </div>

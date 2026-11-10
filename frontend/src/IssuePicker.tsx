@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { EngineService, type GitHubIssue, type IssueBrief } from "./api.ts";
+import { t } from "./i18n.ts";
 
 // IssuePicker lists a trusted project's open GitHub issues for the
 // new-session form (SES-017); choosing one hands back its brief, which
@@ -13,7 +14,7 @@ export default function IssuePicker({ root, onPick, onClose }: { root: string; o
   const [loading, setLoading] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       EngineService.Issues(root, search)
         .then((list) => {
           if (!live) return;
@@ -24,7 +25,7 @@ export default function IssuePicker({ root, onPick, onClose }: { root: string; o
     }, 300);
     return () => {
       live = false;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [root, search]);
   const pick = (n: number) => {
@@ -37,14 +38,14 @@ export default function IssuePicker({ root, onPick, onClose }: { root: string; o
   return (
     <div className="issue-picker">
       <div className="row">
-        <input autoFocus type="search" aria-label="Search issues" placeholder="Search open issues, such as label:bug" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input autoFocus type="search" aria-label={t("issuePicker.search")} placeholder={t("issuePicker.placeholder", { example: "label:bug" })} value={search} onChange={(e) => setSearch(e.target.value)} />
         <button type="button" onClick={onClose}>
-          Cancel
+          {t("common.cancel")}
         </button>
       </div>
       {problem && <p className="muted">{problem}</p>}
-      {!problem && issues === null && <p className="muted">Asking GitHub…</p>}
-      {issues && issues.length === 0 && !problem && <p className="muted">No open issues match.</p>}
+      {!problem && issues === null && <p className="muted">{t("issuePicker.asking")}</p>}
+      {issues && issues.length === 0 && !problem && <p className="muted">{t("issuePicker.none")}</p>}
       {issues && issues.length > 0 && (
         <ul className="issue-list">
           {issues.map((is) => (
@@ -56,7 +57,7 @@ export default function IssuePicker({ root, onPick, onClose }: { root: string; o
                     {l}
                   </span>
                 ))}
-                {loading === is.number && <span className="muted"> reading…</span>}
+                {loading === is.number && <span className="muted"> {t("issuePicker.reading")}</span>}
               </button>
             </li>
           ))}

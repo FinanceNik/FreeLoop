@@ -8,6 +8,7 @@ import { approvalShortcut, isTextField, optionKind } from "./shortcuts.ts";
 import { hookFailedText, lineDiff } from "./transcript.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import { basename } from "./paths.ts";
+import { t } from "./i18n.ts";
 
 // Attention is the list of every session that needs the user, across
 // projects (GUI-002): pending approvals answered inline, failed turns with
@@ -29,9 +30,9 @@ export default function Attention({ items, onOpen, onContinued, onChanged, onErr
   // Issues an AFK run finished, waiting for the user's QA (WFL-006).
   const qa = items.filter((it) => it.qa).length;
   const parts = [
-    waiting > 0 && `${waiting} ${waiting === 1 ? "request" : "requests"} waiting in ${asking} ${asking === 1 ? "session" : "sessions"}`,
-    failed > 0 && `${failed} ${failed === 1 ? "session" : "sessions"} in error`,
-    qa > 0 && `${qa} ${qa === 1 ? "issue" : "issues"} ready for QA`,
+    waiting > 0 && t("attention.requests", { count: waiting, sessions: t("attention.sessions", { count: asking }) }),
+    failed > 0 && t("attention.failed", { count: failed }),
+    qa > 0 && t("attention.qa", { count: qa }),
   ].filter(Boolean);
   // J and K, or the arrows, choose the request the approval keys act on. The keys
   // listen on the window, so answering one, which removes its buttons, loses nothing.
@@ -51,36 +52,34 @@ export default function Attention({ items, onOpen, onContinued, onChanged, onErr
   }, [queue, current]);
   return (
     <div className="page attention">
-      <h2>Needs attention</h2>
+      <h2>{t("app.needsAttention")}</h2>
       <p className="muted">
-        {items.length === 0
-          ? "Nothing needs you right now. Sessions waiting for approval or whose last turn failed appear here."
-          : `${parts.join("; ") || "A session is waiting for your reply"}.`}
-        {queue.length > 1 && " J and K move between requests."}
+        {items.length === 0 ? t("attention.empty") : parts.length > 0 ? `${parts.join("; ")}.` : t("attention.reply")}
+        {queue.length > 1 && ` ${t("attention.moveKeys")}`}
       </p>
       {items.map((it) =>
         it.qa ? (
-          <section key={`${it.session.id}:qa:${it.qa.issue}`} className="card attention-item attention-qa" aria-label={`Ready for QA: ${it.qa.title}`}>
+          <section key={`${it.session.id}:qa:${it.qa.issue}`} className="card attention-item attention-qa" aria-label={t("attention.qaLabel", { title: it.qa.title })}>
             <header className="attention-head">
               <div>
                 <span className="muted attention-project">{it.projectName || basename(it.session.projectRoot)}</span>
                 <h3>
-                  <span className="badge attention-qa-badge">Ready for QA</span> {it.qa.title}
+                  <span className="badge attention-qa-badge">{t("attention.qaBadge")}</span> {it.qa.title}
                 </h3>
               </div>
-              <button onClick={() => onOpen(it.session.id)}>Open session</button>
+              <button onClick={() => onOpen(it.session.id)}>{t("attention.openSession")}</button>
             </header>
             <p className="muted">
-              {it.qa.path}, done by an AFK run{it.qa.branch ? ` on the branch ${it.qa.branch}` : ""}. Try it, then merge the branch from the Diff tab when the run's issues pass.
+              {it.qa.branch ? t("attention.qaDoneOnBranch", { path: it.qa.path, branch: it.qa.branch }) : t("attention.qaDone", { path: it.qa.path })}
               {it.qa.note ? ` ${it.qa.note}` : ""}
             </p>
             {it.qa.reply && (
               <blockquote className="attention-qa-review">
-                <span className="muted">The review:</span> {it.qa.reply}
+                <span className="muted">{t("attention.review")}</span> {it.qa.reply}
               </blockquote>
             )}
             <p className="row">
-              {it.qa.reviewId && <button onClick={() => onOpen(it.qa!.reviewId)}>Open the review</button>}
+              {it.qa.reviewId && <button onClick={() => onOpen(it.qa!.reviewId)}>{t("attention.openReview")}</button>}
               <button
                 className="primary"
                 onClick={() =>
@@ -89,7 +88,7 @@ export default function Attention({ items, onOpen, onContinued, onChanged, onErr
                     .catch(onError)
                 }
               >
-                QA done
+                {t("attention.qaFinished")}
               </button>
             </p>
           </section>
@@ -100,14 +99,14 @@ export default function Attention({ items, onOpen, onContinued, onChanged, onErr
               <span className="muted attention-project">{it.projectName || basename(it.session.projectRoot)}</span>
               <h3>{it.session.title}</h3>
             </div>
-            <button onClick={() => onOpen(it.session.id)}>Open session</button>
+            <button onClick={() => onOpen(it.session.id)}>{t("attention.openSession")}</button>
           </header>
           {(it.requests ?? []).map((r) => (
             <RequestView key={r.requestId} req={r} current={r.requestId === current} onError={onError} />
           ))}
           {it.stuck && (
             <div className="attention-error">
-              <p className="error-text">Not getting on: {it.stuck.detail}.</p>
+              <p className="error-text">{t("session.stuck.detail", { detail: it.stuck.detail })}</p>
               {it.stuck.profileId && !it.stuck.auto && (
                 <button
                   onClick={() =>
@@ -116,15 +115,15 @@ export default function Attention({ items, onOpen, onContinued, onChanged, onErr
                       .catch(onError)
                   }
                 >
-                  Continue on {it.stuck.profileName}
+                  {t("session.stuck.continueOn", { profile: it.stuck.profileName ?? "" })}
                 </button>
               )}
-              {it.stuck.auto && <span className="muted">It continues on {it.stuck.profileName} when the turn ends.</span>}
+              {it.stuck.auto && <span className="muted">{t("attention.continuesOn", { profile: it.stuck.profileName ?? "" })}</span>}
             </div>
           )}
           {it.session.status === "error" && (
             <div className="attention-error">
-              <p className="error-text">{it.error || "The last turn failed."}</p>
+              <p className="error-text">{it.error || t("attention.turnFailed")}</p>
               <button
                 onClick={() =>
                   EngineService.DismissError(it.session.id)
@@ -132,11 +131,11 @@ export default function Attention({ items, onOpen, onContinued, onChanged, onErr
                     .catch(onError)
                 }
               >
-                Dismiss
+                {t("session.dismiss")}
               </button>
             </div>
           )}
-          {it.session.status === "waiting_input" && (it.requests ?? []).length === 0 && <p className="muted">The agent is waiting for your reply.</p>}
+          {it.session.status === "waiting_input" && (it.requests ?? []).length === 0 && <p className="muted">{t("attention.agentWaiting")}</p>}
         </section>
         ),
       )}
@@ -182,7 +181,7 @@ export function RequestView({ req, current, onError }: { req: PermissionRequest;
     <div ref={box} className={current ? "attention-request attention-current" : "attention-request"} aria-current={current ? "true" : undefined}>
       <div>
         <strong>{visibleCommand(req.title)}</strong> <span className="muted">{req.tool}</span>
-        {req.createdAt && <span className="muted"> · waiting since {since(req.createdAt)}</span>}
+        {req.createdAt && <span className="muted"> · {t("attention.waitingSince", { ago: since(req.createdAt) })}</span>}
       </div>
       {req.command && <code className="attention-command">{visibleCommand(req.command)}</code>}
       {req.paths?.map((p) => (
@@ -204,17 +203,17 @@ export function RequestView({ req, current, onError }: { req: PermissionRequest;
       )}
       {req.input && !req.command && !edit && (
         <details>
-          <summary className="muted">Input</summary>
+          <summary className="muted">{t("attention.input")}</summary>
           <pre className="tool-input">{JSON.stringify(req.input, null, 2)}</pre>
         </details>
       )}
       {req.form && <McpFormView form={req.form} state={mcpForm} idPrefix={`form-${req.requestId}`} />}
-      {!req.form && <input aria-label="Note for the agent" placeholder="Optional note for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />}
+      {!req.form && <input aria-label={t("tool.note")} placeholder={t("tool.notePlaceholder")} value={reason} onChange={(e) => setReason(e.target.value)} />}
       <div className="approval-buttons">
         {options.some((o) => o.kind === "allow_always") && (
-          <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Allow always applies to">
-            <option value="session">Always: this session</option>
-            <option value="global">Always: everywhere</option>
+          <select value={scope} onChange={(e) => setScope(e.target.value)} aria-label={t("tool.alwaysScope")}>
+            <option value="session">{t("tool.alwaysSession")}</option>
+            <option value="global">{t("tool.alwaysGlobal")}</option>
           </select>
         )}
         {options.map((o) => (
@@ -222,7 +221,7 @@ export function RequestView({ req, current, onError }: { req: PermissionRequest;
             key={o.optionId}
             disabled={busy}
             className={o.kind.startsWith("allow") ? "primary" : "danger"}
-            title={o.kind === "allow_always" ? "Saves a rule" : undefined}
+            title={o.kind === "allow_always" ? t("attention.savesRule") : undefined}
             onClick={() => mcpForm.choose(o.optionId, o.kind, decide)}
           >
             {req.form ? formLabel(o.kind) : optionLabel(o.kind, o.name)}

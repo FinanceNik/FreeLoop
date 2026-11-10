@@ -1,12 +1,14 @@
 import { change, days, tokensOf, totals, type Row } from "./analytics.ts";
+import type { PlainKey } from "./i18n.ts";
 
 // The usage pane's views (GUI-038): one at a time, cycled with the arrows in its header.
+// Each is named by its catalogue key, translated where it is shown.
 export const PANE_VIEWS = [
-  { id: "recent", label: "Recent hours" },
-  { id: "year", label: "Last 12 months" },
-  { id: "tokens", label: "Tokens" },
-  { id: "models", label: "By model" },
-] as const;
+  { id: "recent", label: "usagePane.view.recent" },
+  { id: "year", label: "usagePane.view.year" },
+  { id: "tokens", label: "usagePane.view.tokens" },
+  { id: "models", label: "usagePane.view.models" },
+] as const satisfies readonly { id: string; label: PlainKey }[];
 export type PaneView = (typeof PANE_VIEWS)[number]["id"];
 
 export const PANE_RANGES = [7, 30] as const;

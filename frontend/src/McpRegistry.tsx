@@ -1,6 +1,8 @@
 import { Browser } from "@wailsio/runtime";
 import { useEffect, useState, type FormEvent } from "react";
 import { EngineService, type RegistryOption, type RegistryServer } from "./api.ts";
+import { list, t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 // McpRegistry browses a server registry (MCP-009). Nothing connects until the
 // user sets its address. Choosing a result only fills in the add-server form:
@@ -48,24 +50,22 @@ export default function McpRegistry({ onPick, onClose, onError }: Props) {
   if (!address) {
     return (
       <section className="page">
-        <h2>Browse a server registry</h2>
+        <h2>{t("mcp.registry.title")}</h2>
         <div className="card form">
-          <p>Freeloop connects only to addresses you set. Searching sends your search words to the registry you choose, and nothing else.</p>
+          <p>{t("mcp.registry.privacy")}</p>
           <div className="row">
             <button className="primary" onClick={() => use(OFFICIAL_REGISTRY)}>
-              Use the official MCP registry
+              {t("mcp.registry.useOfficial")}
             </button>
-            <button onClick={onClose}>Back</button>
+            <button onClick={onClose}>{t("common.back")}</button>
           </div>
-          <p className="muted">
-            It would connect to <code>{OFFICIAL_REGISTRY}</code>.
-          </p>
+          <p className="muted">{tNodes("mcp.registry.wouldConnect", { url: <code>{OFFICIAL_REGISTRY}</code> })}</p>
           <label>
-            Or another registry's address
+            {t("mcp.registry.other")}
             <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="https://registry.example.com" />
           </label>
           <button disabled={!typed.trim()} onClick={() => use(typed.trim())}>
-            Use this address
+            {t("mcp.registry.useAddress")}
           </button>
         </div>
       </section>
@@ -73,12 +73,11 @@ export default function McpRegistry({ onPick, onClose, onError }: Props) {
   }
   return (
     <section className="page">
-      <h2>Browse a server registry</h2>
+      <h2>{t("mcp.registry.title")}</h2>
       <p className="muted">
-        From <code>{address}</code>. Anyone can publish there, so read what a server is before adding it. Adding only fills in the form; it starts after you confirm
-        its exact command.{" "}
+        {tNodes("mcp.registry.from", { address: <code>{address}</code> })}{" "}
         <button type="button" className="link" onClick={() => use("")}>
-          Change the address
+          {t("mcp.registry.change")}
         </button>
       </p>
       <form
@@ -89,16 +88,16 @@ export default function McpRegistry({ onPick, onClose, onError }: Props) {
           search();
         }}
       >
-        <input aria-label="Search the registry" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name" />
+        <input aria-label={t("mcp.registry.searchLabel")} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("mcp.registry.searchPlaceholder")} />
         <button className="primary" disabled={busy}>
-          Search
+          {t("mcp.registry.search")}
         </button>
         <button type="button" onClick={onClose}>
-          Back
+          {t("common.back")}
         </button>
       </form>
-      {servers?.length === 0 && <p className="muted">Nothing matches.</p>}
-      <ul className="provider-list registry-list" aria-label="Servers">
+      {servers?.length === 0 && <p className="muted">{t("mcp.registry.nothing")}</p>}
+      <ul className="provider-list registry-list" aria-label={t("mcp.registry.servers")}>
         {(servers ?? []).map((s) => (
           <li key={s.name} className="card">
             <div>
@@ -107,25 +106,25 @@ export default function McpRegistry({ onPick, onClose, onError }: Props) {
               <p>{s.description}</p>
               {s.repository && (
                 <button type="button" className="link" onClick={() => Browser.OpenURL(s.repository).catch(onError)}>
-                  Its repository
+                  {t("mcp.registry.repository")}
                 </button>
               )}
-              {(s.unsupported ?? []).length > 0 && <div className="muted">Also offered, which Freeloop cannot run: {(s.unsupported ?? []).join(", ")}</div>}
+              {(s.unsupported ?? []).length > 0 && <div className="muted">{t("mcp.registry.unsupported", { list: list(s.unsupported ?? []) })}</div>}
             </div>
             <div className="row wrap">
               {(s.options ?? []).map((o) => (
-                <button key={o.label} onClick={() => onPick(s, o)} aria-label={`Add ${s.name}, ${o.label}`}>
-                  Add: {o.label}
+                <button key={o.label} onClick={() => onPick(s, o)} aria-label={t("mcp.registry.addLabel", { name: s.name, option: o.label })}>
+                  {t("mcp.registry.addOption", { option: o.label })}
                 </button>
               ))}
-              {(s.options ?? []).length === 0 && <span className="muted">No way to run it here</span>}
+              {(s.options ?? []).length === 0 && <span className="muted">{t("mcp.registry.noWay")}</span>}
             </div>
           </li>
         ))}
       </ul>
       {next && (
         <button disabled={busy} onClick={() => search(next)}>
-          More
+          {t("mcp.registry.more")}
         </button>
       )}
     </section>

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decisionStats, duration, heldStats, efficiency, eventCount, forecast, heatLevel, heatmap, perDay, repeatApprovals, sessionStats, timeUnit, toolStats, turnStats, weekdayIndex, type ActivityRow, type EffRow } from "./activity.ts";
+import { language, setLanguage } from "./i18n.ts";
+import { decisionStats, duration, heldStats, efficiency, eventCount, forecast, heatLevel, heatmap, perDay, repeatApprovals, sessionStats, timeUnit, toolStats, turnStats, weekdayIndex, weekdayName, WEEKDAYS, type ActivityRow, type EffRow } from "./activity.ts";
 
 const row = (p: Partial<ActivityRow>): ActivityRow => ({ day: "2026-10-12", hour: 9, sessionId: "s1", kind: "tool", name: "shell", count: 1, failures: 0, millis: 0, ...p });
 const use = (p: Partial<EffRow>): EffRow => ({ day: "2026-10-12", sessionId: "s1", providerId: "p", model: "big", inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, calls: 1, cost: 0, priced: false, ...p });
@@ -162,4 +163,27 @@ test("heldStats is zero with nothing held, and a declined form alone is nothing"
   ]);
   assert.equal(form.total, 0);
   assert.deepEqual(form.sessions, []);
+});
+
+test("durations and weekday names follow the language", () => {
+  const before = language();
+  setLanguage("de");
+  assert.equal(duration(0), "0\u00a0s");
+  assert.equal(duration(400), "<1\u00a0s");
+  assert.equal(duration(125_000), "2\u00a0min 5\u00a0s");
+  assert.equal(duration(90 * 60_000), "1\u00a0h 30\u00a0min");
+  assert.equal(duration(26 * 3_600_000), "1\u00a0d 2\u00a0h");
+  // The abbreviation's full stop depends on the ICU data.
+  assert.deepEqual([0, 1, 6].map((d) => weekdayName(d).replace(/\.$/, "")), ["Mo", "Di", "So"]);
+  assert.equal(WEEKDAYS[2].replace(/\.$/, ""), "Mi");
+  setLanguage("nl");
+  assert.equal(duration(42_000), "42\u00a0s");
+  assert.equal(duration(125_000), "2\u00a0min 5\u00a0s");
+  assert.equal(duration(90 * 60_000), "1\u00a0uur 30\u00a0min");
+  assert.equal(duration(26 * 3_600_000), "1\u00a0d 2\u00a0uur");
+  assert.deepEqual([0, 1, 6].map(weekdayName), ["ma", "di", "zo"]);
+  setLanguage("en");
+  assert.deepEqual([0, 1, 6].map(weekdayName), ["Mon", "Tue", "Sun"]);
+  assert.equal(WEEKDAYS.length, 7);
+  setLanguage(before);
 });

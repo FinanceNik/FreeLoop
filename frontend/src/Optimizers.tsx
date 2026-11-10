@@ -1,6 +1,8 @@
 import { Clipboard } from "@wailsio/runtime";
 import { useEffect, useState } from "react";
 import { EngineService, type Config, type OptimizerCheck, type OptimizerStatus } from "./api.ts";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 // The Settings page for token optimizers (HRN-019): which are installed, and
 // what new sessions use. Listing them runs nothing, since another program can
@@ -68,43 +70,39 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
   }, [JSON.stringify(config)]);
   return (
     <section className="page">
-      <h2>Token optimizers</h2>
-      <p className="muted">
-        An optimizer runs an agent's shell commands through a program that shortens their output, so they cost fewer tokens. You still approve each command as the model wrote it. Shortened output can leave out something the agent needs, such as a commit message or the end of a large diff, so it is off unless you choose one. It works with the built-in agent and Claude Code; other agents run their commands themselves, with no hook to rewrite them.
-      </p>
+      <h2>{t("settings.page.optimizers")}</h2>
+      <p className="muted">{t("optimizers.intro")}</p>
       <div className="card form">
         <label>
-          For new sessions
+          {t("optimizers.forNew")}
           <select value={chosen} onChange={(e) => setDefault(e.target.value)}>
-            <option value="">Off</option>
+            <option value="">{t("optimizers.off")}</option>
             {(list ?? []).map((o) => (
               <option key={o.id} value={o.id}>
-                {o.needsApproval ? `${o.name} (not approved)` : o.path ? o.name : `${o.name} (not installed)`}
+                {o.needsApproval ? t("optimizers.option.notApproved", { name: o.name }) : o.path ? o.name : t("optimizers.option.notInstalled", { name: o.name })}
               </option>
             ))}
-            {chosen && list && !list.some((o) => o.id === chosen) && <option value={chosen}>{chosen} (no such optimizer)</option>}
+            {chosen && list && !list.some((o) => o.id === chosen) && <option value={chosen}>{t("optimizers.option.unknown", { name: chosen })}</option>}
           </select>
-          <span className="muted">A profile can choose its own, and each session can switch at any time from its header.</span>
-          {waitsApproval && <span className="muted">This choice comes from a file and waits for your approval in Settings → Permissions; until then new sessions start with it off. Choosing another here approves that one.</span>}
+          <span className="muted">{t("optimizers.profileNote")}</span>
+          {waitsApproval && <span className="muted">{t("optimizers.waits")}</span>}
         </label>
       </div>
-      {list === null && <p className="muted">Looking for them…</p>}
+      {list === null && <p className="muted">{t("optimizers.looking")}</p>}
       {(list ?? []).map((o) => {
         const c = checks[o.id];
         return (
           <div className="card" key={o.id}>
             <h3>{o.name}</h3>
             <p className="muted">
-              {o.source ? `From ${o.source} in the data folder. ` : ""}
-              {o.path ? `Found at ${o.path}.` : "Not installed."}
+              {o.source ? `${t("optimizers.fromSource", { source: o.source })} ` : ""}
+              {o.path ? t("optimizers.foundAt", { path: o.path }) : t("optimizers.notInstalled")}
             </p>
             {o.needsApproval && (
               <>
-                <p>
-                  Not approved. This would run <code>{o.runs}</code> for every command of a session that uses it.
-                </p>
+                <p>{tNodes("optimizers.notApproved", { runs: <code>{o.runs}</code> })}</p>
                 <p className="row">
-                  <button onClick={() => approve(o)}>Approve</button>
+                  <button onClick={() => approve(o)}>{t("optimizers.approve")}</button>
                 </p>
               </>
             )}
@@ -113,34 +111,32 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
                 <p className="muted">{o.download}</p>
                 <p className="row">
                   <button className="primary" disabled={installing === o.id} onClick={() => install(o)}>
-                    {installing === o.id ? "Installing…" : `Install ${o.name}`}
+                    {installing === o.id ? t("optimizers.installing") : t("optimizers.install", { name: o.name })}
                   </button>
                 </p>
               </>
             )}
             {o.downloaded && (
               <p className="row">
-                <button onClick={() => remove(o)}>Remove Freeloop's copy</button>
+                <button onClick={() => remove(o)}>{t("optimizers.removeCopy")}</button>
               </p>
             )}
             {!o.path && o.install && !o.needsApproval && (
               <p className="row">
                 <code>{o.install}</code>
-                <button onClick={() => copy(o.id, o.install)}>{copied === o.id ? "Copied" : "Copy"}</button>
+                <button onClick={() => copy(o.id, o.install)}>{copied === o.id ? t("optimizers.copied") : t("optimizers.copy")}</button>
               </p>
             )}
             {o.path && !o.needsApproval && (
               <p className="row">
-                <button onClick={() => check(o.id)}>Check it</button>
-                {c && <span className={c.ok ? "muted" : "error-text"}>{c.ok ? `Works${c.version ? `: ${c.version}` : ""}.` : c.reason}</span>}
+                <button onClick={() => check(o.id)}>{t("optimizers.check")}</button>
+                {c && <span className={c.ok ? "muted" : "error-text"}>{c.ok ? (c.version ? t("optimizers.worksVersion", { version: c.version }) : t("optimizers.works")) : c.reason}</span>}
               </p>
             )}
           </div>
         );
       })}
-      <p className="muted">
-        To add another, put a file in the <code>optimizers</code> folder of the data folder and approve it here. Freeloop runs the original command if a rewrite does anything more, and leaves commands with pipes or redirections as they are. <code>docs/DEVELOPING.md</code> lists the fields.
-      </p>
+      <p className="muted">{tNodes("optimizers.addAnother", { folder: <code>{"optimizers"}</code>, doc: <code>{"docs/DEVELOPING.md"}</code> })}</p>
     </section>
   );
 }

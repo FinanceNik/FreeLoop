@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PER_GROUP, rank, score, sections, type PaletteItem } from "./palette.ts";
+import { setLanguage } from "./i18n.ts";
 
 const item = (title: string, group = "Action", keywords?: string, detail?: string): PaletteItem => ({ id: `${group}:${title}`, title, group, keywords, detail, run: () => {} });
 
@@ -74,4 +75,20 @@ test("a search groups its results, best group first, a few of each", () => {
   assert.equal(sections(many, "new")[0].items[0].title, "New session");
   assert.ok(got.some((s) => s.label === "New session in" && s.items[0].title === "freeloop"));
   assert.ok(!got.some((s) => s.group === "Command"), "a description's letters do not bring in the agent's commands");
+});
+
+test("the headings follow the language; a group the palette does not know shows its id", () => {
+  setLanguage("de");
+  try {
+    assert.deepEqual(
+      sections(many, "").map((s) => s.label),
+      ["Wartet auf Antwort", "Aktionen", "Letzte Sitzungen", "Wechseln zu"],
+    );
+    assert.deepEqual(sections(many, "/").map((s) => s.label), ["Befehle des Agenten"]);
+    // A heading's words find its items in the language in force.
+    assert.ok(rank(many, "sitzungen").some((i) => i.title === "Session 0"));
+  } finally {
+    setLanguage("en");
+  }
+  assert.deepEqual(sections([item("Something", "Elsewhere")], "some").map((s) => s.label), ["Elsewhere"]);
 });

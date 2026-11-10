@@ -1,5 +1,6 @@
 // A workflow's backlog on the Board (WFL-004): what each issue waits on and what it
 // holds up, said in words. Pure, so backlog.test.ts covers it.
+import { t, type PlainKey } from "./i18n.ts";
 
 export interface BacklogItem {
   id: string;
@@ -12,23 +13,25 @@ export interface BacklogItem {
   problem?: string;
 }
 
-const STATE: Record<string, string> = { ready: "Ready", blocked: "Blocked", done: "Done" };
+const STATE: Record<string, PlainKey> = { ready: "backlog.state.ready", blocked: "backlog.state.blocked", done: "backlog.state.done" };
 
+// stateLabel is an issue's state in words; one the app does not know, as the file says it.
 export function stateLabel(it: BacklogItem): string {
-  return STATE[it.state] ?? it.state;
+  return STATE[it.state] ? t(STATE[it.state]) : it.state;
 }
 
+// typeLabel says who does an issue: an agent unattended, or a person.
 export function typeLabel(it: BacklogItem): string {
-  return it.type === "afk" ? "AFK" : "Human";
+  return t(it.type === "afk" ? "backlog.type.afk" : "backlog.type.human");
 }
 
 // relations says what an issue waits on and what it holds up, in one line.
 export function relations(it: BacklogItem): string {
   const parts: string[] = [];
-  if (it.cycle) parts.push("waits on itself through others");
-  else if ((it.waitsOn ?? []).length) parts.push(`after ${(it.waitsOn ?? []).join(", ")}`);
-  if ((it.blocks ?? []).length) parts.push(`then ${(it.blocks ?? []).join(", ")}`);
-  if (it.problem) parts.push(`can't be read: ${it.problem}`);
+  if (it.cycle) parts.push(t("backlog.cycle"));
+  else if ((it.waitsOn ?? []).length) parts.push(t("backlog.after", { issues: (it.waitsOn ?? []).join(", ") }));
+  if ((it.blocks ?? []).length) parts.push(t("backlog.then", { issues: (it.blocks ?? []).join(", ") }));
+  if (it.problem) parts.push(t("backlog.unreadable", { problem: it.problem }));
   return parts.join(" · ");
 }
 

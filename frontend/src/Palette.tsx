@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { sections, type PaletteItem } from "./palette.ts";
+import { locale, t } from "./i18n.ts";
 
 // The command palette (GUI-014): ⌘K opens it over the window. App supplies
 // the items it owns (pages, sessions, filters); views add the actions they
@@ -45,7 +46,7 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
   // Nothing is picked until the user types or moves, so ⌘K then a reflex
   // Enter runs nothing, an approval least of all.
   const [pick, setPick] = useState(-1);
-  const grouped = useMemo(() => sections(items, query), [items, query]);
+  const grouped = useMemo(() => sections(items, query), [items, query, locale()]);
   const shown = useMemo(() => grouped.flatMap((s) => s.items), [grouped]);
   const index = useMemo(() => new Map(shown.map((item, i) => [item, i])), [shown]);
   const list = useRef<HTMLDivElement>(null);
@@ -88,7 +89,7 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
 
   return (
     <div className="palette-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div className="palette" role="dialog" aria-modal="true" aria-label={t("palette.label")}>
         <input
           autoFocus
           role="combobox"
@@ -96,12 +97,12 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
           aria-controls="palette-list"
           aria-activedescendant={shown[pick] ? `palette-${pick}` : undefined}
           aria-autocomplete="list"
-          placeholder="Search sessions, pages and actions; / for the agent's commands"
+          placeholder={t("palette.placeholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
         />
-        <div id="palette-list" role="listbox" ref={list} aria-label="Results" className="palette-list">
+        <div id="palette-list" role="listbox" ref={list} aria-label={t("palette.results")} className="palette-list">
           {grouped.map((section) => (
             <div key={section.group} role="group" aria-label={section.label} className="palette-section">
               <div className="palette-heading" aria-hidden="true">
@@ -132,18 +133,19 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
               })}
             </div>
           ))}
-          {shown.length === 0 && <div className="palette-empty">{query.trim().startsWith("/") ? "No agent command matches. The agent's commands are those of the open session." : "Nothing matches."}</div>}
+          {shown.length === 0 && <div className="palette-empty">{query.trim().startsWith("/") ? t("palette.noCommand") : t("palette.nothing")}</div>}
         </div>
         <div className="palette-keys" aria-hidden="true">
           <span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> move
+            <kbd>↓</kbd> {t("palette.keys.move")}
           </span>
           <span>
-            <kbd>↵</kbd> open
+            <kbd>↵</kbd> {t("palette.keys.open")}
           </span>
           <span>
-            <kbd>esc</kbd> close
+            {/* The key's name as printed on it, the same in every language. */}
+            <kbd>{"esc"}</kbd> {t("palette.keys.close")}
           </span>
         </div>
       </div>

@@ -15,7 +15,7 @@ import { basename } from "./paths.ts";
 import Limits from "./Limits.tsx";
 import CostSummaryPanel from "./CostSummary.tsx";
 import { costSummary } from "./costsummary.ts";
-import { locale } from "./i18n.ts";
+import { locale, numberFormat, t, type Key, type PlainKey } from "./i18n.ts";
 
 // The usage dashboard (GUI-018, PRV-008): tokens and estimated cost over a
 // range, by kind of token, model, agent or project, and the sessions that
@@ -35,27 +35,27 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-const RANGES = [
-  { days: 7, label: "7 days" },
-  { days: 30, label: "30 days" },
-  { days: 90, label: "90 days" },
-  { days: 365, label: "12 months" },
-];
+const RANGES = [7, 30, 90, 365];
 
+// A range in words: 30 days, 12 months.
+const rangeLabel = (days: number) => (days === 365 ? t("usagePage.range.year") : t("paneRange.days", { count: days }));
+
+// Tables of labels hold catalogue keys and translate where they render.
 const GROUPS = [
-  { id: "type", label: "Token type" },
-  { id: "model", label: "Model" },
-  { id: "agent", label: "Provider or agent" },
-  { id: "project", label: "Project" },
-] as const;
+  { id: "type", label: "usagePage.group.type", by: "usagePage.by.type", chart: "usagePage.chartLabel.type" },
+  { id: "model", label: "usage.model", by: "usagePage.by.model", chart: "usagePage.chartLabel.model" },
+  { id: "agent", label: "usagePage.group.agent", by: "usagePage.by.agent", chart: "usagePage.chartLabel.agent" },
+  { id: "project", label: "sidebar.groupBy.project", by: "usagePage.by.project", chart: "usagePage.chartLabel.project" },
+] as const satisfies readonly { id: string; label: PlainKey; by: PlainKey; chart: Key }[];
 type GroupID = (typeof GROUPS)[number]["id"];
+const groupOf = (id: GroupID) => GROUPS.find((g) => g.id === id)!;
 
 const TABS = [
-  { id: "tokens", label: "Tokens and cost" },
-  { id: "activity", label: "Activity" },
-  { id: "approvals", label: "Approvals" },
-  { id: "efficiency", label: "Efficiency" },
-] as const;
+  { id: "tokens", label: "usagePage.tab.tokens" },
+  { id: "activity", label: "usagePage.tab.activity" },
+  { id: "approvals", label: "usagePage.tab.approvals" },
+  { id: "efficiency", label: "usagePage.tab.efficiency" },
+] as const satisfies readonly { id: string; label: PlainKey }[];
 type TabID = (typeof TABS)[number]["id"];
 
 const NO_FILTERS = { project: "", agent: "", model: "", tag: "" };
@@ -63,8 +63,11 @@ const NO_FILTERS = { project: "", agent: "", model: "", tag: "" };
 // The month so far is needed for the projection, whatever the range.
 const MIN_FETCH_DAYS = 62;
 
-const FILTER_LABELS = { project: "Project", agent: "Provider or agent", model: "Model", tag: "Tag" };
-const FILTER_PLURALS = { project: "projects", agent: "providers and agents", model: "models", tag: "tags" };
+const FILTER_LABELS = { project: "sidebar.groupBy.project", agent: "usagePage.group.agent", model: "usage.model", tag: "sidebar.filter.tag" } as const satisfies Record<string, PlainKey>;
+const FILTER_ALL = { project: "usagePage.all.project", agent: "usagePage.all.agent", model: "usagePage.all.model", tag: "usagePage.all.tag" } as const satisfies Record<string, PlainKey>;
+
+// A share of a whole, in the locale's style: 12%, 12 %.
+const percent = (ratio: number) => numberFormat({ style: "percent", maximumFractionDigits: 0 }).format(ratio);
 
 const SERIES = 5; // colours; a sixth group and beyond fold into Other
 
@@ -87,6 +90,14 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
   }, []);
   const [tab, setTab] = useState<TabID>("tokens");
   const [filters, setFilters] = useState(NO_FILTERS);
+  // A filter holds the text of a group's name, which a change of language rewrites
+  // (the unnamed provider, the deleted sessions), so a filter set before it would match
+  // nothing after it.
+  const [filterLocale, setFilterLocale] = useState(locale());
+  if (filterLocale !== locale()) {
+    setFilterLocale(locale());
+    setFilters(NO_FILTERS);
+  }
   const [activity, setActivity] = useState<ActivityReport | null>(null);
   const [reloads, setReloads] = useState(0);
 
@@ -124,11 +135,11 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
 
   const agent = (r: Pick<UsageRow, "harnessId" | "providerId">) => {
     if (r.harnessId && r.harnessId !== "builtin") return harnesses.find((h) => h.id === r.harnessId)?.name ?? r.harnessId;
-    return providers.find((p) => p.id === r.providerId)?.name ?? (r.providerId || "Unknown provider");
+    return providers.find((p) => p.id === r.providerId)?.name ?? (r.providerId || t("usagePage.unknownProvider"));
   };
-  const project = (r: Pick<UsageRow, "projectId" | "projectRoot">) => projects.find((p) => p.id === r.projectId)?.name ?? (r.projectRoot ? basename(r.projectRoot) : "Deleted sessions");
+  const project = (r: Pick<UsageRow, "projectId" | "projectRoot">) => projects.find((p) => p.id === r.projectId)?.name ?? (r.projectRoot ? basename(r.projectRoot) : t("usagePage.deletedSessions"));
   const keyOf: Record<Exclude<GroupID, "type">, (r: UsageRow) => string> = {
-    model: (r) => r.model || `${agent(r)} (model not reported)`,
+    model: (r) => r.model || t("recentUsage.modelNotReported", { name: agent(r) }),
     agent,
     project,
   };
@@ -181,12 +192,13 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
   const types = byType(rows);
   const top = byKind ? [] : topKeys(groups, SERIES);
   const series: Series[] = byKind
-    ? TOKEN_TYPES.map((t, i) => ({ key: t.key, label: t.label, color: `var(--series-${i + 1})` })).filter((s) => cacheReads || s.key !== "cacheRead")
+    ? TOKEN_TYPES.map((type, i) => ({ key: type.key, label: t(type.label), color: `var(--series-${i + 1})` })).filter((s) => cacheReads || s.key !== "cacheRead")
     : [
         ...top.map((k, i) => ({ key: k, label: k, color: `var(--series-${i + 1})` })),
-        ...(groups.length > top.length ? [{ key: OTHER, label: `${OTHER} (${groups.length - top.length})`, color: "var(--series-other)" }] : []),
+        ...(groups.length > top.length ? [{ key: OTHER, label: t("recentUsage.other", { count: groups.length - top.length }), color: "var(--series-other)" }] : []),
       ];
   const weekly = range > 90;
+  const chartTitle = t(m === "cost" ? (weekly ? "usagePage.chart.costWeek" : "usagePage.chart.costDay") : weekly ? "usagePage.chart.tokensWeek" : "usagePage.chart.tokensDay");
   const buckets = weekly ? weeks(since, until) : days(since, until);
   const bucketed = weekly ? rows.map((r) => ({ ...r, day: weekStart(r.day) })) : rows;
   const chart = byKind ? dailyByType(bucketed, buckets, m) : daily(bucketed, buckets, key, top, m);
@@ -208,24 +220,24 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
 
   return (
     <section className="page usage-page">
-      <h2>Usage</h2>
+      <h2>{t("usagePage.title")}</h2>
       <UsageOverview cacheReads={cacheReads} onError={onError} />
       <div className="usage-limits">
-        <h3>Limits</h3>
+        <h3>{t("usagePage.limits")}</h3>
         <Limits onError={onError} />
       </div>
       <div className="usage-recent">
         <div className="pane-usage-head">
-          <h3>Recent hours</h3>
+          <h3>{t("usagePane.view.recent")}</h3>
           <span className="spacer" />
-          {onShowInPane && <button onClick={onShowInPane}>Show in a pane</button>}
+          {onShowInPane && <button onClick={onShowInPane}>{t("usagePage.showInPane")}</button>}
         </div>
         <LiveUsage projects={projects} providers={providers} harnesses={harnesses} onError={onError} />
       </div>
       <div
         className="panel-tabs usage-tabs"
         role="tablist"
-        aria-label="Usage views"
+        aria-label={t("usagePane.views")}
         onKeyDown={(e) => {
           const tabs = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
           const next = tabAfterKey(e.key, tabs.indexOf(e.target as HTMLElement), tabs.length);
@@ -235,25 +247,25 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
           setTab(TABS[next].id);
         }}
       >
-        {TABS.map((t) => (
-          <button key={t.id} id={`usage-tab-${t.id}`} role="tab" aria-selected={tab === t.id} aria-controls="usage-panel" tabIndex={tab === t.id ? 0 : -1} className={tab === t.id ? "tab tab-on" : "tab"} onClick={() => setTab(t.id)}>
-            {t.label}
+        {TABS.map((item) => (
+          <button key={item.id} id={`usage-tab-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls="usage-panel" tabIndex={tab === item.id ? 0 : -1} className={tab === item.id ? "tab tab-on" : "tab"} onClick={() => setTab(item.id)}>
+            {t(item.label)}
           </button>
         ))}
       </div>
-      <div className="usage-filters" role="group" aria-label="Filters">
-        <div className="segmented" role="radiogroup" aria-label="Range">
-          {RANGES.map((r) => (
-            <button key={r.days} role="radio" aria-checked={range === r.days} className={range === r.days ? "on" : ""} onClick={() => setRange(r.days)}>
-              {r.label}
+      <div className="usage-filters" role="group" aria-label={t("sidebar.filters")}>
+        <div className="segmented" role="radiogroup" aria-label={t("usagePane.range")}>
+          {RANGES.map((days) => (
+            <button key={days} role="radio" aria-checked={range === days} className={range === days ? "on" : ""} onClick={() => setRange(days)}>
+              {rangeLabel(days)}
             </button>
           ))}
         </div>
         {(["project", "agent", "model", "tag"] as const).map((dim) => (
           <label key={dim} className="row">
-            <span className="sr-only">{FILTER_LABELS[dim]}</span>
+            <span className="sr-only">{t(FILTER_LABELS[dim])}</span>
             <select className={filters[dim] ? "usage-filter-on" : ""} value={filters[dim]} onChange={(e) => setFilters({ ...filters, [dim]: e.target.value })}>
-              <option value="">All {FILTER_PLURALS[dim]}</option>
+              <option value="">{t(FILTER_ALL[dim])}</option>
               {options[dim].map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -264,47 +276,47 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
         ))}
         {filtering && (
           <button className="link" onClick={() => setFilters(NO_FILTERS)}>
-            Clear filters
+            {t("usagePage.clearFilters")}
           </button>
         )}
       </div>
       {tab === "tokens" && (
-        <div className="usage-filters" role="group" aria-label="What the charts show">
+        <div className="usage-filters" role="group" aria-label={t("usagePage.whatCharts")}>
           <label className="row">
-            <span className="muted">Group by</span>
+            <span className="muted">{t("usagePage.groupBy")}</span>
             <select value={group} onChange={(e) => setGroup(e.target.value as GroupID)}>
               {GROUPS.map((g) => (
                 <option key={g.id} value={g.id}>
-                  {g.label}
+                  {t(g.label)}
                 </option>
               ))}
             </select>
           </label>
-          <div className="segmented" role="radiogroup" aria-label="Measure">
+          <div className="segmented" role="radiogroup" aria-label={t("usagePage.measure")}>
             <button role="radio" aria-checked={m === "tokens"} className={m === "tokens" ? "on" : ""} onClick={() => setMetric("tokens")}>
-              Tokens
+              {t("tokenFigures.tokens")}
             </button>
             <button
               role="radio"
               aria-checked={m === "cost"}
               className={m === "cost" ? "on" : ""}
               disabled={!priced}
-              title={priced ? undefined : "Add prices in Settings to see estimated costs"}
+              title={priced ? undefined : t("usagePage.needPrices")}
               onClick={() => setMetric("cost")}
             >
-              Cost
+              {t("usage.cost")}
             </button>
           </div>
           <label className="row">
-            <input type="checkbox" checked={cacheReads} onChange={(e) => setCacheReads(e.target.checked)} /> Include cache reads
+            <input type="checkbox" checked={cacheReads} onChange={(e) => setCacheReads(e.target.checked)} /> {t("usagePage.cacheReads")}
           </label>
           <span className="usage-filters-end">
-            {exported && <span className="muted">Saved to {basename(exported)}</span>}
+            {exported && <span className="muted">{t("usagePage.saved", { file: basename(exported) })}</span>}
             <button onClick={() => setSharing(!sharing)} disabled={rows.length === 0} aria-expanded={sharing}>
-              Share summary
+              {t("usagePage.share")}
             </button>
             <button onClick={exportCSV} disabled={rows.length === 0}>
-              Export CSV…
+              {t("usagePage.exportCsv")}
             </button>
           </span>
         </div>
@@ -313,7 +325,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
       {sharing && tab === "tokens" && rows.length > 0 && (
         <CostSummaryPanel
           summary={costSummary(rows, { agent: keyOf.agent, model: keyOf.model }, {
-            label: RANGES.find((r) => r.days === range)?.label ?? `${range} days`,
+            label: rangeLabel(range),
             since,
             until,
             pricesAsOf,
@@ -326,17 +338,17 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
       )}
 
       <div id="usage-panel" role="tabpanel" aria-labelledby={`usage-tab-${tab}`}>
-        {activity && activity.pending > 0 && tab !== "tokens" && <p className="muted usage-note">Still counting older sessions ({activity.pending} left)…</p>}
-        {tab === "activity" && <ActivityView rows={activityRows} since={since} until={until} rangeLabel={RANGES.find((r) => r.days === range)?.label ?? ""} onOpenSession={onOpenSession} />}
-        {tab === "approvals" && <ApprovalsView rows={activityRows} since={since} until={until} rangeLabel={RANGES.find((r) => r.days === range)?.label ?? ""} onOpenSession={onOpenSession} onChanged={() => setReloads((n) => n + 1)} onError={onError} />}
+        {activity && activity.pending > 0 && tab !== "tokens" && <p className="muted usage-note">{t("usagePage.counting", { pending: activity.pending })}</p>}
+        {tab === "activity" && <ActivityView rows={activityRows} since={since} until={until} rangeLabel={rangeLabel(range)} onOpenSession={onOpenSession} />}
+        {tab === "approvals" && <ApprovalsView rows={activityRows} since={since} until={until} rangeLabel={rangeLabel(range)} onOpenSession={onOpenSession} onChanged={() => setReloads((n) => n + 1)} onError={onError} />}
         {tab === "efficiency" && <EfficiencyView usage={fetched.filter((r) => r.day >= since)} allUsage={fetched} rows={activityRows} today={until} modelOf={keyOf.model} projectOf={project} onOpenPrices={onOpenPrices} />}
         {tab === "tokens" && (
           <div className={loading && report ? "usage-body usage-loading" : "usage-body"}>
-            {!report && loading && <p className="muted">Loading…</p>}
+            {!report && loading && <p className="muted">{t("usagePage.loading")}</p>}
             {report && rows.length === 0 && (
               <div className="usage-empty">
-                <p>No model calls in the last {RANGES.find((r) => r.days === range)?.label}.</p>
-                <p className="muted">Usage is counted from every session's model calls, including external agents that report their tokens.</p>
+                <p>{t("usagePage.none", { range: rangeLabel(range) })}</p>
+                <p className="muted">{t("usagePage.noneNote")}</p>
               </div>
             )}
             <Budgets onOpenPrices={onOpenPrices} />
@@ -347,20 +359,20 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
             ))}
             {rows.length > 0 && (
               <>
-                <TokenFigures now={now} delta={delta} before={RANGES.find((r) => r.days === range)?.label ?? ""} metric={m} priced={priced} cacheReads={cacheReads} />
+                <TokenFigures now={now} delta={delta} before={rangeLabel(range)} metric={m} priced={priced} cacheReads={cacheReads} />
                 {now.unpricedTokens > 0 && (
                   <p className="muted usage-note">
-                    {compact(now.unpricedTokens)} tokens are on models without a price and count as no cost.{" "}
+                    {t("usagePage.unpriced", { tokens: compact(now.unpricedTokens) })}{" "}
                     <button className="link" onClick={onOpenPrices}>
-                      Add prices
+                      {t("usagePage.addPrices")}
                     </button>
                   </p>
                 )}
 
                 <div className="usage-card">
                   <div className="usage-card-head">
-                    <h3>{m === "cost" ? "Estimated cost" : "Tokens"} per {weekly ? "week" : "day"}</h3>
-                    <ul className="usage-legend" aria-label="Legend">
+                    <h3>{chartTitle}</h3>
+                    <ul className="usage-legend" aria-label={t("usagePane.legend")}>
                       {series.map((s) => (
                         <li key={s.key}>
                           <span className="usage-swatch" style={{ background: s.color }} />
@@ -373,22 +385,22 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                     data={chart}
                     series={series}
                     format={fmt}
-                    bucketLabel={(d) => (weekly ? `Week of ${month(d)}` : month(d))}
+                    bucketLabel={(d) => (weekly ? t("insights.weekOfDate", { date: month(d) }) : month(d))}
                     axisLabel={month}
-                    label={`${m === "cost" ? "Estimated cost" : "Tokens"} per ${weekly ? "week" : "day"} by ${GROUPS.find((g) => g.id === group)?.label.toLowerCase()}`}
+                    label={t(groupOf(group).chart, { title: chartTitle })}
                   />
                   <details className="usage-table-view">
-                    <summary>Show as a table</summary>
+                    <summary>{t("insights.asTable")}</summary>
                     <table className="usage-table">
                       <thead>
                         <tr>
-                          <th>{weekly ? "Week of" : "Day"}</th>
+                          <th>{weekly ? t("insights.weekOf") : t("insights.day")}</th>
                           {series.map((s) => (
                             <th key={s.key} className="num">
                               {s.label}
                             </th>
                           ))}
-                          <th className="num">Total</th>
+                          <th className="num">{t("usagePage.total")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -410,35 +422,35 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
 
                 {byKind && (
                   <div className="usage-card">
-                    <h3>By token type</h3>
+                    <h3>{t("usagePage.by.type")}</h3>
                     <table className="usage-table">
                       <thead>
                         <tr>
-                          <th>Token type</th>
-                          <th className="usage-share-col">Share of tokens</th>
-                          <th className="num">Tokens</th>
-                          <th className="num">Per model call</th>
-                          <th className="num">Est. cost</th>
-                          <th className="num">Share of cost</th>
+                          <th>{t("usagePage.group.type")}</th>
+                          <th className="usage-share-col">{t("usagePage.col.shareOfTokens")}</th>
+                          <th className="num">{t("tokenFigures.tokens")}</th>
+                          <th className="num">{t("tokenFigures.perCall")}</th>
+                          <th className="num">{t("usagePage.col.estCost")}</th>
+                          <th className="num">{t("usagePage.col.shareOfCost")}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {types.filter((t) => cacheReads || t.key !== "cacheRead").map((t, i) => (
-                          <tr key={t.key}>
+                        {types.filter((type) => cacheReads || type.key !== "cacheRead").map((type, i) => (
+                          <tr key={type.key}>
                             <td>
                               <span className="usage-swatch" style={{ background: series[i].color }} />
-                              {t.label}
+                              {type.label}
                             </td>
                             <td className="usage-share-col">
                               <span className="usage-share">
-                                <span style={{ width: `${tokensTotal ? (t.tokens / Math.max(...types.map((x) => x.tokens))) * 100 : 0}%`, background: series[i].color }} />
+                                <span style={{ width: `${tokensTotal ? (type.tokens / Math.max(...types.map((x) => x.tokens))) * 100 : 0}%`, background: series[i].color }} />
                               </span>
-                              <span className="muted">{tokensTotal ? `${Math.round((t.tokens / tokensTotal) * 100)}%` : ""}</span>
+                              <span className="muted">{tokensTotal ? percent(type.tokens / tokensTotal) : ""}</span>
                             </td>
-                            <td className="num">{compact(t.tokens)}</td>
-                            <td className="num">{compact(now.calls ? t.tokens / now.calls : 0)}</td>
-                            <td className="num">{priced ? formatCost(t.cost) : "–"}</td>
-                            <td className="num">{priced && now.cost ? `${Math.round((t.cost / now.cost) * 100)}%` : "–"}</td>
+                            <td className="num">{compact(type.tokens)}</td>
+                            <td className="num">{compact(now.calls ? type.tokens / now.calls : 0)}</td>
+                            <td className="num">{priced ? formatCost(type.cost) : "–"}</td>
+                            <td className="num">{priced && now.cost ? percent(type.cost / now.cost) : "–"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -447,18 +459,18 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                 )}
 
                 <div className="usage-card">
-                  <h3>By {byKind ? "model" : GROUPS.find((g) => g.id === group)?.label.toLowerCase()}</h3>
+                  <h3>{t(byKind ? "usagePage.by.model" : groupOf(group).by)}</h3>
                   <table className="usage-table">
                     <thead>
                       <tr>
-                        <th>{byKind ? "Model" : GROUPS.find((g) => g.id === group)?.label}</th>
-                        <th className="usage-share-col">Share</th>
-                        <th className="num">Tokens</th>
-                        <th className="num">Input</th>
-                        <th className="num">Output</th>
-                        {cacheReads && <th className="num">Cache read</th>}
-                        <th className="num">Calls</th>
-                        <th className="num">Est. cost</th>
+                        <th>{t(byKind ? "usage.model" : groupOf(group).label)}</th>
+                        <th className="usage-share-col">{t("insights.share")}</th>
+                        <th className="num">{t("tokenFigures.tokens")}</th>
+                        <th className="num">{t("recentUsage.input")}</th>
+                        <th className="num">{t("recentUsage.output")}</th>
+                        {cacheReads && <th className="num">{t("recentUsage.cacheRead")}</th>}
+                        <th className="num">{t("insights.activity.calls")}</th>
+                        <th className="num">{t("usagePage.col.estCost")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -466,7 +478,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                         <tr key={g.key}>
                           <td>
                             {!byKind && <span className="usage-swatch" style={{ background: colorOf(top.includes(g.key) ? g.key : OTHER) }} />}
-                            <button className="link usage-pick" title="Show only this, on every tab" onClick={() => setFilters({ ...filters, [byKind ? "model" : group]: g.key })}>
+                            <button className="link usage-pick" title={t("usagePage.showOnly")} onClick={() => setFilters({ ...filters, [byKind ? "model" : group]: g.key })}>
                               {g.key}
                             </button>
                           </td>
@@ -474,7 +486,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                             <span className="usage-share">
                               <span style={{ width: `${maxGroup ? (value(g, m) / maxGroup) * 100 : 0}%`, background: colorOf(top.includes(g.key) ? g.key : OTHER) }} />
                             </span>
-                            <span className="muted">{value(now, m) ? `${Math.round((value(g, m) / value(now, m)) * 100)}%` : ""}</span>
+                            <span className="muted">{value(now, m) ? percent(value(g, m) / value(now, m)) : ""}</span>
                           </td>
                           <td className="num">{compact(value(g, "tokens"))}</td>
                           <td className="num">{compact(g.input)}</td>
@@ -489,16 +501,16 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                 </div>
 
                 <div className="usage-card">
-                  <h3>Sessions that used the most</h3>
+                  <h3>{t("usagePage.topSessions")}</h3>
                   <table className="usage-table">
                     <thead>
                       <tr>
-                        <th>Session</th>
-                        <th>Project</th>
-                        <th>Provider or agent</th>
-                        <th className="num">Tokens</th>
-                        <th className="num">Calls</th>
-                        <th className="num">Est. cost</th>
+                        <th>{t("insights.session")}</th>
+                        <th>{t("sidebar.groupBy.project")}</th>
+                        <th>{t("usagePage.group.agent")}</th>
+                        <th className="num">{t("tokenFigures.tokens")}</th>
+                        <th className="num">{t("insights.activity.calls")}</th>
+                        <th className="num">{t("usagePage.col.estCost")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -508,10 +520,10 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                           <tr key={g.key}>
                             <td>
                               {r.deleted ? (
-                                <span className="muted">Deleted session</span>
+                                <span className="muted">{t("insights.deletedSession")}</span>
                               ) : (
                                 <button className="link" onClick={() => onOpenSession(g.key)}>
-                                  {r.title || "Untitled"}
+                                  {r.title || t("insights.untitled")}
                                 </button>
                               )}
                             </td>

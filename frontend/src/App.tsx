@@ -48,7 +48,7 @@ import Rules from "./Rules.tsx";
 import Environments from "./Environments.tsx";
 import Settings from "./Settings.tsx";
 import Attention, { RequestView } from "./Attention.tsx";
-import { addError, errorLine } from "./errorlist.ts";
+import { addError, errorHeading, type ShownError } from "./errorlist.ts";
 import { finishedTurn, markFinished, markRead, onScreen, parseUnread, UNREAD_KEY } from "./unread.ts";
 import Profiles from "./Profiles.tsx";
 import Onboarding from "./Onboarding.tsx";
@@ -237,7 +237,7 @@ export default function App() {
   const waitingApproval = issues.length - problems.length;
   // The last session opened, for the rules page's session scope.
   const [lastSessionId, setLastSessionId] = useState<string | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [errors, setErrors] = useState<ShownError[]>([]);
   // Sessions that finished out of sight (SES-022); see the effects below.
   const [unread, setUnread] = useState<readonly string[]>(() => {
     try {
@@ -340,7 +340,7 @@ export default function App() {
   // seen meanwhile and needs one more fetch.
   const fetching = useRef<Map<string, boolean>>(new Map());
 
-  const report = (err: unknown, sessionTitle?: string) => setErrors((list) => addError(list, errorLine(errorText(err), sessionTitle)));
+  const report = (err: unknown, sessionTitle?: string) => setErrors((list) => addError(list, { detail: errorText(err), session: sessionTitle }));
 
   // A list can arrive after events that changed a session since it was
   // read, or after a list asked for later; neither replaces newer state.
@@ -1636,9 +1636,9 @@ export default function App() {
             </ul>
           </div>
         )}
-        {errors.map((line) => (
-          <div key={line} role="alert" className="banner error">
-            {line} <button onClick={() => setErrors((list) => list.filter((l) => l !== line))}>{t("app.dismiss")}</button>
+        {errors.map((e) => (
+          <div key={`${e.session ?? ""}\n${e.detail}`} role="alert" className="banner error">
+            <strong>{errorHeading(e)}</strong> {e.detail} <button onClick={() => setErrors((list) => list.filter((l) => l !== e))}>{t("app.dismiss")}</button>
           </div>
         ))}
 

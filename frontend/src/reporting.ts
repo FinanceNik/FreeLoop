@@ -3,16 +3,12 @@
 // counted by each turn's total rather than per model call. Pure, so reporting.test.ts
 // covers it.
 
+import { list, t } from "./i18n.ts";
+
 export interface ReportedRow {
   sessionId: string;
   turnTotals?: number;
   unreported?: number;
-}
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
-function list(names: string[]): string {
-  return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 export function reportingNotes<R extends ReportedRow>(rows: R[], agent: (r: R) => string): string[] {
@@ -29,16 +25,16 @@ export function reportingNotes<R extends ReportedRow>(rows: R[], agent: (r: R) =
   }
   const notes: string[] = [];
   for (const [name, a] of [...silent].sort(([x], [y]) => x.localeCompare(y))) {
-    notes.push(`${name} reported no tokens for ${plural(a.turns, "turn")} in ${plural(a.sessions.size, "session")}, so the cost leaves ${a.turns === 1 ? "it" : "them"} out.`);
+    notes.push(t("reporting.silent", { name, count: a.turns, turns: t("reporting.turns", { count: a.turns }), sessions: t("reporting.sessions", { count: a.sessions.size }) }));
   }
   if (totals.size > 0) {
     const names = [...totals].sort();
-    notes.push(`${list(names)} ${names.length === 1 ? "is" : "are"} counted from each turn's total, as ${names.length === 1 ? "it reports" : "they report"}, not per model call.`);
+    notes.push(t("reporting.turnTotals", { names: list(names), count: names.length }));
   }
   return notes;
 }
 
 // heldNote says what the policy held in the summary's time, beside what it cost (SEC-014).
 export function heldNote(held: number): string {
-  return held > 0 ? `The permission policy held ${plural(held, "tool call")} in this time.` : "";
+  return held > 0 ? t("reporting.held", { count: held }) : "";
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { recentChart, recentSeries, recentTotals, type RecentBucket, bucketsOf, filterRecent, groupedChart, NO_RECENT_FILTERS, recentKeys, formatTokens, recentOptions, shortTime, timeLabel } from "./recentUsage.ts";
+import { recentChart, recentSeries, recentTotals, type RecentBucket, bucketsOf, filterRecent, groupedChart, NO_RECENT_FILTERS, recentKeys, formatTokens, recentOptions, shortTime, stepLabel, timeLabel } from "./recentUsage.ts";
 import { setLanguage } from "./i18n.ts";
 
 const b = (start: number, over: Partial<RecentBucket> = {}): RecentBucket => ({ start, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0, cost: 0, unpriced: 0, ...over });
@@ -110,6 +110,25 @@ test("the axis's times are 24-hour in German and Dutch and as before in English"
   assert.equal(timeLabel(morning), "9:05");
   setLanguage("nl");
   assert.equal(timeLabel(evening), "18:30");
+  setLanguage("en");
+});
+
+test("the series, a step and what has no name are in the language in force", () => {
+  const evening = new Date(2026, 10, 8, 18, 30).getTime();
+  assert.equal(stepLabel(evening, 15), "6:30p to 6:45p");
+  assert.deepEqual(recentSeries("tokens", true).map((s) => s.label), ["Input", "Output", "Cache write", "Cache read"]);
+  setLanguage("de");
+  assert.equal(stepLabel(evening, 15), "18:30 bis 18:45");
+  assert.deepEqual(recentSeries("tokens", true).map((s) => s.label), ["Eingabe", "Ausgabe", "Cache schreiben", "Cache lesen"]);
+  assert.deepEqual(recentSeries("cost", true).map((s) => s.label), ["Geschätzte Kosten"]);
+  // The keys were made in English; the names follow the language when asked for.
+  assert.equal(keys.project(row(1, "", "m", 1, { projectRoot: "" })), "Kein Projekt");
+  assert.equal(keys.model(row(1, "a", "", 1)), "Claude Code (Modell nicht gemeldet)");
+  const rows = ["a", "b", "c", "d", "e", "f", "g"].map((m, i) => row(1, "a", m, 100 - i));
+  assert.equal(groupedChart([1], rows, rows, keys.model, "tokens", false).series.at(-1)?.label, "Sonstige (2)");
+  setLanguage("nl");
+  assert.equal(stepLabel(evening, 15), "18:30 tot 18:45");
+  assert.equal(keys.project(row(1, "", "m", 1, { projectRoot: "" })), "Geen project");
   setLanguage("en");
 });
 

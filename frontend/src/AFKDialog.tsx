@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { EngineService, modeName, type AFKPlan, type AFKRun, type Profile, type ProfileModels } from "./api.ts";
 import { commandFrom, commandOutcome, defaultAllow } from "./afk.ts";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 // Starting an AFK run (WFL-005): what it would do first, where, on which profiles,
 // and the commands it will want, which the user can allow for the run's sessions up
@@ -63,22 +65,21 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
     else if (!extra.includes(c)) setExtra([...extra, c]);
     setTyped("");
   };
-  const mode = plan?.mode && modeName(plan.mode);
   return (
     <div className="palette-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="afk-dialog" role="dialog" aria-modal="true" aria-label="Run the AFK issues">
-        <h2>Run the AFK issues{plan ? ` of ${plan.projectName}` : ""}</h2>
-        {!plan && <p className="muted">Reading the backlog…</p>}
+      <div className="afk-dialog" role="dialog" aria-modal="true" aria-label={t("afk.dialog.title")}>
+        <h2>{plan ? t("afk.dialog.titleOf", { project: plan.projectName }) : t("afk.dialog.title")}</h2>
+        {!plan && <p className="muted">{t("afk.dialog.reading")}</p>}
         {plan && (
           <>
             <p>
               {plan.next ? (
                 <>
-                  First: <strong>{plan.next.title}</strong> <span className="muted">({plan.next.path})</span>.{" "}
+                  {tNodes("afk.dialog.first", { title: <strong>{plan.next.title}</strong>, path: <span className="muted">({plan.next.path})</span> })}{" "}
                 </>
               ) : null}
               <span className="muted">
-                {plan.ready} AFK {plan.ready === 1 ? "issue" : "issues"} ready, {plan.waiting} waiting on others, {plan.human} for a person. One fresh session per issue, one at a time, at most {plan.maxIssues}.
+                {t("afk.dialog.counts", { count: plan.ready, waiting: plan.waiting, human: plan.human })} {t("afk.dialog.oneAtATime", { max: plan.maxIssues })}
               </span>
             </p>
             {plan.problem && (
@@ -88,20 +89,20 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
             )}
             {plan.held && profileId === plan.profileId && (
               <p className="error-text" role="status">
-                Its first issue would wait: {plan.held}. Pick a profile on another agent to start now.
+                {t("afk.dialog.held", { reason: plan.held })}
               </p>
             )}
             {plan.queuePaused && (
               <p className="error-text" role="status">
-                The queue is paused: the run's issues wait until you resume it on the Queue page.
+                {t("afk.dialog.queuePaused")}
               </p>
             )}
             <p className="muted">
-              The run works in a git worktree and branch of its own; your checkout stays as it is until you merge the branch from the Diff tab. Its sessions start in {mode} mode. {plan.environmentNote}
+              {t("afk.dialog.worktree")} {t("afk.dialog.mode", { mode: modeName(plan.mode) })} {plan.environmentNote}
             </p>
             <div className="form afk-profiles">
               <label>
-                Profile for the issues
+                {t("afk.dialog.profileIssues")}
                 <select
                   value={profileId}
                   onChange={(e) => {
@@ -116,10 +117,10 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                   ))}
                 </select>
               </label>
-              <ModelPicker label="Model for the issues" root={plan.projectRoot} profileId={profileId} value={model} onChange={setModel} onError={onError} />
+              <ModelPicker label={t("afk.dialog.modelIssues")} root={plan.projectRoot} profileId={profileId} value={model} onChange={setModel} onError={onError} />
               {!plan.reviewOff && (
                 <label>
-                  Profile for the reviews
+                  {t("afk.dialog.profileReviews")}
                   <select
                     value={reviewId}
                     onChange={(e) => {
@@ -133,15 +134,15 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                       </option>
                     ))}
                   </select>
-                  <span className="muted">A stronger model than the issues' catches more. Each finished issue is reviewed, read-only, before it waits for your QA.</span>
+                  <span className="muted">{t("afk.dialog.reviewHint")}</span>
                 </label>
               )}
-              {!plan.reviewOff && <ModelPicker label="Model for the reviews" root={plan.projectRoot} profileId={reviewId} value={reviewModel} onChange={setReviewModel} onError={onError} />}
+              {!plan.reviewOff && <ModelPicker label={t("afk.dialog.modelReviews")} root={plan.projectRoot} profileId={reviewId} value={reviewModel} onChange={setReviewModel} onError={onError} />}
             </div>
             {(plan.commands ?? []).length > 0 && (
               <fieldset className="afk-commands">
-                <legend>Allow for this run's sessions</legend>
-                <p className="muted">Unattended, a command that asks waits until you answer. Allow the ones it needs now; they hold for the run's sessions only. Anything else still asks.</p>
+                <legend>{t("afk.dialog.allow")}</legend>
+                <p className="muted">{t("afk.dialog.allowHint")}</p>
                 {(plan.commands ?? []).map((c) => (
                   <label key={c.command} className="row">
                     <input type="checkbox" checked={allow.includes(c.command)} disabled={c.outcome === "denied"} onChange={(e) => toggle(c.command, e.target.checked)} />
@@ -155,13 +156,13 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                   <label key={c} className="row">
                     <input type="checkbox" checked onChange={() => setExtra(extra.filter((x) => x !== c))} />
                     <code>{c}</code>
-                    <span className="muted">yours</span>
+                    <span className="muted">{t("afk.dialog.yours")}</span>
                   </label>
                 ))}
                 <div className="row afk-add-command">
                   <input
-                    aria-label="Another command to allow"
-                    placeholder="Another command, such as make check-app"
+                    aria-label={t("afk.dialog.another")}
+                    placeholder={t("afk.dialog.anotherPlaceholder", { example: "make check-app" })}
                     value={typed}
                     onChange={(e) => setTyped(e.target.value)}
                     onKeyDown={(e) => {
@@ -172,7 +173,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                     }}
                   />
                   <button type="button" onClick={addTyped} disabled={!typed.trim()}>
-                    Add
+                    {t("afk.dialog.add")}
                   </button>
                 </div>
               </fieldset>
@@ -181,9 +182,9 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
         )}
         <p className="row afk-actions">
           <button className="primary" disabled={!plan || !!plan.problem || busy} onClick={start}>
-            {busy ? "Starting…" : "Start the run"}
+            {busy ? t("afk.dialog.starting") : t("afk.dialog.start")}
           </button>
-          <button onClick={onClose}>Cancel</button>
+          <button onClick={onClose}>{t("common.cancel")}</button>
         </p>
       </div>
     </div>
@@ -208,7 +209,7 @@ function ModelPicker({ label, root, profileId, value, onChange, onError }: { lab
     <label>
       {label}
       <select value={value} disabled={choices.length === 0} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{models?.default ? `The profile's own (${models.default})` : "The profile's own"}</option>
+        <option value="">{models?.default ? t("afk.model.profileOwnNamed", { model: models.default }) : t("afk.model.profileOwn")}</option>
         {groups.map((g) => {
           const items = choices.filter((c) => c.group === g).map((c) => (
             <option key={c.value} value={c.value}>

@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { compact, withoutCacheReads, type Row } from "./analytics.ts";
-import { duration, type ActivityRow } from "./activity.ts";
+import { duration, weekdayName, type ActivityRow } from "./activity.ts";
 import { EngineService } from "./api.ts";
-import { calendar, dayLevel, longestChat, modelName, monthLabels, OTHER_MODEL, usageOverview, type CalendarDay } from "./overview.ts";
-import { locale } from "./i18n.ts";
+import { calendar, dayLevel, longestChat, modelName, monthLabels, usageOverview, type CalendarDay } from "./overview.ts";
+import { locale, t } from "./i18n.ts";
 
 // The overview at the top of the usage page (GUI-033): a year's totals and a calendar with
 // one square per day, in the colour of the model used most that day and as strong as the
 // day was big. One stop in the Tab order; the arrow keys walk the days, as in Heatmap.
 
 const YEAR = 371; // the calendar's 53 weeks
-const WEEKDAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", ""];
+// The weekdays the calendar names, by their index from Monday; the rows between stay blank.
+const WEEKDAY_LABELS = [0, -1, 2, -1, 4, -1, -1];
 const STEP = [32, 48, 64, 80, 100];
 
 const dateLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString(locale(), { weekday: "short", year: "numeric", month: "short", day: "numeric" });
@@ -52,10 +53,11 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
   }, []);
 
   const shown = useMemo(() => (rows ? (cacheReads ? rows : (withoutCacheReads(rows) as Row[])) : []), [rows, cacheReads]);
-  const overview = useMemo(() => usageOverview(shown, today), [shown, today]);
-  const weeks = useMemo(() => (today ? calendar(shown, today) : []), [shown, today]);
-  // The month names are the locale's, so they change with the language.
+  // The month names and the name of a model that did not say are the language's, so they
+  // change with it.
   const loc = locale();
+  const overview = useMemo(() => usageOverview(shown, today), [shown, today, loc]);
+  const weeks = useMemo(() => (today ? calendar(shown, today) : []), [shown, today]);
   const months = useMemo(() => monthLabels(weeks), [weeks, loc]);
   const chat = useMemo(() => longestChat(turns), [turns]);
   const max = overview.peak?.tokens ?? 0;
@@ -67,17 +69,22 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
   const fill = (d: CalendarDay) => {
     if (d.tokens <= 0) return undefined;
     const pct = STEP[dayLevel(d.tokens, max) - 1];
-    return `color-mix(in srgb, ${colorOf(d.models[0].model)} ${pct}%, var(--surface))`;
+    return ["color-mix(in srgb", colorOf(d.models[0].model) + " " + pct + "%", "var(--surface))"].join(", ");
   };
   const folded = shown.some((r) => !overview.models.includes(modelName(r.model)) && r.inputTokens + r.outputTokens + r.cacheReadTokens + r.cacheWriteTokens > 0);
 
-  const say = (d: CalendarDay) =>
-    d.tokens > 0
-      ? `${dateLabel(d.day)}: ${compact(d.tokens)} tokens, ${d.models
-          .slice(0, 3)
-          .map((m) => `${m.model} ${compact(m.tokens)}`)
-          .join(", ")}${d.models.length > 3 ? `, and ${d.models.length - 3} more` : ""}`
-      : `${dateLabel(d.day)}: no use`;
+  const say = (d: CalendarDay) => {
+    if (d.tokens <= 0) return t("overview.dayNone", { date: dateLabel(d.day) });
+    const vars = {
+      date: dateLabel(d.day),
+      tokens: compact(d.tokens),
+      models: d.models
+        .slice(0, 3)
+        .map((m) => `${m.model} ${compact(m.tokens)}`)
+        .join(", "),
+    };
+    return d.models.length > 3 ? t("overview.dayUseMore", { ...vars, count: d.models.length - 3 }) : t("overview.dayUse", vars);
+  };
 
   const grid = useRef<HTMLDivElement>(null);
   // Today is at the right end: in a narrow pane, start there, and stay there while the
@@ -122,46 +129,46 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
 
   if (rows === null) return null;
   const activeDays = weeks.flat().filter((d): d is CalendarDay => !!d && d.tokens > 0).reverse();
-  const streak = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
+  const streak = (n: number) => t("paneRange.days", { count: n });
 
   return (
     <div className={inPane ? "usage-overview usage-overview-compact" : "usage-overview"}>
-      {!inPane && <h3>Last 12 months</h3>}
+      {!inPane && <h3>{t("usagePane.view.year")}</h3>}
       <div className="usage-overview-tiles">
         <div>
           <strong>{compact(overview.total)}</strong>
-          <span className="muted">Tokens{cacheReads ? "" : ", without cache reads"}</span>
+          <span className="muted">{cacheReads ? t("tokenFigures.tokens") : t("overview.tokensNoCache")}</span>
         </div>
         <div>
-          <strong>{overview.peak ? compact(overview.peak.tokens) : "None"}</strong>
-          <span className="muted">Biggest day{overview.peak ? `, ${dateLabel(overview.peak.day)}` : ""}</span>
+          <strong>{overview.peak ? compact(overview.peak.tokens) : t("overview.none")}</strong>
+          <span className="muted">{overview.peak ? t("overview.biggestDayOn", { date: dateLabel(overview.peak.day) }) : t("overview.biggestDay")}</span>
         </div>
         <div>
-          <strong>{chat ? duration(chat.millis) : "None"}</strong>
+          <strong>{chat ? duration(chat.millis) : t("overview.none")}</strong>
           <span className="muted" title={chat ? titles.get(chat.sessionId) : undefined}>
-            Longest chat, working{chat && titles.get(chat.sessionId) ? `: ${titles.get(chat.sessionId)}` : ""}
+            {chat && titles.get(chat.sessionId) ? t("overview.longestChatNamed", { title: titles.get(chat.sessionId)! }) : t("overview.longestChat")}
           </span>
         </div>
         <div>
           <strong>{streak(overview.currentStreak)}</strong>
-          <span className="muted">Current streak</span>
+          <span className="muted">{t("overview.currentStreak")}</span>
         </div>
         <div>
           <strong>{streak(overview.longestStreak)}</strong>
-          <span className="muted">Longest streak, of {streak(overview.activeDays)} active</span>
+          <span className="muted">{t("overview.longestStreak", { days: streak(overview.activeDays) })}</span>
         </div>
       </div>
       <div ref={grid} className="usage-calendar-scroll">
-        <div className="usage-calendar" role="group" aria-label="Tokens per day, last 12 months" onKeyDown={onKey} onPointerLeave={() => setPointed(null)}>
+        <div className="usage-calendar" role="group" aria-label={t("overview.calendar")} onKeyDown={onKey} onPointerLeave={() => setPointed(null)}>
           <span />
           {weeks.map((_, w) => (
             <span key={w} className="usage-calendar-month">
               {months.find((m) => m.week === w)?.label ?? ""}
             </span>
           ))}
-          {WEEKDAY_LABELS.map((label, d) => (
+          {WEEKDAY_LABELS.map((named, d) => (
             <div key={d} style={{ display: "contents" }}>
-              <span className="usage-calendar-weekday">{label}</span>
+              <span className="usage-calendar-weekday">{named >= 0 ? weekdayName(named) : ""}</span>
               {weeks.map((week, w) => {
                 const cell = week[d];
                 if (!cell) return <span key={w} />;
@@ -188,7 +195,7 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
         </div>
       </div>
       <p className="muted usage-calendar-readout" aria-hidden="true">
-        {pointed ? say(pointed) : "Point at a day to see it. Its colour is the model used most, its strength how much was used."}
+        {pointed ? say(pointed) : t("overview.pointHint")}
       </p>
       <div className="usage-calendar-legend">
         {overview.models.map((m) => (
@@ -200,19 +207,19 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
         {folded && (
           <span className="usage-calendar-model">
             <i style={{ background: "var(--series-other)" }} />
-            {OTHER_MODEL}
+            {t("overview.other")}
           </span>
         )}
       </div>
       {!inPane && activeDays.length > 0 && (
         <details className="usage-calendar-table">
-          <summary className="muted">The days as a table</summary>
+          <summary className="muted">{t("overview.tableSummary")}</summary>
           <table className="usage">
             <thead>
               <tr>
-                <th>Day</th>
-                <th>Tokens</th>
-                <th>Models</th>
+                <th>{t("insights.day")}</th>
+                <th>{t("tokenFigures.tokens")}</th>
+                <th>{t("paneRange.models")}</th>
               </tr>
             </thead>
             <tbody>

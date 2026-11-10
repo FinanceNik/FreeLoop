@@ -1,5 +1,5 @@
 import { compact, OTHER, type Day, type Metric } from "./analytics.ts";
-import { locale } from "./i18n.ts";
+import { locale, t } from "./i18n.ts";
 import { sourceName } from "./source.ts";
 import { basename } from "./paths.ts";
 
@@ -17,14 +17,15 @@ export interface RecentBucket {
   unpriced: number;
 }
 
-// The token types in the order and colours of the usage page.
+// The token types in the order and colours of the usage page, named in the language in
+// force.
 export function recentSeries(metric: Metric, cacheReads: boolean) {
-  if (metric === "cost") return [{ key: "cost", label: "Estimated cost", color: "var(--series-1)" }];
+  if (metric === "cost") return [{ key: "cost", label: t("recentUsage.cost"), color: "var(--series-1)" }];
   const all = [
-    { key: "input", label: "Input", color: "var(--series-1)" },
-    { key: "output", label: "Output", color: "var(--series-2)" },
-    { key: "cacheWrite", label: "Cache write", color: "var(--series-3)" },
-    { key: "cacheRead", label: "Cache read", color: "var(--series-4)" },
+    { key: "input", label: t("recentUsage.input"), color: "var(--series-1)" },
+    { key: "output", label: t("recentUsage.output"), color: "var(--series-2)" },
+    { key: "cacheWrite", label: t("recentUsage.cacheWrite"), color: "var(--series-3)" },
+    { key: "cacheRead", label: t("recentUsage.cacheRead"), color: "var(--series-4)" },
   ];
   return cacheReads ? all : all.filter((s) => s.key !== "cacheRead");
 }
@@ -70,7 +71,7 @@ export function shortTime(text: string): string {
 
 // stepLabel is a step in the chart's readout: from when to when.
 export function stepLabel(start: string | number, stepMinutes: number): string {
-  return `${timeLabel(start)} to ${timeLabel(Number(start) + stepMinutes * 60_000)}`;
+  return t("recentUsage.step", { from: timeLabel(start), to: timeLabel(Number(start) + stepMinutes * 60_000) });
 }
 
 // formatTokens is a count of tokens the short way, in the locale's style: 7.9M, 7,9 Mio.
@@ -96,13 +97,14 @@ export const NO_RECENT_FILTERS: RecentFilters = { project: "", agent: "", model:
 
 type Named = { id: string; name: string };
 
-// recentKeys names what a row belongs to, the way the usage page does.
+// recentKeys names what a row belongs to, the way the usage page does, in the language in
+// force when a name is asked for.
 export function recentKeys(projects: readonly Named[], providers: readonly Named[], harnesses: readonly Named[]): RecentKeys {
   const agent = (r: RecentRow) => sourceName(r, providers, harnesses);
   return {
-    project: (r) => projects.find((p) => p.id === r.projectId)?.name ?? (basename(r.projectRoot) || "No project"),
+    project: (r) => projects.find((p) => p.id === r.projectId)?.name ?? (basename(r.projectRoot) || t("recentUsage.noProject")),
     agent,
-    model: (r) => r.model || `${agent(r)} (model not reported)`,
+    model: (r) => r.model || t("recentUsage.modelNotReported", { name: agent(r) }),
   };
 }
 
@@ -158,7 +160,7 @@ export function groupedChart(
   const other = ranked.length - top.length;
   const series = [
     ...top.map((k, i) => ({ key: k, label: k, color: `var(--series-${i + 1})` })),
-    ...(other > 0 ? [{ key: OTHER, label: `${OTHER} (${other})`, color: "var(--series-other)" }] : []),
+    ...(other > 0 ? [{ key: OTHER, label: t("recentUsage.other", { count: other }), color: "var(--series-other)" }] : []),
   ];
   const at = new Map(series.map((s, i) => [s.key, i]));
   const columns = new Map(starts.map((start) => [start, series.map(() => 0)]));

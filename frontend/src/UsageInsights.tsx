@@ -6,7 +6,7 @@ import { EngineService } from "./api.ts";
 import { formatCost } from "./cost.ts";
 import Heatmap from "./Heatmap.tsx";
 import UsageChart, { type Series } from "./UsageChart.tsx";
-import { locale } from "./i18n.ts";
+import { locale, numberFormat, t, type PlainKey } from "./i18n.ts";
 
 // The dashboard's tabs beyond tokens (GUI-021). Each chart's numbers are also in
 // a table, and every tab follows the page's range and filters.
@@ -23,29 +23,29 @@ export function Tile({ label, value, note }: { label: string; value: string; not
 
 const ONE: (label: string) => Series[] = (label) => [{ key: "v", label, color: "var(--series-1)" }];
 const month = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(locale(), { month: "short", day: "numeric" });
-const percent = (share: number) => `${Math.round(share * 100)}%`;
+const percent = (share: number) => numberFormat({ style: "percent", maximumFractionDigits: 0 }).format(share);
 
-const REASONS: Record<string, string> = {
-  end_turn: "Finished",
-  cancelled: "Stopped",
-  max_tokens: "Hit the token limit",
-  max_turn_requests: "Hit the step limit",
-  refusal: "Refused by the model",
-  error: "Ended on an error",
-  unknown: "Not reported",
+const REASONS: Record<string, PlainKey> = {
+  end_turn: "insights.reason.endTurn",
+  cancelled: "insights.reason.cancelled",
+  max_tokens: "insights.reason.maxTokens",
+  max_turn_requests: "insights.reason.maxTurnRequests",
+  refusal: "insights.reason.refusal",
+  error: "insights.reason.error",
+  unknown: "insights.reason.unknown",
 };
-const reasonLabel = (r: string) => REASONS[r] ?? r.replace(/_/g, " ");
+const reasonLabel = (r: string) => (Object.hasOwn(REASONS, r) ? t(REASONS[r]) : r.replace(/_/g, " "));
 
-const ACTORS: Record<string, string> = {
-  user: "You",
-  rule: "A rule",
-  mode: "The permission mode",
-  sandbox: "The sandbox",
-  hook: "A hook",
-  policy: "Policy",
-  protected_path: "Protected paths",
+const ACTORS: Record<string, PlainKey> = {
+  user: "insights.actor.user",
+  rule: "insights.actor.rule",
+  mode: "insights.actor.mode",
+  sandbox: "insights.actor.sandbox",
+  hook: "insights.actor.hook",
+  policy: "insights.actor.policy",
+  protected_path: "insights.actor.protectedPath",
 };
-const actorLabel = (a: string) => ACTORS[a] ?? a.replace(/_/g, " ");
+const actorLabel = (a: string) => (Object.hasOwn(ACTORS, a) ? t(ACTORS[a]) : a.replace(/_/g, " "));
 
 function Share({ value, max, label }: { value: number; max: number; label: string }) {
   return (
@@ -65,7 +65,7 @@ function bucketsOf(rows: ActivityRow[], since: string, until: string) {
     weekly,
     buckets: weekly ? weeks(since, until) : days(since, until),
     bucketed: weekly ? rows.map((r) => ({ ...r, day: weekStart(r.day) })) : rows,
-    bucketLabel: (d: string) => (weekly ? `Week of ${month(d)}` : month(d)),
+    bucketLabel: (d: string) => (weekly ? t("insights.weekOfDate", { date: month(d) }) : month(d)),
   };
 }
 
@@ -99,37 +99,37 @@ export function ActivityView({ rows: all, since, until, rangeLabel, onOpenSessio
   const maxCalls = Math.max(0, ...tools.map((t) => t.calls));
   const maxReason = Math.max(0, ...turns.reasons.map((r) => r.count));
   if (turns.turns === 0 && calls === 0) {
-    return <Empty note="Tools, turns and decisions are counted from every session's transcript.">{`No activity in the last ${rangeLabel}.`}</Empty>;
+    return <Empty note={t("insights.activity.noneNote")}>{t("insights.activity.none", { range: rangeLabel })}</Empty>;
   }
   const cellsWithTurns = heat.cells.flatMap((row, d) => row.map((n, h) => ({ d, h, n }))).filter((c) => c.n > 0).sort((a, b) => b.n - a.n);
   return (
     <div className="usage-body">
       <div className="usage-figures">
         <div className="usage-hero">
-          <span className="muted">Turns</span>
+          <span className="muted">{t("insights.turns")}</span>
           <strong>{compact(turns.turns)}</strong>
-          <span className="muted">{duration(turns.average)} each on average</span>
-          <span className="muted">{duration(turns.millis)} in all</span>
+          <span className="muted">{t("insights.activity.average", { duration: duration(turns.average) })}</span>
+          <span className="muted">{t("insights.activity.total", { duration: duration(turns.millis) })}</span>
         </div>
-        <Tile label="Tool calls" value={compact(calls)} note={turns.turns ? `${compact(calls / turns.turns)} per turn` : undefined} />
-        <Tile label="Tool calls that failed" value={calls ? percent(failures / calls) : "–"} note={`${compact(failures)} of them`} />
-        <Tile label="Edits" value={compact(eventCount(rows, "edit"))} />
-        <Tile label="Pull requests" value={compact(eventCount(rows, "pull_request"))} />
-        <Tile label="Rewinds" value={compact(eventCount(rows, "rewind"))} />
-        <Tile label="Compactions" value={compact(eventCount(rows, "compaction"))} />
-        <Tile label="Errors" value={compact(eventCount(rows, "error"))} />
+        <Tile label={t("insights.toolCalls")} value={compact(calls)} note={turns.turns ? t("insights.activity.perTurn", { calls: compact(calls / turns.turns) }) : undefined} />
+        <Tile label={t("insights.activity.failedCalls")} value={calls ? percent(failures / calls) : "–"} note={t("insights.activity.failedCount", { failures: compact(failures) })} />
+        <Tile label={t("insights.activity.edits")} value={compact(eventCount(rows, "edit"))} />
+        <Tile label={t("insights.activity.pullRequests")} value={compact(eventCount(rows, "pull_request"))} />
+        <Tile label={t("insights.activity.rewinds")} value={compact(eventCount(rows, "rewind"))} />
+        <Tile label={t("insights.activity.compactions")} value={compact(eventCount(rows, "compaction"))} />
+        <Tile label={t("insights.activity.errors")} value={compact(eventCount(rows, "error"))} />
       </div>
 
       <div className="usage-card">
-        <h3>Turns per {weekly ? "week" : "day"}</h3>
-        <UsageChart data={chart} series={ONE("Turns")} format={compact} bucketLabel={bucketLabel} axisLabel={month} label={`Turns per ${weekly ? "week" : "day"}`} />
+        <h3>{t(weekly ? "insights.activity.turnsPerWeek" : "insights.activity.turnsPerDay")}</h3>
+        <UsageChart data={chart} series={ONE(t("insights.turns"))} format={compact} bucketLabel={bucketLabel} axisLabel={month} label={t(weekly ? "insights.activity.turnsPerWeek" : "insights.activity.turnsPerDay")} />
         <details className="usage-table-view">
-          <summary>Show as a table</summary>
+          <summary>{t("insights.asTable")}</summary>
           <table className="usage-table">
             <thead>
               <tr>
-                <th>{weekly ? "Week of" : "Day"}</th>
-                <th className="num">Turns</th>
+                <th>{t(weekly ? "insights.weekOf" : "insights.day")}</th>
+                <th className="num">{t("insights.turns")}</th>
               </tr>
             </thead>
             <tbody>
@@ -145,24 +145,24 @@ export function ActivityView({ rows: all, since, until, rangeLabel, onOpenSessio
       </div>
 
       <div className="usage-card">
-        <h3>When turns start</h3>
+        <h3>{t("insights.activity.whenTurnsStart")}</h3>
         <Heatmap data={heat} />
         <div className="usage-heat-legend" aria-hidden="true">
-          <span>Fewer</span>
+          <span>{t("insights.activity.fewer")}</span>
           {[0, 1, 2, 3, 4, 5].map((l) => (
             <i key={l} className={`usage-heat-cell heat-${l}`} />
           ))}
-          <span>More</span>
+          <span>{t("insights.activity.more")}</span>
         </div>
         <details className="usage-table-view">
-          <summary>Show as a table</summary>
+          <summary>{t("insights.asTable")}</summary>
           <table className="usage-table">
             <thead>
               <tr>
-                <th>Weekday</th>
-                <th>Hour</th>
-                <th className="num">Turns</th>
-                <th className="num">Scale</th>
+                <th>{t("insights.activity.weekday")}</th>
+                <th>{t("insights.activity.hour")}</th>
+                <th className="num">{t("insights.turns")}</th>
+                <th className="num">{t("insights.activity.scale")}</th>
               </tr>
             </thead>
             <tbody>
@@ -171,7 +171,7 @@ export function ActivityView({ rows: all, since, until, rangeLabel, onOpenSessio
                   <td>{WEEKDAYS[c.d]}</td>
                   <td>{String(c.h).padStart(2, "0")}:00</td>
                   <td className="num">{c.n}</td>
-                  <td className="num">{heatLevel(c.n, heat.max)} of 5</td>
+                  <td className="num">{t("insights.activity.scaleOf", { level: heatLevel(c.n, heat.max) })}</td>
                 </tr>
               ))}
             </tbody>
@@ -180,46 +180,46 @@ export function ActivityView({ rows: all, since, until, rangeLabel, onOpenSessio
       </div>
 
       <div className="usage-card">
-        <h3>Tools</h3>
+        <h3>{t("insights.activity.tools")}</h3>
         <table className="usage-table">
           <thead>
             <tr>
-              <th>Tool</th>
-              <th className="usage-share-col">Share of calls</th>
-              <th className="num">Calls</th>
-              <th className="num">Failed</th>
-              <th className="num">Failure rate</th>
-              <th className="num">Average time</th>
-              <th className="num">Total time</th>
+              <th>{t("insights.activity.tool")}</th>
+              <th className="usage-share-col">{t("insights.activity.shareOfCalls")}</th>
+              <th className="num">{t("insights.activity.calls")}</th>
+              <th className="num">{t("insights.failed")}</th>
+              <th className="num">{t("insights.activity.failureRate")}</th>
+              <th className="num">{t("insights.activity.averageTime")}</th>
+              <th className="num">{t("insights.activity.totalTime")}</th>
             </tr>
           </thead>
           <tbody>
-            {tools.map((t) => (
-              <tr key={t.name}>
-                <td>{t.name || "Unnamed"}</td>
-                <Share value={t.calls} max={maxCalls} label={percent(calls ? t.calls / calls : 0)} />
-                <td className="num">{compact(t.calls)}</td>
-                <td className="num">{t.failures ? compact(t.failures) : "–"}</td>
-                <td className="num">{t.failures ? percent(t.failureRate) : "–"}</td>
-                <td className="num">{duration(t.average)}</td>
-                <td className="num">{duration(t.millis)}</td>
+            {tools.map((tool) => (
+              <tr key={tool.name}>
+                <td>{tool.name || t("insights.activity.unnamedTool")}</td>
+                <Share value={tool.calls} max={maxCalls} label={percent(calls ? tool.calls / calls : 0)} />
+                <td className="num">{compact(tool.calls)}</td>
+                <td className="num">{tool.failures ? compact(tool.failures) : "–"}</td>
+                <td className="num">{tool.failures ? percent(tool.failureRate) : "–"}</td>
+                <td className="num">{duration(tool.average)}</td>
+                <td className="num">{duration(tool.millis)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="muted usage-note">A call you or a rule denied is not a failure, and time waiting for an approval is not counted.</p>
+        <p className="muted usage-note">{t("insights.activity.toolsNote")}</p>
       </div>
 
       {turns.reasons.length > 0 && (
         <div className="usage-card">
-          <h3>How turns ended</h3>
+          <h3>{t("insights.activity.endings")}</h3>
           <table className="usage-table">
             <thead>
               <tr>
-                <th>Ending</th>
-                <th className="usage-share-col">Share</th>
-                <th className="num">Turns</th>
-                <th className="num">Average length</th>
+                <th>{t("insights.activity.ending")}</th>
+                <th className="usage-share-col">{t("insights.share")}</th>
+                <th className="num">{t("insights.turns")}</th>
+                <th className="num">{t("insights.activity.averageLength")}</th>
               </tr>
             </thead>
             <tbody>
@@ -237,15 +237,15 @@ export function ActivityView({ rows: all, since, until, rangeLabel, onOpenSessio
       )}
 
       <div className="usage-card">
-        <h3>Busiest sessions</h3>
+        <h3>{t("insights.activity.busiest")}</h3>
         <table className="usage-table">
           <thead>
             <tr>
-              <th>Session</th>
-              <th className="num">Turns</th>
-              <th className="num">Tool calls</th>
-              <th className="num">Failed</th>
-              <th className="num">Time in turns</th>
+              <th>{t("insights.session")}</th>
+              <th className="num">{t("insights.turns")}</th>
+              <th className="num">{t("insights.toolCalls")}</th>
+              <th className="num">{t("insights.failed")}</th>
+              <th className="num">{t("insights.activity.timeInTurns")}</th>
             </tr>
           </thead>
           <tbody>
@@ -255,10 +255,10 @@ export function ActivityView({ rows: all, since, until, rangeLabel, onOpenSessio
                 <tr key={s.sessionId}>
                   <td>
                     {r?.deleted ? (
-                      <span className="muted">Deleted session</span>
+                      <span className="muted">{t("insights.deletedSession")}</span>
                     ) : (
                       <button className="link usage-pick" onClick={() => onOpenSession(s.sessionId)}>
-                        {r?.title || "Untitled"}
+                        {r?.title || t("insights.untitled")}
                       </button>
                     )}
                   </td>
@@ -299,7 +299,7 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
   const maxActor = Math.max(0, ...stats.actors.map((a) => a.total));
   const [busy, setBusy] = useState("");
   if (stats.total === 0) {
-    return <Empty note="Every request an agent makes to do something is decided by you, a rule, the permission mode or the sandbox.">{`No permission requests in the last ${rangeLabel}.`}</Empty>;
+    return <Empty note={t("insights.approvals.noneNote")}>{t("insights.approvals.none", { range: rangeLabel })}</Empty>;
   }
   const allow = (tool: string, command: string, path: string) => {
     setBusy(`${tool}\t${command}\t${path}`);
@@ -312,23 +312,23 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
     <div className="usage-body">
       <div className="usage-figures">
         <div className="usage-hero">
-          <span className="muted">Agents waited on you</span>
+          <span className="muted">{t("insights.approvals.waited")}</span>
           <strong>{duration(stats.waited)}</strong>
-          <span className="muted">{duration(stats.averageWait)} per question on average</span>
+          <span className="muted">{t("insights.approvals.averageWait", { duration: duration(stats.averageWait) })}</span>
         </div>
-        <Tile label="Decisions" value={compact(stats.total)} />
-        <Tile label="Asked you" value={compact(stats.byUser)} note={`${percent(stats.byUser / stats.total)} of decisions`} />
-        <Tile label="Denied" value={compact(stats.denied)} note={`${percent(stats.denied / stats.total)} of decisions`} />
+        <Tile label={t("insights.approvals.decisions")} value={compact(stats.total)} />
+        <Tile label={t("insights.approvals.askedYou")} value={compact(stats.byUser)} note={t("insights.approvals.ofDecisions", { share: percent(stats.byUser / stats.total) })} />
+        <Tile label={t("insights.approvals.denied")} value={compact(stats.denied)} note={t("insights.approvals.ofDecisions", { share: percent(stats.denied / stats.total) })} />
       </div>
 
       <div className="usage-card">
-        <h3>Held by your policy</h3>
+        <h3>{t("insights.approvals.held")}</h3>
         {held.total === 0 ? (
-          <p className="muted">Nothing in this range: no agent or repository was stopped from doing something.</p>
+          <p className="muted">{t("insights.approvals.heldNone")}</p>
         ) : (
           <>
             <p className="muted">
-              {compact(held.total)} {held.total === 1 ? "thing" : "things"} an agent or a repository would have gone ahead with. A session's Info tab lists them, each with a link to the moment.
+              {t("insights.approvals.heldCount", { count: held.total })} {t("insights.approvals.heldWhere")}
             </p>
             <table className="usage-table">
               <tbody>
@@ -343,8 +343,8 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
             <table className="usage-table">
               <thead>
                 <tr>
-                  <th>Session</th>
-                  <th className="num">Held</th>
+                  <th>{t("insights.session")}</th>
+                  <th className="num">{t("insights.approvals.heldColumn")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -352,7 +352,7 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
                   <tr key={s.sessionId}>
                     <td>
                       {s.deleted ? (
-                        <span className="muted">{s.title || "Deleted session"}</span>
+                        <span className="muted">{s.title || t("insights.deletedSession")}</span>
                       ) : (
                         <button className="link" onClick={() => onOpenSession(s.sessionId)}>
                           {s.title || s.sessionId}
@@ -370,14 +370,14 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
 
       {repeats.length > 0 && (
         <div className="usage-card">
-          <h3>Questions you keep answering yes to</h3>
+          <h3>{t("insights.approvals.repeats")}</h3>
           <table className="usage-table">
             <thead>
               <tr>
-                <th>Command or file</th>
-                <th>Tool</th>
-                <th className="num">Times allowed</th>
-                <th className="num">Time waited</th>
+                <th>{t("insights.approvals.commandOrFile")}</th>
+                <th>{t("insights.activity.tool")}</th>
+                <th className="num">{t("insights.approvals.timesAllowed")}</th>
+                <th className="num">{t("insights.approvals.timeWaited")}</th>
                 <th />
               </tr>
             </thead>
@@ -391,8 +391,8 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
                     <td className="num">{compact(r.allowed)}</td>
                     <td className="num">{duration(r.waited)}</td>
                     <td className="num">
-                      <button disabled={busy === id} aria-label={`Always allow ${r.command || r.path}`} onClick={() => allow(r.tool, r.command, r.path)}>
-                        Always allow
+                      <button disabled={busy === id} aria-label={t("insights.approvals.alwaysAllowNamed", { what: r.command || r.path })} onClick={() => allow(r.tool, r.command, r.path)}>
+                        {t("insights.approvals.alwaysAllow")}
                       </button>
                     </td>
                   </tr>
@@ -400,21 +400,21 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
               })}
             </tbody>
           </table>
-          <p className="muted usage-note">A rule covers exactly this command or file, in every project. Deny rules and protected paths still win.</p>
+          <p className="muted usage-note">{t("insights.approvals.repeatsNote")}</p>
         </div>
       )}
 
       <div className="usage-card">
-        <h3>Who decided</h3>
+        <h3>{t("insights.approvals.whoDecided")}</h3>
         <table className="usage-table">
           <thead>
             <tr>
-              <th>Decided by</th>
-              <th className="usage-share-col">Share</th>
-              <th className="num">Decisions</th>
-              <th className="num">Allowed</th>
-              <th className="num">Denied</th>
-              <th className="num">Cancelled</th>
+              <th>{t("insights.approvals.decidedBy")}</th>
+              <th className="usage-share-col">{t("insights.share")}</th>
+              <th className="num">{t("insights.approvals.decisions")}</th>
+              <th className="num">{t("insights.approvals.allowed")}</th>
+              <th className="num">{t("insights.approvals.denied")}</th>
+              <th className="num">{t("insights.approvals.cancelled")}</th>
             </tr>
           </thead>
           <tbody>
@@ -434,15 +434,22 @@ export function ApprovalsView({ rows: all, since, until, rangeLabel, onChanged, 
 
       {stats.waited > 0 && (
         <div className="usage-card">
-          <h3>Time agents waited on you, per {weekly ? "week" : "day"}</h3>
-          <UsageChart data={waits} series={ONE("Waited")} format={waitLabel} bucketLabel={bucketLabel} axisLabel={month} label={`Time agents waited on you per ${weekly ? "week" : "day"}`} />
+          <h3>{t(weekly ? "insights.approvals.waitedPerWeek" : "insights.approvals.waitedPerDay")}</h3>
+          <UsageChart
+            data={waits}
+            series={ONE(t("insights.approvals.waitedSeries"))}
+            format={waitLabel}
+            bucketLabel={bucketLabel}
+            axisLabel={month}
+            label={t(weekly ? "insights.approvals.waitedPerWeekLabel" : "insights.approvals.waitedPerDayLabel")}
+          />
           <details className="usage-table-view">
-            <summary>Show as a table</summary>
+            <summary>{t("insights.asTable")}</summary>
             <table className="usage-table">
               <thead>
                 <tr>
-                  <th>{weekly ? "Week of" : "Day"}</th>
-                  <th className="num">Waited</th>
+                  <th>{t(weekly ? "insights.weekOf" : "insights.day")}</th>
+                  <th className="num">{t("insights.approvals.waitedSeries")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -482,53 +489,56 @@ export function EfficiencyView<R extends EffRow>({ usage, allUsage, rows, today,
   const cost = sum((m) => m.cost);
   const saved = sum((m) => m.saved);
   if (models.length === 0) {
-    return <Empty note="Efficiency compares model calls with the turns they made up.">No model calls in this range.</Empty>;
+    return <Empty note={t("insights.efficiency.noneNote")}>{t("insights.efficiency.none")}</Empty>;
   }
   const monthName = new Date(`${today}T12:00:00`).toLocaleDateString(locale(), { month: "long" });
   return (
     <div className="usage-body">
       <div className="usage-figures">
         <div className="usage-hero">
-          <span className="muted">Tokens per turn</span>
+          <span className="muted">{t("insights.efficiency.tokensPerTurn")}</span>
           <strong>{turns ? compact(tokens / turns) : "–"}</strong>
-          <span className="muted">
-            {compact(tokens)} tokens in {compact(turns)} {Math.round(turns) === 1 ? "turn" : "turns"}
-          </span>
+          <span className="muted">{t("insights.efficiency.tokensInTurns", { tokens: compact(tokens), turns: compact(turns), count: Math.round(turns) })}</span>
         </div>
-        {priced && <Tile label="Estimated cost per turn" value={turns ? formatCost(cost / turns) : "–"} />}
-        {priced && <Tile label="Saved by the prompt cache" value={formatCost(saved)} note="Against the same reads at the input price" />}
-        {pace && (priced ? <Tile label={`Projected for ${monthName}`} value={formatCost(pace.projected)} note={`${formatCost(pace.spent)} so far, at the last 14 days' pace`} /> : <Tile label={`Projected for ${monthName}`} value={compact(pace.projectedTokens)} note={`${compact(pace.tokens)} tokens so far, at the last 14 days' pace`} />)}
+        {priced && <Tile label={t("insights.efficiency.costPerTurn")} value={turns ? formatCost(cost / turns) : "–"} />}
+        {priced && <Tile label={t("insights.efficiency.savedByPromptCache")} value={formatCost(saved)} note={t("insights.efficiency.savedNote")} />}
+        {pace &&
+          (priced ? (
+            <Tile label={t("insights.efficiency.projected", { month: monthName })} value={formatCost(pace.projected)} note={t("insights.efficiency.spentSoFar", { spent: formatCost(pace.spent) })} />
+          ) : (
+            <Tile label={t("insights.efficiency.projected", { month: monthName })} value={compact(pace.projectedTokens)} note={t("insights.efficiency.tokensSoFar", { tokens: compact(pace.tokens) })} />
+          ))}
       </div>
       {!priced && (
         <p className="muted usage-note">
-          Add prices to see the cost of a turn, what the cache saved and a projection in money.{" "}
+          {t("insights.efficiency.addPricesNote")}{" "}
           <button className="link" onClick={onOpenPrices}>
-            Add prices
+            {t("insights.efficiency.addPrices")}
           </button>
         </p>
       )}
-      <EfficiencyTable title="By model" head="Model" groups={models} priced={priced} />
-      <EfficiencyTable title="By project" head="Project" groups={projects} priced={priced} />
-      <p className="muted usage-note">A session's turns are shared among its models by their share of its model calls. Estimates depend on the prices in Settings.</p>
+      <EfficiencyTable heading="insights.efficiency.byModel" column="insights.efficiency.model" groups={models} priced={priced} />
+      <EfficiencyTable heading="insights.efficiency.byProject" column="insights.efficiency.project" groups={projects} priced={priced} />
+      <p className="muted usage-note">{t("insights.efficiency.note")}</p>
     </div>
   );
 }
 
-function EfficiencyTable({ title, head, groups, priced }: { title: string; head: string; groups: Efficiency[]; priced: boolean }) {
+function EfficiencyTable({ heading, column, groups, priced }: { heading: PlainKey; column: PlainKey; groups: Efficiency[]; priced: boolean }) {
   const max = Math.max(0, ...groups.map((g) => g.tokensPerTurn));
   return (
     <div className="usage-card">
-      <h3>{title}</h3>
+      <h3>{t(heading)}</h3>
       <table className="usage-table">
         <thead>
           <tr>
-            <th>{head}</th>
-            <th className="usage-share-col">Tokens per turn</th>
-            <th className="num">Turns</th>
-            <th className="num">Output per call</th>
-            <th className="num">From the cache</th>
-            {priced && <th className="num">Est. cost per turn</th>}
-            {priced && <th className="num">Saved by the cache</th>}
+            <th>{t(column)}</th>
+            <th className="usage-share-col">{t("insights.efficiency.tokensPerTurn")}</th>
+            <th className="num">{t("insights.turns")}</th>
+            <th className="num">{t("insights.efficiency.outputPerCall")}</th>
+            <th className="num">{t("insights.efficiency.fromCache")}</th>
+            {priced && <th className="num">{t("insights.efficiency.estCostPerTurn")}</th>}
+            {priced && <th className="num">{t("insights.efficiency.savedByCache")}</th>}
           </tr>
         </thead>
         <tbody>
