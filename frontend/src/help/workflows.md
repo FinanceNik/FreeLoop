@@ -38,7 +38,7 @@ blockedBy: [001-store-a-draft]
 ---
 ```
 
-The **Board** shows a **Backlog** column for each trusted project that has one: each issue is **Ready**, **Blocked** (with what it waits on) or **Done**. An issue the app can't read counts as one for a person.
+The **Board** shows a row for each trusted project that has a backlog, with a card for each issue in four columns: **Backlog**, **Working**, **In review** and **Done**. A card shows its title, its number, whether an agent (AFK) or a person does it, and in Backlog what it waits on. An issue the app can't read counts as one for a person. The Board only shows where each issue stands, from its file and the run; you don't move cards. Ordinary sessions are not on it: they are in the sidebar.
 
 **Archive finished** removes done issues, and PRDs whose issues are all done, in a commit of their own, so later agents aren't misled by stale docs. Git history keeps them: `git log -- backlog/` lists them and `git show` brings one back.
 

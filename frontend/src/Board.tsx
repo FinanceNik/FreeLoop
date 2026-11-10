@@ -1,161 +1,110 @@
 import type { ReactNode } from "react";
-import { columns, since } from "./board.ts";
-import { issueStep, stepLabel } from "./afk.ts";
-import { counts, relations, stateLabel, typeLabel } from "./backlog.ts";
+import { cardMeta, LANES, laneTitle, placeIssues, type IssueCard } from "./board.ts";
+import { stepLabel } from "./afk.ts";
+import { counts } from "./backlog.ts";
 import type { BacklogInfo } from "./api.ts";
 import { t } from "./i18n.ts";
 
-type Card = { id: string; title: string; status: string; updatedAt: string | Date; projectRoot: string; projectId: string; branch?: string; tags?: string[] | null };
-
-// Board shows one card per session in columns by status (GUI-016), an
-// alternative to the sidebar's list. It shows the sessions the sidebar's
-// filters let through.
-export default function Board<T extends Card>({
-  sessions,
-  projectName,
-  statusLabel,
-  filtered,
-  unread,
-  activityOf,
-  markOf,
-  renderRequest,
+// The Board is a scrum board of workflow issues (GUI-016): one row per project with a
+// backlog, and in it one card per issue, in Backlog, Working, In review or Done. It only
+// shows where each issue stands, from its file and the AFK run's step for it, so a card
+// is never dragged; the sessions behind it are reached from the card, and the sidebar and
+// Needs attention keep the ordinary sessions.
+export default function Board({
+  backlogs,
   onOpen,
-  onQueue,
-  backlogs = [],
   onArchive,
   backlogActions,
 }: {
-  sessions: T[];
-  projectName: (s: T) => string;
-  statusLabel: Record<string, string>;
-  filtered: boolean;
-  // Sessions that finished work the user has not seen (SES-022).
-  unread: readonly string[];
-  // What the session is doing (GUI-030).
-  activityOf: (s: T) => ReactNode;
-  // What it runs on (GUI-034).
-  markOf: (s: T) => ReactNode;
-  // The approval a session waits on longest, answered on its card.
-  renderRequest: (sid: string) => ReactNode;
-  onOpen: (id: string) => void;
-  // Opens the queue of tasks (SES-025), whose tasks start as the sessions here.
-  onQueue?: () => void;
-  // Trusted projects' workflow backlogs (WFL-004), shown before the sessions.
-  backlogs?: BacklogInfo[];
+  // Trusted projects' workflow backlogs (WFL-004).
+  backlogs: BacklogInfo[];
+  onOpen: (sessionId: string) => void;
   onArchive?: (b: BacklogInfo) => void;
-  // Extra controls for a project's backlog, such as its AFK run (WFL-005).
+  // Controls for a project's row, such as its AFK run (WFL-005).
   backlogActions?: (b: BacklogInfo) => ReactNode;
 }) {
-  const cols = columns(sessions);
+  const total = backlogs.reduce((n, b) => n + (b.issues ?? []).length, 0);
   return (
     <div className="board-page">
       <header className="board-header">
         <h2>{t("app.board")}</h2>
-        <span className="muted">{t(filtered ? "board.countFiltered" : "board.count", { count: sessions.length })}</span>
-        {onQueue && (
-          <button className="link board-queue" onClick={onQueue}>
-            {t("board.queue")}
-          </button>
-        )}
+        <span className="muted">{t("board.issueCount", { count: total })}</span>
       </header>
-      <div className="board">
-        {backlogs.length > 0 && (
-          <section className="board-column board-backlog" aria-label={t("board.backlog")}>
-            <h3>
-              {t("board.backlog")} <span className="muted">{backlogs.reduce((n, b) => n + counts(b.issues).open, 0)}</span>
-            </h3>
-            {backlogs.map((b) => {
-              const n = counts(b.issues);
-              return (
-                <div key={b.projectId} className="backlog-project" aria-label={t("board.backlogOf", { project: b.projectName })}>
-                  <div className="backlog-project-head">
-                    <strong>{b.projectName}</strong>
-                    <span className="muted">
-                      {" · "}
-                      {t("board.backlogCounts", { open: n.open, ready: n.afkReady })}
-                      {b.uncommitted ? ` · ${t("board.notCommitted")}` : ""}
-                    </span>
-                  </div>
-                  {backlogActions?.(b)}
-                  <ul>
-                    {(b.issues ?? []).map((it) => {
-                      const step = issueStep(b.run, it.id);
-                      return (
-                      <li key={it.id}>
-                        <div className={`board-card backlog-card backlog-${it.state}`} aria-label={`${it.id}: ${it.title}`}>
-                          <span className="board-card-title">{it.title}</span>
-                          <span className="muted board-card-where">{it.path}</span>
-                          <span className="session-meta">
-                            <span className={`badge backlog-state backlog-state-${it.state}`}>{stateLabel(it)}</span>
-                            <span className={`tag backlog-type-${it.type}`}>{typeLabel(it)}</span>
-                          </span>
-                          {relations(it) && <span className="muted backlog-relations">{relations(it)}</span>}
-                          {step && (
-                            <span className={step.waiting && step.state === "working" ? "backlog-step backlog-step-waiting" : "muted backlog-step"}>
-                              {t("board.afkStep", { step: stepLabel(step) })}
-                              {step.sessionId && (
-                                <>
-                                  {" · "}
-                                  <button className="link" onClick={() => onOpen(step.sessionId!)}>
-                                    {t("board.openSession")}
-                                  </button>
-                                </>
-                              )}
-                            </span>
-                          )}
-                        </div>
-                      </li>
-                      );
-                    })}
-                    {(b.issues ?? []).length === 0 && <li className="muted board-empty">{t("board.noIssues")}</li>}
-                  </ul>
-                  {b.finished > 0 && onArchive && (
-                    <button className="link backlog-archive" onClick={() => onArchive(b)} title={t("board.archiveTitle")}>
-                      {t("board.archive", { count: b.finished })}
-                    </button>
-                  )}
+      {backlogs.length === 0 && <p className="muted board-empty">{t("board.noBacklogs")}</p>}
+      <div className="board-lanes">
+        {backlogs.map((b) => {
+          const cols = placeIssues(b.issues, b.run);
+          const n = counts(b.issues);
+          return (
+            <section key={b.projectId} className="board-lane" aria-label={t("board.backlogOf", { project: b.projectName })}>
+              <header className="board-lane-head">
+                <div className="board-lane-title">
+                  <strong>{b.projectName}</strong>
+                  <span className="muted">
+                    {" · "}
+                    {t("board.backlogCounts", { open: n.open, ready: n.afkReady })}
+                    {b.uncommitted ? ` · ${t("board.notCommitted")}` : ""}
+                  </span>
                 </div>
-              );
-            })}
-          </section>
-        )}
-        {cols.map((c) => (
-          <section key={c.key} className={`board-column board-${c.key}`} aria-label={c.title}>
-            <h3>
-              {c.title} <span className="muted">{c.sessions.length}</span>
-            </h3>
-            <ul>
-              {c.sessions.map((s) => (
-                <li key={s.id}>
-                  <button className="board-card" onClick={() => onOpen(s.id)}>
-                    <span className="board-card-title">
-                      {markOf(s)}
-                      {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label={t("status.unread")} />}
-                      {s.title}
-                    </span>
-                    <span className="muted board-card-where">
-                      {projectName(s)}
-                      {s.branch ? ` · ${s.branch}` : ""}
-                    </span>
-                    {activityOf(s)}
-                    <span className="session-meta">
-                      <span className={`badge badge-${s.status}`}>{statusLabel[s.status] ?? s.status}</span>
-                      <span className="muted">{since(s.updatedAt)}</span>
-                      {(s.tags ?? []).map((tag) => (
-                        <span key={tag} className="tag">
-                          #{tag}
-                        </span>
-                      ))}
-                    </span>
+                {backlogActions?.(b)}
+                {b.finished > 0 && onArchive && (
+                  <button className="link board-lane-archive" onClick={() => onArchive(b)} title={t("board.archiveTitle")}>
+                    {t("board.archive", { count: b.finished })}
                   </button>
-                  {renderRequest(s.id)}
-                </li>
-              ))}
-              {c.sessions.length === 0 && <li className="muted board-empty">{t("board.none")}</li>}
-            </ul>
-          </section>
-        ))}
+                )}
+              </header>
+              <div className="board-lane-columns">
+                {LANES.map((lane) => (
+                  <div key={lane} className={`board-col board-col-${lane}`} role="group" aria-label={laneTitle(lane)}>
+                    <h3>
+                      {laneTitle(lane)} <span className="muted">{cols[lane].length}</span>
+                    </h3>
+                    <ul>
+                      {cols[lane].map((card) => (
+                        <li key={card.id}>
+                          <Issue card={card} onOpen={onOpen} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </div>
+    </div>
+  );
+}
+
+// Issue is one card: the title in at most two lines, one line saying which issue it is,
+// who does it and what it waits on or how long it has worked, then a mark or an action
+// only where one applies. The whole title and the file are in the hover text.
+function Issue({ card, onOpen }: { card: IssueCard; onOpen: (sessionId: string) => void }) {
+  const [id, type, ...more] = cardMeta(card);
+  const step = card.step;
+  const waiting = !!step?.waiting && step.state === "working";
+  return (
+    <div className={`board-card issue-card backlog-card issue-${card.column} backlog-${card.state}`} role="group" aria-label={`${id}: ${card.title}`} title={card.hover}>
+      <span className="issue-title">{card.title}</span>
+      <span className="issue-meta">
+        <span className="issue-id">{id}</span>
+        <span className={`tag backlog-type-${card.type}`}>{type}</span>
+        {more.map((m) => (
+          <span key={m} className="muted">
+            {m}
+          </span>
+        ))}
+      </span>
+      {card.note && <span className="issue-mark muted">{card.note}</span>}
+      {waiting && <span className="issue-mark backlog-step-waiting">{t("board.afkStep", { step: stepLabel(step!) })}</span>}
+      {step?.sessionId && (
+        <span className="issue-actions">
+          <button className="link" onClick={() => onOpen(step.sessionId!)}>
+            {t("board.openSession")}
+          </button>
+        </span>
+      )}
     </div>
   );
 }

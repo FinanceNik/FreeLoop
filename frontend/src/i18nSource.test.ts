@@ -25,7 +25,6 @@ const TRANSLATED = [
   "GitMark.tsx",
   "ContextMenu.tsx",
   "Splitter.tsx",
-  "ActivityLine.tsx",
   "sessionActivity.ts",
   "filters.ts",
   "unread.ts",

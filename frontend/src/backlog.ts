@@ -5,6 +5,8 @@ import { t, type PlainKey } from "./i18n.ts";
 export interface BacklogItem {
   id: string;
   title: string;
+  // The file's path in the project, for hovering over its card.
+  path?: string;
   state: string;
   type: string;
   waitsOn: string[] | null;

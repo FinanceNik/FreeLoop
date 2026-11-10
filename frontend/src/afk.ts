@@ -16,6 +16,8 @@ export interface StepLike {
   // Why its session has not started yet, such as an agent's limit.
   waiting?: string;
   sessionId?: string;
+  // When the run began on the issue.
+  startedAt?: string;
 }
 
 export interface RunLike {

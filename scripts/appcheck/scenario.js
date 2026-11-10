@@ -82,13 +82,15 @@ await step("a session shows what it runs on", async () => {
 });
 
 // A profile on an agent with its own sign-in hides the provider, and says how to get it.
-// The sidebar's footer: the four layout icons sit under the four icons above them,
-// whether or not the bell is shown, and Settings stands alone at the lower right.
+// The sidebar's footer: the four layout icons sit under the first four of the five icons
+// above them, whether or not the bell is shown, and Settings stands alone at the lower
+// right.
 await step("the footer's icons line up, with Settings at the lower right", async () => {
   const centre = (e) => { const r = e.getBoundingClientRect(); return Math.round(r.left + r.width / 2); };
-  const top = [...document.querySelector(".footer-links").children].filter((e) => !e.classList.contains("footer-cost")).slice(0, 4);
+  const all5 = [...document.querySelector(".footer-links").children].filter((e) => !e.classList.contains("footer-cost"));
+  const top = all5.slice(0, 4);
   const layout = [...document.querySelectorAll(".layout-switch button")];
-  check("four icons above and four layout icons below", top.length === 4 && layout.length === 4, `${top.length} and ${layout.length}`);
+  check("five icons above and four layout icons below", all5.length === 5 && layout.length === 4, `${all5.length} and ${layout.length}`);
   check("each layout icon is under the one above it", top.every((e, i) => Math.abs(centre(e) - centre(layout[i])) <= 1), `${top.map(centre)} vs ${layout.map(centre)}`);
   const settings = document.querySelector(".footer-row .settings-link").getBoundingClientRect();
   const row = document.querySelector(".footer-row").getBoundingClientRect();
@@ -629,8 +631,10 @@ await step("the year at a glance", async () => {
 });
 
 await step("the queue takes a task and holds it while paused", async () => {
-  named(".footer-links button", "Board").click();
-  (await until("the board's link to the queue", () => document.querySelector(".board-queue"), 8000)).click();
+  // The queue has an icon of its own in the sidebar (GUI-016), which says how many tasks wait.
+  const icon = () => all(".footer-links button").find((b) => /^Queue\b/.test(b.getAttribute("aria-label") ?? ""));
+  check("the sidebar has a Queue icon", !!icon() && icon().getAttribute("aria-label") === "Queue" && !icon().querySelector(".footer-badge"), icon()?.getAttribute("aria-label"));
+  icon().click();
   const page = await until("the queue page", () => [...document.querySelectorAll(".page h2")].find((h) => h.textContent === "Queue")?.closest(".page"), 8000);
   if (withText("button", "Pause", page)) withText("button", "Pause", page).click();
   await until("paused", () => page.querySelector('[role="status"]')?.textContent.startsWith("Paused"), 5000);
@@ -642,8 +646,12 @@ await step("the queue takes a task and holds it while paused", async () => {
   const row = await until("the task listed", () => [...page.querySelectorAll(".queue-table tbody tr")].find((r) => r.textContent.includes("Write a haiku")), 5000);
   check("a paused queue keeps the task waiting", row.textContent.includes("Waiting"), row.textContent);
   check("the summary counts it", page.querySelector('[role="status"]').textContent.includes("1 waiting"), page.querySelector('[role="status"]').textContent);
+  const counted = await until("the icon's count", () => icon()?.querySelector(".footer-badge")?.textContent === "1" && icon(), 9000).catch(() => null);
+  check("the Queue icon counts the waiting task", !!counted && /1 task waiting/.test(counted.getAttribute("aria-label")), icon()?.getAttribute("aria-label"));
   row.querySelector('button[aria-label^="Remove"]').click();
   await until("the task removed", () => !page.textContent.includes("Write a haiku"), 5000);
+  await until("the icon's count gone", () => icon()?.getAttribute("aria-label") === "Queue", 9000).catch(() => {});
+  check("the Queue icon is plain again", icon()?.getAttribute("aria-label") === "Queue" && !icon().querySelector(".footer-badge"), icon()?.getAttribute("aria-label"));
   openSession("Check alpha");
   await until("the conversation", () => document.querySelector(".conversation"));
 });
@@ -692,11 +700,14 @@ await step("the side parts are resizable", async () => {
   check("a double click puts the panel back", Math.round(panel.getBoundingClientRect().width) === Math.round(usual), `${Math.round(panel.getBoundingClientRect().width)} against ${Math.round(usual)} px`);
 });
 
-await step("a finished session says so on the board", async () => {
+// The Board is for workflow issues only (GUI-016): ordinary sessions stay in the sidebar
+// and Needs attention, and with no backlog the Board says so.
+await step("the Board shows no ordinary session", async () => {
   named(".footer-links button", "Board").click();
-  const card = await until("the board's card", () => withText(".board-card", "Check alpha"));
-  const line = card.querySelector(".session-activity")?.textContent ?? "";
-  check("a finished session says so on the board", line.startsWith("Finished"), `it said "${line}"`);
+  const page = await until("the Board", () => document.querySelector(".board-page"), 8000);
+  check("no ordinary session is on the Board", !withText(".board-card", "Check") && !page.textContent.includes("Check alpha") && !page.textContent.includes("Check long"), page.textContent.slice(0, 120));
+  check("with no backlog the Board says so", page.textContent.includes("No project has a backlog yet."), page.textContent.slice(0, 120));
+  check("the old session columns are gone", all(".board-col h3, .board-column h3", page).length === 0 && !/Needs you|Running|Idle/.test(page.textContent), page.textContent.slice(0, 120));
   openSession("Check alpha");
   await until("the conversation", () => document.querySelector(".conversation"));
 });
@@ -827,7 +838,7 @@ await step("the attention view and the Board follow the language, without a relo
     await sleep(100);
   };
   const heading = (sel) => document.querySelector(`${sel} h2`)?.textContent ?? "";
-  const columns = () => all(".board-column h3").map((h) => h.textContent.trim());
+  const boardText = () => document.querySelector(".board-page")?.textContent ?? "";
   try {
     await pick("nl");
     (document.querySelector(".attention-link") ?? named(".footer-links button", "Aandacht")).click();
@@ -838,11 +849,12 @@ await step("the attention view and the Board follow the language, without a relo
     board?.click();
     const shown = await until("the Board in Dutch", () => heading(".board-page") === "Bord", 8000).catch(() => false);
     check("Nederlands turns the Board's heading Dutch", shown, heading(".board-page"));
-    check("the Board's columns are Dutch", columns().length > 0 && !columns().some((c) => /^(Needs you|Running|Idle)\b/.test(c)), columns().join(" | "));
+    check("the Board's words are Dutch", boardText().includes("Nog geen project heeft een backlog."), boardText().slice(0, 100));
+    check("the Queue icon is Dutch", !!named(".footer-links button", "Wachtrij"), all(".footer-links button").map((b) => b.getAttribute("aria-label")).join(", "));
     await pick("en");
     named(".footer-links button", "Board").click();
     await until("the Board in English", () => heading(".board-page") === "Board", 8000).catch(() => {});
-    check("English comes back", heading(".board-page") === "Board" && columns().some((c) => c.startsWith("Running")), `${heading(".board-page")}; ${columns().join(" | ")}`);
+    check("English comes back", heading(".board-page") === "Board" && boardText().includes("No project has a backlog yet."), `${heading(".board-page")}; ${boardText().slice(0, 80)}`);
     check("no reload in between", window.appcheckNotReloaded === true);
   } finally {
     // Later steps find English and the session they expect.
@@ -1645,12 +1657,25 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   (await until("Start", () => { const b = withText("button", "Start the run", dialog); return b && !b.disabled && b; }, 4000)).click();
   await until("the dialog closed", () => !document.querySelector(".afk-dialog"), 8000);
 
-  // Starting shows the Board's backlog: two issues, the second waiting on the first.
-  const backlog = await until("the backlog", () => document.querySelector('.board-backlog [aria-label="Backlog of workflow"]'), 15000);
-  const cards = () => all(".backlog-card", backlog);
+  // Starting shows the Board: the project's row, with the run's first issue in Working
+  // and the second, which waits on it, in Backlog (GUI-016).
+  const laneEl = () => document.querySelector('.board-lane[aria-label="Backlog of workflow"]');
+  await until("the project's row", laneEl, 15000);
+  const cards = () => all(".backlog-card", laneEl() ?? document);
+  const issueCard = (n) => cards().find((c) => c.getAttribute("aria-label")?.startsWith(`${n}:`));
+  const column = (c) => c?.closest(".board-col")?.getAttribute("aria-label");
   await until("two issues", () => cards().length === 2, 10000);
-  check("the first issue is ready", cards()[0].textContent.includes("Ready") && cards()[0].textContent.includes("AFK"), cards()[0].textContent);
-  check("the second waits on the first", cards()[1].textContent.includes("Blocked") && cards()[1].textContent.includes("after 001-first-slice"), cards()[1].textContent);
+  check("the row has the four columns", all(".board-col h3", laneEl()).map((h) => h.firstChild.textContent.trim()).join("|") === "Backlog|Working|In review|Done", all(".board-col h3", laneEl()).map((h) => h.textContent).join("|"));
+  // With the queue paused (the step before leaves it so) the issue waits in Working until
+  // it is resumed; with it running, a quick issue can already be in review when the Board
+  // next looks, so either column shows the run has taken it up.
+  await until("the first issue taken up", () => column(issueCard("001")) !== "Backlog", 15000);
+  check("the first issue is taken up by the run, an agent's", (queuePaused ? column(issueCard("001")) === "Working" : ["Working", "In review"].includes(column(issueCard("001")))) && issueCard("001").textContent.includes("AFK"), `${column(issueCard("001"))}: ${issueCard("001")?.textContent}`);
+  // Only while the queue holds the run can the second still be waiting for the first.
+  if (queuePaused) check("the second waits on the first in Backlog", column(issueCard("002")) === "Backlog" && issueCard("002").textContent.includes("after 001"), issueCard("002")?.textContent);
+  // A card is compact: a title of at most two lines, the file only on hover.
+  check("a card holds the title, one meta line and no file path", issueCard("001").querySelector(".issue-title")?.textContent === "First slice" && !issueCard("001").textContent.includes("backlog/issues") && issueCard("001").title.includes("backlog/issues/001-first-slice.md"), issueCard("001")?.title);
+  check("a title is cut after two lines", getComputedStyle(issueCard("001").querySelector(".issue-title")).webkitLineClamp === "2");
   // The queue step above left the queue paused, which holds the run's issues: the
   // dialog said so, and the Queue page resumes it.
   if (queuePaused) {
@@ -1659,9 +1684,11 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
     // can be its 30-second tick.
     const waiting = await until("the run waiting", () => document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-waiting')?.textContent, 35000);
     check("the run says its issue waits for the paused queue", waiting.includes("001-first-slice waiting to start: the queue is paused"), waiting);
-    const firstCard = document.querySelector('[aria-label="Backlog of workflow"] .backlog-card');
+    const firstCard = issueCard("001");
     check("the issue's card says so too", firstCard?.querySelector(".backlog-step-waiting")?.textContent.includes("AFK run: waiting to start"), firstCard?.textContent);
-    document.querySelector(".board-queue").click();
+    const queueIcon = all(".footer-links button").find((b) => /^Queue\b/.test(b.getAttribute("aria-label") ?? ""));
+    check("the Queue icon counts the run's issue waiting in the paused queue", /waiting/.test(queueIcon?.getAttribute("aria-label") ?? ""), queueIcon?.getAttribute("aria-label"));
+    queueIcon.click();
     const page = await until("the queue page", () => [...document.querySelectorAll(".page h2")].find((h) => h.textContent === "Queue")?.closest(".page"), 8000);
     (await until("Resume", () => withText("button", "Resume", page), 4000)).click();
     await until("resumed", () => !page.querySelector('[role="status"]')?.textContent.startsWith("Paused"), 5000);
@@ -1672,7 +1699,26 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
     return l && !l.includes("going on") && l;
   }, 150000);
   check("the run did both issues", line.startsWith("AFK run finished: 2 of 2 issues done"), line);
-  check("no unattended session waited for an approval", !document.querySelector(".board-needs .board-card"), document.querySelector(".board-needs")?.textContent.slice(0, 120));
+  // (Needs attention also counts the issues now ready for QA, so ask the sessions' own dots.)
+  const needing = all(".session-row").filter((r) => r.querySelector(".status-dot")?.getAttribute("aria-label") === "Needs you");
+  check("no unattended session waited for an approval", needing.length === 0, needing.map((r) => r.textContent.slice(0, 40)).join(" | "));
+  // Both issues are done and reviewed, and wait for the user's QA: In review.
+  await until("both issues in review", () => column(issueCard("001")) === "In review" && column(issueCard("002")) === "In review", 15000);
+  check("the finished issues wait in review", column(issueCard("001")) === "In review" && column(issueCard("002")) === "In review", `${column(issueCard("001"))}, ${column(issueCard("002"))}`);
+  // Nothing in a card is wider than the card, and in a narrow window the row scrolls
+  // sideways instead of squeezing its columns.
+  const wide = cards().filter((c) => c.scrollWidth > c.clientWidth + 1 || all("*", c).some((e) => e.getBoundingClientRect().right > c.getBoundingClientRect().right + 1));
+  check("no card holds anything wider than itself", wide.length === 0, wide.map((c) => c.getAttribute("aria-label")).join(", "));
+  const page = document.querySelector(".board-page");
+  const lanes = document.querySelector(".board-lanes");
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  page.style.maxWidth = "640px";
+  await sleep(150);
+  const narrowest = Math.min(...all(".board-col", laneEl()).map((c) => c.getBoundingClientRect().width));
+  check("in a narrow window the Board scrolls sideways", lanes.scrollWidth > lanes.clientWidth + 1, `${lanes.scrollWidth} vs ${lanes.clientWidth}`);
+  check("and its columns keep their width", narrowest >= 13 * rem, `${Math.round(narrowest)} px, a rem is ${rem}`);
+  check("and no card holds anything wider than itself", cards().every((c) => c.scrollWidth <= c.clientWidth + 1), "");
+  page.style.maxWidth = "";
 
   // WFL-009: the run in full, each issue with its session and review.
   withText(".backlog-run-details", "Show the run").click();
@@ -1690,6 +1736,10 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   withText("button", "QA done", qa()[0]).click();
   await until("one QA'd", () => qa().length === 1, 8000);
   check("QA done takes an issue off the list", qa().length === 1);
+  // On the Board the QA'd issue is Done, and the other still waits in review.
+  named(".footer-links button", "Board").click();
+  await until("the QA'd issue in Done", () => column(issueCard("001")) === "Done", 15000);
+  check("the QA'd issue is Done and the other still in review", column(issueCard("001")) === "Done" && column(issueCard("002")) === "In review", `${column(issueCard("001"))}, ${column(issueCard("002"))}`);
 });
 
 // However short the window, only the parts scroll, never the page: text for screen

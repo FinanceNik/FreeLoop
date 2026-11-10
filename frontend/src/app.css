@@ -428,6 +428,26 @@ fieldset {
   color: var(--text);
 }
 
+/* The queue's icon says how many tasks wait, as a small number on its corner. */
+.footer-links .footer-queue {
+  position: relative;
+}
+
+.footer-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 1.1em;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: calc(10rem / 14);
+  line-height: 1.5;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .footer-links .footer-cost {
   flex: none;
   margin-left: auto;
@@ -2352,22 +2372,57 @@ details.choice[open] > summary h3::after {
   font-size: calc(16rem / 14);
 }
 
-.board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px;
-  align-items: start;
+/* The Board's rows, one a project, scroll sideways together when the window is
+   narrower than four columns of cards, rather than squeeze them (GUI-016). */
+.board-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-x: auto;
+  padding-bottom: 6px;
 }
 
-.board-column {
+.board-lane {
+  flex: none;
+  min-width: calc(4 * 14rem + 3 * 12px + 24px);
   background: var(--bg-side);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 10px;
+  padding: 10px 12px 12px;
 }
 
-.board-column h3 {
-  margin: 2px 4px 10px;
+.board-lane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0 0 8px;
+}
+
+.board-lane-title {
+  font-size: calc(13rem / 14);
+  overflow-wrap: anywhere;
+}
+
+.board-lane-head .backlog-run {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.board-lane-archive {
+  margin-left: auto;
+  font-size: calc(12rem / 14);
+}
+
+.board-lane-columns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(14rem, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.board-col h3 {
+  margin: 2px 4px 8px;
   font-size: calc(12rem / 14);
   font-weight: 600;
   text-transform: uppercase;
@@ -2375,45 +2430,71 @@ details.choice[open] > summary h3::after {
   color: var(--muted);
 }
 
-.board-needs h3 {
-  color: var(--text);
-}
-
-.board-column ul {
+.board-col ul {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 2rem;
 }
 
+/* A card: nothing in it is wider than it is, whatever the title or the file. */
 .board-card {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  box-sizing: border-box;
+  min-width: 0;
   width: 100%;
   padding: 10px 12px;
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
+  cursor: default;
 }
 
 .board-card:hover:not(:disabled) {
   border-color: var(--border-strong);
 }
 
-.board-card-title {
+.issue-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.board-card-where {
+.issue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
   font-size: calc(12rem / 14);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.issue-id {
+  font-variant-numeric: tabular-nums;
+}
+
+.issue-mark,
+.issue-actions {
+  min-width: 0;
+  font-size: calc(12rem / 14);
+  overflow-wrap: anywhere;
+}
+
+.issue-done {
+  opacity: 0.7;
+}
+
+.issue-backlog.backlog-ready {
+  background: var(--accent-soft, var(--surface));
 }
 
 .backlog-run-line {
@@ -2426,10 +2507,6 @@ details.choice[open] > summary h3::after {
 .backlog-run-waiting,
 .backlog-step-waiting {
   color: var(--warn);
-}
-
-.backlog-step {
-  font-size: calc(12rem / 14);
 }
 
 .backlog-run .row {
@@ -2494,37 +2571,6 @@ details.choice[open] > summary h3::after {
 .afk-add-command input {
   flex: 1;
   min-width: 0;
-}
-
-.backlog-project + .backlog-project {
-  margin-top: 14px;
-}
-
-.backlog-project-head {
-  margin: 0 4px 8px;
-  font-size: calc(12rem / 14);
-  overflow-wrap: anywhere;
-}
-
-.backlog-card {
-  cursor: default;
-}
-
-.backlog-done {
-  opacity: 0.65;
-}
-
-.backlog-state-ready {
-  background: var(--accent-soft, var(--surface));
-}
-
-.backlog-relations,
-.backlog-archive {
-  font-size: calc(12rem / 14);
-}
-
-.backlog-archive {
-  margin: 8px 4px 0;
 }
 
 .board-empty {
@@ -5356,18 +5402,6 @@ table.hooks .hook-command {
   background: var(--surface);
 }
 
-/* What a session is doing (GUI-030): one line, cut short. */
-.session-activity {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  font-size: calc(11rem / 14);
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* A menu at the pointer, in the look of the header's. */
 .context-menu {
   position: fixed;
@@ -5623,11 +5657,6 @@ table.hooks .hook-command {
 
 .session-titleline {
   align-items: center;
-}
-
-.board-card-title .source-mark {
-  margin-right: 6px;
-  vertical-align: text-bottom;
 }
 
 .pane-tab .source-mark {

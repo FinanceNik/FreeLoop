@@ -1,29 +1,112 @@
 // The board view's columns (GUI-016). Pure, so board.test.ts covers it.
 import { t, type PlainKey } from "./i18n.ts";
 
-type Card = { status: string; updatedAt: string | Date };
+import { relations, typeLabel, type BacklogItem } from "./backlog.ts";
+import type { RunLike, StepLike } from "./afk.ts";
 
-export type Column<T> = { key: string; title: string; sessions: T[] };
+// The Board is a scrum board of workflow issues (GUI-016): one row per project, and in it
+// one card per issue in one of four columns. A card's column only shows where the issue
+// stands, from its file and the AFK run's step for it, so the Board can never disagree
+// with either; nothing moves a card by hand.
+export type Lane = "backlog" | "working" | "review" | "done";
 
-// Each column takes these statuses; a session in error, or waiting for an
-// answer, needs the user as much as one waiting for an approval.
-const COLUMNS: { key: string; title: PlainKey; statuses: string[] }[] = [
-  { key: "needs", title: "board.column.needs", statuses: ["waiting_permission", "waiting_input", "error"] },
-  { key: "running", title: "status.running", statuses: ["running", "queued"] },
-  { key: "idle", title: "status.idle", statuses: ["idle"] },
-];
+export const LANES: Lane[] = ["backlog", "working", "review", "done"];
 
-// columns sorts sessions into the board's columns, the most recently updated
-// first, except that what needs the user has waited longest first, as in the
-// attention view; archived sessions are not on the board. Titles are in the language
-// in force.
-export function columns<T extends Card>(sessions: T[]): Column<T>[] {
-  const time = (s: Card) => new Date(s.updatedAt).getTime() || 0;
-  return COLUMNS.map((c) => ({
-    key: c.key,
-    title: t(c.title),
-    sessions: sessions.filter((s) => c.statuses.includes(s.status)).sort((a, b) => (c.key === "needs" ? time(a) - time(b) : time(b) - time(a))),
-  }));
+const LANE_TITLE: Record<Lane, PlainKey> = {
+  backlog: "board.lane.backlog",
+  working: "board.lane.working",
+  review: "board.lane.review",
+  done: "board.lane.done",
+};
+
+// laneTitle is a column's name in the language in force.
+export function laneTitle(lane: Lane): string {
+  return t(LANE_TITLE[lane]);
+}
+
+// IssueCard is an issue as the Board shows it.
+export interface IssueCard {
+  id: string;
+  // The number it starts with ("001"), or its whole id when it has none.
+  short: string;
+  title: string;
+  path: string;
+  type: string;
+  state: string;
+  column: Lane;
+  waitsOn: string[];
+  // The run's step for it, when there is one, and when that began.
+  step?: StepLike;
+  startedAt?: string;
+  // A cycle or a file the app cannot read, in words; empty when neither.
+  note: string;
+  // The whole title and the file, for hovering: the card cuts a long title short.
+  hover: string;
+}
+
+// shortId is the number an issue's id starts with, which is how its neighbours name it.
+export function shortId(id: string): string {
+  const m = /^(\d+)-/.exec(id);
+  return m ? m[1] : id;
+}
+
+// columnOf is the column an issue is in. A step the run is on decides it, working or
+// reviewing or waiting for the user's QA; otherwise the file does: done, or still open.
+// An issue a run stopped at is open again, so it is back in the backlog.
+function columnOf(it: BacklogItem, step: StepLike | undefined): Lane {
+  switch (step?.state) {
+    case "working":
+      return "working";
+    case "reviewing":
+    case "qa":
+      return "review";
+    case "qa_done":
+      return "done";
+  }
+  return it.state === "done" ? "done" : "backlog";
+}
+
+// placeIssues sorts a project's issues into the Board's columns, in the order the
+// engine listed them. The run's latest step for an issue counts; steps for issues no
+// longer in the backlog are ignored.
+export function placeIssues(items: BacklogItem[] | null | undefined, run: RunLike | null | undefined): Record<Lane, IssueCard[]> {
+  const out: Record<Lane, IssueCard[]> = { backlog: [], working: [], review: [], done: [] };
+  const latest = new Map<string, StepLike>();
+  for (const s of run?.steps ?? []) latest.set(s.issue, s);
+  for (const it of items ?? []) {
+    const step = latest.get(it.id);
+    const column = columnOf(it, step);
+    out[column].push({
+      id: it.id,
+      short: shortId(it.id),
+      title: it.title,
+      path: it.path ?? "",
+      type: it.type,
+      state: it.state,
+      column,
+      waitsOn: it.waitsOn ?? [],
+      step,
+      startedAt: step?.startedAt,
+      note: it.cycle || it.problem ? relationsOf(it) : "",
+      hover: it.path ? `${it.title}\n${it.path}` : it.title,
+    });
+  }
+  return out;
+}
+
+// relationsOf says only what is wrong with an issue's place in the backlog: a cycle, or
+// a file the app cannot read. What it waits on is in the card's meta line.
+function relationsOf(it: BacklogItem): string {
+  return relations({ ...it, waitsOn: [], blocks: [] });
+}
+
+// cardMeta is a card's one meta line, in parts: its number, who does it, and what it
+// waits on in the backlog or how long ago it started working.
+export function cardMeta(c: IssueCard, now: Date = new Date()): string[] {
+  const parts = [c.short, typeLabel({ type: c.type } as BacklogItem)];
+  if (c.column === "backlog" && c.state === "blocked" && c.waitsOn.length > 0) parts.push(t("backlog.after", { issues: c.waitsOn.map(shortId).join(", ") }));
+  if (c.column === "working" && c.startedAt) parts.push(t("board.meta.started", { when: since(c.startedAt, now) }));
+  return parts;
 }
 
 // since says how long ago a time was, in the largest whole unit.

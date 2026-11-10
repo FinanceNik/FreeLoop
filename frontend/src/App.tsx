@@ -47,7 +47,7 @@ import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
 import Environments from "./Environments.tsx";
 import Settings from "./Settings.tsx";
-import Attention, { RequestView } from "./Attention.tsx";
+import Attention from "./Attention.tsx";
 import { addError, errorHeading, type ShownError } from "./errorlist.ts";
 import { finishedTurn, markFinished, markRead, onScreen, parseUnread, UNREAD_KEY } from "./unread.ts";
 import Profiles from "./Profiles.tsx";
@@ -57,7 +57,7 @@ import Skills from "./Skills.tsx";
 import MCP from "./MCP.tsx";
 import SettingsNav from "./SettingsNav.tsx";
 import { budgetLine, budgetName, worst } from "./budgets.ts";
-import { BellIcon, BoardIcon, BookIcon, ChevronIcon, FilterIcon, Logo, NavIcon as Icon, NewSessionIcon, UsageIcon } from "./icons.tsx";
+import { BellIcon, BoardIcon, BookIcon, ChevronIcon, FilterIcon, Logo, NavIcon as Icon, NewSessionIcon, QueueIcon, UsageIcon } from "./icons.tsx";
 import Help, { SHOWN_TOPICS } from "./Help.tsx";
 import type { HelpPlace } from "./help.ts";
 import { clearSelectionOnClick } from "./selection.ts";
@@ -68,7 +68,6 @@ import SourceMark from "./SourceMark.tsx";
 import GitMark from "./GitMark.tsx";
 import { contextHigh, contextLabel, contextTitle } from "./contextMeter.ts";
 import { sourceId, sourceIndex, type SourceChoices } from "./source.ts";
-import ActivityLine from "./ActivityLine.tsx";
 import ContextMenu, { type MenuItem } from "./ContextMenu.tsx";
 import { ask } from "./ask.ts";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
@@ -280,6 +279,19 @@ export default function App() {
     const timer = setInterval(refreshBacklogs, 5000);
     return () => clearInterval(timer);
   }, [screen.kind, runFor]);
+  // How many tasks wait in the queue, for the sidebar's icon (SES-025). The queue starts
+  // its tasks every 30 seconds, so this looks as often as the Queue page does, slower.
+  const [queueWaiting, setQueueWaiting] = useState(0);
+  useEffect(() => {
+    if (STANDALONE) return;
+    const load = () =>
+      EngineService.Queue()
+        .then((q) => setQueueWaiting(((q as { tasks?: { state: string }[] }).tasks ?? []).filter((task) => task.state === "waiting").length))
+        .catch(() => {});
+    load();
+    const every = setInterval(load, 5000);
+    return () => clearInterval(every);
+  }, []);
   // The AFK run's dialog (WFL-005), for a project's backlog.
   const [afkFor, setAfkFor] = useState<{ root: string; workflowId?: string; startedBy: string } | null>(null);
   const backlogActions = (b: BacklogInfo) => {
@@ -1530,6 +1542,20 @@ export default function App() {
                 <BoardIcon />
               </button>
               <button
+                className="icon-button footer-queue"
+                aria-label={queueWaiting > 0 ? t("sidebar.queue.waiting", { count: queueWaiting }) : t("app.queue")}
+                title={t("sidebar.queue.title")}
+                aria-current={screen.kind === "queue" ? "page" : undefined}
+                onClick={() => setScreen({ kind: "queue" })}
+              >
+                <QueueIcon />
+                {queueWaiting > 0 && (
+                  <span className="footer-badge" aria-hidden="true">
+                    {queueWaiting}
+                  </span>
+                )}
+              </button>
+              <button
                 aria-current={screen.kind === "usage" ? "page" : undefined}
                 className="icon-button"
                 aria-label={t("app.usage")}
@@ -1797,24 +1823,7 @@ export default function App() {
         )}
         {screen.kind === "queue" && <Queue projects={projects} profiles={profiles} onOpen={openSession} onError={report} />}
         {screen.kind === "board" && (
-          <Board
-            onQueue={() => setScreen({ kind: "queue" })}
-            backlogs={backlogs}
-            onArchive={archiveBacklog}
-            backlogActions={backlogActions}
-            activityOf={(s) => <ActivityLine status={s.status} activity={activities[s.id]} roots={rootsOf(s)} />}
-            markOf={(s) => <SourceMark source={sourceOf(s)} detail={s.model || undefined} />}
-            sessions={visible.filter((s) => s.status !== "archived")}
-            projectName={(s) => projects.find((p) => p.id === s.projectId)?.name ?? basename(s.projectRoot)}
-            statusLabel={statusLabels}
-            unread={unread}
-            renderRequest={(sid) => {
-              const req = attention.find((it) => it.session.id === sid)?.requests?.[0];
-              return req ? <RequestView key={req.requestId} req={req} onError={report} /> : null;
-            }}
-            filtered={!isEmpty(filter)}
-            onOpen={(id) => openSession(id)}
-          />
+          <Board backlogs={backlogs} onArchive={archiveBacklog} backlogActions={backlogActions} onOpen={(id) => openSession(id)} />
         )}
         {screen.kind === "attention" && (
           <Attention

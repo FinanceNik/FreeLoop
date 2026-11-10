@@ -548,6 +548,20 @@ The interface in German and Dutch, chosen in Settings (GUI-048; the PRD and issu
 3. **The views used all day (backlog 003).** *Built 2026-11-09.* The sidebar and its footer, the session's header, the transcript's own words, the composer and its controls, the right panel, the Diff and Files tabs, and the app's own slash commands and mode names (`modeName` in `frontend/src/commands.ts`); what an agent advertises is shown as given. The source test reads all of them. A `make check-app` step switches the session to Deutsch and back.
 4. **The remaining views (004), the help pages (005), the menu bar and notifications (006), the guards against untranslated text and clipped labels (007), and the user's review of the wording (008).** *Not built.*
 
+## The Board as a workflow board (planned 2026-11-09, at the user's request)
+
+GUI-016 reworded: the Board becomes a scrum board of workflow issues, designed in one conversation and written up as `backlog/prds/workflow-board.md`, sliced into the issues `backlog/issues/009` to `015`. Built a slice at a time, each by the work-an-issue method with its tests and an app-check step:
+
+1. **009, swimlanes and the Queue icon.** *Built 2026-11-10.* Rows per project, four columns, compact cards (`placeIssues`, `cardMeta` in `frontend/src/board.ts`, `Board.tsx`); the session columns and the sessions' cards are gone; the Queue's icon in the sidebar counts waiting tasks. German and Dutch column names.
+2. **010, waiting for you on the card.** An issue whose session waits for an answer, marked and answered on its card; the header counts them.
+3. **011, review and QA, and stopped issues.** In review's two states with QA done; a stopped issue back in Backlog with a mark.
+4. **012, rows collapse, a filter, the Done cap.**
+5. **013, untrusted rows and the empty board's actions.**
+6. **014, the read-only detail panel.**
+7. **015, a look in the running app (the user).**
+
+Not in: dragging, a Sessions view on the Board, filters beyond a project, parallel runs, changes to Needs attention.
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.

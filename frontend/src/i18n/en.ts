@@ -1784,10 +1784,15 @@ export const en = {
 
   // The Board (Board.tsx, board.ts). Its first column holds what needs the user: an
   // approval, an answer or an error.
-  "board.column.needs": "Needs you",
-  "board.count": { one: "{count} session", other: "{count} sessions" },
-  "board.countFiltered": { one: "{count} session, filtered in the sidebar", other: "{count} sessions, filtered in the sidebar" },
-  "board.queue": "Queue of tasks",
+  "board.lane.backlog": "Backlog",
+  "board.lane.working": "Working",
+  "board.lane.review": "In review",
+  "board.lane.done": "Done",
+  "board.meta.started": "started {when}",
+  "board.issueCount": { one: "{count} issue", other: "{count} issues" },
+  "board.noBacklogs": "No project has a backlog yet.",
+  "sidebar.queue.title": "Queue of tasks",
+  "sidebar.queue.waiting": { one: "Queue, {count} task waiting", other: "Queue, {count} tasks waiting" },
   "board.backlog": "Backlog",
   "board.backlogOf": "Backlog of {project}",
   "board.backlogCounts": "{open} open, {ready} AFK ready",
@@ -1799,7 +1804,6 @@ export const en = {
   "board.archiveTitle":
     "Removes done issues, and PRDs whose issues are all done, from the project in a commit of their own. Git history keeps them.",
   "board.archive": "Archive finished ({count})",
-  "board.none": "None",
   // How long ago, in the largest whole unit.
   "board.since.now": "just now",
   "board.since.minutes": "{minutes} min ago",

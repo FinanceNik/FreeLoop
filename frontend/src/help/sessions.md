@@ -46,8 +46,8 @@ To bring the work back, commit it, then choose **Merge…** in the Diff tab. Onl
 | View | What it's for |
 | --- | --- |
 | Panes | The buttons at the foot of the sidebar show one to four sessions. Drag a session in, or ⌘-click it. |
-| Board | One card per session: Needs you, Running, Idle. |
-| Queue | Tasks that start as sessions when there is room. |
+| Board | One card per issue of a workflow's backlog, a row for each project: Backlog, Working, In review, Done. |
+| Queue | Tasks that start as sessions when there is room. Its icon in the sidebar shows how many are waiting. |
 | Needs attention (⌘0) | Everything waiting for you, across projects. J and K move between requests. |
 
 ## The right panel
