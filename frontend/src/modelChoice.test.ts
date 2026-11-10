@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { keptEffort, modelGroups, modelLabel, namedModel } from "./modelChoice.ts";
+import { fromSetNote, keptEffort, modelGroups, modelLabel, modelOffered, namedModel } from "./modelChoice.ts";
 
 const choices = [
   { value: "big\nb", name: "b", group: "Big" },
@@ -38,4 +38,22 @@ test("an effort stays only while the model offers it", () => {
   assert.equal(keptEffort([], "low"), "");
   assert.equal(keptEffort(levels, "max"), "");
   assert.equal(keptEffort(levels, ""), "");
+});
+
+test("a run's model says whether it is the model set's, or changed for this run", () => {
+  assert.equal(fromSetNote("small\ntiny", "small\ntiny", "Split"), "from model set Split");
+  assert.equal(fromSetNote("small\ntiny", "big\nb", "Split"), "changed for this run");
+  assert.equal(fromSetNote("", "big\nb", "Split"), "");
+  assert.equal(fromSetNote("small\ntiny", "", ""), "");
+});
+
+test("a model is offered when listed, or named on a listed provider where naming is allowed", () => {
+  const models = { choices, custom: true };
+  assert.equal(modelOffered(models, ""), true);
+  assert.equal(modelOffered(models, "big\nb"), true);
+  assert.equal(modelOffered(models, "small\nmine"), true);
+  assert.equal(modelOffered(models, "gone\nx"), false);
+  assert.equal(modelOffered({ choices, custom: false }, "small\nmine"), false);
+  // An external agent's profile, which lists none of a provider's models.
+  assert.equal(modelOffered({ choices: [{ value: "opus", name: "Opus", group: "" }], custom: false }, "small\ntiny"), false);
 });

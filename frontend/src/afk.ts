@@ -30,6 +30,9 @@ export interface RunLike {
   reason?: string;
   steps: StepLike[] | null;
   branch?: string;
+  // The model its issues run on, named for a person, and their effort (WFL-014).
+  modelLabel?: string;
+  effort?: string;
 }
 
 // commandOutcome says what a session of the run would meet now.
@@ -106,5 +109,6 @@ export function runLine(r: RunLike): string {
   const parts = [t(line, { done, count: steps.length })];
   if (now) parts.push(`${now.issue} ${stepLabel(now)}`);
   if (r.reason && r.state !== "running") parts.push(r.reason);
+  if (r.modelLabel) parts.push(t("afk.line.issuesOn", { model: [r.modelLabel, r.effort].filter(Boolean).join(" · ") }));
   return parts.join(" · ");
 }

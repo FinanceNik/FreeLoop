@@ -48,6 +48,9 @@ type AFKRun struct {
 	Model             string `json:"model,omitempty"`
 	ReviewModelOption string `json:"reviewModelOption,omitempty"`
 	ReviewModel       string `json:"reviewModel,omitempty"`
+	// ModelLabel and ReviewModelLabel name those models for a person (WFL-014).
+	ModelLabel       string `json:"modelLabel,omitempty"`
+	ReviewModelLabel string `json:"reviewModelLabel,omitempty"`
 	// The efforts they switch to, likewise, when their model takes one (WFL-012).
 	EffortOption       string `json:"effortOption,omitempty"`
 	Effort             string `json:"effort,omitempty"`

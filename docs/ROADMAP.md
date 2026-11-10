@@ -571,7 +571,7 @@ WFL-011 to WFL-015: plan on a big model and hand the AFK issues to a small one, 
 3. **018, model sets in Settings** (WFL-013). *Built 2026-11-10.* `internal/config/modelsets.go`, `internal/engine/modelsets.go`, `ModelSets.tsx` and `ModelSelect.tsx`.
 4. **019, the planning stages switch to the set's model** (WFL-014). *Built 2026-11-10.* `planningModel`, `RunStageOnCurrent`; the composer's notice with its two buttons.
 5. **020, a workflow session starts on the Planning model** (WFL-014). *Built 2026-11-10.* `startingPlanning`, `WorkflowInfo.Planning`; the new-session form fills it in.
-6. **021, the AFK dialog starts from the set; the Board shows the run's models** (WFL-014).
+6. **021, the AFK dialog starts from the set; the Board shows the run's models** (WFL-014). *Built 2026-11-10.* `AFKPlan.ModelSet`, `fromSetNote`, `modelOffered`, `AFKRun.ModelLabel`.
 7. **022, cost per issue and run on the Board** (WFL-015).
 8. **023, a run's costs in its pull request and on the Usage page** (WFL-015).
 9. **024, a try with real providers (the user).**

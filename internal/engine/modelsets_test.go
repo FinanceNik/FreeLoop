@@ -238,6 +238,19 @@ func TestWorkflowSessionStartsOnThePlanningModel(t *testing.T) {
 		t.Errorf("by default: %q on %s/%s", byDefault.Workflow, byDefault.ProviderID, byDefault.Model)
 	}
 
+	agentProfile(t, e)
+	agent, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "agent", Workflow: config.BuiltinWorkflowID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agent.HarnessID != "ref" || agent.ProviderID != "" || agent.Model != "ref-model" {
+		t.Errorf("an external agent: %s, %s/%s", agent.HarnessID, agent.ProviderID, agent.Model)
+	}
+}
+
+// agentProfile gives the engine a profile "agent" on the reference ACP agent.
+func agentProfile(t *testing.T, e *Engine) {
+	t.Helper()
 	exe, _ := os.Executable()
 	os.MkdirAll(filepath.Join(e.dataDir, config.PresetsDir), 0o700)
 	os.WriteFile(filepath.Join(e.dataDir, config.PresetsDir, "ref.yaml"), []byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n"), 0o600)
@@ -246,11 +259,51 @@ func TestWorkflowSessionStartsOnThePlanningModel(t *testing.T) {
 	if err := e.SaveProfileYAML("agent", "name: Agent\nharness: ref\nmodel: ref-model\n"); err != nil {
 		t.Fatal(err)
 	}
-	agent, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "agent", Workflow: config.BuiltinWorkflowID})
+}
+
+// WFL-014: the AFK dialog starts from the workflow's model set; a run keeps the models
+// it started with when the set is edited, says them, and is refused a model its
+// profile cannot have.
+func TestAFKRunStartsFromTheSet(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	twoProviders(t, e)
+	set := config.ModelSet{Name: "Split", Issues: config.ModelChoice{Provider: "small", Model: "tiny", Effort: "low"}, Reviews: config.ModelChoice{Provider: "gone", Model: "x"}}
+	if _, err := e.SaveModelSet(ctx, set); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.SetWorkflowModelSet(ctx, config.BuiltinWorkflowID, "split"); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := e.PrepareAFK(ctx, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if agent.HarnessID != "ref" || agent.ProviderID != "" || agent.Model != "ref-model" {
-		t.Errorf("an external agent: %s, %s/%s", agent.HarnessID, agent.ProviderID, agent.Model)
+	if plan.ModelSet == nil || plan.ModelSet.Name != "Split" || plan.ModelSet.Issues.Model != "tiny" || plan.ModelSetUnavailable["reviews"] == "" || plan.ModelSetUnavailable["issues"] != "" {
+		t.Fatalf("plan's set: %+v, unavailable %v", plan.ModelSet, plan.ModelSetUnavailable)
+	}
+	agentProfile(t, e)
+	if _, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "agent", Model: set.Issues.Value()}); err == nil {
+		t.Error("an external agent's profile took a built-in provider's model")
+	}
+	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "big", ReviewProfileID: "big", Allow: []string{"git add *", "git commit *"}, Model: set.Issues.Value(), Effort: "low"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.ModelLabel != "tiny (Small)" {
+		t.Errorf("label %q", run.ModelLabel)
+	}
+	set.ID, set.Issues = "split", config.ModelChoice{Provider: "big", Model: "b"}
+	if _, err := e.SaveModelSet(ctx, set); err != nil {
+		t.Fatal(err)
+	}
+	run = waitRun(t, e, run.ID)
+	if run.State != config.RunFinished || run.Model != "small"+modelSeparator+"tiny" || run.Effort != "low" {
+		t.Fatalf("run = %+v", run)
+	}
+	for _, s := range run.Steps {
+		if ses, _ := e.store.GetSession(ctx, s.SessionID); ses.Model != "tiny" || ses.Effort != "low" {
+			t.Errorf("%s ran on %s at %q", s.Issue, ses.Model, ses.Effort)
+		}
 	}
 }

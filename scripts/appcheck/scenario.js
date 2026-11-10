@@ -1709,6 +1709,12 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
     if (effort) setSelect(effort, "low");
     return sel;
   };
+  // WFL-014: the workflow's model set fills the issues' model and effort.
+  const setNote = await until("the set's model", () => {
+    const l = all("label", dialog).find((x) => x.textContent.startsWith("Model for the issues"));
+    return l?.querySelector("select")?.value === "demo-small\nsmall" && l.querySelector(".afk-model-source");
+  }, 8000).catch(() => null);
+  check("the dialog starts from the workflow's model set", setNote?.textContent === "from model set Big plans, small works", setNote?.textContent);
   const issuesModel = await smallModel(dialog);
   check("the run offers the profile's models", [...issuesModel.options].some((o) => o.value.endsWith("\nscripted")), [...issuesModel.options].map((o) => o.textContent).join(", "));
   check("and every callable provider's, grouped, with one to name", !!issuesModel.querySelector('optgroup[label="Demo small"]') && [...issuesModel.options].some((o) => o.textContent === "Other model on Demo small…"), all("optgroup", issuesModel).map((g) => g.label).join(", "));
@@ -1809,6 +1815,7 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
     return l && !l.includes("going on") && l;
   }, 150000);
   check("the run did both issues", line.startsWith("AFK run finished: 2 of 2 issues done"), line);
+  check("the run's line says where its issues went", line.includes("Issues on small (Demo small) · low"), line);
   const afkRow = all(".session-row").find((r) => /AFK 001/.test(r.textContent));
   check("the issue's session ran on Demo small", /^Provider: Demo small/.test(afkRow?.querySelector(".source-mark")?.getAttribute("aria-label") ?? ""), afkRow?.querySelector(".source-mark")?.getAttribute("aria-label"));
   afkRow.click();

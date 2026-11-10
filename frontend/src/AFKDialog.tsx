@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { EngineService, modeName, type AFKPlan, type AFKRun, type Profile, type ProfileEfforts, type ProfileModels } from "./api.ts";
+import { EngineService, modeName, type AFKPlan, type AFKRun, type ModelChoice, type Profile, type ProfileEfforts, type ProfileModels } from "./api.ts";
 import { commandFrom, commandOutcome, defaultAllow } from "./afk.ts";
-import { keptEffort } from "./modelChoice.ts";
+import { fromSetNote, keptEffort, modelOffered } from "./modelChoice.ts";
 import ModelSelect from "./ModelSelect.tsx";
 import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
@@ -36,6 +36,12 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   // Commands the user types in to allow as well, such as a check the plan missed (WFL-009).
   const [extra, setExtra] = useState<string[]>([]);
   const [typed, setTyped] = useState("");
+  // Pickers whose model the chosen profile cannot have, which hold Start (WFL-014).
+  const [blocked, setBlocked] = useState<Record<string, boolean>>({});
+  // The workflow's model set starts the pickers off (WFL-014).
+  const set = plan?.modelSet ?? null;
+  const setIssues = rowValue(set?.issues);
+  const setReviews = rowValue(set?.reviews);
   useEffect(() => {
     EngineService.PrepareAFK(root, workflowId ?? "")
       .then((p) => {
@@ -43,6 +49,10 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
         setAllow(defaultAllow(p.commands ?? []));
         setProfileId(p.profileId);
         setReviewId(p.reviewProfileId);
+        setModel(rowValue(p.modelSet?.issues));
+        setEffort(p.modelSet?.issues?.effort ?? "");
+        setReviewModel(rowValue(p.modelSet?.reviews));
+        setReviewEffort(p.modelSet?.reviews?.effort ?? "");
       })
       .catch((err) => {
         onError(err);
@@ -112,7 +122,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                   value={profileId}
                   onChange={(e) => {
                     setProfileId(e.target.value);
-                    setModel("");
+                    setModel(setIssues);
                   }}
                 >
                   {profiles.map((p) => (
@@ -122,7 +132,20 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                   ))}
                 </select>
               </label>
-              <ModelPicker label={t("afk.dialog.modelIssues")} root={plan.projectRoot} profileId={profileId} value={model} onChange={setModel} onError={onError} />
+              <ModelPicker
+                label={t("afk.dialog.modelIssues")}
+                root={plan.projectRoot}
+                profileId={profileId}
+                value={model}
+                onChange={setModel}
+                fromSet={{ value: setIssues, name: set?.name ?? "", why: plan.modelSetUnavailable?.issues ?? "" }}
+                onReset={() => {
+                  setModel(setIssues);
+                  setEffort(set?.issues?.effort ?? "");
+                }}
+                onBlocked={(b) => setBlocked((old) => ({ ...old, issues: b }))}
+                onError={onError}
+              />
               <EffortPicker label={t("afk.dialog.effortIssues")} root={plan.projectRoot} profileId={profileId} model={model} value={effort} onChange={setEffort} onError={onError} />
               {!plan.reviewOff && (
                 <label>
@@ -131,7 +154,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                     value={reviewId}
                     onChange={(e) => {
                       setReviewId(e.target.value);
-                      setReviewModel("");
+                      setReviewModel(setReviews);
                     }}
                   >
                     {profiles.map((p) => (
@@ -143,7 +166,22 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                   <span className="muted">{t("afk.dialog.reviewHint")}</span>
                 </label>
               )}
-              {!plan.reviewOff && <ModelPicker label={t("afk.dialog.modelReviews")} root={plan.projectRoot} profileId={reviewId} value={reviewModel} onChange={setReviewModel} onError={onError} />}
+              {!plan.reviewOff && (
+                <ModelPicker
+                  label={t("afk.dialog.modelReviews")}
+                  root={plan.projectRoot}
+                  profileId={reviewId}
+                  value={reviewModel}
+                  onChange={setReviewModel}
+                  fromSet={{ value: setReviews, name: set?.name ?? "", why: plan.modelSetUnavailable?.reviews ?? "" }}
+                  onReset={() => {
+                    setReviewModel(setReviews);
+                    setReviewEffort(set?.reviews?.effort ?? "");
+                  }}
+                  onBlocked={(b) => setBlocked((old) => ({ ...old, reviews: b }))}
+                  onError={onError}
+                />
+              )}
               {!plan.reviewOff && <EffortPicker label={t("afk.dialog.effortReviews")} root={plan.projectRoot} profileId={reviewId} model={reviewModel} value={reviewEffort} onChange={setReviewEffort} onError={onError} />}
             </div>
             {(plan.commands ?? []).length > 0 && (
@@ -188,7 +226,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
           </>
         )}
         <p className="row afk-actions">
-          <button className="primary" disabled={!plan || !!plan.problem || busy} onClick={start}>
+          <button className="primary" disabled={!plan || !!plan.problem || busy || Object.values(blocked).some(Boolean)} onClick={start}>
             {busy ? t("afk.dialog.starting") : t("afk.dialog.start")}
           </button>
           <button onClick={onClose}>{t("common.cancel")}</button>
@@ -202,7 +240,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
 // built-in agent every model of every provider that can be called unasked, the
 // profile's own first, or one named by hand (WFL-011); for an external agent what it
 // last said it offers.
-function ModelPicker({ label, root, profileId, value, onChange, onError }: { label: string; root: string; profileId: string; value: string; onChange: (v: string) => void; onError: (err: unknown) => void }) {
+function ModelPicker({ label, root, profileId, value, onChange, fromSet, onReset, onBlocked, onError }: { label: string; root: string; profileId: string; value: string; onChange: (v: string) => void; fromSet: { value: string; name: string; why: string }; onReset: () => void; onBlocked: (b: boolean) => void; onError: (err: unknown) => void }) {
   const [models, setModels] = useState<ProfileModels | null>(null);
   useEffect(() => {
     setModels(null);
@@ -211,6 +249,11 @@ function ModelPicker({ label, root, profileId, value, onChange, onError }: { lab
       .then(setModels)
       .catch(onError);
   }, [root, profileId]);
+  // What stands in the way: the set's model gone or without its key, or one the
+  // profile cannot have, as with an external agent.
+  const problem = !models ? "" : fromSet.why && value === fromSet.value ? t("afk.model.unavailable", { why: fromSet.why }) : !modelOffered({ choices: models.choices ?? [], custom: !!models.custom }, value) ? t("afk.model.notOffered") : "";
+  useEffect(() => onBlocked(!!problem), [problem]);
+  const note = fromSetNote(fromSet.value, value, fromSet.name);
   return (
     <label>
       {label}
@@ -222,9 +265,29 @@ function ModelPicker({ label, root, profileId, value, onChange, onError }: { lab
         emptyLabel={models?.default ? t("afk.model.profileOwnNamed", { model: models.default }) : t("afk.model.profileOwn")}
         onChange={onChange}
       />
+      {note && (
+        <span className="muted afk-model-source">
+          {note}
+          {value !== fromSet.value && (
+            <>
+              {" · "}
+              <button type="button" className="link" onClick={onReset}>
+                {t("afk.model.reset")}
+              </button>
+            </>
+          )}
+        </span>
+      )}
+      {problem && <span className="error-text">{problem}</span>}
       {models?.note && <span className="muted">{models.note}</span>}
     </label>
   );
+}
+
+// rowValue is a model set's row as a model picker's value.
+function rowValue(row?: ModelChoice | null): string {
+  if (!row?.model) return "";
+  return row.provider ? `${row.provider}\n${row.model}` : row.model;
 }
 
 // EffortPicker chooses the effort a run's sessions switch to on their model: the

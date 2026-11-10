@@ -138,6 +138,10 @@ type AFKPlan struct {
 	// Held says why the run's first issue would wait now, such as its agent's
 	// limit (SES-025); empty when it would start.
 	Held string `json:"held"`
+	// ModelSet is the workflow's model set, which the dialog starts from, with why
+	// a row's model cannot be had, by row (WFL-014).
+	ModelSet            *config.ModelSet  `json:"modelSet"`
+	ModelSetUnavailable map[string]string `json:"modelSetUnavailable"`
 }
 
 // projectChecks are the commands a project's files suggest for its tests and type
@@ -272,6 +276,14 @@ func (e *Engine) PrepareAFK(ctx context.Context, root, workflowID string) (AFKPl
 	if !slices.ContainsFunc(w.Stages, func(s config.WorkflowStage) bool { return s.StageKind() == config.StageAFK }) {
 		plan.Problem = w.Name + " has no AFK stage."
 		return plan, nil
+	}
+	if set, ok := e.workflowModelSet(w.ID); ok {
+		plan.ModelSet, plan.ModelSetUnavailable = &set, map[string]string{}
+		for name, row := range set.Rows() {
+			if why := e.modelUnavailable(row); why != "" {
+				plan.ModelSetUnavailable[name] = why
+			}
+		}
 	}
 	plan.ProfileID = e.afkProfile(project, w.AFK.Profile)
 	plan.ReviewProfileID = e.afkProfile(project, cmp.Or(w.Review.Profile, plan.ProfileID))
@@ -416,25 +428,26 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 		}
 		review = req.ReviewProfileID
 	}
-	// A model is one the profile's sessions can be switched to, as offered.
-	pick := func(profileID, value string) (string, error) {
+	// A model is one the profile's sessions can be switched to, as offered; its label
+	// names it, and its provider, for the Board.
+	pick := func(profileID, value string) (string, string, error) {
 		if value == "" {
-			return "", nil
+			return "", "", nil
 		}
 		m, err := e.ProfileModels(ctx, project.Root, profileID)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if !m.offers(value) {
-			return "", fmt.Errorf("%s is not among the models offered for that profile", modelName(value))
+			return "", "", fmt.Errorf("%s is not among the models offered for that profile", modelName(value))
 		}
-		return m.OptionID, nil
+		return m.OptionID, m.label(value), nil
 	}
-	modelOption, err := pick(prof, req.Model)
+	modelOption, modelLabel, err := pick(prof, req.Model)
 	if err != nil {
 		return config.AFKRun{}, err
 	}
-	reviewOption, err := pick(review, req.ReviewModel)
+	reviewOption, reviewLabel, err := pick(review, req.ReviewModel)
 	if err != nil {
 		return config.AFKRun{}, err
 	}
@@ -449,6 +462,7 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 	run := config.AFKRun{
 		ModelOption: modelOption, Model: req.Model, ReviewModelOption: reviewOption, ReviewModel: req.ReviewModel,
 		EffortOption: effortOption, Effort: effort, ReviewEffortOption: reviewEffortOption, ReviewEffort: reviewEffort,
+		ModelLabel: modelLabel, ReviewModelLabel: reviewLabel,
 		ID: fmt.Sprintf("afk_%d", time.Now().UnixNano()), WorkflowID: plan.WorkflowID, ProjectID: project.ID, ProjectRoot: project.Root,
 		ProfileID: prof, ReviewProfileID: review, EnvironmentID: plan.EnvironmentID, Mode: plan.Mode, Allow: allow,
 		MaxIssues: plan.MaxIssues, State: config.RunRunning, Steps: []config.AFKStep{}, StartedBy: req.StartedBy, StartedAt: time.Now().UTC(),

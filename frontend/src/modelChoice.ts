@@ -2,6 +2,7 @@
 // provider, a model named by hand, and a chosen value in words. A built-in agent's
 // value is its provider's ID and the model, a line apart. Pure, so modelChoice.test.ts
 // covers it.
+import { t } from "./i18n.ts";
 
 export interface ChoiceLike {
   value: string;
@@ -62,4 +63,19 @@ export function modelLabel(choices: readonly ChoiceLike[], value: string): strin
 // level when the model offers it, else the profile's (WFL-012).
 export function keptEffort(choices: readonly { value: string }[], chosen: string): string {
   return chosen && choices.some((c) => c.value === chosen) ? chosen : "";
+}
+
+// fromSetNote says where a run's model comes from (WFL-014): the workflow's model set,
+// or a change for this run only; nothing when the set fixes no model there.
+export function fromSetNote(setValue: string, value: string, setName: string): string {
+  if (!setValue || !setName) return "";
+  return value === setValue ? t("afk.model.fromSet", { name: setName }) : t("afk.model.changedForRun");
+}
+
+// modelOffered reports whether a profile can have value, as the engine decides when a
+// run starts: one of its choices, or a model named on a provider the choices come from.
+export function modelOffered(models: { choices: readonly ChoiceLike[]; custom: boolean }, value: string): boolean {
+  if (!value || models.choices.some((c) => c.value === value)) return true;
+  const [provider, model] = split(value);
+  return models.custom && !!provider && !!model.trim() && models.choices.some((c) => split(c.value)[0] === provider);
 }

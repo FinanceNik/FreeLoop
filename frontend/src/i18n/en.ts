@@ -1997,6 +1997,11 @@ export const en = {
   "afk.model.profileOwnNamed": "The profile's own ({model})",
   "afk.model.other": "Other model on {provider}…",
   "afk.model.otherName": "Model name",
+  "afk.model.fromSet": "from model set {name}",
+  "afk.model.changedForRun": "changed for this run",
+  "afk.model.reset": "Reset",
+  "afk.model.notOffered": "Not available with this profile.",
+  "afk.model.unavailable": "Not available: {why}",
   "afk.effort.profileOwnNamed": "The profile's ({effort})",
   "afk.effort.none": "This model has no effort setting.",
 
@@ -2032,6 +2037,7 @@ export const en = {
   "afk.step.waiting": "waiting to start: {reason}",
   // A run in one line: {done} of its {count} issues are done.
   "afk.line.running": { one: "AFK run going on: {done} of {count} issue done", other: "AFK run going on: {done} of {count} issues done" },
+  "afk.line.issuesOn": "Issues on {model}",
   "afk.line.paused": { one: "AFK run paused: {done} of {count} issue done", other: "AFK run paused: {done} of {count} issues done" },
   "afk.line.finished": { one: "AFK run finished: {done} of {count} issue done", other: "AFK run finished: {done} of {count} issues done" },
   "afk.line.stopped": { one: "AFK run stopped: {done} of {count} issue done", other: "AFK run stopped: {done} of {count} issues done" },

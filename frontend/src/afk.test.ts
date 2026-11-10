@@ -21,6 +21,8 @@ test("a run sums itself up in a line", () => {
   ];
   assert.equal(runLine({ state: "running", steps }), "AFK run going on: 1 of 2 issues done · 002-search in review");
   assert.equal(runLine({ state: "finished", steps: [steps[0]], reason: "Every AFK issue is done." }), "AFK run finished: 1 of 1 issue done · Every AFK issue is done.");
+  // WFL-014: where its issues went.
+  assert.equal(runLine({ state: "finished", steps: [steps[0]], modelLabel: "small (Demo small)", effort: "low" }), "AFK run finished: 1 of 1 issue done · Issues on small (Demo small) · low");
   assert.equal(stepLabel({ issue: "x", title: "x", state: "qa_done" }), "QA'd");
 });
 

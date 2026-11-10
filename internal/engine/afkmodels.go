@@ -208,6 +208,25 @@ func (m ProfileModels) offers(value string) bool {
 	})
 }
 
+// label names a value for a person: the model, with its provider's name when the
+// choices give one.
+func (m ProfileModels) label(value string) string {
+	name, group := modelName(value), ""
+	providerID, _, _ := strings.Cut(value, modelSeparator)
+	for _, c := range m.Choices {
+		if c.Value == value && c.Name != "" {
+			name = c.Name
+		}
+		if group == "" && strings.HasPrefix(c.Value, providerID+modelSeparator) {
+			group = c.Group
+		}
+	}
+	if group == "" || !strings.Contains(value, modelSeparator) {
+		return name
+	}
+	return fmt.Sprintf("%s (%s)", name, group)
+}
+
 // modelName is a model option's value as a person reads it: the built-in agent's
 // value names the provider too.
 func modelName(value string) string {

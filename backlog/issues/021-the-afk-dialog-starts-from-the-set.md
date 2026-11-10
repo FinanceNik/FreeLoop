@@ -1,6 +1,6 @@
 ---
 title: The AFK dialog starts from the workflow's model set, and the Board shows the run's models
-status: open
+status: done
 type: afk
 blockedBy: [018-model-sets-in-settings]
 prd: model-sets
@@ -17,3 +17,8 @@ The workflow's set fills the AFK dialog's Issues and Reviews model and effort, l
 
 ## Notes
 - Requirement WFL-014; PRD decisions 7, 9.
+
+## Done
+- `AFKPlan.ModelSet` and `ModelSetUnavailable` carry the workflow's set to the dialog, which fills the issues' and reviews' models and efforts from it; a profile change goes back to the set's model, not the profile's.
+- `fromSetNote` and `modelOffered` (`frontend/src/modelChoice.ts`) say "from model set …" or "changed for this run" (with Reset), and whether the profile can have the model, as the engine's `ProfileModels.offers` decides; a picker that cannot holds Start.
+- The run stores `modelLabel` and `reviewModelLabel` ("small (Demo small)"), and `runLine` ends with "Issues on … · effort".
