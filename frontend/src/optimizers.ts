@@ -1,5 +1,6 @@
 // How new sessions inherit a token optimizer (HRN-019), for what the forms say;
 // the engine decides the same way.
+import { t } from "./i18n.ts";
 
 export const OPTIMIZER_OFF = "off";
 
@@ -13,6 +14,6 @@ export function inheritedOptimizer(profileOptimizer: string | undefined, setting
 // inheritedLabel is the form's first choice, saying where the value comes from.
 export function inheritedLabel(profileOptimizer: string | undefined, settingsDefault: string | undefined, list: { id: string; name: string }[]): string {
   const id = inheritedOptimizer(profileOptimizer, settingsDefault);
-  const name = id ? (list.find((o) => o.id === id)?.name ?? id) : "Off";
-  return `${profileOptimizer ? "From the profile" : "From Settings"} (${name})`;
+  const name = id ? (list.find((o) => o.id === id)?.name ?? id) : t("optimizers.off");
+  return t(profileOptimizer ? "optimizers.fromProfile" : "optimizers.fromSettings", { name });
 }

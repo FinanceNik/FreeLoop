@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { tabAfterKey } from "./a11y.ts";
 import { niceTicks, type Day } from "./analytics.ts";
+import { t } from "./i18n.ts";
 
 // UsageChart draws usage over time as stacked columns, one per day or week
 // (PRV-008). Each column is its own hover and focus target, and its readout
@@ -86,6 +87,8 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
     e.preventDefault();
     e.currentTarget.querySelectorAll<SVGRectElement>(".usage-hit")[next]?.focus();
   };
+  // What a screen reader says of a column: its bucket and total, then each series' share.
+  const readout = (d: Day) => [`${bucketLabel(d.day)}: ${format(d.total)}`, ...d.values.flatMap((v, s) => (v > 0 ? [`${series[s]?.label} ${format(v)}`] : []))].join(", ");
   const tip = hover !== null ? data[hover] : null;
   // The readout stays inside the chart: past its edge it would make the card scroll.
   const tipHalf = Math.min(TIP_HALF, width / 2);
@@ -125,7 +128,7 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
               height={plotH}
               role="img"
               tabIndex={i === Math.min(cursor, data.length - 1) ? 0 : -1}
-              aria-label={`${bucketLabel(d.day)}: ${format(d.total)}${d.values.map((v, s) => (v > 0 ? `, ${series[s]?.label} ${format(v)}` : "")).join("")}`}
+              aria-label={readout(d)}
               onPointerMove={() => setHover(i)}
               onMouseMove={() => setHover(i)}
               onFocus={() => {
@@ -151,7 +154,7 @@ export default function UsageChart({ data, series, format, bucketLabel, axisLabe
               </div>
             ) : null,
           )}
-          {tip.total === 0 && <div className="muted">No use</div>}
+          {tip.total === 0 && <div className="muted">{t("chart.noUse")}</div>}
         </div>
       )}
     </div>
@@ -179,9 +182,12 @@ function inside(centre: number, w: number, width: number): number {
   return Math.min(Math.max(centre, w / 2 + 1), width - w / 2 - 1);
 }
 
+// path joins the commands and numbers of an SVG path.
+const path = (...parts: (string | number)[]) => parts.join("");
+
 // column is a bar from (x, y) of width w and height h whose top corners are
 // rounded by r and whose base is square.
 function column(x: number, y: number, w: number, h: number, r: number): string {
-  if (r <= 0) return `M${x},${y}h${w}v${h}h${-w}Z`;
-  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  if (r <= 0) return path("M", x, ",", y, "h", w, "v", h, "h", -w, "Z");
+  return path("M", x, ",", y + h, "V", y + r, "Q", x, ",", y, " ", x + r, ",", y, "H", x + w - r, "Q", x + w, ",", y, " ", x + w, ",", y + r, "V", y + h, "Z");
 }

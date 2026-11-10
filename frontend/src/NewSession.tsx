@@ -25,7 +25,8 @@ import { inheritedLabel, OPTIMIZER_OFF } from "./optimizers.ts";
 import { orderModels } from "./models.ts";
 import { trustLines } from "./trust.ts";
 import type { Defaults } from "../bindings/github.com/FinanceNik/Freeloop/internal/config/models";
-import { locale } from "./i18n.ts";
+import { t, type PlainKey } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 interface Props {
   providers: ProviderInfo[];
@@ -52,12 +53,24 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-const SOURCE: Record<string, string> = {
-  static: "known for this provider",
-  reported: "reported by the server",
-  probe: "tested",
-  override: "set by you",
+// Where what a model can do is known from; a source the app does not know shows as given.
+const SOURCE: Record<string, PlainKey> = {
+  static: "newSession.caps.source.static",
+  reported: "newSession.caps.source.reported",
+  probe: "newSession.caps.source.probe",
+  override: "newSession.caps.source.override",
 };
+
+const sourceLabel = (source: string) => (SOURCE[source] ? t(SOURCE[source]) : source);
+
+// The files and the command an untrusted folder's sessions go without, named as
+// they are, and the project files that say what a trusted one runs.
+const AGENTS_MD = "AGENTS.md";
+const CLAUDE_MD = "CLAUDE.md";
+const SETTINGS_DIR = ".freeloop/";
+const GIT_STATUS = "git status";
+const WORKTREE_YAML = ".freeloop/worktree.yaml";
+const HOOKS_YAML = ".freeloop/hooks.yaml";
 
 export default function NewSession({ providers, projects, environments, profiles, harnesses, sessions, defaults, initialRoot, initialWorkflow, onCreated, onCompare, onProjectsChanged, onImport, onManageProviders, onProvidersChanged, onError }: Props) {
   // SET-004: the configured defaults, else the first provider.
@@ -147,8 +160,8 @@ export default function NewSession({ providers, projects, environments, profiles
 
   // What the chosen model can do (PRV-005), after typing settles.
   useEffect(() => {
-    const t = setTimeout(() => loadCaps(false), 400);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => loadCaps(false), 400);
+    return () => clearTimeout(timer);
   }, [providerId, model]);
 
   // A known project preselects its default environment.
@@ -173,8 +186,8 @@ export default function NewSession({ providers, projects, environments, profiles
   };
   useEffect(() => {
     setSettings(null);
-    const t = setTimeout(loadSettings, 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(loadSettings, 300);
+    return () => clearTimeout(timer);
   }, [root]);
   const trust = () =>
     EngineService.SetProjectTrust(root.trim(), true)
@@ -302,44 +315,49 @@ export default function NewSession({ providers, projects, environments, profiles
   if (providers.length === 0 && !readyAgent) {
     return (
       <section className="page">
-        <h2>New session</h2>
-        <p>Add a model provider, or install an agent that signs in by itself, such as Claude Code.</p>
+        <h2>{t("app.newSession")}</h2>
+        <p>{t("newSession.noProvider")}</p>
         <button className="primary" onClick={onManageProviders}>
-          Add a provider
+          {t("newSession.addProvider")}
         </button>
       </section>
     );
   }
 
   const blocked = caps !== null && !caps.tools;
+  const addProvider = (
+    <button type="button" className="link" onClick={onManageProviders}>
+      {t("newSession.addProvider")}
+    </button>
+  );
 
   return (
     <section className="page">
-      <h2>{initialWorkflow ? "Start a workflow" : "New session"}</h2>
+      <h2>{initialWorkflow ? t("newSession.startWorkflow") : t("app.newSession")}</h2>
       <form className="card form" onSubmit={create}>
         {initialWorkflow && firstStage && (
           <label className="workflow-brief">
-            What is it about?
+            {t("newSession.brief")}
             <textarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               rows={3}
               required={!!firstStage.needsInput}
-              placeholder="A feature, a fix or an idea, in a sentence or two"
+              placeholder={t("newSession.briefPlaceholder")}
               autoFocus
             />
             <span className="muted">
               {chosenWorkflow?.reason
-                ? `${chosenWorkflow.name} cannot start yet: ${chosenWorkflow.reason}. Settings → Workflows sets it up.`
-                : `${chosenWorkflow?.name}: the session starts at "${firstStage.title}" with this, and the stage strip above its box shows what comes after.`}
+                ? t("newSession.workflowCannotStart", { name: chosenWorkflow.name, reason: chosenWorkflow.reason })
+                : t("newSession.workflowStartsAt", { name: chosenWorkflow?.name ?? "", stage: firstStage.title })}
             </span>
           </label>
         )}
         {projects.length > 0 && (
           <label>
-            Project
+            {t("panel.info.project")}
             <select value={project?.root ?? ""} onChange={(e) => setRoot(e.target.value)}>
-              <option value="">Another folder…</option>
+              <option value="">{t("newSession.anotherFolder")}</option>
               {projects
                 .filter((p) => !p.missing)
                 .map((p) => (
@@ -351,25 +369,28 @@ export default function NewSession({ providers, projects, environments, profiles
           </label>
         )}
         <label>
-          Project folder
+          {t("newSession.folder")}
           <div className="row">
-            <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder="/Users/you/code/project" required />
+            <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder={t("newSession.folderPlaceholder")} required />
             <button type="button" onClick={choose}>
-              Choose…
+              {t("newSession.choose")}
             </button>
           </div>
         </label>
         {root.trim() && settings && !settings.trusted && (
           <div className="banner warn trust-box" role="status">
-            <strong>Do you trust this folder?</strong>
+            <strong>{t("newSession.trust.ask")}</strong>
             <p>
-              Until you do, sessions here use your global settings only: Freeloop does not read its <code>AGENTS.md</code> or{" "}
-              <code>CLAUDE.md</code>, its <code>.freeloop/</code> settings, run its hooks, or run <code>git status</code> in it. Trust only folders whose
-              contents you know.
+              {tNodes("newSession.trust.until", {
+                agents: <code>{AGENTS_MD}</code>,
+                claude: <code>{CLAUDE_MD}</code>,
+                settings: <code>{SETTINGS_DIR}</code>,
+                git: <code>{GIT_STATUS}</code>,
+              })}
             </p>
             {trustLines(settings).length > 0 && (
               <div>
-                <strong>Trusting it lets it run or try these:</strong>
+                <strong>{t("trust.banner.lets")}</strong>
                 <ul>
                   {trustLines(settings).map((line, n) => (
                     <li key={n}>
@@ -381,11 +402,13 @@ export default function NewSession({ providers, projects, environments, profiles
             )}
             {(settings.worktree?.setup || settings.worktree?.run || settings.worktree?.archive || (settings.worktree?.copy ?? []).length > 0) && (
               <div>
-                <strong>Its worktree sessions would do this (.freeloop/worktree.yaml):</strong>
+                <strong>{t("newSession.trust.worktree", { file: WORKTREE_YAML })}</strong>
                 <ul>
                   {(settings.worktree?.copy ?? []).length > 0 && (
                     <li>
-                      copy into each worktree: {(settings.worktree?.copy ?? []).map((c) => <code key={c}>{c} </code>)}
+                      {tNodes("newSession.trust.copy", {
+                        files: (settings.worktree?.copy ?? []).map((c) => <code key={c}>{c} </code>),
+                      })}
                     </li>
                   )}
                   {(["setup", "run", "archive"] as const)
@@ -400,16 +423,16 @@ export default function NewSession({ providers, projects, environments, profiles
             )}
             <div className="row">
               <button type="button" className="primary" onClick={trust}>
-                Trust this project
+                {t("trust.palette")}
               </button>
-              <span className="muted">or start without trusting it.</span>
+              <span className="muted">{t("newSession.trust.or")}</span>
             </div>
           </div>
         )}
         {settings?.trusted && (settings.hooks ?? []).length > 0 && (
           <div className="banner row" role="status">
             <span>
-              This project runs hooks from <code>.freeloop/hooks.yaml</code>:
+              {tNodes("newSession.hooks", { file: <code>{HOOKS_YAML}</code> })}
               <ul>
                 {(settings.hooks ?? []).map((h, n) => (
                   <li key={n}>
@@ -423,7 +446,7 @@ export default function NewSession({ providers, projects, environments, profiles
         )}
         {settings && (settings.issues ?? []).length > 0 && (
           <div className="banner warn" role="status">
-            <strong>Problems in the project's .freeloop/ settings</strong>
+            <strong>{t("newSession.problems")}</strong>
             <ul>
               {(settings.issues ?? []).map((i, n) => (
                 <li key={n}>
@@ -436,18 +459,17 @@ export default function NewSession({ providers, projects, environments, profiles
           </div>
         )}
         <label>
-          Profile
+          {t("settings.defaults.profile")}
           <select value={profileId} onChange={(e) => pickProfile(e.target.value)}>
             {harnesses.flatMap((h) =>
               [false, true].map((fromProject) => {
                 const list = (fromProject ? projectProfiles : profiles).filter((p) => (p.harness || "builtin") === h.id);
                 if (list.length === 0) return null;
                 return (
-                  <optgroup key={h.id + fromProject} label={fromProject ? `${h.name} · this project's .freeloop/` : h.name}>
+                  <optgroup key={h.id + fromProject} label={fromProject ? t("newSession.profile.fromProject", { harness: h.name }) : h.name}>
                     {list.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name}
-                        {project && project.defaultProfileId === p.id ? " (project default)" : ""}
+                        {project && project.defaultProfileId === p.id ? t("newSession.profile.projectDefault", { name: p.name }) : p.name}
                       </option>
                     ))}
                   </optgroup>
@@ -458,43 +480,44 @@ export default function NewSession({ providers, projects, environments, profiles
           {profile?.description && <span className="muted">{profile.description}</span>}
           {project && (project.defaultProfileId || "default") !== profileId && (
             <span className="row muted">
-              <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} /> Make it {project.name}'s default
+              <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} /> {t("newSession.profile.makeDefault", { project: project.name })}
             </span>
           )}
         </label>
         {harness?.missing && (
           <p className="error-text" role="alert">
-            {harness.name} cannot start: {harness.missing}.
+            {t("newSession.harness.missing", { name: harness.name, reason: harness.missing })}
           </p>
         )}
         {harness && !harness.usesProvider && (
           <p className="muted harness-note">
-            {harness.name} brings its own model access and sign-in; Freeloop passes it no credentials.{harness.notes ? ` ${harness.notes}` : ""}
+            {t("newSession.harness.ownAccess", { name: harness.name })}
+            {harness.notes ? ` ${harness.notes}` : ""}
           </p>
         )}
         {harness && !harness.usesProvider && builtinProfile && providers.length > 0 && (
           <p className="harness-note provider-offer">
             <span className="muted">
-              {harness.name} cannot use {providers.length === 1 ? providers[0].name : "your providers"}. To choose a provider and model, run the session on {builtinProfile.name}.
+              {providers.length === 1
+                ? t("newSession.harness.cannotUse", { name: harness.name, provider: providers[0].name, profile: builtinProfile.name })
+                : t("newSession.harness.cannotUseAny", { name: harness.name, profile: builtinProfile.name })}
             </span>{" "}
             <button type="button" onClick={() => pickProfile(builtinProfile.id)}>
-              Use a provider
+              {t("newSession.useProvider")}
             </button>
           </p>
         )}
         {usesProvider && providers.length === 0 && (
           <p className="banner warn">
-            This profile runs on a model provider, and none is set up.{" "}
-            <button type="button" className="link" onClick={onManageProviders}>
-              Add a provider
-            </button>
-            {readyAgent ? `, or choose the ${readyAgent.name} profile above.` : "."}
+            {readyAgent
+              ? tNodes("newSession.noProviderForProfileOrAgent", { add: addProvider, agent: readyAgent.name })
+              : tNodes("newSession.noProviderForProfile", { add: addProvider })}
           </p>
         )}
         {(!harness || harness.usesProvider) && providers.length > 0 && (
           <>
         <label>
-          Provider
+          {t("settings.defaults.provider")}
           <select value={providerId} onChange={(e) => pickProvider(e.target.value)}>
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -504,12 +527,12 @@ export default function NewSession({ providers, projects, environments, profiles
           </select>
         </label>
         <label>
-          Model
-          <input list="models" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Pick or type a model ID" required />
+          {t("settings.defaults.model")}
+          <input list="models" value={model} onChange={(e) => setModel(e.target.value)} placeholder={t("newSession.modelPlaceholder")} required />
           <datalist id="models">
             {listed.map((id) => {
               const name = names.get(id);
-              const label = [favorites.includes(id) && "★", hidden.includes(id) && "hidden", name && name !== id && name].filter(Boolean).join(" ");
+              const label = [favorites.includes(id) && "★", hidden.includes(id) && t("newSession.model.hidden"), name && name !== id && name].filter(Boolean).join(" ");
               return (
                 <option key={id} value={id}>
                   {label || undefined}
@@ -517,17 +540,17 @@ export default function NewSession({ providers, projects, environments, profiles
               );
             })}
           </datalist>
-          {modelsError && <span className="error-text">Could not list models: {modelsError}</span>}
+          {modelsError && <span className="error-text">{t("newSession.modelsFailed", { error: modelsError })}</span>}
           {!modelsError && models.length > 0 && (
             <span className="muted">
-              {models.length} models available
-              {hidden.length > 0 && ` · ${hidden.length} hidden`}
+              {t("newSession.modelsAvailable", { count: models.length })}
+              {hidden.length > 0 && ` · ${t("newSession.modelsHidden", { count: hidden.length })}`}
             </span>
           )}
         </label>
         {!current?.builtin && (
           <div className="row wrap model-flags">
-            {favorites.length > 0 && <span className="muted">Favorites:</span>}
+            {favorites.length > 0 && <span className="muted">{t("newSession.favorites")}</span>}
             {favorites.map((f) => (
               <button type="button" key={f} className={f === chosen ? "chip chip-on" : "chip"} onClick={() => setModel(f)}>
                 {f}
@@ -539,44 +562,44 @@ export default function NewSession({ providers, projects, environments, profiles
                   type="button"
                   aria-pressed={favorites.includes(chosen)}
                   onClick={() => flag(!favorites.includes(chosen), false)}
-                  title="Favorites are listed first"
+                  title={t("newSession.favoritesTip")}
                 >
-                  {favorites.includes(chosen) ? "★ Unfavorite" : "☆ Favorite"}
+                  {favorites.includes(chosen) ? `★ ${t("newSession.unfavorite")}` : `☆ ${t("newSession.favorite")}`}
                 </button>
-                <button type="button" onClick={() => flag(false, !hidden.includes(chosen))} title="Hidden models are left out of the list">
-                  {hidden.includes(chosen) ? "Unhide" : "Hide"}
+                <button type="button" onClick={() => flag(false, !hidden.includes(chosen))} title={t("newSession.hideTip")}>
+                  {hidden.includes(chosen) ? t("newSession.unhide") : t("newSession.hide")}
                 </button>
               </>
             )}
             {hidden.length > 0 && (
               <label className="row">
-                <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show hidden
+                <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> {t("newSession.showHidden")}
               </label>
             )}
           </div>
         )}
 
         <div className="caps" role="status">
-          {capsState === "loading" && <span className="muted">Checking the model…</span>}
-          {capsState === "probing" && <span className="muted">Testing tool calling; local models may need a minute to load…</span>}
+          {capsState === "loading" && <span className="muted">{t("newSession.caps.checking")}</span>}
+          {capsState === "probing" && <span className="muted">{t("newSession.caps.probing")}</span>}
           {capsState === "idle" && capsError && <span className="error-text">{capsError}</span>}
           {capsState === "idle" && caps && caps.source === "unknown" && (
             <span>
-              Tool support is not known yet; it is tested when the session starts.{" "}
+              {t("newSession.caps.unknown")}{" "}
               <button type="button" onClick={() => loadCaps(true)}>
-                Test now
+                {t("newSession.caps.testNow")}
               </button>
             </span>
           )}
           {capsState === "idle" && caps && caps.source !== "unknown" && caps.tools && (
             <span className="ok">
-              Tool calling supported ({SOURCE[caps.source] ?? caps.source})
-              {caps.contextWindow > 0 && ` · ${caps.contextWindow.toLocaleString(locale())} token context`}
+              {t("newSession.caps.supported", { source: sourceLabel(caps.source) })}
+              {caps.contextWindow > 0 && ` · ${t("newSession.caps.context", { tokens: caps.contextWindow })}`}
               {caps.source === "override" && (
                 <>
                   {" "}
                   <button type="button" onClick={() => override(null)}>
-                    Undo override
+                    {t("newSession.caps.undoOverride")}
                   </button>
                 </>
               )}
@@ -584,16 +607,16 @@ export default function NewSession({ providers, projects, environments, profiles
           )}
           {capsState === "idle" && blocked && caps.source !== "unknown" && (
             <span className="error-text">
-              This model cannot be used by the built-in harness: no tool calling ({SOURCE[caps.source] ?? caps.source}).{" "}
+              {t("newSession.caps.blocked", { source: sourceLabel(caps.source) })}{" "}
               <button type="button" onClick={() => override(caps.source === "override" ? null : true)}>
-                {caps.source === "override" ? "Undo override" : "Use anyway"}
+                {caps.source === "override" ? t("newSession.caps.undoOverride") : t("newSession.caps.useAnyway")}
               </button>
             </span>
           )}
         </div>
         {providerId && chosen && capsState === "idle" && caps && (
           <label className="context-limit-row">
-            Context limit <span className="muted">(optional, in tokens)</span>
+            {t("panel.info.contextLimit")} <span className="muted">{t("newSession.contextLimitHint")}</span>
             <ContextLimit providerId={providerId} model={chosen} onChanged={() => loadCaps(false)} onError={onError} />
           </label>
         )}
@@ -604,47 +627,46 @@ export default function NewSession({ providers, projects, environments, profiles
           <div className="worktree-choice">
             {others > 0 && project && !project.worktreeDefault && (
               <p className="muted">
-                {others === 1 ? "Another session works" : `${others} other sessions work`} in {project.name}. Its own worktree keeps this one's edits apart.
+                {t("newSession.otherSessions", { count: others, project: project.name })}
               </p>
             )}
             <label className="row">
               <input type="checkbox" checked={worktree && !!settings?.trusted} disabled={!settings?.trusted} onChange={(e) => setWorktree(e.target.checked)} />
-              Work in its own git worktree and branch
-              {!settings?.trusted && <span className="muted"> (trust the project first)</span>}
+              {t("newSession.worktree")}
+              {!settings?.trusted && <span className="muted"> {t("newSession.worktreeTrustFirst")}</span>}
             </label>
             {project && settings?.trusted && (
               <label className="row muted">
-                <input type="checkbox" checked={rememberWorktree} onChange={(e) => setRememberWorktree(e.target.checked)} /> Remember for {project.name}
+                <input type="checkbox" checked={rememberWorktree} onChange={(e) => setRememberWorktree(e.target.checked)} /> {t("newSession.rememberWorktree", { project: project.name })}
               </label>
             )}
             {project && settings?.trusted && worktree && <WorktreeScripts projectId={project.id} onError={onError} />}
           </div>
         )}
         <label>
-          Environment
+          {t("settings.defaults.environment")}
           <select value={environmentId || "local"} onChange={(e) => setEnvironmentId(e.target.value)}>
             {environments.map((e) => (
               <option key={e.id} value={e.id}>
-                {e.name}
-                {(e.secretNames ?? []).length > 0 ? ` (${(e.secretNames ?? []).length} secrets)` : ""}
+                {(e.secretNames ?? []).length > 0 ? t("newSession.environmentSecrets", { name: e.name, count: (e.secretNames ?? []).length }) : e.name}
               </option>
             ))}
           </select>
           {env?.sandbox?.enabled ? (
-            <span className="muted">The built-in agent's commands run without asking, and can only write in the project. Leaving the sandbox always asks.</span>
+            <span className="muted">{t("newSession.sandboxed")}</span>
           ) : (
-            env?.kind === "local" && <span className="muted">Commands ask each time, and run with your full access. Choose a sandboxed environment to confine them to the project.</span>
+            env?.kind === "local" && <span className="muted">{t("newSession.unsandboxed")}</span>
           )}
         </label>
         {(usesProvider || harness?.takesOptimizer) && extra.length === 0 && (
           <label>
-            Token optimizer
+            {t("newSession.optimizer")}
             <select value={optimizer} onChange={(e) => setOptimizer(e.target.value)}>
-              <option value="">{waits?.optimizer ? "Off, until you approve the file's choice in Settings" : inheritedLabel(profile?.optimizer, defaults?.optimizer, optimizers)}</option>
-              <option value={OPTIMIZER_OFF}>Off</option>
+              <option value="">{waits?.optimizer ? t("newSession.optimizerWaits") : inheritedLabel(profile?.optimizer, defaults?.optimizer, optimizers)}</option>
+              <option value={OPTIMIZER_OFF}>{t("newSession.off")}</option>
               {optimizers.map((o) => (
                 <option key={o.id} value={o.id} disabled={o.needsApproval || (!o.path && env?.kind !== "docker")}>
-                  {o.needsApproval ? `${o.name} (not approved)` : o.path || env?.kind === "docker" ? o.name : `${o.name} (not installed)`}
+                  {o.needsApproval ? t("newSession.notApproved", { name: o.name }) : o.path || env?.kind === "docker" ? o.name : t("newSession.notInstalled", { name: o.name })}
                 </option>
               ))}
             </select>
@@ -652,24 +674,26 @@ export default function NewSession({ providers, projects, environments, profiles
         )}
         {workflows.length > 0 && (
           <label>
-            Workflow
+            {t("composer.workflow")}
             <select value={workflow} onChange={(e) => setWorkflow(e.target.value)}>
               <option value="">{inheritedLabel(profile?.workflow, defaults?.workflow, workflows)}</option>
-              <option value={OPTIMIZER_OFF}>Off</option>
+              <option value={OPTIMIZER_OFF}>{t("newSession.off")}</option>
               {workflows.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.reason ? `${w.name} (not approved)` : w.name}
+                  {w.reason ? t("newSession.notApproved", { name: w.name }) : w.name}
                 </option>
               ))}
             </select>
-            <span className="muted">Its stages are slash commands in the session: type / to see them.</span>
+            <span className="muted">{t("newSession.workflowTip")}</span>
           </label>
         )}
         <label>
-          Permission mode
+          {t("newSession.mode")}
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="">
-              {waits?.mode ? "Ask, until you approve the file's choice in Settings" : <>{profile?.mode ? "From the profile" : "From the environment"} ({modeName(profile?.mode || env?.defaultMode || "ask")})</>}
+              {waits?.mode
+                ? t("newSession.modeWaits", { mode: modeName("ask") })
+                : t(profile?.mode ? "newSession.modeFromProfile" : "newSession.modeFromEnvironment", { mode: modeName(profile?.mode || env?.defaultMode || "ask") })}
             </option>
             {STARTING_MODES.map((m) => (
               <option key={m.id} value={m.id}>
@@ -679,13 +703,13 @@ export default function NewSession({ providers, projects, environments, profiles
           </select>
         </label>
         <label>
-          Title <span className="muted">(optional)</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="New session" />
+          {t("newSession.title")} <span className="muted">{t("newSession.optional")}</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("app.newSession")} />
         </label>
         {settings?.trusted && allProfiles.length > 1 && (
           <details className="compare-choice" open={extra.length > 0}>
-            <summary>Also run this task on other profiles, to compare</summary>
-            <p className="muted">Each profile gets its own worktree; the task is sent to all of them at once, and a page shows the runs side by side.</p>
+            <summary>{t("newSession.compare")}</summary>
+            <p className="muted">{t("newSession.compareNote")}</p>
             <div className="row wrap">
               {allProfiles
                 .filter((p) => p.id !== profileId)
@@ -703,8 +727,8 @@ export default function NewSession({ providers, projects, environments, profiles
             </div>
             {extra.length > 0 && (
               <label>
-                Task <span className="muted">(sent to all {extra.length + 1} runs)</span>
-                <textarea rows={4} value={task} onChange={(e) => setTask(e.target.value)} placeholder="Describe the change all runs should make." required />
+                {t("newSession.task")} <span className="muted">{t("newSession.taskHint", { count: extra.length + 1 })}</span>
+                <textarea rows={4} value={task} onChange={(e) => setTask(e.target.value)} placeholder={t("newSession.taskPlaceholder")} required />
               </label>
             )}
           </details>
@@ -713,14 +737,14 @@ export default function NewSession({ providers, projects, environments, profiles
           <p className="muted">
             {issue ? (
               <>
-                Starts from issue #{issue.number}; its text goes into the message box for you to edit and send.{" "}
+                {t("newSession.fromIssue", { number: String(issue.number) })}{" "}
                 <button type="button" className="link" onClick={() => (setIssue(null), setTitle(""))}>
-                  Remove
+                  {t("common.remove")}
                 </button>
               </>
             ) : (
               <button type="button" className="link" onClick={() => setPickingIssue(true)}>
-                Start from a GitHub issue…
+                {t("newSession.pickIssue")}
               </button>
             )}
           </p>
@@ -738,11 +762,11 @@ export default function NewSession({ providers, projects, environments, profiles
         )}
         <div className="row">
           <button type="submit" className="primary" disabled={busy || !root || !!harness?.missing || (usesProvider && (!model.trim() || (blocked && caps?.source !== "unknown")))}>
-            {busy ? "Starting…" : extra.length > 0 ? `Start ${extra.length + 1} runs` : "Start session"}
+            {busy ? t("newSession.starting") : extra.length > 0 ? t("newSession.startRuns", { count: extra.length + 1 }) : t("newSession.start")}
           </button>
           {onImport && (
             <button type="button" className="link" onClick={onImport}>
-              Import an existing session…
+              {t("newSession.import")}
             </button>
           )}
         </div>

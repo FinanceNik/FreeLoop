@@ -5,21 +5,27 @@
 // user's rights, pinned to one version. Addresses and versions were checked against
 // each vendor's documentation and npm on 2026-11-08; keep them that way when changing
 // one. No server that reads files directly is suggested: it would go around the
-// protected paths the agent's own file tools keep to.
+// protected paths the agent's own file tools keep to. The descriptions are the app's own
+// words, held as catalogue keys and translated where they show (GUI-048); names, header
+// names and addresses are shown as given.
+import type { PlainKey } from "./i18n.ts";
+
+// AUTH_HEADER is the header a token goes in: a protocol value, never translated.
+export const AUTH_HEADER = "Authorization";
 
 export interface McpSuggestion {
   id: string;
   name: string;
   // What it is for, in a line.
-  description: string;
+  description: PlainKey;
   // Where it runs and what it can reach, said plainly.
-  reach: string;
+  reach: PlainKey;
   transport: "http" | "stdio";
   url?: string;
   command?: string;
   args?: string[];
   // A header holding a secret, filled in before saving; it goes to the keyring.
-  secretHeader?: { name: string; hint: string };
+  secretHeader?: { name: string; hint: PlainKey };
   // How it signs in: OAuth in the browser, a token in a header, or not at all.
   signIn: "oauth" | "token" | "none";
   docs: string;
@@ -29,19 +35,19 @@ export const MCP_SUGGESTIONS: McpSuggestion[] = [
   {
     id: "github",
     name: "GitHub",
-    description: "Issues, pull requests, code search and Actions in your repositories.",
-    reach: "Runs at GitHub. It can do what the personal access token you give it allows.",
+    description: "mcp.suggest.github.description",
+    reach: "mcp.suggest.github.reach",
     transport: "http",
     url: "https://api.githubcopilot.com/mcp/",
-    secretHeader: { name: "Authorization", hint: "Bearer followed by a GitHub personal access token" },
+    secretHeader: { name: AUTH_HEADER, hint: "mcp.suggest.github.hint" },
     signIn: "token",
     docs: "https://github.com/github/github-mcp-server",
   },
   {
     id: "linear",
     name: "Linear",
-    description: "Issues, projects and comments in your Linear workspace.",
-    reach: "Runs at Linear, as you, once you sign in.",
+    description: "mcp.suggest.linear.description",
+    reach: "mcp.suggest.linear.reach",
     transport: "http",
     url: "https://mcp.linear.app/mcp",
     signIn: "oauth",
@@ -50,8 +56,8 @@ export const MCP_SUGGESTIONS: McpSuggestion[] = [
   {
     id: "sentry",
     name: "Sentry",
-    description: "Errors, issues and releases in your Sentry organization.",
-    reach: "Runs at Sentry, as you, once you sign in.",
+    description: "mcp.suggest.sentry.description",
+    reach: "mcp.suggest.sentry.reach",
     transport: "http",
     url: "https://mcp.sentry.dev/mcp",
     signIn: "oauth",
@@ -60,8 +66,8 @@ export const MCP_SUGGESTIONS: McpSuggestion[] = [
   {
     id: "notion",
     name: "Notion",
-    description: "Pages and databases in your Notion workspace.",
-    reach: "Runs at Notion, as you, once you sign in.",
+    description: "mcp.suggest.notion.description",
+    reach: "mcp.suggest.notion.reach",
     transport: "http",
     url: "https://mcp.notion.com/mcp",
     signIn: "oauth",
@@ -70,8 +76,8 @@ export const MCP_SUGGESTIONS: McpSuggestion[] = [
   {
     id: "context7",
     name: "Context7",
-    description: "Current documentation and code examples for libraries.",
-    reach: "Runs at Context7, which receives the library names and questions the agent asks about.",
+    description: "mcp.suggest.context7.description",
+    reach: "mcp.suggest.context7.reach",
     transport: "http",
     url: "https://mcp.context7.com/mcp",
     signIn: "none",
@@ -80,8 +86,8 @@ export const MCP_SUGGESTIONS: McpSuggestion[] = [
   {
     id: "playwright",
     name: "Playwright",
-    description: "A browser the agent drives, to test web apps.",
-    reach: "Runs on this computer with your rights: it opens a browser and visits the pages the agent chooses. Needs Node.js.",
+    description: "mcp.suggest.playwright.description",
+    reach: "mcp.suggest.playwright.reach",
     transport: "stdio",
     command: "npx",
     args: ["-y", "@playwright/mcp@0.0.84"],

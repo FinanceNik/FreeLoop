@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { list, t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 import { formAnswers, formFields, initialValues, type FormField, type FormValues } from "./forms.ts";
 
 // An MCP server's request for input (MCP-008), answered on the tool card in
@@ -49,7 +51,9 @@ export function useMcpForm(form: McpFormRequest | null | undefined, requestId: s
       if (!form || !kind.startsWith("allow")) return decide(optionId);
       const { answers, missing, invalid } = formAnswers(fields, values);
       if (missing.length || invalid.length) {
-        setError([missing.length ? `Fill in ${missing.join(", ")}.` : "", invalid.length ? `Check ${invalid.join(", ")}.` : ""].join(" ").trim());
+        setError(
+          [missing.length ? t("mcp.ask.fillIn", { fields: list(missing) }) : "", invalid.length ? t("mcp.ask.check", { fields: list(invalid) }) : ""].join(" ").trim(),
+        );
         return;
       }
       decide(optionId, answers);
@@ -69,11 +73,11 @@ export function McpFormView({ form, state, idPrefix = "form" }: { form: McpFormR
   return (
     <div className="mcp-form">
       <p>
-        <strong>{form.server}</strong> asks: {form.message}
+        {tNodes("mcp.ask.asks", { server: <strong>{form.server}</strong>, message: form.message })}
       </p>
       {form.url && (
         <p>
-          Open <code>{form.url}</code> to continue, then choose Send.
+          {tNodes("mcp.ask.openUrl", { url: <code>{form.url}</code>, send: t("approval.send") })}
         </p>
       )}
       {fields.map((f) => {
@@ -132,7 +136,7 @@ export function McpFormView({ form, state, idPrefix = "form" }: { form: McpFormR
             {label}
             {f.type === "enum" ? (
               <select id={id} value={value} required={f.required} onChange={(e) => set(f.name, e.target.value)}>
-                <option value="">Choose…</option>
+                <option value="">{t("mcp.ask.choose")}</option>
                 {f.options!.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}

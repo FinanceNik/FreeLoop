@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 import { EngineService, modeName, STARTING_MODES, type Command, type HarnessInfo, type Issue, type OptimizerStatus, type Profile, type ProviderInfo, type WorkflowInfo } from "./api.ts";
 import { OPTIMIZER_OFF } from "./optimizers.ts";
 
@@ -16,6 +18,14 @@ interface Props {
 
 const TOOLS = ["read_file", "list_dir", "glob", "grep", "write_file", "edit_file", "shell"];
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
+
+// names is a comma-separated field's entries.
+function names(text: string): string[] {
+  return text
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
 
 function blank(): Profile {
   return {
@@ -79,14 +89,14 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
   const [yamlIssues, setYamlIssues] = useState<Issue[]>([]);
   useEffect(() => {
     if (!yamlEdit) return;
-    const t = setTimeout(
+    const timer = setTimeout(
       () =>
         EngineService.CheckProfileYAML(yamlEdit.id, yamlEdit.text)
           .then((l) => setYamlIssues(l ?? []))
           .catch(onError),
       250,
     );
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [yamlEdit?.text]);
   const openYAML = (id: string) =>
     EngineService.ProfileYAML(id)
@@ -107,11 +117,11 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
   };
 
   const remove = async (p: Profile) => {
-    const what = p.id === "default" ? "Reset the default profile to the built-in one" : `Delete ${p.name}`;
-    if (!(await ask(`${what}? Sessions using it ${p.id === "default" ? "use the built-in default" : "cannot start until it exists again"}.`))) return;
+    if (!(await ask(p.id === "default" ? t("profiles.resetDefaultAsk") : t("profiles.deleteAsk", { name: p.name })))) return;
     EngineService.DeleteProfile(p.id).then(onChanged).catch(onError);
   };
 
+  const providerName = (id: string) => providers.find((x) => x.id === id)?.name ?? id;
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
   const setCommand = (i: number, c: Partial<Command>) =>
     set(
@@ -123,7 +133,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
     return (
       <section className="page">
         <h2>
-          <code>profiles/{yamlEdit.id}.yaml</code>
+          <code>{`profiles/${yamlEdit.id}.yaml`}</code>
         </h2>
         <textarea
           className="yaml-editor"
@@ -131,20 +141,18 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
           rows={24}
           value={yamlEdit.text}
           onChange={(e) => setYamlEdit({ ...yamlEdit, text: e.target.value })}
-          aria-label="Profile YAML"
+          aria-label={t("profiles.yamlLabel")}
         />
         {yamlIssues.length > 0 ? (
           <ul className="error-text">
             {yamlIssues.map((i, n) => (
               <li key={n}>
-                {i.line ? `Line ${i.line}: ` : ""}
-                {i.field ? `${i.field}: ` : ""}
-                {i.message}
+                {i.line ? t("profiles.yamlLine", { line: i.line, issue: i.field ? `${i.field}: ${i.message}` : i.message }) : i.field ? `${i.field}: ${i.message}` : i.message}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="ok">Valid.</p>
+          <p className="ok">{t("profiles.yamlValid")}</p>
         )}
         <div className="row">
           <button
@@ -161,9 +169,9 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                 .finally(() => setBusy(false));
             }}
           >
-            Save
+            {t("common.save")}
           </button>
-          <button onClick={() => setYamlEdit(null)}>Cancel</button>
+          <button onClick={() => setYamlEdit(null)}>{t("common.cancel")}</button>
         </div>
       </section>
     );
@@ -174,24 +182,24 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
     const provider = providers.find((p) => p.id === form.provider);
     return (
       <section className="page">
-        <h2>{isNew ? "New profile" : `Edit ${form.name || form.id}`}</h2>
+        <h2>{isNew ? t("profiles.new") : t("profiles.editTitle", { name: form.name || form.id })}</h2>
         <form className="card form" onSubmit={save}>
           {isNew && (
             <label>
-              ID <span className="muted">(the file name: lowercase letters, digits and dashes)</span>
-              <input value={form.id} onChange={(e) => set("id", e.target.value)} placeholder="reviewer" required pattern="[a-z0-9][a-z0-9-]*" />
+              {t("profiles.id")} <span className="muted">{t("profiles.idHint")}</span>
+              <input value={form.id} onChange={(e) => set("id", e.target.value)} placeholder={"reviewer"} required pattern="[a-z0-9][a-z0-9-]*" />
             </label>
           )}
           <label>
-            Name
+            {t("profiles.name")}
             <input value={form.name} onChange={(e) => set("name", e.target.value)} required />
           </label>
           <label>
-            Description
+            {t("profiles.description")}
             <input value={form.description} onChange={(e) => set("description", e.target.value)} />
           </label>
           <label>
-            Harness
+            {t("profiles.harness")}
             <select value={form.harness || "builtin"} onChange={(e) => set("harness", e.target.value)}>
               {harnesses.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -202,18 +210,18 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
           </label>
           {!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider ?? true) && (
             <label>
-              Model it runs on
-              <input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="For example gemini-2.5-pro" aria-describedby="agent-model-note" />
+              {t("profiles.agentModel")}
+              <input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder={t("profiles.agentModelPlaceholder", { model: "gemini-2.5-pro" })} aria-describedby="agent-model-note" />
               <span id="agent-model-note" className="muted">
-                Prices the turns of an agent that does not say which model it is on. The agent is not told; a model it reports wins.
+                {t("profiles.agentModelNote")}
               </span>
             </label>
           )}
           <div className="row wrap" hidden={!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider ?? true)}>
             <label>
-              Provider
+              {t("settings.defaults.provider")}
               <select value={form.provider} onChange={(e) => set("provider", e.target.value)}>
-                <option value="">Chosen per session</option>
+                <option value="">{t("profiles.perSession")}</option>
                 {providers.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -222,16 +230,16 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
               </select>
             </label>
             <label>
-              Model
-              <input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder={provider?.defaultModel || "Chosen per session"} />
+              {t("settings.defaults.model")}
+              <input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder={provider?.defaultModel || t("profiles.perSession")} />
             </label>
-            <label title="Takes a call the model keeps failing with rate limits or server errors, after four tries">
-              Fallback provider
+            <label title={t("profiles.fallbackTitle")}>
+              {t("profiles.fallbackProvider")}
               <select
                 value={form.fallback?.provider ?? ""}
                 onChange={(e) => set("fallback", e.target.value ? { provider: e.target.value, model: form.fallback?.model ?? "" } : null)}
               >
-                <option value="">None</option>
+                <option value="">{t("profiles.none")}</option>
                 {providers.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -241,16 +249,16 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
             </label>
             {form.fallback && (
               <label>
-                Fallback model
+                {t("profiles.fallbackModel")}
                 <input required value={form.fallback.model} onChange={(e) => set("fallback", { provider: form.fallback!.provider, model: e.target.value })} />
               </label>
             )}
           </div>
           <div className="row wrap">
             <label>
-              Permission mode
+              {t("profiles.mode")}
               <select value={form.mode} onChange={(e) => set("mode", e.target.value)}>
-                <option value="">From the environment</option>
+                <option value="">{t("profiles.modeFromEnvironment")}</option>
                 {STARTING_MODES.map((m) => (
                   <option key={m.id} value={m.id}>
                     {modeName(m.id)}
@@ -259,32 +267,32 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
               </select>
             </label>
             <label>
-              Effort
+              {t("profiles.effort")}
               <select value={form.effort} onChange={(e) => set("effort", e.target.value)}>
-                <option value="">Default (high)</option>
+                <option value="">{t("profiles.effortDefault", { effort: "high" })}</option>
                 {EFFORTS.map((x) => (
                   <option key={x}>{x}</option>
                 ))}
               </select>
             </label>
             <label hidden={!(harnesses.find((h) => h.id === (form.harness || "builtin"))?.usesProvider || harnesses.find((h) => h.id === (form.harness || "builtin"))?.takesOptimizer || !harnesses.length)}>
-              Token optimizer
+              {t("profiles.optimizer")}
               <select value={form.optimizer} onChange={(e) => set("optimizer", e.target.value)}>
-                <option value="">From Settings</option>
-                <option value={OPTIMIZER_OFF}>Off</option>
+                <option value="">{t("profiles.fromSettings")}</option>
+                <option value={OPTIMIZER_OFF}>{t("profiles.off")}</option>
                 {optimizers.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.needsApproval ? `${o.name} (not approved)` : o.path ? o.name : `${o.name} (not installed)`}
+                    {o.needsApproval ? t("profiles.notApproved", { name: o.name }) : o.path ? o.name : t("profiles.notInstalled", { name: o.name })}
                   </option>
                 ))}
                 {form.optimizer && form.optimizer !== OPTIMIZER_OFF && !optimizers.some((o) => o.id === form.optimizer) && <option value={form.optimizer}>{form.optimizer}</option>}
               </select>
             </label>
             <label>
-              Workflow
+              {t("profiles.workflow")}
               <select value={form.workflow} onChange={(e) => set("workflow", e.target.value)}>
-                <option value="">From Settings</option>
-                <option value={OPTIMIZER_OFF}>Off</option>
+                <option value="">{t("profiles.fromSettings")}</option>
+                <option value={OPTIMIZER_OFF}>{t("profiles.off")}</option>
                 {workflows.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
@@ -294,93 +302,80 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
               </select>
             </label>
             <label>
-              Max model calls per message
+              {t("profiles.maxTurns")}
               <input type="number" min={0} max={1000} value={form.maxTurns || ""} placeholder="100" onChange={(e) => set("maxTurns", Number(e.target.value) || 0)} />
             </label>
           </div>
           <label>
-            System prompt <span className="muted">(added to the built-in agent's own)</span>
+            {t("profiles.systemPrompt")} <span className="muted">{t("profiles.systemPromptHint")}</span>
             <textarea rows={5} value={form.systemPrompt} onChange={(e) => set("systemPrompt", e.target.value)} />
           </label>
           <fieldset>
-            <legend>Tools {tools.length === 0 && <span className="muted">(all)</span>}</legend>
+            <legend>{t("profiles.tools")} {tools.length === 0 && <span className="muted">{t("profiles.toolsAll")}</span>}</legend>
             <div className="row wrap">
-              {TOOLS.map((t) => (
-                <label key={t} className="row">
+              {TOOLS.map((tool) => (
+                <label key={tool} className="row">
                   <input
                     type="checkbox"
-                    checked={tools.length === 0 || tools.includes(t)}
+                    checked={tools.length === 0 || tools.includes(tool)}
                     onChange={() => {
                       const on = tools.length === 0 ? TOOLS : tools;
-                      const next = on.includes(t) ? on.filter((x) => x !== t) : [...on, t];
+                      const next = on.includes(tool) ? on.filter((x) => x !== tool) : [...on, tool];
                       set("tools", next.length === TOOLS.length ? [] : next);
                     }}
                   />
-                  <code>{t}</code>
+                  <code>{tool}</code>
                 </label>
               ))}
             </div>
           </fieldset>
           <label>
-            Skills <span className="muted">(names separated by commas; empty means every skill that is on)</span>
+            {t("profiles.skills")} <span className="muted">{t("profiles.skillsHint")}</span>
             <input
               key={form.id}
               defaultValue={(form.skills ?? []).join(", ")}
               onBlur={(e) =>
-                set(
-                  "skills",
-                  e.target.value
-                    .split(",")
-                    .map((x) => x.trim())
-                    .filter(Boolean),
-                )
+                set("skills", names(e.target.value))
               }
             />
           </label>
           <label>
-            MCP servers <span className="muted">(IDs separated by commas, added to the servers that are on for everyone)</span>
+            {t("profiles.mcpServers")} <span className="muted">{t("profiles.mcpServersHint")}</span>
             <input
               key={form.id + "-mcp"}
               defaultValue={(form.mcpServers ?? []).join(", ")}
               onBlur={(e) =>
-                set(
-                  "mcpServers",
-                  e.target.value
-                    .split(",")
-                    .map((x) => x.trim())
-                    .filter(Boolean),
-                )
+                set("mcpServers", names(e.target.value))
               }
             />
           </label>
           <label className="row">
-            <input type="checkbox" checked={form.instructions !== "none"} onChange={(e) => set("instructions", e.target.checked ? "" : "none")} /> Read
-            the project's AGENTS.md or CLAUDE.md
+            <input type="checkbox" checked={form.instructions !== "none"} onChange={(e) => set("instructions", e.target.checked ? "" : "none")} /> {t("profiles.instructions")}
           </label>
           <fieldset>
-            <legend>Slash commands</legend>
+            <legend>{t("profiles.commands")}</legend>
             {(form.commands ?? []).map((c, i) => (
               <div key={i} className="profile-command">
                 <div className="row">
                   <span className="muted">/</span>
-                  <input value={c.name} onChange={(e) => setCommand(i, { name: e.target.value })} placeholder="review" aria-label="Command name" />
-                  <input value={c.description} onChange={(e) => setCommand(i, { description: e.target.value })} placeholder="What it does" aria-label="Description" />
+                  <input value={c.name} onChange={(e) => setCommand(i, { name: e.target.value })} placeholder={"review"} aria-label={t("profiles.commandName")} />
+                  <input value={c.description} onChange={(e) => setCommand(i, { description: e.target.value })} placeholder={t("profiles.commandDescription")} aria-label={t("profiles.description")} />
                   <button type="button" onClick={() => set("commands", (form.commands ?? []).filter((_, n) => n !== i))}>
-                    Remove
+                    {t("common.remove")}
                   </button>
                 </div>
-                <textarea rows={2} value={c.prompt} onChange={(e) => setCommand(i, { prompt: e.target.value })} placeholder="The prompt it sends" aria-label="Prompt" />
+                <textarea rows={2} value={c.prompt} onChange={(e) => setCommand(i, { prompt: e.target.value })} placeholder={t("profiles.commandPromptPlaceholder")} aria-label={t("profiles.commandPrompt")} />
               </div>
             ))}
             <div>
               <button type="button" onClick={() => set("commands", [...(form.commands ?? []), { name: "", description: "", prompt: "" }])}>
-                Add a command
+                {t("profiles.addCommand")}
               </button>
             </div>
           </fieldset>
           {(form.rules ?? []).length > 0 && (
             <div>
-              <strong>Rules</strong> <span className="muted">(edit them in {form.source || "the file"})</span>
+              <strong>{t("profiles.rules")}</strong> <span className="muted">{form.source ? t("profiles.rulesIn", { file: form.source }) : t("profiles.rulesInFile")}</span>
               <ul>
                 {(form.rules ?? []).map((r, i) => (
                   <li key={i}>
@@ -395,10 +390,10 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
           )}
           <div className="row">
             <button type="submit" className="primary" disabled={busy}>
-              Save
+              {t("common.save")}
             </button>
             <button type="button" onClick={() => setForm(null)}>
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>
@@ -408,20 +403,18 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
 
   return (
     <section className="page">
-      <h2>Profiles</h2>
+      <h2>{t("settings.page.profiles")}</h2>
       <p className="muted">
-        A profile sets the model, tools, prompt, rules and slash commands a session runs with. Each is a YAML file in <code>profiles/</code> of the app's
-        data folder; edits to the files apply to new sessions, and their rules at once.
+        {tNodes("profiles.intro", { folder: <code>{"profiles/"}</code> })}
       </p>
       <FallbackCard profiles={profiles} harnesses={harnesses} onError={onError} />
       <div className="card">
-        <h3>Your own agent</h3>
+        <h3>{t("profiles.ownAgent.title")}</h3>
         <p className="muted">
-          Start an agent of your own from a Python or Go template that already speaks the Agent Client Protocol. Freeloop registers it as a harness;
-          when you change its files, sessions start it again with your code. See docs/DEVELOPING.md.
+          {t("profiles.ownAgent.intro")}
         </p>
         {!scaffold && (
-          <button onClick={() => setScaffold({ name: "", language: "python", folder: "" })}>New harness…</button>
+          <button onClick={() => setScaffold({ name: "", language: "python", folder: "" })}>{t("profiles.ownAgent.new")}</button>
         )}
         {scaffold && !scaffold.made && (
           <form
@@ -432,14 +425,14 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
             }}
           >
             <label>
-              Name
+              {t("profiles.name")}
               <input required autoFocus value={scaffold.name} onChange={(e) => setScaffold({ ...scaffold, name: e.target.value })} />
             </label>
             <label>
-              Template
+              {t("profiles.ownAgent.template")}
               <select value={scaffold.language} onChange={(e) => setScaffold({ ...scaffold, language: e.target.value })}>
-                <option value="python">Python (standard library only)</option>
-                <option value="go">Go (github.com/coder/acp-go-sdk)</option>
+                <option value="python">{t("profiles.ownAgent.python")}</option>
+                <option value="go">{t("profiles.ownAgent.go", { module: "github.com/coder/acp-go-sdk" })}</option>
               </select>
             </label>
             <div className="row">
@@ -451,25 +444,25 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                     .catch(onError)
                 }
               >
-                Choose a folder…
+                {t("profiles.ownAgent.chooseFolder")}
               </button>
-              <code>{scaffold.folder || "No folder chosen"}</code>
+              {scaffold.folder ? <code>{scaffold.folder}</code> : <span className="muted">{t("profiles.ownAgent.noFolder")}</span>}
             </div>
             <div className="row">
               <button type="submit" className="primary" disabled={!scaffold.folder || !scaffold.name.trim()}>
-                Create and open
+                {t("profiles.ownAgent.create")}
               </button>
               <button type="button" onClick={() => setScaffold(null)}>
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </form>
         )}
         {scaffold?.made && (
           <p className="ok">
-            Created in <code>{scaffold.made}</code>. Pick it in the new-session form; it answers with what you said until you change it.{" "}
+            {tNodes("profiles.ownAgent.created", { folder: <code>{scaffold.made}</code> })}{" "}
             <button className="link" onClick={() => setScaffold(null)}>
-              Done
+              {t("profiles.ownAgent.done")}
             </button>
           </p>
         )}
@@ -481,7 +474,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                 <li key={h.id}>
                   {h.name}{" "}
                   <button className="link" onClick={() => EngineService.OpenHarness(h.id).catch(onError)}>
-                    Edit
+                    {t("profiles.edit")}
                   </button>
                   {h.missing && <span className="error-text"> {h.missing}</span>}
                 </li>
@@ -497,11 +490,11 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
               {p.description && <div className="muted">{p.description}</div>}
               <div className="muted">
                 {[
-                  p.provider && `${providers.find((x) => x.id === p.provider)?.name ?? p.provider}${p.model ? ` · ${p.model}` : ""}`,
-                  (p.tools ?? []).length > 0 && `${(p.tools ?? []).length} tools`,
-                  (p.rules ?? []).length > 0 && `${(p.rules ?? []).length} rules`,
+                  p.provider && (p.model ? `${providerName(p.provider)} · ${p.model}` : providerName(p.provider)),
+                  (p.tools ?? []).length > 0 && t("profiles.toolCount", { count: (p.tools ?? []).length }),
+                  (p.rules ?? []).length > 0 && t("profiles.ruleCount", { count: (p.rules ?? []).length }),
                   (p.commands ?? []).length > 0 && (p.commands ?? []).map((c) => `/${c.name}`).join(" "),
-                  !p.source && "built in",
+                  !p.source && t("profiles.builtIn"),
                 ]
                   .filter(Boolean)
                   .join(" · ")}
@@ -514,10 +507,10 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
                   setForm({ ...p });
                 }}
               >
-                Edit
+                {t("profiles.edit")}
               </button>
-              {!p.id.startsWith("project:") && <button onClick={() => openYAML(p.id)}>YAML</button>}
-              {p.source && <button onClick={() => remove(p)}>{p.id === "default" ? "Reset" : "Delete"}</button>}
+              {!p.id.startsWith("project:") && <button onClick={() => openYAML(p.id)}>{t("profiles.yaml")}</button>}
+              {p.source && <button onClick={() => remove(p)}>{p.id === "default" ? t("common.reset") : t("profiles.delete")}</button>}
             </div>
           </li>
         ))}
@@ -529,7 +522,7 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
           setForm(blank());
         }}
       >
-        New profile
+        {t("profiles.new")}
       </button>
     </section>
   );
@@ -555,18 +548,17 @@ function FallbackCard({ profiles, harnesses, onError }: { profiles: Profile[]; h
   };
   return (
     <div className="card">
-      <h3>When a session is stuck</h3>
+      <h3>{t("profiles.stuck.title")}</h3>
       <p className="muted">
-        A session that reaches its account limit or its turn limit, or keeps failing, offers to continue on the profile chosen here for its agent. To
-        continue without asking when a limit is reached, set <code>onLimit</code> in a profile.
+        {tNodes("profiles.stuck.intro", { key: <code>{"onLimit"}</code> })}
       </p>
       <dl className="panel-info">
         {harnesses.map((h) => (
           <div key={h.id}>
             <dt>{h.name}</dt>
             <dd>
-              <select aria-label={`Continue a stuck ${h.name} session on`} value={fallbacks[h.id] ?? ""} onChange={(e) => save(h.id, e.target.value)}>
-                <option value="">Ask which profile</option>
+              <select aria-label={t("profiles.stuck.label", { name: h.name })} value={fallbacks[h.id] ?? ""} onChange={(e) => save(h.id, e.target.value)}>
+                <option value="">{t("profiles.stuck.ask")}</option>
                 {profiles.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}

@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { language, setLanguage } from "./i18n.ts";
 import assert from "node:assert/strict";
 import { calendar, dayLevel, longestChat, monthLabels, usageOverview } from "./overview.ts";
 import type { Row } from "./analytics.ts";
@@ -103,4 +104,15 @@ test("a model no agent named still has a name", () => {
   const o = usageOverview([row("2026-11-04", "", 9), row("2026-11-04", "a", 1)], "2026-11-04");
   assert.deepEqual(o.models, ["Model not reported", "a"]);
   assert.equal(calendar([row("2026-11-04", "", 9)], "2026-11-04")[52][2]?.models[0].model, "Model not reported");
+});
+
+test("a model that did not say is named in the language", () => {
+  const before = language();
+  const rows = [row("2026-11-03", "", 10)];
+  assert.deepEqual(usageOverview(rows, "2026-11-03").models, ["Model not reported"]);
+  setLanguage("de");
+  assert.deepEqual(usageOverview(rows, "2026-11-03").models, ["Modell nicht gemeldet"]);
+  setLanguage("nl");
+  assert.deepEqual(usageOverview(rows, "2026-11-03").models, ["Model niet gemeld"]);
+  setLanguage(before);
 });

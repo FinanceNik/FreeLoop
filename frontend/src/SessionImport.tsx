@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { EngineService, type AgentSession, type ProjectInfo, type Profile } from "./api.ts";
 import { canImport, folderName, importResult, matchesImport } from "./sessionimport.ts";
-import { locale } from "./i18n.ts";
+import { locale, t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 // SessionImport brings an external agent's own sessions here (SES-020): the agent
 // lists them and copies the chosen ones, and each continues as a session here. It
@@ -26,12 +27,12 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult] = useState("");
+  const [result, setResult] = useState<{ done: number; failed: number } | null>(null);
   const [imported, setImported] = useState<Record<string, string>>({});
 
   const find = (profile = agent, where = folder) => {
     setSearching(true);
-    setResult("");
+    setResult(null);
     setPicked([]);
     setImported({});
     EngineService.AgentSessions(profile, where)
@@ -60,7 +61,7 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
     const chosen = (rows ?? []).filter((r) => picked.includes(r.id));
     let done = 0;
     let failed = 0;
-    setResult("");
+    setResult(null);
     setProgress({ done: 0, total: chosen.length });
     for (const r of chosen) {
       try {
@@ -75,22 +76,19 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
     }
     setProgress(null);
     setPicked([]);
-    setResult(importResult(done, failed));
+    setResult({ done, failed });
     onImported();
   };
 
-  if (agents.length === 0) return <p className="muted">No external agent is set up, so there are no sessions to import.</p>;
+  if (agents.length === 0) return <p className="muted">{t("sessionImport.noAgents")}</p>;
   const busy = searching || progress !== null;
   return (
     <div className="session-import">
-      <p className="muted">
-        The agent copies each session you choose, so the original stays as it is, and the copy continues here. Importing calls no model. A transcript holds whatever the agent read, keys
-        included, and is copied into Freeloop's data folder. What the agent had compacted away is not shown.
-      </p>
+      <p className="muted">{t("sessionImport.intro")}</p>
       <div className="row session-import-where">
         {agents.length > 1 && (
           <label>
-            Agent{" "}
+            {t("sessionImport.agent")}{" "}
             <select
               value={agent}
               disabled={busy}
@@ -108,7 +106,7 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
           </label>
         )}
         <label>
-          Folder{" "}
+          {t("sessionImport.folder")}{" "}
           <select
             value={folder}
             disabled={busy}
@@ -117,7 +115,7 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
               if (rows) find(agent, e.target.value);
             }}
           >
-            <option value="">All folders</option>
+            <option value="">{t("sessionImport.allFolders")}</option>
             {projects.map((p) => (
               <option key={p.id} value={p.root}>
                 {folderName(p.root)}
@@ -127,20 +125,20 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
           </select>
         </label>
         <button disabled={busy} onClick={chooseFolder}>
-          Choose folder…
+          {t("sessionImport.chooseFolder")}
         </button>
         <button className={rows ? "" : "primary"} disabled={busy} onClick={() => find()}>
-          {searching ? "Looking…" : rows ? "Look again" : "Find sessions"}
+          {searching ? t("sessionImport.looking") : rows ? t("sessionImport.lookAgain") : t("sessionImport.find")}
         </button>
       </div>
-      {searching && !rows && <p className="muted">Starting the agent. The first time, it may have to be downloaded, which takes a moment.</p>}
-      {rows && rows.length === 0 && <p className="muted">The agent has no sessions here.</p>}
+      {searching && !rows && <p className="muted">{t("sessionImport.starting")}</p>}
+      {rows && rows.length === 0 && <p className="muted">{t("sessionImport.none")}</p>}
       {rows && rows.length > 0 && (
         <>
           <div className="row session-import-where">
-            <input type="search" aria-label="Filter the sessions" placeholder="Filter" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input type="search" aria-label={t("sessionImport.filterLabel")} placeholder={t("sessionImport.filter")} value={query} onChange={(e) => setQuery(e.target.value)} />
             <button disabled={busy || pickable.length === 0} onClick={() => setPicked(picked.length === pickable.length ? [] : pickable.map((r) => r.id))}>
-              {picked.length === pickable.length && pickable.length > 0 ? "Select none" : "Select all"}
+              {picked.length === pickable.length && pickable.length > 0 ? t("sessionImport.selectNone") : t("sessionImport.selectAll")}
             </button>
           </div>
           <ul className="import-list session-import-list">
@@ -153,18 +151,22 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
                     checked={picked.includes(r.id)}
                     onChange={(e) => setPicked((p) => (e.target.checked ? [...p, r.id] : p.filter((k) => k !== r.id)))}
                   />
-                  <strong>{r.title || "Untitled session"}</strong>
-                  {r.missing && <span className="badge">folder gone</span>}
+                  <strong>{r.title || t("sessionImport.untitled")}</strong>
+                  {r.missing && <span className="badge">{t("sessionImport.folderGone")}</span>}
                 </label>
                 <div className="import-detail muted">
                   <span title={r.folder}>{folderName(r.folder)}</span>
                   {r.updatedAt && !r.updatedAt.startsWith("0001") && ` · ${new Date(r.updatedAt).toLocaleString(locale())}`}
                   {r.sessionId && (
                     <>
-                      {" · here already "}
-                      <button className="link" onClick={() => onOpen(r.sessionId)}>
-                        Open
-                      </button>
+                      {" · "}
+                      {tNodes("sessionImport.hereAlready", {
+                        open: (
+                          <button className="link" onClick={() => onOpen(r.sessionId)}>
+                            {t("sessionImport.open")}
+                          </button>
+                        ),
+                      })}
                     </>
                   )}
                 </div>
@@ -173,11 +175,11 @@ export default function SessionImport({ profiles, projects, onOpen, onImported, 
           </ul>
         </>
       )}
-      {result && <p className="ok">{result}</p>}
+      {result && <p className="ok">{importResult(result.done, result.failed)}</p>}
       {rows && rows.length > 0 && (
         <div className="row">
           <button className="primary" disabled={busy || picked.length === 0} onClick={run}>
-            {progress ? `Importing ${progress.done + 1} of ${progress.total}…` : `Import ${picked.length} selected`}
+            {progress ? t("sessionImport.importing", { current: progress.done + 1, total: progress.total }) : t("sessionImport.importSelected", { count: picked.length })}
           </button>
         </div>
       )}

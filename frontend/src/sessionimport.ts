@@ -1,4 +1,5 @@
 // Rules of the session import (SES-020), apart from its view.
+import { t } from "./i18n.ts";
 
 export interface ImportRow {
   id: string;
@@ -30,7 +31,6 @@ export function folderName(folder: string): string {
 
 // importResult says how an import went, in one line.
 export function importResult(done: number, failed: number): string {
-  const sessions = (n: number) => `${n} ${n === 1 ? "session" : "sessions"}`;
-  if (failed === 0) return `Imported ${sessions(done)}.`;
-  return `Imported ${sessions(done)}; ${failed} could not be imported.`;
+  if (failed === 0) return t("sessionImport.result", { count: done });
+  return t("sessionImport.resultFailed", { sessions: t("sessionImport.sessions", { count: done }), count: failed });
 }

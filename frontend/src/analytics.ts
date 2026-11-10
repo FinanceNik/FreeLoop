@@ -1,7 +1,7 @@
 // The usage dashboard's numbers (PRV-008): totals, groups and the daily
 // series, from the engine's rows of one day, session and model. Pure, so
 // analytics.test.ts covers it.
-import { numberFormat } from "./i18n.ts";
+import { numberFormat, t, type PlainKey } from "./i18n.ts";
 
 export interface Row {
   day: string;
@@ -94,7 +94,8 @@ export function groupBy<R extends Row>(rows: R[], key: (r: R) => string, metric:
     .sort((a, b) => value(b, metric) - value(a, metric) || tokensOf(b) - tokensOf(a) || a.key.localeCompare(b.key));
 }
 
-export const OTHER = "Other";
+// The key of the series the rest fold into: a name no group has; its label is the language's.
+export const OTHER = "\u0000other";
 
 // topKeys returns the keys that get a series of their own, at most n; the
 // rest fold into Other. A key keeps its series as long as it stays among
@@ -190,11 +191,11 @@ export function weeks(since: string, until: string): string[] {
 // model was sent fresh, what it wrote, what went into the prompt cache and
 // what was read from it.
 export const TOKEN_TYPES = [
-  { key: "input", label: "Input" },
-  { key: "output", label: "Output" },
-  { key: "cacheWrite", label: "Cache write" },
-  { key: "cacheRead", label: "Cache read" },
-] as const;
+  { key: "input", label: "recentUsage.input" },
+  { key: "output", label: "recentUsage.output" },
+  { key: "cacheWrite", label: "recentUsage.cacheWrite" },
+  { key: "cacheRead", label: "recentUsage.cacheRead" },
+] as const satisfies readonly { key: string; label: PlainKey }[];
 
 export type TokenType = (typeof TOKEN_TYPES)[number]["key"];
 
@@ -214,13 +215,13 @@ export interface TypeGroup {
   cost: number;
 }
 
-// byType adds up each kind of token, in TOKEN_TYPES order.
+// byType adds up each kind of token, in TOKEN_TYPES order, named in the language in force.
 export function byType(rows: Row[]): TypeGroup[] {
-  return TOKEN_TYPES.map((t) => ({
-    key: t.key,
-    label: t.label,
-    tokens: rows.reduce((n, r) => n + typeValue(r, t.key, "tokens"), 0),
-    cost: rows.reduce((n, r) => n + typeValue(r, t.key, "cost"), 0),
+  return TOKEN_TYPES.map((type) => ({
+    key: type.key,
+    label: t(type.label),
+    tokens: rows.reduce((n, r) => n + typeValue(r, type.key, "tokens"), 0),
+    cost: rows.reduce((n, r) => n + typeValue(r, type.key, "cost"), 0),
   }));
 }
 
@@ -230,7 +231,7 @@ export function dailyByType(rows: Row[], dayList: string[], metric: Metric): Day
   for (const r of rows) {
     const vals = byDay.get(r.day);
     if (!vals) continue;
-    TOKEN_TYPES.forEach((t, i) => (vals[i] += typeValue(r, t.key, metric)));
+    TOKEN_TYPES.forEach((type, i) => (vals[i] += typeValue(r, type.key, metric)));
   }
   return dayList.map((d) => {
     const values = byDay.get(d)!;

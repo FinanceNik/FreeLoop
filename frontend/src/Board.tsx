@@ -3,6 +3,7 @@ import { columns, since } from "./board.ts";
 import { issueStep, stepLabel } from "./afk.ts";
 import { counts, relations, stateLabel, typeLabel } from "./backlog.ts";
 import type { BacklogInfo } from "./api.ts";
+import { t } from "./i18n.ts";
 
 type Card = { id: string; title: string; status: string; updatedAt: string | Date; projectRoot: string; projectId: string; branch?: string; tags?: string[] | null };
 
@@ -49,33 +50,30 @@ export default function Board<T extends Card>({
   return (
     <div className="board-page">
       <header className="board-header">
-        <h2>Board</h2>
-        <span className="muted">
-          {sessions.length} {sessions.length === 1 ? "session" : "sessions"}
-          {filtered ? ", filtered in the sidebar" : ""}
-        </span>
+        <h2>{t("app.board")}</h2>
+        <span className="muted">{t(filtered ? "board.countFiltered" : "board.count", { count: sessions.length })}</span>
         {onQueue && (
           <button className="link board-queue" onClick={onQueue}>
-            Queue of tasks
+            {t("board.queue")}
           </button>
         )}
       </header>
       <div className="board">
         {backlogs.length > 0 && (
-          <section className="board-column board-backlog" aria-label="Backlog">
+          <section className="board-column board-backlog" aria-label={t("board.backlog")}>
             <h3>
-              Backlog <span className="muted">{backlogs.reduce((n, b) => n + counts(b.issues).open, 0)}</span>
+              {t("board.backlog")} <span className="muted">{backlogs.reduce((n, b) => n + counts(b.issues).open, 0)}</span>
             </h3>
             {backlogs.map((b) => {
               const n = counts(b.issues);
               return (
-                <div key={b.projectId} className="backlog-project" aria-label={`Backlog of ${b.projectName}`}>
+                <div key={b.projectId} className="backlog-project" aria-label={t("board.backlogOf", { project: b.projectName })}>
                   <div className="backlog-project-head">
                     <strong>{b.projectName}</strong>
                     <span className="muted">
-                      {" "}
-                      · {n.open} open, {n.afkReady} AFK ready
-                      {b.uncommitted ? " · not committed" : ""}
+                      {" · "}
+                      {t("board.backlogCounts", { open: n.open, ready: n.afkReady })}
+                      {b.uncommitted ? ` · ${t("board.notCommitted")}` : ""}
                     </span>
                   </div>
                   {backlogActions?.(b)}
@@ -94,12 +92,12 @@ export default function Board<T extends Card>({
                           {relations(it) && <span className="muted backlog-relations">{relations(it)}</span>}
                           {step && (
                             <span className={step.waiting && step.state === "working" ? "backlog-step backlog-step-waiting" : "muted backlog-step"}>
-                              AFK run: {stepLabel(step)}
+                              {t("board.afkStep", { step: stepLabel(step) })}
                               {step.sessionId && (
                                 <>
                                   {" · "}
                                   <button className="link" onClick={() => onOpen(step.sessionId!)}>
-                                    Open its session
+                                    {t("board.openSession")}
                                   </button>
                                 </>
                               )}
@@ -109,11 +107,11 @@ export default function Board<T extends Card>({
                       </li>
                       );
                     })}
-                    {(b.issues ?? []).length === 0 && <li className="muted board-empty">No issues yet</li>}
+                    {(b.issues ?? []).length === 0 && <li className="muted board-empty">{t("board.noIssues")}</li>}
                   </ul>
                   {b.finished > 0 && onArchive && (
-                    <button className="link backlog-archive" onClick={() => onArchive(b)} title="Removes done issues, and PRDs whose issues are all done, from the project in a commit of their own. Git history keeps them.">
-                      Archive finished ({b.finished})
+                    <button className="link backlog-archive" onClick={() => onArchive(b)} title={t("board.archiveTitle")}>
+                      {t("board.archive", { count: b.finished })}
                     </button>
                   )}
                 </div>
@@ -132,7 +130,7 @@ export default function Board<T extends Card>({
                   <button className="board-card" onClick={() => onOpen(s.id)}>
                     <span className="board-card-title">
                       {markOf(s)}
-                      {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label="Finished, not read yet" />}
+                      {unread.includes(s.id) && <span className="unread-dot" role="img" aria-label={t("status.unread")} />}
                       {s.title}
                     </span>
                     <span className="muted board-card-where">
@@ -143,9 +141,9 @@ export default function Board<T extends Card>({
                     <span className="session-meta">
                       <span className={`badge badge-${s.status}`}>{statusLabel[s.status] ?? s.status}</span>
                       <span className="muted">{since(s.updatedAt)}</span>
-                      {(s.tags ?? []).map((t) => (
-                        <span key={t} className="tag">
-                          #{t}
+                      {(s.tags ?? []).map((tag) => (
+                        <span key={tag} className="tag">
+                          #{tag}
                         </span>
                       ))}
                     </span>
@@ -153,7 +151,7 @@ export default function Board<T extends Card>({
                   {renderRequest(s.id)}
                 </li>
               ))}
-              {c.sessions.length === 0 && <li className="muted board-empty">None</li>}
+              {c.sessions.length === 0 && <li className="muted board-empty">{t("board.none")}</li>}
             </ul>
           </section>
         ))}

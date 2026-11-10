@@ -1,12 +1,15 @@
 // The policy page's check (SEC-018): what a person types, as the engine's query,
 // and the verdict in words.
+import { t, type PlainKey } from "./i18n.ts";
 
+// Each action's label is a catalogue key, translated where it shows; the examples are
+// commands and paths, shown as given.
 export const CHECK_TOOLS = [
-  { id: "shell", label: "Run a command", placeholder: "git push origin main" },
-  { id: "edit", label: "Edit a file", placeholder: ".git/hooks/pre-commit" },
-  { id: "read", label: "Read a file", placeholder: ".env" },
-  { id: "fetch", label: "Fetch a URL", placeholder: "https://example.com" },
-] as const;
+  { id: "shell", label: "policy.tool.shell", placeholder: "git push origin main" },
+  { id: "edit", label: "policy.tool.edit", placeholder: ".git/hooks/pre-commit" },
+  { id: "read", label: "policy.tool.read", placeholder: ".env" },
+  { id: "fetch", label: "policy.tool.fetch", placeholder: "https://example.com" },
+] as const satisfies readonly { id: string; label: PlainKey; placeholder: string }[];
 
 export interface CheckInput {
   where: string; // "session:<id>" or "project:<root>"
@@ -49,21 +52,33 @@ interface Verdict {
   rule?: { scope: string; source: string } | null;
 }
 
-// headline is the verdict's first line: what happens, then who decided.
+// headline is the verdict's first line: what happens, then who decided, in the
+// engine's words.
 export function headline(v: Verdict): { tone: "ok" | "warn" | "error"; text: string } {
   const why = v.reason.charAt(0).toUpperCase() + v.reason.slice(1);
   switch (v.outcome) {
     case "allowed":
-      return { tone: "ok", text: `Allowed. ${why}.` };
+      return { tone: "ok", text: t("policy.allowed", { why }) };
     case "denied":
-      return { tone: "error", text: `Denied. ${why}.` };
+      return { tone: "error", text: t("policy.denied", { why }) };
     default:
-      return { tone: "warn", text: `You would be asked. ${why}.` };
+      return { tone: "warn", text: t("policy.asked", { why }) };
   }
 }
 
+// Where a rule lives, named as the right panel names it; a scope not listed shows as
+// the engine names it.
+const SCOPE: Record<string, PlainKey> = {
+  global: "panel.scope.global",
+  environment: "policy.scope.environment",
+  profile: "policy.scope.profile",
+  project: "panel.scope.project",
+  session: "panel.rules.listed.session",
+};
+
 // ruleWhere says where a rule lives, in the words of the page.
 export function ruleWhere(r: { scope: string; source: string }): string {
-  const scope = { global: "global", environment: "environment", profile: "profile", project: "project", session: "this session" }[r.scope] ?? r.scope;
+  const key = SCOPE[r.scope];
+  const scope = key ? t(key) : r.scope;
   return r.source ? `${scope}, ${r.source}` : scope;
 }

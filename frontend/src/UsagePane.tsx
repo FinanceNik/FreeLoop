@@ -5,6 +5,8 @@ import LiveUsage from "./LiveUsage.tsx";
 import PaneRange from "./PaneRange.tsx";
 import UsageOverview from "./UsageOverview.tsx";
 import { cycleView, PANE_VIEWS, viewIndex } from "./usagePane.ts";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 // The usage pane (GUI-023, GUI-038): one view at a time, which the arrows either side of
 // its name step through. Only the view shown is mounted, so the others ask for nothing.
@@ -42,8 +44,8 @@ export default function UsagePane({ draggable, onDragStart, onUsagePage, onClose
   }, [at]);
   const n = PANE_VIEWS.length;
   const go = (step: number) => setAt((i) => cycleView(i, step, n));
-  const previous = PANE_VIEWS[cycleView(at, -1, n)].label;
-  const next = PANE_VIEWS[cycleView(at, 1, n)].label;
+  const previous = t(PANE_VIEWS[cycleView(at, -1, n)].label);
+  const next = t(PANE_VIEWS[cycleView(at, 1, n)].label);
   const view = PANE_VIEWS[at].id;
   // The arrow keys move between views from anywhere in the header; with modifiers they
   // are the workspace's, which moves between panes.
@@ -55,25 +57,23 @@ export default function UsagePane({ draggable, onDragStart, onUsagePage, onClose
   return (
     <div className="pane-usage" data-view={view}>
       <div className="pane-usage-head" draggable={draggable} onDragStart={onDragStart} onKeyDown={onKeyDown}>
-        <div className="usage-views" role="group" aria-label="Usage views">
-          <button className="icon-button usage-view-step usage-view-previous" onClick={() => go(-1)} aria-label={`Previous view: ${previous}`} title={previous}>
+        <div className="usage-views" role="group" aria-label={t("usagePane.views")}>
+          <button className="icon-button usage-view-step usage-view-previous" onClick={() => go(-1)} aria-label={t("usagePane.previous", { view: previous })} title={previous}>
             <ChevronIcon />
           </button>
-          <h2>
-            Usage · <span className="usage-view-name">{PANE_VIEWS[at].label}</span>
-          </h2>
-          <span className="muted usage-view-count" aria-label={`View ${at + 1} of ${n}`}>
+          <h2>{tNodes("usagePane.title", { view: <span className="usage-view-name">{t(PANE_VIEWS[at].label)}</span> })}</h2>
+          <span className="muted usage-view-count" aria-label={t("usagePane.position", { number: at + 1, total: n })}>
             {at + 1}/{n}
           </span>
-          <button className="icon-button usage-view-step" onClick={() => go(1)} aria-label={`Next view: ${next}`} title={next}>
+          <button className="icon-button usage-view-step" onClick={() => go(1)} aria-label={t("usagePane.next", { view: next })} title={next}>
             <ChevronIcon />
           </button>
         </div>
         <span className="spacer" />
-        <button className="icon-button" aria-label="Full usage page" title="Full usage page" onClick={onUsagePage}>
+        <button className="icon-button" aria-label={t("usagePane.fullPage")} title={t("usagePane.fullPage")} onClick={onUsagePage}>
           <ExpandIcon />
         </button>
-        <button className="icon-button" onClick={onClose} aria-label="Close this pane" title="Close this pane">
+        <button className="icon-button" onClick={onClose} aria-label={t("workspace.close")} title={t("workspace.close")}>
           <CloseIcon />
         </button>
       </div>

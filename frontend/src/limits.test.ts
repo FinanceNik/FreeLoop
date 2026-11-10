@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { currentLimits, limitSummaries, percentText, reportAge, resetText } from "./limits.ts";
+import { setLanguage } from "./i18n.ts";
 
 const now = new Date("2026-11-03T12:00:00Z");
 const run = (window: string, resetsAt: string, peak: number, more = {}) => ({
@@ -80,4 +81,23 @@ test("a fresh report says nothing of its age, an old one does", () => {
   const since = (_t: string | Date) => "12 min ago";
   assert.equal(reportAge(new Date(now.getTime() - 5 * 60000), now, since), "");
   assert.equal(reportAge(new Date(now.getTime() - 12 * 60000), now, since), "reported 12 min ago");
+});
+
+// GUI-048: the words and the percentages follow the language.
+test("use, the reset and a report's age are in the language in force", () => {
+  const after = (minutes: number) => resetText(new Date(now.getTime() + minutes * 60000), now);
+  setLanguage("de");
+  // German puts a no-break space before the per cent sign.
+  assert.equal(percentText(11.4), "11\u00a0%");
+  assert.equal(percentText(0.4), "unter 1\u00a0%");
+  assert.equal(after(-1), "wurde zurückgesetzt");
+  assert.equal(after(125), "wird in 2 h 5 min zurückgesetzt");
+  assert.equal(after(60 * 25), "wird in 1 Tag 1 h zurückgesetzt");
+  assert.equal(after(60 * 49), "wird in 2 Tagen 1 h zurückgesetzt");
+  assert.equal(reportAge(new Date(now.getTime() - 12 * 60000), now, () => "vor 12 min"), "vor 12 min gemeldet");
+  setLanguage("nl");
+  assert.equal(percentText(11.4), "11%");
+  assert.equal(after(45), "begint over 45 min opnieuw");
+  assert.equal(after(60 * 49), "begint over 2 dagen 1 uur opnieuw");
+  setLanguage("en");
 });

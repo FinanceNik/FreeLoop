@@ -3,6 +3,14 @@ import { secretStore } from "./platform.ts";
 import { EngineService, type Config, type HarnessInfo, type ProviderInfo } from "./api.ts";
 import Providers from "./Providers.tsx";
 import ClaudeImport from "./ClaudeImport.tsx";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
+
+// The files and the command a trusted project's sessions use, named as they are.
+const AGENTS_MD = "AGENTS.md";
+const CLAUDE_MD = "CLAUDE.md";
+const SETTINGS_DIR = ".freeloop/";
+const GIT_STATUS = "git status";
 
 // Onboarding is the first-run guide (GUI-010): choose how agents run (an
 // agent that signs in by itself, such as Claude Code with a subscription,
@@ -87,20 +95,20 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
 
   return (
     <section className="page onboarding">
-      <h2>Welcome to Freeloop</h2>
-      <ol className="steps" aria-label="Setup steps">
-        <li className={step === "provider" ? "step-on" : "step-done"}>Choose how agents run</li>
-        <li className={step === "import" ? "step-on" : step === "project" ? "step-done" : ""}>Import from Claude Code (optional)</li>
-        <li className={step === "project" ? "step-on" : ""}>Choose a project</li>
-        <li>Start a session</li>
+      <h2>{t("onboarding.welcome")}</h2>
+      <ol className="steps" aria-label={t("onboarding.steps")}>
+        <li className={step === "provider" ? "step-on" : "step-done"}>{t("onboarding.step.agents")}</li>
+        <li className={step === "import" ? "step-on" : step === "project" ? "step-done" : ""}>{t("onboarding.step.import")}</li>
+        <li className={step === "project" ? "step-on" : ""}>{t("onboarding.step.project")}</li>
+        <li>{t("onboarding.step.start")}</li>
       </ol>
 
       {step === "provider" && (
         <>
           {agents.length > 0 && (
             <section className="choice" aria-labelledby="choice-agent">
-              <h3 id="choice-agent">Use an agent you're signed in to</h3>
-              <p className="muted">It runs with its own account. Freeloop starts it on your computer and never sees the login.</p>
+              <h3 id="choice-agent">{t("onboarding.agent.title")}</h3>
+              <p className="muted">{t("onboarding.agent.intro")}</p>
               <ul className="agent-choices">
                 {agents.map((h) => (
                   <li key={h.id} className="agent-choice">
@@ -113,7 +121,7 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
                       <span className="error-text">{h.missing}</span>
                     ) : (
                       <button className="primary" onClick={() => useAgent(h)}>
-                        Use {h.name}
+                        {t("onboarding.agent.use", { name: h.name })}
                       </button>
                     )}
                   </li>
@@ -123,69 +131,73 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
           )}
           <details className="choice" open={hasProvider || agents.length === 0}>
             <summary>
-              <h3>Use an API key or a local model</h3>
-              <span className="muted">Anthropic, OpenAI, Google Gemini, OpenRouter, or a server on this computer such as Ollama or LM Studio. Keys go to {secretStore()}.</span>
+              <h3>{t("onboarding.provider.title")}</h3>
+              <span className="muted">{t("onboarding.provider.intro", { store: secretStore() })}</span>
             </summary>
             <Providers providers={providers} onChanged={onProvidersChanged} onError={onError} />
           </details>
           <div className="row onboarding-nav">
             <button className="primary" disabled={!ready} onClick={() => setStep("import")}>
-              Next
+              {t("onboarding.next")}
             </button>
-            {!ready && <span className="muted">Choose an agent or add a provider to continue.</span>}
+            {!ready && <span className="muted">{t("onboarding.notReady")}</span>}
             <button className="link" onClick={() => finish("")} disabled={busy}>
-              Skip the guide
+              {t("onboarding.skip")}
             </button>
           </div>
           <div className="demo-offer">
             <button onClick={tryDemo} disabled={busy}>
-              Try it with a demo
+              {t("onboarding.demo")}
             </button>
-            <p className="muted">A scripted agent shows what Freeloop allows, asks about and refuses, in a scratch project. No key needed.</p>
+            <p className="muted">{t("onboarding.demoNote")}</p>
           </div>
         </>
       )}
 
       {step === "import" && (
         <>
-          <p>If you use Claude Code, you can bring its MCP servers, permission rules and skills along. This only reads its files.</p>
+          <p>{t("onboarding.import.intro")}</p>
           <ClaudeImport onError={onError} />
           <div className="row onboarding-nav">
             <button className="primary" onClick={() => setStep("project")}>
-              Next: choose a project
+              {t("onboarding.nextProject")}
             </button>
-            <button onClick={() => setStep("provider")}>Back</button>
+            <button onClick={() => setStep("provider")}>{t("common.back")}</button>
           </div>
         </>
       )}
 
       {step === "project" && (
         <div className="card form">
-          <p>Pick the folder of a repository you want an agent to work in.</p>
+          <p>{t("onboarding.project.intro")}</p>
           <label>
-            Project folder
+            {t("newSession.folder")}
             <div className="row">
-              <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder="/Users/you/code/project" />
+              <input value={root} onChange={(e) => setRoot(e.target.value)} placeholder={t("newSession.folderPlaceholder")} />
               <button type="button" onClick={choose}>
-                Choose…
+                {t("newSession.choose")}
               </button>
             </div>
           </label>
           <label className="row">
             <input type="checkbox" checked={trust} onChange={(e) => setTrust(e.target.checked)} />
-            Trust this project
+            {t("trust.palette")}
           </label>
           <p className="muted">
-            A trusted project's <code>AGENTS.md</code> or <code>CLAUDE.md</code>, its <code>.freeloop/</code> settings and <code>git status</code> are
-            used. Trust only folders whose contents you know; you can trust it later from the session.
+            {tNodes("onboarding.project.trustNote", {
+              agents: <code>{AGENTS_MD}</code>,
+              claude: <code>{CLAUDE_MD}</code>,
+              settings: <code>{SETTINGS_DIR}</code>,
+              git: <code>{GIT_STATUS}</code>,
+            })}
           </p>
           <div className="row onboarding-nav">
             <button className="primary" disabled={!root.trim() || busy} onClick={() => finish(root.trim())}>
-              Next: start a session
+              {t("onboarding.nextStart")}
             </button>
-            <button onClick={() => setStep("import")}>Back</button>
+            <button onClick={() => setStep("import")}>{t("common.back")}</button>
             <button className="link" onClick={() => finish("")} disabled={busy}>
-              Skip the guide
+              {t("onboarding.skip")}
             </button>
           </div>
         </div>

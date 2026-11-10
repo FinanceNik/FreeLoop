@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { secretStore } from "./platform.ts";
 import { EngineService, type ClaudeImport as Preview, type SkillCandidate } from "./api.ts";
+import { t, type PlainKey } from "./i18n.ts";
 
 // ClaudeImport is the one-way import from Claude Code (MCP-002, SKL-003,
 // SET-003): MCP servers from ~/.claude.json, permission rules from
@@ -12,14 +13,25 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-const STATUS: Record<string, string> = { new: "new", same: "already here", changed: "replaces", unsupported: "not imported", invalid: "cannot load" };
+// What an item will do, as a catalogue key; a status not listed shows as the engine names it.
+const STATUS: Record<string, PlainKey> = {
+  new: "claudeImport.status.new",
+  same: "claudeImport.status.same",
+  changed: "claudeImport.status.changed",
+  unsupported: "claudeImport.status.unsupported",
+  invalid: "claudeImport.status.invalid",
+};
+function statusName(status: string): string {
+  const key = STATUS[status];
+  return key ? t(key) : status;
+}
 
 export default function ClaudeImport({ onDone, onError }: Props) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [skills, setSkills] = useState<{ dir: string; cands: SkillCandidate[] } | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState("");
+  const [result, setResult] = useState<{ items: number; skills: number } | null>(null);
 
   const load = () => {
     EngineService.PreviewClaudeImport()
@@ -51,7 +63,7 @@ export default function ClaudeImport({ onDone, onError }: Props) {
       const n = await EngineService.ApplyClaudeImport(picked.filter((k) => !k.startsWith("skill:")));
       const names = picked.filter((k) => k.startsWith("skill:")).map((k) => k.slice(6));
       const done = names.length > 0 && skills ? ((await EngineService.InstallSkills(skills.dir, names)) ?? []) : [];
-      setResult(`Imported ${n} ${n === 1 ? "item" : "items"} and ${done.length} ${done.length === 1 ? "skill" : "skills"}. Imported MCP servers run only after you approve them on the MCP page.`);
+      setResult({ items: n, skills: done.length });
       load();
       onDone?.();
     } catch (err) {
@@ -61,23 +73,24 @@ export default function ClaudeImport({ onDone, onError }: Props) {
     }
   };
 
-  if (!preview) return <p className="muted">Reading Claude Code's settings…</p>;
+  if (!preview) return <p className="muted">{t("claudeImport.reading")}</p>;
   const items = preview.items ?? [];
-  const groups = [
-    { title: "MCP servers", items: items.filter((i) => i.kind === "mcp") },
-    { title: "Permission rules", items: items.filter((i) => i.kind === "rule") },
-  ];
   const skillCands = skills?.cands ?? [];
+  const groups = [
+    { id: "mcp", title: t("settings.page.mcp"), items: items.filter((i) => i.kind === "mcp") },
+    { id: "rule", title: t("claudeImport.group.rules"), items: items.filter((i) => i.kind === "rule") },
+  ];
+  const sources = [...(preview.sources ?? []), ...(skillCands.length > 0 && skills ? [skills.dir] : [])].join(", ") || t("claudeImport.nothing");
+  const missing = (preview.missing ?? []).join(", ");
   return (
     <div className="claude-import">
       <p className="muted">
-        Read from {[...(preview.sources ?? []), ...(skillCands.length > 0 && skills ? [skills.dir] : [])].map((s) => s).join(", ") || "nothing"}
-        {(preview.missing ?? []).length > 0 && `; not found: ${(preview.missing ?? []).join(", ")}`}. Nothing is written to Claude Code's files.
+        {missing ? t("claudeImport.readFromMissing", { sources, missing }) : t("claudeImport.readFrom", { sources })} {t("claudeImport.notWritten")}
       </p>
       {groups.map(
         (g) =>
           g.items.length > 0 && (
-            <section key={g.title}>
+            <section key={g.id}>
               <h3>{g.title}</h3>
               <ul className="import-list">
                 {g.items.map((it) => (
@@ -89,12 +102,12 @@ export default function ClaudeImport({ onDone, onError }: Props) {
                         checked={picked.includes(it.key)}
                         onChange={(e) => toggle(it.key, e.target.checked)}
                       />
-                      <strong>{it.label}</strong> <span className={`badge import-${it.status}`}>{STATUS[it.status] ?? it.status}</span>
+                      <strong>{it.label}</strong> <span className={`badge import-${it.status}`}>{statusName(it.status)}</span>
                     </label>
                     <div className="import-detail">
                       {it.kind === "mcp" && <code>{it.detail}</code>}
                       {it.destination !== "none" && <div className="muted">→ {it.destination}</div>}
-                      {(it.secrets ?? []).length > 0 && <div className="muted">Moved to {secretStore()}: {(it.secrets ?? []).join(", ")}</div>}
+                      {(it.secrets ?? []).length > 0 && <div className="muted">{t("claudeImport.movedTo", { store: secretStore(), secrets: (it.secrets ?? []).join(", ") })}</div>}
                       {it.note && <div className="muted">{it.note}</div>}
                     </div>
                   </li>
@@ -105,7 +118,7 @@ export default function ClaudeImport({ onDone, onError }: Props) {
       )}
       {skillCands.length > 0 && (
         <section>
-          <h3>Skills</h3>
+          <h3>{t("settings.page.skills")}</h3>
           <ul className="import-list">
             {skillCands.map((c) => (
               <li key={c.name}>
@@ -116,22 +129,23 @@ export default function ClaudeImport({ onDone, onError }: Props) {
                     checked={picked.includes("skill:" + c.name)}
                     onChange={(e) => toggle("skill:" + c.name, e.target.checked)}
                   />
-                  <strong>{c.name}</strong> <span className={`badge import-${c.status}`}>{STATUS[c.status] ?? c.status}</span>
+                  <strong>{c.name}</strong> <span className={`badge import-${c.status}`}>{statusName(c.status)}</span>
                 </label>
                 <div className="import-detail muted">
-                  → the skill store{c.issue ? ` · ${c.issue}` : ""}
-                  {(c.scripts ?? []).length > 0 && ` · scripts: ${(c.scripts ?? []).join(", ")}`}
+                  {[t("claudeImport.skillStore"), c.issue, (c.scripts ?? []).length > 0 && t("claudeImport.scripts", { scripts: (c.scripts ?? []).join(", ") })]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </div>
               </li>
             ))}
           </ul>
         </section>
       )}
-      {items.length === 0 && skillCands.length === 0 && <p className="muted">Claude Code has nothing to import here.</p>}
-      {result && <p className="ok">{result}</p>}
+      {items.length === 0 && skillCands.length === 0 && <p className="muted">{t("claudeImport.nothingToImport")}</p>}
+      {result && <p className="ok">{t("claudeImport.result", { items: t("claudeImport.items", { count: result.items }), count: result.skills })} {t("claudeImport.approveMcp")}</p>}
       <div className="row">
         <button className="primary" disabled={busy || picked.length === 0} onClick={apply}>
-          Import {picked.length} selected
+          {t("claudeImport.importSelected", { count: picked.length })}
         </button>
       </div>
     </div>

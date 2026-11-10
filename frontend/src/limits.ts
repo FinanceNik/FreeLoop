@@ -1,5 +1,6 @@
 // An account's limits as agents reported them (GUI-028). Pure, so limits.test.ts
 // covers it. A report comes back with a model call, so what is shown may be old.
+import { numberFormat, t, type PlainKey } from "./i18n.ts";
 
 export type LimitPeriodRow = {
   source: string;
@@ -80,8 +81,10 @@ export function limitSummaries(periods: readonly LimitPeriodRow[], now: Date = n
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
+// percentText is a share used, in the locale's style: 11%, 11 %.
 export function percentText(used: number): string {
-  return used > 0 && used < 1 ? "under 1%" : `${Math.round(used)}%`;
+  const percent = numberFormat({ style: "percent", maximumFractionDigits: 0 });
+  return used > 0 && used < 1 ? t("limits.under", { percent: percent.format(0.01) }) : percent.format(Math.round(used) / 100);
 }
 
 // STALE_MINUTES is when a limit's report is old enough to say how old.
@@ -91,23 +94,24 @@ export const STALE_MINUTES = 10;
 // note, an old one may be out of date (GUI-028).
 export function reportAge(lastReport: string | Date, now: Date, since: (t: string | Date, now: Date) => string): string {
   const minutes = (now.getTime() - new Date(lastReport).getTime()) / 60000;
-  return minutes < STALE_MINUTES ? "" : `reported ${since(lastReport, now)}`;
+  return minutes < STALE_MINUTES ? "" : t("limits.reported", { ago: since(lastReport, now) });
 }
 
 // resetText says when a limit starts over, in words.
 export function resetText(resetsAt: Date, now: Date = new Date()): string {
   const minutes = Math.round((resetsAt.getTime() - now.getTime()) / 60000);
-  if (minutes <= 0) return "has reset";
-  if (minutes < 60) return `resets in ${minutes} min`;
+  if (minutes <= 0) return t("limits.hasReset");
+  if (minutes < 60) return t("limits.resetsInMinutes", { minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `resets in ${hours} h ${minutes % 60} min`;
+  if (hours < 24) return t("limits.resetsInHours", { hours, minutes: minutes % 60 });
   const days = Math.floor(hours / 24);
-  return `resets in ${days} ${days === 1 ? "day" : "days"} ${hours % 24} h`;
+  return t("limits.resetsInDays", { count: days, hours: hours % 24 });
 }
 
-export const LIMIT_STATE_LABEL: Record<CurrentLimit["state"], string> = {
-  ok: "",
-  warning: "Close to the limit",
-  refused: "Limit reached",
-  reset: "Has reset, no report since",
+// What a limit's state says beside its meter, as a catalogue key; nothing while it is ok.
+export const LIMIT_STATE_LABEL: Record<CurrentLimit["state"], PlainKey | null> = {
+  ok: null,
+  warning: "limits.state.warning",
+  refused: "limits.state.refused",
+  reset: "limits.state.reset",
 };

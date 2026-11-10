@@ -3,11 +3,11 @@
 
 import { days, tokensOf, type Row } from "./analytics.ts";
 import { weekdayIndex } from "./activity.ts";
-import { locale } from "./i18n.ts";
+import { locale, t } from "./i18n.ts";
 
-export const OTHER_MODEL = "Other";
-// An agent need not say which model it ran, as with its default in the early rows.
-export const modelName = (model: string) => model || "Model not reported";
+// An agent need not say which model it ran, as with its default in the early rows; the
+// name is the language in force's, so what holds it needs locale() among its dependencies.
+export const modelName = (model: string) => model || t("overview.modelNotReported");
 // Colours, as on the dashboard; a sixth model and beyond fold into Other.
 const SERIES = 5;
 const WEEKS = 53;

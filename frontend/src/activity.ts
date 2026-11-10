@@ -3,6 +3,7 @@
 // Pure, so activity.test.ts covers it.
 
 import { tokensOf, type Row } from "./analytics.ts";
+import { locale, t } from "./i18n.ts";
 
 export interface ActivityRow {
   day: string;
@@ -24,16 +25,17 @@ export function eventCount(rows: ActivityRow[], name: string): number {
   return rows.reduce((n, r) => (r.kind === "event" && r.name === name ? n + r.count : n), 0);
 }
 
-// duration is a length of time in the largest units that say it.
+// duration is a length of time in the largest units that say it, written as the language
+// writes its units (GUI-048).
 export function duration(ms: number): string {
-  if (ms <= 0) return "0s";
-  if (ms < 1000) return "<1s";
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return s < 600 && s % 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${m}m`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h}h ${m % 60}m` : `${Math.floor(h / 24)}d ${h % 24}h`;
+  if (ms <= 0) return t("activity.duration.zero");
+  if (ms < 1000) return t("activity.duration.underSecond");
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return t("activity.duration.seconds", { seconds });
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return seconds < 600 && seconds % 60 ? t("activity.duration.minutesSeconds", { minutes: Math.floor(seconds / 60), seconds: seconds % 60 }) : t("activity.duration.minutes", { minutes });
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? t("activity.duration.hoursMinutes", { hours, minutes: minutes % 60 }) : t("activity.duration.daysHours", { days: Math.floor(hours / 24), hours: hours % 24 });
 }
 
 // timeUnit picks the unit a chart of durations counts in, so its axis falls on
@@ -181,7 +183,19 @@ export function repeatApprovals(rows: ActivityRow[], atLeast = 2): Repeat[] {
     .map(({ tool, command, path, allowed, waited }) => ({ tool, command, path, allowed, waited }));
 }
 
-export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAYS_OF_WEEK = 7;
+
+// weekdayName is the short name of a weekday in the language in force, 0 for Monday: Mon,
+// Mo., ma. 2024-01-01 was a Monday.
+export function weekdayName(index: number): string {
+  return new Intl.DateTimeFormat(locale(), { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 1 + index)));
+}
+
+// WEEKDAYS reads as the list of short names, written when read, so a change of language
+// shows at once; use weekdayName where an index is at hand.
+export const WEEKDAYS: readonly string[] = new Proxy(Array.from({ length: DAYS_OF_WEEK }, () => ""), {
+  get: (days, key) => (typeof key === "string" && /^[0-6]$/.test(key) ? weekdayName(Number(key)) : Reflect.get(days, key)),
+});
 
 // weekdayIndex is 0 for Monday.
 export function weekdayIndex(day: string): number {
@@ -195,7 +209,7 @@ export interface Heatmap {
 
 // heatmap counts turns by the weekday and hour they started.
 export function heatmap(rows: ActivityRow[]): Heatmap {
-  const cells = WEEKDAYS.map(() => new Array<number>(24).fill(0));
+  const cells = Array.from({ length: DAYS_OF_WEEK }, () => new Array<number>(24).fill(0));
   let max = 0;
   for (const r of of(rows, "turn")) {
     const row = cells[weekdayIndex(r.day)];

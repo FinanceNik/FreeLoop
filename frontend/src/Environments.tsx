@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { secretStore } from "./platform.ts";
 import { ask } from "./ask.ts";
+import { t } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 import { EngineService, modeName, STARTING_MODES, type EnvironmentInfo } from "./api.ts";
 
 interface Props {
@@ -97,13 +99,49 @@ function lines(text: string): string[] {
 function parseVars(text: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of text.split("\n")) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    const i = t.indexOf("=");
-    if (i <= 0) throw new Error(`"${t}" is not KEY=value`);
-    out[t.slice(0, i).trim()] = t.slice(i + 1);
+    const entry = line.trim();
+    if (!entry || entry.startsWith("#")) continue;
+    const i = entry.indexOf("=");
+    if (i <= 0) throw new Error(t("environments.notKeyValue", { line: entry }));
+    out[entry.slice(0, i).trim()] = entry.slice(i + 1);
   }
   return out;
+}
+
+// ruleText writes a rule as the engine does: its effect, its tool and what it matches.
+function ruleText(r: { effect: string; tool: string; command?: string; path?: string }): string {
+  const match = r.command || r.path;
+  return match ? `${r.effect} ${r.tool}(${match})` : `${r.effect} ${r.tool}`;
+}
+
+function sandboxText(network: string | undefined, hosts: number): string {
+  if (network === "none") return t("environments.sandboxedNoNetwork");
+  return network === "hosts" ? t("environments.sandboxedHosts", { count: hosts }) : t("environments.sandboxed");
+}
+
+// summary is an environment's one-line description, its parts joined by " · ".
+function summary(env: EnvironmentInfo): string {
+  const secrets = env.secretNames ?? [];
+  const hosts = (env.sandbox?.hosts ?? []).length;
+  const disabled = env.disabledTools ?? [];
+  const rules = env.rules ?? [];
+  const sandboxed = env.sandbox?.enabled && sandboxText(env.sandbox.network, hosts);
+  return [
+    t("environments.variableCount", { count: Object.keys(env.env ?? {}).length }),
+    secrets.length > 0 ? t("environments.secretCountNamed", { count: secrets.length, names: secrets.join(", ") }) : t("environments.secretCount", { count: 0 }),
+    sandboxed,
+    env.kind === "docker" && (env.devcontainer ? t("environments.dockerDevcontainer") : t("environments.docker", { image: env.image })),
+    env.kind === "ssh" && t("environments.ssh", { host: env.host }),
+    disabled.length > 0 && t("environments.toolsOff", { tools: disabled.join(", ") }),
+    rules.length > 0 &&
+      t("environments.rules", {
+        rules: rules.map(ruleText).join(", "),
+        file: `environments/${env.id}.yaml`,
+      }),
+    env.defaultMode && t("environments.startsIn", { mode: modeName(env.defaultMode) }),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export default function Environments({ environments, onChanged, onError }: Props) {
@@ -150,8 +188,7 @@ export default function Environments({ environments, onChanged, onError }: Props
   };
 
   const remove = async (env: EnvironmentInfo) => {
-    const what = env.builtin ? `Reset ${env.name}` : `Delete ${env.name}`;
-    if (!(await ask(`${what}? Its secrets are removed from ${secretStore()}.`))) return;
+    if (!(await ask(t(env.builtin ? "environments.resetAsk" : "environments.deleteAsk", { name: env.name, store: secretStore() })))) return;
     EngineService.DeleteEnvironment(env.id).then(onChanged).catch(onError);
   };
 
@@ -159,33 +196,23 @@ export default function Environments({ environments, onChanged, onError }: Props
 
   return (
     <section className="page">
-      <h2>Environments</h2>
+      <h2>{t("settings.page.environments")}</h2>
       <p className="muted">
-        An environment is what a session's commands run with: variables, secrets, the tools the agent may use and the mode new
-        sessions start in. Commands run on this computer in the session's project folder, in a sandbox if the environment has one. Secrets are stored in {secretStore()},
-        handed to commands as variables when they start, and redacted from transcripts.
+        {t("environments.intro", { store: secretStore() })}
       </p>
       <ul className="provider-list">
         {environments.map((env) => (
           <li key={env.id} className="card">
             <div>
-              <strong>{env.name}</strong> <span className="muted">{env.id === "local" ? "default" : env.builtin ? "built in" : env.id}</span>
+              <strong>{env.name}</strong> <span className="muted">{env.id === "local" ? t("environments.default") : env.builtin ? t("environments.builtIn") : env.id}</span>
               <div className="muted">
-                {Object.keys(env.env ?? {}).length} variables · {(env.secretNames ?? []).length} secrets
-                {(env.secretNames ?? []).length > 0 && ` (${(env.secretNames ?? []).join(", ")})`}
-                {env.sandbox?.enabled && ` · sandboxed${env.sandbox.network === "none" ? ", no network" : env.sandbox.network === "hosts" ? `, ${(env.sandbox.hosts ?? []).length} hosts` : ""}`}
-                {env.kind === "docker" && ` · Docker: ${env.devcontainer ? "the project's devcontainer.json" : env.image}`}
-                {env.kind === "ssh" && ` · SSH: ${env.host}`}
-                {(env.disabledTools ?? []).length > 0 && ` · tools off: ${(env.disabledTools ?? []).join(", ")}`}
-                {(env.rules ?? []).length > 0 &&
-                  ` · rules: ${(env.rules ?? []).map((r) => `${r.effect} ${r.tool}${r.command ? `(${r.command})` : r.path ? `(${r.path})` : ""}`).join(", ")} (edit environments/${env.id}.yaml)`}
-                {env.defaultMode && ` · starts in ${modeName(env.defaultMode)}`}
+                {summary(env)}
               </div>
             </div>
             <div className="row">
-              <button onClick={() => setForm(toForm(env))}>Edit</button>
+              <button onClick={() => setForm(toForm(env))}>{t("environments.edit")}</button>
               <button className="danger" onClick={() => remove(env)}>
-                {env.builtin ? "Reset" : "Delete"}
+                {env.builtin ? t("common.reset") : t("environments.delete")}
               </button>
             </div>
           </li>
@@ -193,123 +220,121 @@ export default function Environments({ environments, onChanged, onError }: Props
       </ul>
       {!form && (
         <button className="primary" onClick={() => setForm(toForm())}>
-          Add environment
+          {t("environments.add")}
         </button>
       )}
       {form && (
         <form className="card form" onSubmit={save}>
-          <h3>{form.id ? `Edit ${form.name}` : "Add environment"}</h3>
+          <h3>{form.id ? t("environments.editTitle", { name: form.name }) : t("environments.add")}</h3>
           <label>
-            Name
+            {t("environments.name")}
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           </label>
           <label>
-            Variables <span className="muted">(one KEY=value per line)</span>
-            <textarea rows={4} value={form.vars} onChange={(e) => setForm({ ...form, vars: e.target.value })} placeholder="NODE_ENV=development" />
+            {t("environments.variables")} <span className="muted">{t("environments.variablesHint")}</span>
+            <textarea rows={4} value={form.vars} onChange={(e) => setForm({ ...form, vars: e.target.value })} placeholder={"NODE_ENV=development"} />
           </label>
           <fieldset>
-            <legend>Secrets</legend>
+            <legend>{t("environments.secrets")}</legend>
             {form.secretNames.map((n) => (
               <label key={n} className="row">
                 <code>{n}</code>
-                <span className="muted">stored</span>
+                <span className="muted">{t("environments.stored")}</span>
                 <input
                   type="checkbox"
                   checked={form.remove.includes(n)}
                   onChange={() => setForm({ ...form, remove: toggle(form.remove, n) })}
                 />{" "}
-                remove
+                {t("environments.removeSecret")}
               </label>
             ))}
             {form.added.map((s, i) => (
               <div key={i} className="row">
                 <input
-                  placeholder="NAME"
+                  placeholder={t("environments.secretName")}
                   value={s.name}
                   onChange={(e) => setForm({ ...form, added: form.added.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })}
                 />
                 <input
                   type="password"
                   autoComplete="off"
-                  placeholder="value"
+                  placeholder={t("environments.secretValue")}
                   value={s.value}
                   onChange={(e) => setForm({ ...form, added: form.added.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })}
                 />
               </div>
             ))}
             <button type="button" onClick={() => setForm({ ...form, added: [...form.added, { name: "", value: "" }] })}>
-              Add secret
+              {t("environments.addSecret")}
             </button>
           </fieldset>
           <fieldset>
-            <legend>Tools the agent may use</legend>
+            <legend>{t("environments.tools")}</legend>
             <div className="row wrap">
-              {TOOLS.map((t) => (
-                <label key={t} className="row">
-                  <input type="checkbox" checked={!form.disabled.includes(t)} onChange={() => setForm({ ...form, disabled: toggle(form.disabled, t) })} />
-                  <code>{t}</code>
+              {TOOLS.map((tool) => (
+                <label key={tool} className="row">
+                  <input type="checkbox" checked={!form.disabled.includes(tool)} onChange={() => setForm({ ...form, disabled: toggle(form.disabled, tool) })} />
+                  <code>{tool}</code>
                 </label>
               ))}
             </div>
           </fieldset>
           <label>
-            Runs
+            {t("environments.runs")}
             <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-              <option value="local">On this computer, in the project folder</option>
-              <option value="docker">In a Docker container per session</option>
-              <option value="ssh">On another machine, over SSH</option>
+              <option value="local">{t("environments.kind.local")}</option>
+              <option value="docker">{t("environments.kind.docker")}</option>
+              <option value="ssh">{t("environments.kind.ssh")}</option>
             </select>
           </label>
           {form.kind === "local" && (
             <fieldset>
-              <legend>SSH keys</legend>
+              <legend>{t("environments.sshKeys")}</legend>
               <label className="row">
-                <input type="checkbox" checked={form.sshAgent} onChange={(e) => setForm({ ...form, sshAgent: e.target.checked })} /> Commands and agents can use my SSH agent
+                <input type="checkbox" checked={form.sshAgent} onChange={(e) => setForm({ ...form, sshAgent: e.target.checked })} /> {t("environments.sshAgent")}
               </label>
               <p className="muted">
-                With it, an approved command can use your SSH keys, for example to <code>git push</code> or log in to a server. Without it, git over SSH needs
-                another way in, such as HTTPS.
+                {tNodes("environments.sshAgentNote", { command: <code>{"git push"}</code> })}
               </p>
             </fieldset>
           )}
           {form.kind === "local" && (
             <fieldset>
-              <legend>Sandbox</legend>
+              <legend>{t("environments.sandbox")}</legend>
               <label className="row">
-                <input type="checkbox" checked={form.sandbox} onChange={(e) => setForm({ ...form, sandbox: e.target.checked })} /> Run commands in a sandbox
+                <input type="checkbox" checked={form.sandbox} onChange={(e) => setForm({ ...form, sandbox: e.target.checked })} /> {t("environments.sandboxOn")}
               </label>
               <p className="muted">
-                The built-in agent's commands then run without asking, because they can only write in the project and read little outside it. Leaving the
-                sandbox always asks. An external agent's own tools are not covered; for those, use a Docker environment.
+                {t("environments.sandboxNote")}
               </p>
               {form.sandbox && (
                 <>
                   <label>
-                    Network
+                    {t("environments.network")}
                     <select value={form.sandboxNetwork} onChange={(e) => setForm({ ...form, sandboxNetwork: e.target.value })}>
-                      <option value="localhost">This computer only: tests and dev servers work, and so does anything else listening here</option>
-                      <option value="hosts">This computer and the hosts listed here</option>
-                      <option value="none">None</option>
+                      <option value="localhost">{t("environments.network.localhost")}</option>
+                      <option value="hosts">{t("environments.network.hosts")}</option>
+                      <option value="none">{t("environments.network.none")}</option>
                     </select>
                   </label>
                   {form.sandboxNetwork === "hosts" && (
                     <label>
-                      Hosts <span className="muted">(one per line, such as registry.npmjs.org or *.github.com; add :port for a port other than 80 and 443)</span>
+                      {t("environments.hosts")} <span className="muted">{t("environments.hostsHint")}</span>
                       <textarea rows={4} value={form.sandboxHosts} onChange={(e) => setForm({ ...form, sandboxHosts: e.target.value })} required />
                       <span className="muted">
-                        A tool has to use the proxy the sandbox sets up, as npm, pip, Go, git over https and curl do. Anything else gets no connection.{" "}
+                        {t("environments.hostsNote")}{" "}
                         <button type="button" className="link" onClick={() => setForm({ ...form, sandboxHosts: mergeLines(form.sandboxHosts, PACKAGE_HOSTS) })}>
-                          Add the usual package registries
+                          {t("environments.addRegistries")}
                         </button>
                       </span>
                     </label>
                   )}
                   <label>
-                    More folders it can read <span className="muted">(one per line, absolute or under ~/)</span>
-                    <textarea rows={2} value={form.sandboxRead} onChange={(e) => setForm({ ...form, sandboxRead: e.target.value })} placeholder="~/tools" />
+                    {t("environments.readFolders")} <span className="muted">{t("environments.readFoldersHint")}</span>
+                    <textarea rows={2} value={form.sandboxRead} onChange={(e) => setForm({ ...form, sandboxRead: e.target.value })} placeholder={"~/tools"} />
                   </label>
                   <label>
-                    More folders it can write <span className="muted">(one per line)</span>
+                    {t("environments.writeFolders")} <span className="muted">{t("environments.writeFoldersHint")}</span>
                     <textarea rows={2} value={form.sandboxWrite} onChange={(e) => setForm({ ...form, sandboxWrite: e.target.value })} />
                   </label>
                 </>
@@ -318,65 +343,63 @@ export default function Environments({ environments, onChanged, onError }: Props
           )}
           {form.kind === "docker" && (
             <fieldset>
-              <legend>Container</legend>
+              <legend>{t("environments.container")}</legend>
               <p className="muted">
-                Each session gets its own container with its folder shared at the same path. Commands and external agents run inside it, so they see the
-                project and the image, not the rest of your files. Needs Docker Desktop, or Colima and the docker CLI.
+                {t("environments.containerNote")}
               </p>
               <label className="row">
-                <input type="checkbox" checked={form.devcontainer} onChange={(e) => setForm({ ...form, devcontainer: e.target.checked })} /> Use the
-                project's .devcontainer/devcontainer.json
+                <input type="checkbox" checked={form.devcontainer} onChange={(e) => setForm({ ...form, devcontainer: e.target.checked })} /> {t("environments.devcontainer")}
               </label>
               {!form.devcontainer && (
                 <label>
-                  Image
-                  <input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="node:22-bookworm" required />
+                  {t("environments.image")}
+                  <input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder={"node:22-bookworm"} required />
                 </label>
               )}
               <label>
-                Setup command <span className="muted">(once, after the container is created{form.devcontainer ? "; defaults to postCreateCommand" : ""})</span>
-                <input value={form.setup} onChange={(e) => setForm({ ...form, setup: e.target.value })} placeholder="npm ci" />
+                {t("environments.setup")} <span className="muted">{t(form.devcontainer ? "environments.setupHintDevcontainer" : "environments.setupHintDocker")}</span>
+                <input value={form.setup} onChange={(e) => setForm({ ...form, setup: e.target.value })} placeholder={"npm ci"} />
               </label>
               <label>
-                Health check <span className="muted">(before every session start; a failure blocks the session)</span>
-                <input value={form.health} onChange={(e) => setForm({ ...form, health: e.target.value })} placeholder="node --version" />
+                {t("environments.health")} <span className="muted">{t("environments.healthHint")}</span>
+                <input value={form.health} onChange={(e) => setForm({ ...form, health: e.target.value })} placeholder={"node --version"} />
               </label>
             </fieldset>
           )}
           {form.kind === "ssh" && (
             <fieldset>
-              <legend>Machine</legend>
+              <legend>{t("environments.machine")}</legend>
               <p className="muted">
-                Commands run on that machine, in a working copy kept in sync with the project here. Your files, keys and network on this computer are out of their reach. Use a machine you can afford to lose, not a server that matters: an agent can do anything on it, and your code and this environment's variables and secrets go there.
+                {t("environments.machineNote")}
               </p>
               <p className="muted">
-                Secrets, files a deny rule covers and what the project ignores are not copied. Settings this computer or an agent would act on, such as <code>.git</code>, <code>.claude</code> and <code>AGENTS.md</code>, do not come back. Other changes do, so read the diff. So far this works with the built-in agent only.
+                {tNodes("environments.machineCopies", { git: <code>{".git"}</code>, claude: <code>{".claude"}</code>, agents: <code>{"AGENTS.md"}</code> })}
               </p>
               <label>
-                Host <span className="muted">(a name from ~/.ssh/config, or user@host)</span>
-                <input value={form.host} required onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder="my-box" autoCapitalize="off" spellCheck={false} />
+                {t("environments.host")} <span className="muted">{t("environments.hostHint")}</span>
+                <input value={form.host} required onChange={(e) => setForm({ ...form, host: e.target.value })} placeholder={"my-box"} autoCapitalize="off" spellCheck={false} />
               </label>
               <p className="muted">
-                Run <code>ssh {form.host.trim() || "my-box"}</code> in a terminal once, and check its fingerprint: Freeloop does not accept a host key by itself. It signs in with your keys and ssh agent with no prompt, and never reads them. Your agent is not forwarded.
+                {tNodes("environments.hostNote", { command: <code>ssh {form.host.trim() || "my-box"}</code> })}
               </p>
               <label>
-                Folder there <span className="muted">(optional; each session gets its own folder inside it. Default ~/.freeloop-sessions)</span>
-                <input value={form.remoteDir} onChange={(e) => setForm({ ...form, remoteDir: e.target.value })} placeholder="~/.freeloop-sessions" autoCapitalize="off" spellCheck={false} />
+                {t("environments.remoteDir")} <span className="muted">{t("environments.remoteDirHint")}</span>
+                <input value={form.remoteDir} onChange={(e) => setForm({ ...form, remoteDir: e.target.value })} placeholder={"~/.freeloop-sessions"} autoCapitalize="off" spellCheck={false} />
               </label>
               <label>
-                Setup command <span className="muted">(once, after the first copy)</span>
-                <input value={form.setup} onChange={(e) => setForm({ ...form, setup: e.target.value })} placeholder="npm ci" />
+                {t("environments.setup")} <span className="muted">{t("environments.setupHintSsh")}</span>
+                <input value={form.setup} onChange={(e) => setForm({ ...form, setup: e.target.value })} placeholder={"npm ci"} />
               </label>
               <label>
-                Health check <span className="muted">(before every session start; a failure blocks the session)</span>
-                <input value={form.health} onChange={(e) => setForm({ ...form, health: e.target.value })} placeholder="node --version" />
+                {t("environments.health")} <span className="muted">{t("environments.healthHint")}</span>
+                <input value={form.health} onChange={(e) => setForm({ ...form, health: e.target.value })} placeholder={"node --version"} />
               </label>
             </fieldset>
           )}
           <label>
-            New sessions start in
+            {t("environments.defaultMode")}
             <select value={form.defaultMode} onChange={(e) => setForm({ ...form, defaultMode: e.target.value })}>
-              <option value="">Ask (default)</option>
+              <option value="">{t("environments.defaultModeAsk", { mode: modeName("ask") })}</option>
               {STARTING_MODES.filter((m) => m.id !== "ask").map((m) => (
                 <option key={m.id} value={m.id}>
                   {modeName(m.id)}
@@ -386,10 +409,10 @@ export default function Environments({ environments, onChanged, onError }: Props
           </label>
           <div className="row">
             <button type="submit" className="primary" disabled={busy}>
-              Save
+              {t("common.save")}
             </button>
             <button type="button" onClick={() => setForm(null)}>
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>

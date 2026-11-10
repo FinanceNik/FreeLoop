@@ -552,6 +552,11 @@ export const en = {
   "app.approvals.review": "Review",
   "app.problems": "Configuration problems; using defaults where needed.",
   "app.dismiss": "Dismiss",
+  // Before an error's words, which stay as the engine gave them.
+  "app.error.heading": "Error:",
+  "app.error.inSession": "Error in {title}:",
+  "app.error.drawing": "Something went wrong drawing this window. Your sessions and transcripts are safe.",
+  "app.error.reload": "Reload",
   "app.import.title": "Import",
   "app.import.sessions": "Sessions",
   "app.import.settings": "Settings from Claude Code",
@@ -1365,4 +1370,1466 @@ export const en = {
   "files.truncated": "Only the first 512 KB are shown.",
   // The title of the frame a PDF shows in.
   "files.pdf": "PDF: {path}",
+
+  // The usage page (Usage.tsx).
+  "usagePage.title": "Usage",
+  "usagePage.limits": "Limits",
+  "usagePage.showInPane": "Show in a pane",
+  "usagePage.tab.tokens": "Tokens and cost",
+  "usagePage.tab.activity": "Activity",
+  "usagePage.tab.approvals": "Approvals",
+  "usagePage.tab.efficiency": "Efficiency",
+  // The longest range; the others are counted in days (paneRange.days).
+  "usagePage.range.year": "12 months",
+  // What the charts and tables are grouped by, and the filters of the same names (Model,
+  // Project and Tag are usage.model, sidebar.groupBy.project and sidebar.filter.tag).
+  "usagePage.group.type": "Token type",
+  "usagePage.group.agent": "Provider or agent",
+  "usagePage.all.project": "All projects",
+  "usagePage.all.agent": "All providers and agents",
+  "usagePage.all.model": "All models",
+  "usagePage.all.tag": "All tags",
+  "usagePage.clearFilters": "Clear filters",
+  "usagePage.whatCharts": "What the charts show",
+  "usagePage.groupBy": "Group by",
+  "usagePage.measure": "Measure",
+  "usagePage.needPrices": "Add prices in Settings to see estimated costs",
+  "usagePage.cacheReads": "Include cache reads",
+  "usagePage.saved": "Saved to {file}",
+  "usagePage.share": "Share summary",
+  "usagePage.exportCsv": "Export CSV…",
+  "usagePage.counting": "Still counting older sessions ({pending} left)…",
+  "usagePage.loading": "Loading…",
+  // {range} is the page's range, such as 30 days.
+  "usagePage.none": "No model calls in the last {range}.",
+  "usagePage.noneNote": "Usage is counted from every session's model calls, including external agents that report their tokens.",
+  "usagePage.unpriced": "{tokens} tokens are on models without a price and count as no cost.",
+  "usagePage.addPrices": "Add prices",
+  "usagePage.chart.tokensDay": "Tokens per day",
+  "usagePage.chart.tokensWeek": "Tokens per week",
+  "usagePage.chart.costDay": "Estimated cost per day",
+  "usagePage.chart.costWeek": "Estimated cost per week",
+  // What a screen reader hears for the chart; {title} is one of the four above.
+  "usagePage.chartLabel.type": "{title} by token type",
+  "usagePage.chartLabel.model": "{title} by model",
+  "usagePage.chartLabel.agent": "{title} by provider or agent",
+  "usagePage.chartLabel.project": "{title} by project",
+  "usagePage.total": "Total",
+  "usagePage.by.type": "By token type",
+  "usagePage.by.model": "By model",
+  "usagePage.by.agent": "By provider or agent",
+  "usagePage.by.project": "By project",
+  "usagePage.col.shareOfTokens": "Share of tokens",
+  "usagePage.col.estCost": "Est. cost",
+  "usagePage.col.shareOfCost": "Share of cost",
+  "usagePage.showOnly": "Show only this, on every tab",
+  "usagePage.topSessions": "Sessions that used the most",
+  "usagePage.unknownProvider": "Unknown provider",
+  "usagePage.deletedSessions": "Deleted sessions",
+
+  // The chart of usage over time (UsageChart.tsx).
+  "chart.noUse": "No use",
+
+  // The heatmap of turns by weekday and hour (Heatmap.tsx).
+  "heatmap.label": "Turns by weekday and hour",
+  "heatmap.turns": { one: "{count} turn", other: "{count} turns" },
+
+  // A length of time (activity.ts), in the largest units that say it.
+  "activity.duration.zero": "0s",
+  "activity.duration.underSecond": "<1s",
+  "activity.duration.seconds": "{seconds}s",
+  "activity.duration.minutesSeconds": "{minutes}m {seconds}s",
+  "activity.duration.minutes": "{minutes}m",
+  "activity.duration.hoursMinutes": "{hours}h {minutes}m",
+  "activity.duration.daysHours": "{days}d {hours}h",
+
+  // The year's overview at the top of the page and in the pane (UsageOverview.tsx).
+  "overview.tokensNoCache": "Tokens, without cache reads",
+  "overview.none": "None",
+  "overview.biggestDay": "Biggest day",
+  "overview.biggestDayOn": "Biggest day, {date}",
+  "overview.longestChat": "Longest chat, working",
+  "overview.longestChatNamed": "Longest chat, working: {title}",
+  "overview.currentStreak": "Current streak",
+  // {days} is a count of days, such as 12 days.
+  "overview.longestStreak": "Longest streak, of {days} active",
+  "overview.calendar": "Tokens per day, last 12 months",
+  "overview.pointHint": "Point at a day to see it. Its colour is the model used most, its strength how much was used.",
+  "overview.tableSummary": "The days as a table",
+  // What a day says, spoken and in the readout; {tokens} is a short count such as 12K.
+  "overview.dayUse": "{date}: {tokens} tokens, {models}",
+  "overview.dayUseMore": "{date}: {tokens} tokens, {models}, and {count} more",
+  "overview.dayNone": "{date}: no use",
+  "overview.other": "Other",
+  // An agent need not say which model it ran.
+  "overview.modelNotReported": "Model not reported",
+
+  // Runs of one task side by side (Compare.tsx).
+  "compare.title": "Compare runs",
+  "compare.intro": {
+    one: "One task on {count} profile, each in its own worktree. Open a run to read it or review its diff; keep the one you want.",
+    other: "One task on {count} profiles, each in its own worktree. Open a run to read it or review its diff; keep the one you want.",
+  },
+  // Before the runs are known.
+  "compare.introSeveral": "One task on several profiles, each in its own worktree. Open a run to read it or review its diff; keep the one you want.",
+  "compare.files": "Files",
+  "compare.lines": "Lines",
+  "compare.noReply": "No reply yet.",
+  "compare.open": "Open",
+  "compare.keep": "Keep this one",
+  "compare.keepWaiting": "Wait until every run has stopped",
+  "compare.keepConfirm": {
+    one: 'Keep "{title}" and archive the other run? Their worktrees are removed; their branches stay.',
+    other: 'Keep "{title}" and archive the {count} other runs? Their worktrees are removed; their branches stay.',
+  },
+
+  // The budgets on the usage page (Budgets.tsx).
+  "budgetsPage.label": "Budgets",
+  "budgetsPage.none": "No budget set.",
+  "budgetsPage.setOne": "Set one beside the prices",
+
+  // How agents reported their usage (reporting.ts). {turns} and {sessions} are counts such
+  // as 3 turns; the form follows the number of turns, which "it" or "them" stands for.
+  "reporting.turns": { one: "{count} turn", other: "{count} turns" },
+  "reporting.sessions": { one: "{count} session", other: "{count} sessions" },
+  "reporting.silent": {
+    one: "{name} reported no tokens for {turns} in {sessions}, so the cost leaves it out.",
+    other: "{name} reported no tokens for {turns} in {sessions}, so the cost leaves them out.",
+  },
+  // {names} is one or more agents, such as Codex CLI and Gemini CLI; the form follows how many.
+  "reporting.turnTotals": {
+    one: "{names} is counted from each turn's total, as it reports, not per model call.",
+    other: "{names} are counted from each turn's total, as they report, not per model call.",
+  },
+  "reporting.held": {
+    one: "The permission policy held {count} tool call in this time.",
+    other: "The permission policy held {count} tool calls in this time.",
+  },
+
+  // The usage page's Activity, Approvals and Efficiency tabs (UsageInsights.tsx). Why a
+  // turn ended; a reason not listed here is shown as the agent gave it.
+  "insights.reason.endTurn": "Finished",
+  "insights.reason.cancelled": "Stopped",
+  "insights.reason.maxTokens": "Hit the token limit",
+  "insights.reason.maxTurnRequests": "Hit the step limit",
+  "insights.reason.refusal": "Refused by the model",
+  "insights.reason.error": "Ended on an error",
+  "insights.reason.unknown": "Not reported",
+  // Who decided a permission request.
+  "insights.actor.user": "You",
+  "insights.actor.rule": "A rule",
+  "insights.actor.mode": "The permission mode",
+  "insights.actor.sandbox": "The sandbox",
+  "insights.actor.hook": "A hook",
+  "insights.actor.policy": "Policy",
+  "insights.actor.protectedPath": "Protected paths",
+  // A chart's column past 90 days; {date} is its first day, such as Nov 3.
+  "insights.weekOfDate": "Week of {date}",
+  "insights.weekOf": "Week of",
+  "insights.day": "Day",
+  "insights.asTable": "Show as a table",
+  "insights.share": "Share",
+  "insights.session": "Session",
+  "insights.deletedSession": "Deleted session",
+  "insights.untitled": "Untitled",
+  "insights.failed": "Failed",
+  "insights.turns": "Turns",
+  "insights.toolCalls": "Tool calls",
+  // {range} is the page's range, such as 30 days.
+  "insights.activity.none": "No activity in the last {range}.",
+  "insights.activity.noneNote": "Tools, turns and decisions are counted from every session's transcript.",
+  "insights.activity.average": "{duration} each on average",
+  "insights.activity.total": "{duration} in all",
+  "insights.activity.perTurn": "{calls} per turn",
+  "insights.activity.failedCalls": "Tool calls that failed",
+  "insights.activity.failedCount": "{failures} of them",
+  "insights.activity.edits": "Edits",
+  "insights.activity.pullRequests": "Pull requests",
+  "insights.activity.rewinds": "Rewinds",
+  "insights.activity.compactions": "Compactions",
+  "insights.activity.errors": "Errors",
+  "insights.activity.turnsPerDay": "Turns per day",
+  "insights.activity.turnsPerWeek": "Turns per week",
+  "insights.activity.whenTurnsStart": "When turns start",
+  // The heatmap's legend, from its lightest shade to its darkest.
+  "insights.activity.fewer": "Fewer",
+  "insights.activity.more": "More",
+  "insights.activity.weekday": "Weekday",
+  "insights.activity.hour": "Hour",
+  "insights.activity.scale": "Scale",
+  // A cell's shade on the heatmap, from 0 to 5.
+  "insights.activity.scaleOf": "{level} of 5",
+  "insights.activity.tools": "Tools",
+  "insights.activity.tool": "Tool",
+  "insights.activity.shareOfCalls": "Share of calls",
+  "insights.activity.calls": "Calls",
+  "insights.activity.failureRate": "Failure rate",
+  "insights.activity.averageTime": "Average time",
+  "insights.activity.totalTime": "Total time",
+  "insights.activity.unnamedTool": "Unnamed",
+  "insights.activity.toolsNote": "A call you or a rule denied is not a failure, and time waiting for an approval is not counted.",
+  "insights.activity.endings": "How turns ended",
+  "insights.activity.ending": "Ending",
+  "insights.activity.averageLength": "Average length",
+  "insights.activity.busiest": "Busiest sessions",
+  "insights.activity.timeInTurns": "Time in turns",
+  "insights.approvals.none": "No permission requests in the last {range}.",
+  "insights.approvals.noneNote": "Every request an agent makes to do something is decided by you, a rule, the permission mode or the sandbox.",
+  "insights.approvals.waited": "Agents waited on you",
+  "insights.approvals.averageWait": "{duration} per question on average",
+  "insights.approvals.decisions": "Decisions",
+  "insights.approvals.askedYou": "Asked you",
+  // {share} is a percentage, such as 12%.
+  "insights.approvals.ofDecisions": "{share} of decisions",
+  "insights.approvals.denied": "Denied",
+  "insights.approvals.held": "Held by your policy",
+  "insights.approvals.heldNone": "Nothing in this range: no agent or repository was stopped from doing something.",
+  "insights.approvals.heldCount": {
+    one: "{count} thing an agent or a repository would have gone ahead with.",
+    other: "{count} things an agent or a repository would have gone ahead with.",
+  },
+  "insights.approvals.heldWhere": "A session's Info tab lists them, each with a link to the moment.",
+  "insights.approvals.heldColumn": "Held",
+  "insights.approvals.repeats": "Questions you keep answering yes to",
+  "insights.approvals.commandOrFile": "Command or file",
+  "insights.approvals.timesAllowed": "Times allowed",
+  "insights.approvals.timeWaited": "Time waited",
+  "insights.approvals.alwaysAllow": "Always allow",
+  // {what} is the command or the file's path.
+  "insights.approvals.alwaysAllowNamed": "Always allow {what}",
+  "insights.approvals.repeatsNote": "A rule covers exactly this command or file, in every project. Deny rules and protected paths still win.",
+  "insights.approvals.whoDecided": "Who decided",
+  "insights.approvals.decidedBy": "Decided by",
+  "insights.approvals.allowed": "Allowed",
+  "insights.approvals.cancelled": "Cancelled",
+  "insights.approvals.waitedPerDay": "Time agents waited on you, per day",
+  "insights.approvals.waitedPerWeek": "Time agents waited on you, per week",
+  // The same chart's name for a screen reader.
+  "insights.approvals.waitedPerDayLabel": "Time agents waited on you per day",
+  "insights.approvals.waitedPerWeekLabel": "Time agents waited on you per week",
+  "insights.approvals.waitedSeries": "Waited",
+  "insights.efficiency.none": "No model calls in this range.",
+  "insights.efficiency.noneNote": "Efficiency compares model calls with the turns they made up.",
+  "insights.efficiency.tokensPerTurn": "Tokens per turn",
+  // {tokens} and {turns} are short numbers such as 7.9M; the count is the turns, rounded.
+  "insights.efficiency.tokensInTurns": { one: "{tokens} tokens in {turns} turn", other: "{tokens} tokens in {turns} turns" },
+  "insights.efficiency.costPerTurn": "Estimated cost per turn",
+  "insights.efficiency.savedByPromptCache": "Saved by the prompt cache",
+  "insights.efficiency.savedNote": "Against the same reads at the input price",
+  // {month} is the month's name, such as November.
+  "insights.efficiency.projected": "Projected for {month}",
+  "insights.efficiency.spentSoFar": "{spent} so far, at the last 14 days' pace",
+  "insights.efficiency.tokensSoFar": "{tokens} tokens so far, at the last 14 days' pace",
+  // Followed by a button that opens the prices.
+  "insights.efficiency.addPricesNote": "Add prices to see the cost of a turn, what the cache saved and a projection in money.",
+  "insights.efficiency.addPrices": "Add prices",
+  "insights.efficiency.byModel": "By model",
+  "insights.efficiency.model": "Model",
+  "insights.efficiency.byProject": "By project",
+  "insights.efficiency.project": "Project",
+  "insights.efficiency.note": "A session's turns are shared among its models by their share of its model calls. Estimates depend on the prices in Settings.",
+  "insights.efficiency.outputPerCall": "Output per call",
+  "insights.efficiency.fromCache": "From the cache",
+  "insights.efficiency.estCostPerTurn": "Est. cost per turn",
+  "insights.efficiency.savedByCache": "Saved by the cache",
+
+  // The figures over a range, on the usage page and in the usage pane (TokenFigures.tsx).
+  "tokenFigures.cost": "Estimated cost",
+  "tokenFigures.tokens": "Tokens",
+  "tokenFigures.noComparison": "Nothing to compare with in the period before",
+  // {change} is a change in percent, such as +12%; {before} the range's length, such as 30 days.
+  "tokenFigures.change": "{change} on the {before} before",
+  "tokenFigures.withoutCacheReads": "{tokens} without cache reads",
+  "tokenFigures.input": "Input",
+  "tokenFigures.output": "Output",
+  "tokenFigures.fromPromptCache": "From the prompt cache",
+  "tokenFigures.tokensRead": "{tokens} tokens read",
+  "tokenFigures.perCall": "Per model call",
+  "tokenFigures.outputOfThem": "{tokens} of them output",
+  "tokenFigures.perSession": "Per session",
+  // {calls} is a short number such as 1.2K; the count is the sessions.
+  "tokenFigures.callsInSessions": { one: "{calls} calls in {count} session", other: "{calls} calls in {count} sessions" },
+
+  // The cost summary to share (CostSummary.tsx).
+  "costSummary.copied": "Copied",
+  "costSummary.savedTo": "Saved to {file}",
+  "costSummary.label": "Cost summary to share",
+  "costSummary.title": "Summary to share",
+  "costSummary.copy": "Copy as text",
+  "costSummary.save": "Save picture…",
+  "costSummary.close": "Close the summary",
+  "costSummary.note": "It shows agents and models, not sessions or projects. Nothing is sent anywhere unless you paste or send it.",
+  // The summary itself (costsummary.ts), as a picture and as Markdown to paste.
+  "costSummary.noPrice": "no price",
+  // The lines past the first eight, folded into one.
+  "costSummary.more": "{count} more",
+  "costSummary.listPrices":
+    "Estimated at list prices as of {date}. An agent on a subscription is shown at what the same work costs on the API, not at what the subscription costs.",
+  // {models} names the models without a price.
+  "costSummary.unpriced": {
+    one: "{count} model call on {models} has no price, so the cost leaves it out.",
+    other: "{count} model calls on {models} have no price, so the cost leaves them out.",
+  },
+  "costSummary.noCacheReads": "Tokens leave out cache reads.",
+  "costSummary.filtered": "A filtered part of the usage, not all of it.",
+  // {range} is the page's range, such as 30 days.
+  "costSummary.heading": "Freeloop usage, last {range}",
+  "costSummary.dates": "{since} to {until}",
+  "costSummary.total": "Total",
+  "costSummary.agent": "Agent",
+  "costSummary.model": "Model",
+  "costSummary.tokens": "Tokens",
+  "costSummary.cost": "Estimated cost",
+
+  // The usage pane (UsagePane.tsx, usagePane.ts): its views, stepped through by arrows.
+  "usagePane.view.recent": "Recent hours",
+  "usagePane.view.year": "Last 12 months",
+  "usagePane.view.tokens": "Tokens",
+  "usagePane.view.models": "By model",
+  "usagePane.views": "Usage views",
+  // {view} is the name of the view an arrow goes to.
+  "usagePane.previous": "Previous view: {view}",
+  "usagePane.next": "Next view: {view}",
+  "usagePane.title": "Usage · {view}",
+  "usagePane.position": "View {number} of {total}",
+  "usagePane.fullPage": "Full usage page",
+  "usagePane.range": "Range",
+  "usagePane.legend": "Legend",
+
+  // The last hours of usage (LiveUsage.tsx).
+  "liveUsage.hours": { one: "{count} hour", other: "{count} hours" },
+  // A range's button in a narrow pane.
+  "liveUsage.hoursShort": "{hours} h",
+  "liveUsage.group.type": "Token type",
+  "liveUsage.group.agent": "Provider or agent",
+  // A filter's first choice, which lets everything through.
+  "liveUsage.all.project": "All projects",
+  "liveUsage.all.agent": "All providers and agents",
+  "liveUsage.all.model": "All models",
+  // The chart's name: {step} minutes per column, over the last {hours} hours.
+  "liveUsage.title.tokens": "Tokens per {step} minutes, last {hours} hours",
+  "liveUsage.title.cost": "Estimated cost per {step} minutes, last {hours} hours",
+  "liveUsage.perStep": "Per {step} minutes",
+  "liveUsage.measure": "Measure",
+  "liveUsage.tokens": "Tokens",
+  "liveUsage.cacheReads": "Cache reads",
+  // {name} is what the filter shows, such as "All projects" or a project's name.
+  "liveUsage.filter": "Filter: {name}",
+  "liveUsage.clearFilters": "Clear filters",
+  "liveUsage.label": "Recent usage",
+  "liveUsage.filters": "Filters and grouping",
+  "liveUsage.filtersSet": { one: "Filters and grouping, {count} set", other: "Filters and grouping, {count} set" },
+  "liveUsage.filtersInUse": "Filters in use",
+  "liveUsage.removeThisFilter": "Remove this filter",
+  // The pane's line of totals and its tooltip; {tokens} is a short count such as 7.9M.
+  "liveUsage.strip": "{tokens} tokens · {cost}",
+  "liveUsage.strip.output": "{tokens} output",
+  "liveUsage.strip.calls": { one: "{count} model call", other: "{count} model calls" },
+  "liveUsage.strip.unpriced": { one: "{count} without a price", other: "{count} without a price" },
+  "liveUsage.noPrice": "No price",
+  "liveUsage.calls": "Model calls",
+  "liveUsage.unpricedCalls": { one: "{count} call has no price", other: "{count} calls have no price" },
+  "liveUsage.counting": "Counting…",
+  "liveUsage.none": "No model calls in the last {hours} hours.",
+  "liveUsage.noneFiltered": "Nothing matches these filters in the last {hours} hours.",
+
+  // Recent usage as the chart takes it (recentUsage.ts): the kinds of token.
+  "recentUsage.input": "Input",
+  "recentUsage.output": "Output",
+  "recentUsage.cacheWrite": "Cache write",
+  "recentUsage.cacheRead": "Cache read",
+  "recentUsage.cost": "Estimated cost",
+  // A column of the chart, from one time to the next.
+  "recentUsage.step": "{from} to {to}",
+  "recentUsage.noProject": "No project",
+  // {name} is the provider or agent the call ran on.
+  "recentUsage.modelNotReported": "{name} (model not reported)",
+  // What is past the largest few, with how many there are.
+  "recentUsage.other": "Other ({count})",
+
+  // The usage pane's views over days (PaneRange.tsx).
+  "paneRange.days": { one: "{count} day", other: "{count} days" },
+  "paneRange.none": "No model calls in the last {days} days.",
+  "paneRange.chart": "Tokens per day by token type, last {days} days",
+  // {tokens} is a short count such as 7.9M.
+  "paneRange.total": "{tokens} tokens in the last {days} days",
+  "paneRange.models": "Models",
+  "paneRange.agents": "Providers and agents",
+
+  // An account's limits as agents report them (Limits.tsx, limits.ts).
+  "limits.none":
+    "No limits reported yet. An agent that knows its account's limits reports them after its next model call. API keys and local models report none here.",
+  "limits.noFigure": "No current figure",
+  // {percent} is the share used, such as 11%.
+  "limits.percentUsed": "{percent} used",
+  "limits.meter": "{label}, {percent} used",
+  "limits.state.warning": "Close to the limit",
+  "limits.state.refused": "Limit reached",
+  "limits.state.reset": "Has reset, no report since",
+  // A run is a limit's span from one reset to the next.
+  "limits.history": "Finished runs of each limit, last 90 days",
+  "limits.col.limit": "Limit",
+  "limits.col.runs": "Runs",
+  "limits.col.averagePeak": "Average peak",
+  "limits.col.highest": "Highest",
+  "limits.col.close": "Close to it",
+  "limits.col.reached": "Reached",
+  "limits.under": "under {percent}",
+  // {ago} is how long ago, such as "12 min ago".
+  "limits.reported": "reported {ago}",
+  "limits.hasReset": "has reset",
+  "limits.resetsInMinutes": "resets in {minutes} min",
+  "limits.resetsInHours": "resets in {hours} h {minutes} min",
+  "limits.resetsInDays": { one: "resets in {count} day {hours} h", other: "resets in {count} days {hours} h" },
+
+  // The Board (Board.tsx, board.ts). Its first column holds what needs the user: an
+  // approval, an answer or an error.
+  "board.column.needs": "Needs you",
+  "board.count": { one: "{count} session", other: "{count} sessions" },
+  "board.countFiltered": { one: "{count} session, filtered in the sidebar", other: "{count} sessions, filtered in the sidebar" },
+  "board.queue": "Queue of tasks",
+  "board.backlog": "Backlog",
+  "board.backlogOf": "Backlog of {project}",
+  "board.backlogCounts": "{open} open, {ready} AFK ready",
+  "board.notCommitted": "not committed",
+  // {step} is how far the run got with the issue.
+  "board.afkStep": "AFK run: {step}",
+  "board.openSession": "Open its session",
+  "board.noIssues": "No issues yet",
+  "board.archiveTitle":
+    "Removes done issues, and PRDs whose issues are all done, from the project in a commit of their own. Git history keeps them.",
+  "board.archive": "Archive finished ({count})",
+  "board.none": "None",
+  // How long ago, in the largest whole unit.
+  "board.since.now": "just now",
+  "board.since.minutes": "{minutes} min ago",
+  "board.since.hours": "{hours} h ago",
+  "board.since.yesterday": "yesterday",
+  "board.since.days": "{days} days ago",
+
+  // A workflow's backlog on the Board (backlog.ts).
+  "backlog.state.ready": "Ready",
+  "backlog.state.blocked": "Blocked",
+  "backlog.state.done": "Done",
+  "backlog.type.afk": "AFK",
+  "backlog.type.human": "Human",
+  "backlog.cycle": "waits on itself through others",
+  // {issues} are the issues' ids, joined by commas.
+  "backlog.after": "after {issues}",
+  "backlog.then": "then {issues}",
+  "backlog.unreadable": "can't be read: {problem}",
+
+  // The attention view (Attention.tsx). Its summary is these facts, joined by semicolons;
+  // {sessions} is attention.sessions.
+  "attention.requests": { one: "{count} request waiting in {sessions}", other: "{count} requests waiting in {sessions}" },
+  "attention.sessions": { one: "{count} session", other: "{count} sessions" },
+  "attention.failed": { one: "{count} session in error", other: "{count} sessions in error" },
+  "attention.qa": { one: "{count} issue ready for QA", other: "{count} issues ready for QA" },
+  "attention.reply": "A session is waiting for your reply.",
+  "attention.empty": "Nothing needs you right now. Sessions waiting for approval or whose last turn failed appear here.",
+  "attention.moveKeys": "J and K move between requests.",
+  "attention.qaLabel": "Ready for QA: {title}",
+  "attention.qaBadge": "Ready for QA",
+  "attention.openSession": "Open session",
+  // {path} is the issue's file.
+  "attention.qaDone": "{path}, done by an AFK run. Try it, then merge the branch from the Diff tab when the run's issues pass.",
+  "attention.qaDoneOnBranch":
+    "{path}, done by an AFK run on the branch {branch}. Try it, then merge the branch from the Diff tab when the run's issues pass.",
+  // Before what the reviewing agent replied.
+  "attention.review": "The review:",
+  "attention.openReview": "Open the review",
+  "attention.qaFinished": "QA done",
+  "attention.continuesOn": "It continues on {profile} when the turn ends.",
+  "attention.turnFailed": "The last turn failed.",
+  "attention.agentWaiting": "The agent is waiting for your reply.",
+  // {ago} is how long ago the request came, such as "5 min ago".
+  "attention.waitingSince": "waiting since {ago}",
+  "attention.input": "Input",
+  "attention.savesRule": "Saves a rule",
+
+  // The Workflows page in Settings (Workflows.tsx); workflow, stage, skill and command
+  // names are shown as given.
+  "workflows.intro":
+    "A workflow is a way of working in stages. Each stage is a slash command in a session: it sends a prompt that names a skill, switches the mode, or starts an AFK run, a review or a clean-up. Every tool call still goes through your policy; an AFK run asks you up front for the commands it will need, and anything else it wants waits in Needs attention.",
+  "workflows.forNewSessions": "For new sessions",
+  "workflows.off": "Off",
+  "workflows.forNewSessionsHint": "A profile can choose its own, and each session can switch from beside its optimizer.",
+  "workflows.loading": "Loading…",
+  // {source} is the workflow's file.
+  "workflows.fromFile": "From {source} in the data folder.",
+  "workflows.builtIn": "Built into Freeloop.",
+  // {folder}, {prds} and {issues} are folder names, as code.
+  "workflows.backlog": "Its backlog is the project's {folder} folder: PRDs in {prds}, issues in {issues}.",
+  "workflows.notApproved": "Not approved. Until you approve it as it is now, none of its stages run.",
+  "workflows.stages": "Stages",
+  // After a stage's command and title: {action} is what it does (workflow.action.*).
+  "workflows.stage.inMode": "{action}, in {mode} mode",
+  "workflows.stage.withSkill": "{action}, with the skill {skill}",
+  "workflows.stage.inModeWithSkill": "{action}, in {mode} mode, with the skill {skill}",
+  "workflows.skills": "Skills",
+  // A skill's state, after its name.
+  "workflows.skill.installed": "installed",
+  "workflows.skill.changed": "installed, and changed since",
+  "workflows.skill.outdated": "installed; this version of Freeloop has a newer text",
+  "workflows.skill.other": "a skill of this name from elsewhere is used",
+  "workflows.skill.missing": "not installed",
+  // Skills is the Settings page.
+  "workflows.skill.off": "turned off in Skills",
+  "workflows.install": "Install skills",
+  "workflows.installing": "Installing…",
+  "workflows.installNote": "Into Freeloop's own skill store, with their source recorded. Nothing is written to ~/.claude or a project.",
+  // {names} are the skills installed, joined by commas.
+  "workflows.installed": "Installed {names}.",
+  "workflows.nothingToInstall": "Nothing to install.",
+  "workflows.afkRun": "AFK run",
+  // {count} is the most issues a run takes on.
+  "workflows.afk.plan": {
+    one: "One fresh session per unblocked AFK issue, one at a time, in a worktree of the run's own, in {mode} mode, at most {count} issue a run.",
+    other: "One fresh session per unblocked AFK issue, one at a time, in a worktree of the run's own, in {mode} mode, at most {count} issues a run.",
+  },
+  "workflows.afk.planSandboxed": {
+    one: "One fresh session per unblocked AFK issue, one at a time, in a worktree of the run's own, in {mode} mode, sandboxed where your system offers it, at most {count} issue a run.",
+    other: "One fresh session per unblocked AFK issue, one at a time, in a worktree of the run's own, in {mode} mode, sandboxed where your system offers it, at most {count} issues a run.",
+  },
+  "workflows.afk.review": "Each finished issue is reviewed by a second agent before it waits for your QA.",
+  "workflows.afk.noReview": "Finished issues are not reviewed.",
+  // {commands} are the commands, as code, joined by commas.
+  "workflows.afk.commands": "It will want these commands, besides the project's tests and type checks, which you can allow for the run when you start it: {commands}.",
+  // {folder} and {doc} are a folder's and a file's names, as code.
+  "workflows.addAnother": "To add another, put a file in the {folder} folder of the data folder and approve it here.",
+  "workflows.fields": "{doc} lists the fields.",
+
+  // Starting an AFK run (AFKDialog.tsx); issue titles are shown as given.
+  "afk.dialog.title": "Run the AFK issues",
+  "afk.dialog.titleOf": "Run the AFK issues of {project}",
+  "afk.dialog.reading": "Reading the backlog…",
+  // {title} is the first issue's title, {path} its file in brackets.
+  "afk.dialog.first": "First: {title} {path}.",
+  // {waiting} issues wait on other issues, {human} are for a person to do.
+  "afk.dialog.counts": {
+    one: "{count} AFK issue ready, {waiting} waiting on others, {human} for a person.",
+    other: "{count} AFK issues ready, {waiting} waiting on others, {human} for a person.",
+  },
+  "afk.dialog.oneAtATime": "One fresh session per issue, one at a time, at most {max}.",
+  // {reason} is the engine's, as given, such as an agent's limit.
+  "afk.dialog.held": "Its first issue would wait: {reason}. Pick a profile on another agent to start now.",
+  "afk.dialog.queuePaused": "The queue is paused: the run's issues wait until you resume it on the Queue page.",
+  "afk.dialog.worktree": "The run works in a git worktree and branch of its own; your checkout stays as it is until you merge the branch from the Diff tab.",
+  "afk.dialog.mode": "Its sessions start in {mode} mode.",
+  "afk.dialog.profileIssues": "Profile for the issues",
+  "afk.dialog.modelIssues": "Model for the issues",
+  "afk.dialog.profileReviews": "Profile for the reviews",
+  "afk.dialog.modelReviews": "Model for the reviews",
+  "afk.dialog.reviewHint": "A stronger model than the issues' catches more. Each finished issue is reviewed, read-only, before it waits for your QA.",
+  "afk.dialog.allow": "Allow for this run's sessions",
+  "afk.dialog.allowHint": "Unattended, a command that asks waits until you answer. Allow the ones it needs now; they hold for the run's sessions only. Anything else still asks.",
+  // Beside a command the user typed in.
+  "afk.dialog.yours": "yours",
+  "afk.dialog.another": "Another command to allow",
+  // {example} is a command, as typed.
+  "afk.dialog.anotherPlaceholder": "Another command, such as {example}",
+  "afk.dialog.add": "Add",
+  "afk.dialog.start": "Start the run",
+  "afk.dialog.starting": "Starting…",
+  // The model picker's first choice: the profile's own model, named when known.
+  "afk.model.profileOwn": "The profile's own",
+  "afk.model.profileOwnNamed": "The profile's own ({model})",
+
+  // A run in full (AFKRunView.tsx).
+  "afk.run.title": "AFK run of {project}",
+  // {branch} is the run's branch, as code.
+  "afk.run.onBranch": "on {branch}",
+  "afk.run.approvals": { one: "{count} approval waits", other: "{count} approvals wait" },
+  "afk.run.openSession": "Open its session",
+  "afk.run.openReview": "Open its review",
+  "afk.run.qaDone": "QA done",
+  "afk.run.toCome": "Still to come",
+  "afk.run.ready": "ready",
+  "afk.run.blocked": "blocked",
+  "afk.run.close": "Close",
+
+  // What a session of the run would meet with a command it will want (afk.ts).
+  "afk.outcome.allowed": "already allowed",
+  "afk.outcome.denied": "denied by your policy",
+  "afk.outcome.ask": "would ask",
+  "afk.outcome.unknown": "not known",
+  // Where an offered command comes from.
+  "afk.from.project": "the project's checks",
+  "afk.from.projectMore": "another of the project's checks",
+  "afk.from.workflow": "the workflow",
+  // How far the run has got with an issue.
+  "afk.step.working": "working",
+  "afk.step.reviewing": "in review",
+  "afk.step.qa": "ready for QA",
+  "afk.step.qaDone": "QA'd",
+  "afk.step.failed": "stopped here",
+  // {reason} is the engine's, as given, such as an agent's limit.
+  "afk.step.waiting": "waiting to start: {reason}",
+  // A run in one line: {done} of its {count} issues are done.
+  "afk.line.running": { one: "AFK run going on: {done} of {count} issue done", other: "AFK run going on: {done} of {count} issues done" },
+  "afk.line.paused": { one: "AFK run paused: {done} of {count} issue done", other: "AFK run paused: {done} of {count} issues done" },
+  "afk.line.finished": { one: "AFK run finished: {done} of {count} issue done", other: "AFK run finished: {done} of {count} issues done" },
+  "afk.line.stopped": { one: "AFK run stopped: {done} of {count} issue done", other: "AFK run stopped: {done} of {count} issues done" },
+
+  // The Queue page (Queue.tsx, queue.ts).
+  "queue.intro":
+    "Tasks start as sessions when there is room: under the limit below, and with their agent not near its account limit, whose reset they then wait for. Each runs as an ordinary session, and asks for every tool call as usual.",
+  "queue.pause": "Pause",
+  "queue.resume": "Resume",
+  // How many tasks may run at once.
+  "queue.atOnce": "At once",
+  "queue.addTitle": "Add a task",
+  "queue.task": "Task",
+  "queue.taskPlaceholder": "What the agent should do",
+  "queue.project": "Project",
+  "queue.profile": "Profile",
+  "queue.defaultProfile": "Project's default profile",
+  "queue.ownWorktree": "Its own worktree",
+  "queue.add": "Add to queue",
+  "queue.empty": "No tasks yet.",
+  "queue.state": "State",
+  "queue.actions": "Actions",
+  "queue.moveUp": "Move up",
+  "queue.moveDown": "Move down",
+  "queue.moveUpNamed": "Move {title} up",
+  "queue.moveDownNamed": "Move {title} down",
+  "queue.removeNamed": "Remove {title}",
+  "queue.state.waiting": "Waiting",
+  "queue.state.running": "Running",
+  "queue.state.done": "Done",
+  "queue.state.failed": "Failed",
+  // The queue in one line: {running} of at most {limit} tasks run.
+  "queue.summary": "{running} of {limit} running, {waiting} waiting.",
+  "queue.summaryFailed": "{running} of {limit} running, {waiting} waiting, {failed} failed.",
+  // Before the line above.
+  "queue.paused": "Paused.",
+
+  // The Schedules page (Schedules.tsx, schedules.ts).
+  "schedules.intro":
+    "A schedule starts a new session in a project with the same prompt at set times, while Freeloop is open. Each run is tagged #scheduled. It asks for approvals like any session and waits in Needs attention until you answer; runs missed while the app was closed make one run when it opens.",
+  "schedules.loading": "Loading…",
+  "schedules.empty": "No schedules yet.",
+  "schedules.afkRun": "AFK run",
+  // {when} is schedules.at.*, a weekday and a time, or a date and a time.
+  "schedules.next": "next {when}",
+  "schedules.last": "last {when}",
+  // A schedule turned off.
+  "schedules.off": "off",
+  // {error} is the engine's, as given.
+  "schedules.lastFailed": "Last run failed: {error}",
+  "schedules.openLast": "Open the last run",
+  // A checkbox: the schedule runs.
+  "schedules.on": "On",
+  "schedules.runNow": "Run now",
+  "schedules.starting": "Starting…",
+  "schedules.edit": "Edit",
+  "schedules.delete": "Delete",
+  "schedules.deleteAsk": 'Delete the schedule "{name}"? The sessions it started stay.',
+  "schedules.add": "Add schedule",
+  "schedules.noProjects": "Start a session in a project first; schedules run in your projects.",
+  "schedules.editNamed": "Edit {name}",
+  "schedules.form.name": "Name",
+  "schedules.form.project": "Project",
+  "schedules.form.chooseProject": "Choose a project",
+  // What the schedule starts: a session or an AFK run, the choices below.
+  "schedules.form.starts": "It starts",
+  "schedules.form.startsSession": "A session with a prompt",
+  "schedules.form.startsAfk": "An AFK run of the backlog",
+  "schedules.form.prompt": "Prompt",
+  "schedules.form.promptPlaceholder": "Run the tests and summarise any failures.",
+  "schedules.form.allow": "Allow for the run's sessions",
+  "schedules.form.allowHint":
+    "The run does the backlog's ready AFK issues, one fresh session each, in a worktree of its own, on the profile below. Commands you allow here hold for its sessions only; anything else waits in Needs attention.",
+  "schedules.form.chooseFirst": "Choose a project to see what it will want.",
+  // {problem} is the engine's, as given: why the run could not start now.
+  "schedules.form.problem": "Now: {problem}",
+  "schedules.form.repeat": "Repeat",
+  // The weekday a weekly schedule runs on.
+  "schedules.form.weekday": "On",
+  // The time of day it runs.
+  "schedules.form.at": "At",
+  "schedules.form.minute": "Minute (the hour is ignored)",
+  "schedules.form.profile": "Profile",
+  "schedules.form.provider": "Provider",
+  "schedules.form.model": "Model",
+  "schedules.form.modelHint": "(empty for the default)",
+  "schedules.form.mode": "Mode",
+  "schedules.repeat.daily": "Every day",
+  "schedules.repeat.weekdays": "Weekdays",
+  "schedules.repeat.weekly": "Every week",
+  "schedules.repeat.hourly": "Every hour",
+  // When a schedule runs: {time} as set, such as 09:00.
+  "schedules.when.daily": "Every day at {time}",
+  "schedules.when.weekdays": "Weekdays at {time}",
+  // {weekday} is the day's name, such as Wednesday.
+  "schedules.when.weekly": "{weekday}s at {time}",
+  // {minute} is the minute past each hour, such as 05.
+  "schedules.when.hourly": "Every hour at :{minute}",
+  // A time near now; {time} is the time of day.
+  "schedules.at.today": "today {time}",
+  "schedules.at.tomorrow": "tomorrow {time}",
+  "schedules.at.yesterday": "yesterday {time}",
+
+  // Picking a GitHub issue for a new session (IssuePicker.tsx); issue titles and labels
+  // are shown as given.
+  "issuePicker.search": "Search issues",
+  // {example} is a GitHub search, as typed.
+  "issuePicker.placeholder": "Search open issues, such as {example}",
+  "issuePicker.asking": "Asking GitHub…",
+  "issuePicker.none": "No open issues match.",
+  "issuePicker.reading": "reading…",
+
+  // The new-session form (NewSession.tsx). Names of providers, models, agents, profiles,
+  // environments, workflows and folders are shown as given.
+  "newSession.noProvider": "Add a model provider, or install an agent that signs in by itself, such as Claude Code.",
+  "newSession.addProvider": "Add a provider",
+  "newSession.startWorkflow": "Start a workflow",
+  "newSession.brief": "What is it about?",
+  "newSession.briefPlaceholder": "A feature, a fix or an idea, in a sentence or two",
+  // {reason} is the engine's, as given.
+  "newSession.workflowCannotStart": "{name} cannot start yet: {reason}. Settings → Workflows sets it up.",
+  // {stage} is the first stage's title, as given.
+  "newSession.workflowStartsAt": '{name}: the session starts at "{stage}" with this, and the stage strip above its box shows what comes after.',
+  "newSession.anotherFolder": "Another folder…",
+  "newSession.folder": "Project folder",
+  // An example path in the folder field.
+  "newSession.folderPlaceholder": "/Users/you/code/project",
+  "newSession.choose": "Choose…",
+  "newSession.trust.ask": "Do you trust this folder?",
+  // {agents}, {claude}, {settings} and {git} are AGENTS.md, CLAUDE.md, .freeloop/ and git status, as code.
+  "newSession.trust.until":
+    "Until you do, sessions here use your global settings only: Freeloop does not read its {agents} or {claude}, its {settings} settings, run its hooks, or run {git} in it. Trust only folders whose contents you know.",
+  "newSession.trust.worktree": "Its worktree sessions would do this ({file}):",
+  // {files} are file names, as code.
+  "newSession.trust.copy": "copy into each worktree: {files}",
+  // Beside the button that trusts the folder.
+  "newSession.trust.or": "or start without trusting it.",
+  "newSession.hooks": "This project runs hooks from {file}:",
+  "newSession.problems": "Problems in the project's .freeloop/ settings",
+  // A group of profiles in the picker; {harness} is the agent's name.
+  "newSession.profile.fromProject": "{harness} · this project's .freeloop/",
+  "newSession.profile.projectDefault": "{name} (project default)",
+  "newSession.profile.makeDefault": "Make it {project}'s default",
+  // {reason} is the engine's, as given.
+  "newSession.harness.missing": "{name} cannot start: {reason}.",
+  "newSession.harness.ownAccess": "{name} brings its own model access and sign-in; Freeloop passes it no credentials.",
+  "newSession.harness.cannotUse": "{name} cannot use {provider}. To choose a provider and model, run the session on {profile}.",
+  "newSession.harness.cannotUseAny": "{name} cannot use your providers. To choose a provider and model, run the session on {profile}.",
+  "newSession.useProvider": "Use a provider",
+  // {add} is a button that says "Add a provider".
+  "newSession.noProviderForProfile": "This profile runs on a model provider, and none is set up. {add}.",
+  "newSession.noProviderForProfileOrAgent": "This profile runs on a model provider, and none is set up. {add}, or choose the {agent} profile above.",
+  "newSession.modelPlaceholder": "Pick or type a model ID",
+  // Beside a hidden model in the list.
+  "newSession.model.hidden": "hidden",
+  // {error} is the provider's, as given.
+  "newSession.modelsFailed": "Could not list models: {error}",
+  "newSession.modelsAvailable": { one: "{count} model available", other: "{count} models available" },
+  "newSession.modelsHidden": "{count} hidden",
+  "newSession.favorites": "Favorites:",
+  "newSession.favoritesTip": "Favorites are listed first",
+  "newSession.favorite": "Favorite",
+  "newSession.unfavorite": "Unfavorite",
+  "newSession.hideTip": "Hidden models are left out of the list",
+  "newSession.hide": "Hide",
+  "newSession.unhide": "Unhide",
+  "newSession.showHidden": "Show hidden",
+  // What the model can do (PRV-005), and where that is known from: {source} is one of the four below.
+  "newSession.caps.checking": "Checking the model…",
+  "newSession.caps.probing": "Testing tool calling; local models may need a minute to load…",
+  "newSession.caps.unknown": "Tool support is not known yet; it is tested when the session starts.",
+  "newSession.caps.testNow": "Test now",
+  "newSession.caps.supported": "Tool calling supported ({source})",
+  "newSession.caps.context": "{tokens} token context",
+  "newSession.caps.undoOverride": "Undo override",
+  "newSession.caps.blocked": "This model cannot be used by the built-in harness: no tool calling ({source}).",
+  "newSession.caps.useAnyway": "Use anyway",
+  "newSession.caps.source.static": "known for this provider",
+  "newSession.caps.source.reported": "reported by the server",
+  "newSession.caps.source.probe": "tested",
+  "newSession.caps.source.override": "set by you",
+  // After "Context limit".
+  "newSession.contextLimitHint": "(optional, in tokens)",
+  "newSession.otherSessions": {
+    one: "Another session works in {project}. Its own worktree keeps this one's edits apart.",
+    other: "{count} other sessions work in {project}. Its own worktree keeps this one's edits apart.",
+  },
+  "newSession.worktree": "Work in its own git worktree and branch",
+  "newSession.worktreeTrustFirst": "(trust the project first)",
+  "newSession.rememberWorktree": "Remember for {project}",
+  "newSession.environmentSecrets": { one: "{name} ({count} secret)", other: "{name} ({count} secrets)" },
+  "newSession.sandboxed": "The built-in agent's commands run without asking, and can only write in the project. Leaving the sandbox always asks.",
+  "newSession.unsandboxed": "Commands ask each time, and run with your full access. Choose a sandboxed environment to confine them to the project.",
+  "newSession.optimizer": "Token optimizer",
+  "newSession.optimizerWaits": "Off, until you approve the file's choice in Settings",
+  "newSession.off": "Off",
+  // {name} is an optimizer's or a workflow's, as given.
+  "newSession.notApproved": "{name} (not approved)",
+  "newSession.notInstalled": "{name} (not installed)",
+  "newSession.workflowTip": "Its stages are slash commands in the session: type / to see them.",
+  "newSession.mode": "Permission mode",
+  // {mode} is the name of the Ask mode.
+  "newSession.modeWaits": "{mode}, until you approve the file's choice in Settings",
+  "newSession.modeFromProfile": "From the profile ({mode})",
+  "newSession.modeFromEnvironment": "From the environment ({mode})",
+  "newSession.title": "Title",
+  "newSession.optional": "(optional)",
+  "newSession.compare": "Also run this task on other profiles, to compare",
+  "newSession.compareNote": "Each profile gets its own worktree; the task is sent to all of them at once, and a page shows the runs side by side.",
+  "newSession.task": "Task",
+  // {count} is two or more.
+  "newSession.taskHint": "(sent to all {count} runs)",
+  "newSession.taskPlaceholder": "Describe the change all runs should make.",
+  "newSession.fromIssue": "Starts from issue #{number}; its text goes into the message box for you to edit and send.",
+  "newSession.pickIssue": "Start from a GitHub issue…",
+  "newSession.starting": "Starting…",
+  // {count} is two or more.
+  "newSession.startRuns": "Start {count} runs",
+  "newSession.start": "Start session",
+  "newSession.import": "Import an existing session…",
+
+  // The first-run guide (Onboarding.tsx).
+  "onboarding.welcome": "Welcome to Freeloop",
+  "onboarding.steps": "Setup steps",
+  "onboarding.step.agents": "Choose how agents run",
+  "onboarding.step.import": "Import from Claude Code (optional)",
+  "onboarding.step.project": "Choose a project",
+  "onboarding.step.start": "Start a session",
+  "onboarding.agent.title": "Use an agent you're signed in to",
+  "onboarding.agent.intro": "It runs with its own account. Freeloop starts it on your computer and never sees the login.",
+  "onboarding.agent.use": "Use {name}",
+  "onboarding.provider.title": "Use an API key or a local model",
+  // {store} is where keys are kept, such as "the macOS Keychain".
+  "onboarding.provider.intro":
+    "Anthropic, OpenAI, Google Gemini, OpenRouter, or a server on this computer such as Ollama or LM Studio. Keys go to {store}.",
+  "onboarding.next": "Next",
+  "onboarding.notReady": "Choose an agent or add a provider to continue.",
+  "onboarding.skip": "Skip the guide",
+  "onboarding.demo": "Try it with a demo",
+  "onboarding.demoNote": "A scripted agent shows what Freeloop allows, asks about and refuses, in a scratch project. No key needed.",
+  "onboarding.import.intro": "If you use Claude Code, you can bring its MCP servers, permission rules and skills along. This only reads its files.",
+  "onboarding.nextProject": "Next: choose a project",
+  "onboarding.project.intro": "Pick the folder of a repository you want an agent to work in.",
+  // {agents}, {claude}, {settings} and {git} are AGENTS.md, CLAUDE.md, .freeloop/ and git status, as code.
+  "onboarding.project.trustNote":
+    "A trusted project's {agents} or {claude}, its {settings} settings and {git} are used. Trust only folders whose contents you know; you can trust it later from the session.",
+  "onboarding.nextStart": "Next: start a session",
+
+  // The command palette (Palette.tsx, palette.ts): its headings above each group of items.
+  "palette.group.approval": "Waiting for you",
+  "palette.group.thisSession": "This session",
+  "palette.group.action": "Actions",
+  // Above the projects a new session can start in.
+  "palette.group.newSession": "New session in",
+  "palette.group.session": "Sessions",
+  "palette.group.page": "Go to",
+  "palette.group.command": "Agent commands",
+  "palette.group.resource": "Attach to the message",
+  "palette.group.changes": "Changes",
+  "palette.recentSessions": "Recent sessions",
+  "palette.label": "Command palette",
+  "palette.placeholder": "Search sessions, pages and actions; / for the agent's commands",
+  "palette.results": "Results",
+  "palette.noCommand": "No agent command matches. The agent's commands are those of the open session.",
+  "palette.nothing": "Nothing matches.",
+  // The key hints at the palette's foot, after the keys.
+  "palette.keys.move": "move",
+  "palette.keys.open": "open",
+  "palette.keys.close": "close",
+
+  // The Profiles page (Profiles.tsx); {folder} is profiles/, as code.
+  "profiles.intro":
+    "A profile sets the model, tools, prompt, rules and slash commands a session runs with. Each is a YAML file in {folder} of the app's data folder; edits to the files apply to new sessions, and their rules at once.",
+  "profiles.new": "New profile",
+  "profiles.edit": "Edit",
+  "profiles.editTitle": "Edit {name}",
+  "profiles.delete": "Delete",
+  // Opens the profile's file in the YAML editor.
+  "profiles.yaml": "YAML",
+  "profiles.builtIn": "built in",
+  "profiles.toolCount": { one: "{count} tool", other: "{count} tools" },
+  "profiles.ruleCount": { one: "{count} rule", other: "{count} rules" },
+  "profiles.resetDefaultAsk": "Reset the default profile to the built-in one? Sessions using it use the built-in default.",
+  "profiles.deleteAsk": "Delete {name}? Sessions using it cannot start until it exists again.",
+  "profiles.yamlLabel": "Profile YAML",
+  // A problem the engine found in the YAML; {issue} is its message, as given.
+  "profiles.yamlLine": "Line {line}: {issue}",
+  "profiles.yamlValid": "Valid.",
+  "profiles.id": "ID",
+  "profiles.idHint": "(the file name: lowercase letters, digits and dashes)",
+  "profiles.name": "Name",
+  "profiles.description": "Description",
+  "profiles.harness": "Harness",
+  // For an agent that brings its own model: the model it is priced at.
+  "profiles.agentModel": "Model it runs on",
+  "profiles.agentModelPlaceholder": "For example {model}",
+  "profiles.agentModelNote": "Prices the turns of an agent that does not say which model it is on. The agent is not told; a model it reports wins.",
+  "profiles.perSession": "Chosen per session",
+  "profiles.fallbackProvider": "Fallback provider",
+  "profiles.fallbackTitle": "Takes a call the model keeps failing with rate limits or server errors, after four tries",
+  "profiles.fallbackModel": "Fallback model",
+  "profiles.none": "None",
+  "profiles.mode": "Permission mode",
+  "profiles.modeFromEnvironment": "From the environment",
+  "profiles.effort": "Effort",
+  // {effort} is the effort's name as the provider gives it, such as high.
+  "profiles.effortDefault": "Default ({effort})",
+  "profiles.optimizer": "Token optimizer",
+  "profiles.fromSettings": "From Settings",
+  "profiles.off": "Off",
+  // A token optimizer by its name.
+  "profiles.notApproved": "{name} (not approved)",
+  "profiles.notInstalled": "{name} (not installed)",
+  "profiles.workflow": "Workflow",
+  "profiles.maxTurns": "Max model calls per message",
+  "profiles.systemPrompt": "System prompt",
+  "profiles.systemPromptHint": "(added to the built-in agent's own)",
+  "profiles.tools": "Tools",
+  "profiles.toolsAll": "(all)",
+  "profiles.skills": "Skills",
+  "profiles.skillsHint": "(names separated by commas; empty means every skill that is on)",
+  "profiles.mcpServers": "MCP servers",
+  "profiles.mcpServersHint": "(IDs separated by commas, added to the servers that are on for everyone)",
+  "profiles.instructions": "Read the project's AGENTS.md or CLAUDE.md",
+  "profiles.commands": "Slash commands",
+  "profiles.commandName": "Command name",
+  "profiles.commandDescription": "What it does",
+  "profiles.commandPrompt": "Prompt",
+  "profiles.commandPromptPlaceholder": "The prompt it sends",
+  "profiles.addCommand": "Add a command",
+  "profiles.rules": "Rules",
+  // {file} is the profile's file.
+  "profiles.rulesIn": "(edit them in {file})",
+  "profiles.rulesInFile": "(edit them in the file)",
+  // A custom harness from a template (HRN-011).
+  "profiles.ownAgent.title": "Your own agent",
+  "profiles.ownAgent.intro":
+    "Start an agent of your own from a Python or Go template that already speaks the Agent Client Protocol. Freeloop registers it as a harness; when you change its files, sessions start it again with your code. See docs/DEVELOPING.md.",
+  "profiles.ownAgent.new": "New harness…",
+  "profiles.ownAgent.template": "Template",
+  "profiles.ownAgent.python": "Python (standard library only)",
+  // {module} is the Go module the template uses.
+  "profiles.ownAgent.go": "Go ({module})",
+  "profiles.ownAgent.chooseFolder": "Choose a folder…",
+  "profiles.ownAgent.noFolder": "No folder chosen",
+  "profiles.ownAgent.create": "Create and open",
+  // {folder} is the new harness's folder, as code. Until changed, it echoes each message.
+  "profiles.ownAgent.created": "Created in {folder}. Pick it in the new-session form; it answers with what you said until you change it.",
+  "profiles.ownAgent.done": "Done",
+  // The profile a stuck session is offered to continue on, per agent (HRN-020); {key}
+  // is onLimit, as code.
+  "profiles.stuck.title": "When a session is stuck",
+  "profiles.stuck.intro":
+    "A session that reaches its account limit or its turn limit, or keeps failing, offers to continue on the profile chosen here for its agent. To continue without asking when a limit is reached, set {key} in a profile.",
+  // {name} is the agent's.
+  "profiles.stuck.label": "Continue a stuck {name} session on",
+  "profiles.stuck.ask": "Ask which profile",
+
+  // The Environments page (Environments.tsx); {store} is where secrets are kept, as
+  // platform.secretStore.* names it.
+  "environments.intro":
+    "An environment is what a session's commands run with: variables, secrets, the tools the agent may use and the mode new sessions start in. Commands run on this computer in the session's project folder, in a sandbox if the environment has one. Secrets are stored in {store}, handed to commands as variables when they start, and redacted from transcripts.",
+  // Beside the name of the local environment.
+  "environments.default": "default",
+  "environments.builtIn": "built in",
+  // An environment's summary, its parts joined by " · ".
+  "environments.variableCount": { one: "{count} variable", other: "{count} variables" },
+  "environments.secretCount": { one: "{count} secret", other: "{count} secrets" },
+  // {names} are the secrets' names, joined by commas.
+  "environments.secretCountNamed": { one: "{count} secret ({names})", other: "{count} secrets ({names})" },
+  "environments.sandboxed": "sandboxed",
+  "environments.sandboxedNoNetwork": "sandboxed, no network",
+  "environments.sandboxedHosts": { one: "sandboxed, {count} host", other: "sandboxed, {count} hosts" },
+  "environments.docker": "Docker: {image}",
+  "environments.dockerDevcontainer": "Docker: the project's devcontainer.json",
+  "environments.ssh": "SSH: {host}",
+  // {tools} are tool names, joined by commas.
+  "environments.toolsOff": "tools off: {tools}",
+  // {rules} are the rules as the engine writes them; {file} is the environment's file.
+  "environments.rules": "rules: {rules} (edit {file})",
+  "environments.startsIn": "starts in {mode}",
+  "environments.edit": "Edit",
+  "environments.delete": "Delete",
+  "environments.resetAsk": "Reset {name}? Its secrets are removed from {store}.",
+  "environments.deleteAsk": "Delete {name}? Its secrets are removed from {store}.",
+  "environments.add": "Add environment",
+  "environments.editTitle": "Edit {name}",
+  "environments.name": "Name",
+  "environments.variables": "Variables",
+  "environments.variablesHint": "(one KEY=value per line)",
+  // {line} is a line of the variables field, as typed.
+  "environments.notKeyValue": '"{line}" is not KEY=value',
+  "environments.secrets": "Secrets",
+  // A secret already kept, and its checkbox.
+  "environments.stored": "stored",
+  "environments.removeSecret": "remove",
+  // A new secret's two fields; the name is written in capitals, as variables are.
+  "environments.secretName": "NAME",
+  "environments.secretValue": "value",
+  "environments.addSecret": "Add secret",
+  "environments.tools": "Tools the agent may use",
+  // Where commands run.
+  "environments.runs": "Runs",
+  "environments.kind.local": "On this computer, in the project folder",
+  "environments.kind.docker": "In a Docker container per session",
+  "environments.kind.ssh": "On another machine, over SSH",
+  "environments.sshKeys": "SSH keys",
+  "environments.sshAgent": "Commands and agents can use my SSH agent",
+  // {command} is git push, as code.
+  "environments.sshAgentNote":
+    "With it, an approved command can use your SSH keys, for example to {command} or log in to a server. Without it, git over SSH needs another way in, such as HTTPS.",
+  "environments.sandbox": "Sandbox",
+  "environments.sandboxOn": "Run commands in a sandbox",
+  "environments.sandboxNote":
+    "The built-in agent's commands then run without asking, because they can only write in the project and read little outside it. Leaving the sandbox always asks. An external agent's own tools are not covered; for those, use a Docker environment.",
+  "environments.network": "Network",
+  "environments.network.localhost": "This computer only: tests and dev servers work, and so does anything else listening here",
+  "environments.network.hosts": "This computer and the hosts listed here",
+  "environments.network.none": "None",
+  "environments.hosts": "Hosts",
+  "environments.hostsHint": "(one per line, such as registry.npmjs.org or *.github.com; add :port for a port other than 80 and 443)",
+  "environments.hostsNote": "A tool has to use the proxy the sandbox sets up, as npm, pip, Go, git over https and curl do. Anything else gets no connection.",
+  "environments.addRegistries": "Add the usual package registries",
+  "environments.readFolders": "More folders it can read",
+  "environments.readFoldersHint": "(one per line, absolute or under ~/)",
+  "environments.writeFolders": "More folders it can write",
+  "environments.writeFoldersHint": "(one per line)",
+  "environments.container": "Container",
+  "environments.containerNote":
+    "Each session gets its own container with its folder shared at the same path. Commands and external agents run inside it, so they see the project and the image, not the rest of your files. Needs Docker Desktop, or Colima and the docker CLI.",
+  "environments.devcontainer": "Use the project's .devcontainer/devcontainer.json",
+  "environments.image": "Image",
+  "environments.setup": "Setup command",
+  "environments.setupHintDocker": "(once, after the container is created)",
+  "environments.setupHintDevcontainer": "(once, after the container is created; defaults to postCreateCommand)",
+  "environments.setupHintSsh": "(once, after the first copy)",
+  "environments.health": "Health check",
+  "environments.healthHint": "(before every session start; a failure blocks the session)",
+  "environments.machine": "Machine",
+  "environments.machineNote":
+    "Commands run on that machine, in a working copy kept in sync with the project here. Your files, keys and network on this computer are out of their reach. Use a machine you can afford to lose, not a server that matters: an agent can do anything on it, and your code and this environment's variables and secrets go there.",
+  // {git}, {claude} and {agents} are .git, .claude and AGENTS.md, as code.
+  "environments.machineCopies":
+    "Secrets, files a deny rule covers and what the project ignores are not copied. Settings this computer or an agent would act on, such as {git}, {claude} and {agents}, do not come back. Other changes do, so read the diff. So far this works with the built-in agent only.",
+  "environments.host": "Host",
+  "environments.hostHint": "(a name from ~/.ssh/config, or user@host)",
+  // {command} is ssh and the host, as code. "Your agent" is the ssh agent.
+  "environments.hostNote":
+    "Run {command} in a terminal once, and check its fingerprint: Freeloop does not accept a host key by itself. It signs in with your keys and ssh agent with no prompt, and never reads them. Your agent is not forwarded.",
+  "environments.remoteDir": "Folder there",
+  "environments.remoteDirHint": "(optional; each session gets its own folder inside it. Default ~/.freeloop-sessions)",
+  "environments.defaultMode": "New sessions start in",
+  // {mode} is the name of the mode Ask.
+  "environments.defaultModeAsk": "{mode} (default)",
+
+  // A project's worktree scripts under the new-session form (WorktreeScripts.tsx, SES-016).
+  "worktreeScripts.setup": "Setup",
+  "worktreeScripts.setupHint": "Runs once when the worktree is made, before the first message, such as npm install.",
+  "worktreeScripts.run": "Run",
+  // Run is the session's button (session.menu.run).
+  "worktreeScripts.runHint": "Starts from the session's Run button in a terminal tab, such as npm run dev -- --port $FREELOOP_PORT.",
+  "worktreeScripts.archive": "Archive",
+  "worktreeScripts.archiveHint": "Runs before the worktree is removed, such as docker compose down.",
+  // Where a script comes from: the app, or the project's file by its name.
+  "worktreeScripts.fromApp": "set in Freeloop",
+  "worktreeScripts.none": "No worktree scripts: the worktree starts with the committed files only.",
+  "worktreeScripts.add": "Add setup…",
+  // Before the files copied into the worktree.
+  "worktreeScripts.copies": "Copies",
+  "worktreeScripts.edit": "Edit…",
+  // {file} is .freeloop/worktree.yaml; {port}, {root} and {worktree} are variables, as code.
+  "worktreeScripts.intro":
+    "Values here override the project's {file}; leave one empty to use the file's. Commands run in the worktree with the environment's variables and {port}, {root} and {worktree}: on this computer, or in the session's container in a Docker environment, where the main checkout's files are not available. Copies always come from the main checkout on this computer.",
+  "worktreeScripts.copy": "Copy from the main checkout",
+  "worktreeScripts.copyHint": "(one path a line, such as .env)",
+
+  // A line of the form's variables or headers that is not a pair; {line} is the line.
+  "mcp.notPair.env": '"{line}" is not name=value',
+  "mcp.notPair.header": '"{line}" is not name:value',
+  "mcp.form.addTitle": "Add an MCP server",
+  "mcp.form.editTitle": "Edit {name}",
+  "mcp.form.id": "ID",
+  "mcp.form.idHint": "(its tools are named mcp__ID__tool)",
+  "mcp.form.name": "Name",
+  "mcp.form.transport": "Transport",
+  "mcp.form.stdio": "Command (stdio)",
+  "mcp.form.http": "Remote (Streamable HTTP)",
+  "mcp.form.command": "Command",
+  "mcp.form.args": "Arguments",
+  "mcp.form.argsHint": "(one per line)",
+  "mcp.form.env": "Variables",
+  "mcp.form.envHint": "(KEY=value per line; use secrets for keys)",
+  "mcp.form.url": "URL",
+  "mcp.form.oauthClientId": "OAuth client ID",
+  "mcp.form.oauthClientIdHint": "(optional; only for servers that want a pre-registered client)",
+  "mcp.form.headers": "Headers",
+  "mcp.form.headersHint": "(Name: value per line; use secrets for tokens)",
+  "mcp.form.secretsHeaders": "Secrets (sent as headers)",
+  "mcp.form.secretsVariables": "Secrets (passed as variables)",
+  // {store} is where the system keeps secrets, such as "the macOS Keychain".
+  "mcp.form.storedIn": "stored in {store}",
+  "mcp.form.secretName": "Secret name",
+  "mcp.form.secretValue": "Secret value",
+  "mcp.form.valuePlaceholder": "value",
+  "mcp.form.addSecret": "Add a secret",
+  "mcp.form.enabled": "Offer its tools in every session",
+  "mcp.form.enabledHint": "(profiles can add servers that are off)",
+  // {pattern} is how a server's tools are named, {example} a rule that allows one server's.
+  "mcp.intro":
+    "Tools from Model Context Protocol servers, offered to the built-in agent as {pattern}. Every call asks unless a rule allows it, such as {example}. Servers run with your privileges; prefer ones you can read and pin their versions.",
+  "mcp.none": "No servers yet.",
+  "mcp.badge.approval": "needs approval",
+  "mcp.badge.signIn": "needs sign-in",
+  "mcp.state.stopped": "stopped",
+  "mcp.state.starting": "starting",
+  "mcp.state.running": "running",
+  "mcp.state.error": "error",
+  "mcp.signedIn": "signed in",
+  "mcp.offByDefault": "off by default",
+  "mcp.importedFrom": "Imported from {source}",
+  // {protocol} is the MCP revision the server speaks, such as 2025-06-18.
+  "mcp.tools": { one: "{count} tool · protocol {protocol}", other: "{count} tools · protocol {protocol}" },
+  "mcp.signInNeeded": "This server wants you to sign in. Sign in opens its page in your browser.",
+  "mcp.signInWaiting": "Waiting for the sign-in in your browser.",
+  "mcp.signInAgain": "Open the page again",
+  "mcp.approve.title": "Approve before it runs.",
+  "mcp.approve.connect": "It will connect to:",
+  "mcp.approve.run": "It will run:",
+  "mcp.approve.withHeaders": "With headers: {names}",
+  "mcp.approve.withVariables": "With variables: {names}",
+  "mcp.approve.secret": "{name} (secret)",
+  "mcp.approve.start": "Approve and start",
+  "mcp.signingIn": "Signing in…",
+  "mcp.signIn": "Sign in…",
+  "mcp.starting": "Starting…",
+  "mcp.start": "Start",
+  "mcp.signOutAsk": "Sign out of {name}? Its tokens are removed from {store}.",
+  "mcp.signOut": "Sign out",
+  "mcp.refresh": "Refresh",
+  "mcp.stop": "Stop",
+  "mcp.edit": "Edit",
+  "mcp.deleteAsk": "Delete {name}? Its secrets are removed from {store}.",
+  "mcp.delete": "Delete",
+  "mcp.add": "Add a server",
+  "mcp.browse": "Browse a registry…",
+  "mcp.suggested": "Suggested",
+  "mcp.suggestedIntro": "Common servers, built into the app. Nothing runs or connects until you add one, save it and approve it, as any other server.",
+  "mcp.suggest.remote": "remote",
+  "mcp.suggest.local": "runs locally",
+  "mcp.suggest.oauth": "signs in with OAuth",
+  "mcp.suggest.token": "needs a token",
+  "mcp.suggest.none": "no sign-in",
+  "mcp.suggest.isAdded": "{name} is added",
+  "mcp.suggest.addNamed": "Add {name}",
+  "mcp.suggest.added": "Added",
+  "mcp.suggest.add": "Add…",
+  "mcp.suggest.about": "About {name}",
+  // The suggested servers (mcpSuggestions.ts): what each is for, where it runs and what
+  // it can reach, and the hint in the field for a token.
+  "mcp.suggest.github.description": "Issues, pull requests, code search and Actions in your repositories.",
+  "mcp.suggest.github.reach": "Runs at GitHub. It can do what the personal access token you give it allows.",
+  "mcp.suggest.github.hint": "Bearer followed by a GitHub personal access token",
+  "mcp.suggest.linear.description": "Issues, projects and comments in your Linear workspace.",
+  "mcp.suggest.linear.reach": "Runs at Linear, as you, once you sign in.",
+  "mcp.suggest.sentry.description": "Errors, issues and releases in your Sentry organization.",
+  "mcp.suggest.sentry.reach": "Runs at Sentry, as you, once you sign in.",
+  "mcp.suggest.notion.description": "Pages and databases in your Notion workspace.",
+  "mcp.suggest.notion.reach": "Runs at Notion, as you, once you sign in.",
+  "mcp.suggest.context7.description": "Current documentation and code examples for libraries.",
+  "mcp.suggest.context7.reach": "Runs at Context7, which receives the library names and questions the agent asks about.",
+  "mcp.suggest.playwright.description": "A browser the agent drives, to test web apps.",
+  "mcp.suggest.playwright.reach": "Runs on this computer with your rights: it opens a browser and visits the pages the agent chooses. Needs Node.js.",
+  "mcp.registry.title": "Browse a server registry",
+  "mcp.registry.privacy": "Freeloop connects only to addresses you set. Searching sends your search words to the registry you choose, and nothing else.",
+  "mcp.registry.useOfficial": "Use the official MCP registry",
+  "mcp.registry.wouldConnect": "It would connect to {url}.",
+  "mcp.registry.other": "Or another registry's address",
+  "mcp.registry.useAddress": "Use this address",
+  "mcp.registry.from":
+    "From {address}. Anyone can publish there, so read what a server is before adding it. Adding only fills in the form; it starts after you confirm its exact command.",
+  "mcp.registry.change": "Change the address",
+  "mcp.registry.searchLabel": "Search the registry",
+  "mcp.registry.searchPlaceholder": "Search by name",
+  "mcp.registry.search": "Search",
+  "mcp.registry.nothing": "Nothing matches.",
+  "mcp.registry.servers": "Servers",
+  "mcp.registry.repository": "Its repository",
+  // {list} is what else the server offers, as the engine names it, such as "pypi package acme".
+  "mcp.registry.unsupported": "Also offered, which Freeloop cannot run: {list}",
+  // {option} is a way to run the server, as the engine names it, such as "Remote: https://…".
+  "mcp.registry.addLabel": "Add {name}, {option}",
+  "mcp.registry.addOption": "Add: {option}",
+  "mcp.registry.noWay": "No way to run it here",
+  "mcp.registry.more": "More",
+  // A server's request for input (McpForm.tsx); {message} is the server's, as it wrote it.
+  "mcp.ask.asks": "{server} asks: {message}",
+  // {send} is the name of the button that answers.
+  "mcp.ask.openUrl": "Open {url} to continue, then choose {send}.",
+  "mcp.ask.choose": "Choose…",
+  "mcp.ask.fillIn": "Fill in {fields}.",
+  "mcp.ask.check": "Check {fields}.",
+
+  "skills.status.new": "new",
+  "skills.status.same": "up to date",
+  "skills.status.changed": "changed",
+  "skills.status.invalid": "cannot load",
+  "skills.source.app": "Skill store",
+  "skills.source.project": "Project {folder}",
+  "skills.intro":
+    "Agent Skills from the app's skill store ({store} in the data folder) and, in trusted projects, from {freeloop}, {agents} and {claude}. A project skill hides a store skill of the same name. Profiles can limit a session to some skills.",
+  "skills.new": "New skill…",
+  "skills.installFolder": "Install from a folder…",
+  "skills.drop": "or drop a skill folder or .zip here. Skills are copied into the store; the source is not changed.",
+  "skills.pathPlaceholder": "Or paste a skill folder or .zip path, or a git URL (add #branch, #tag or #commit to pin it)",
+  "skills.pathLabel": "Skill source path or git URL",
+  "skills.preview": "Preview",
+  "skills.create.name": "Name",
+  "skills.create.nameHint": "(lowercase letters, digits and hyphens; the folder's name)",
+  "skills.create.description": "Description",
+  "skills.create.descriptionHint": "(what it does and when to use it; models pick skills by this)",
+  "skills.create.submit": "Create and open",
+  "skills.installed": "Installed {names}.",
+  "skills.upToDate": "Nothing to install; the chosen skills are up to date.",
+  "skills.preview.from": "From {source}",
+  "skills.preview.scripts": "Scripts: {scripts}. They run only through the shell tool, which asks before each command.",
+  "skills.preview.installedFrom": "Installed from {source}",
+  "skills.preview.installedFromOn": "Installed from {source} on {date}",
+  "skills.install": { one: "Install {count} skill", other: "Install {count} skills" },
+  "skills.project": "Project",
+  "skills.storeOnly": "None (skill store only)",
+  "skills.none": "No skills found.",
+  "skills.lines": { one: "{count} line (the spec recommends under 500)", other: "{count} lines (the spec recommends under 500)" },
+  // Where a skill installed from git came from: {commit} is the commit, {ref} the branch or tag.
+  "skills.from": "from {source} at {commit}",
+  "skills.fromRef": "from {source} at {commit} ({ref})",
+  "skills.suggestsTools": "suggests tools: {tools}",
+  "skills.onEverywhere": "On everywhere",
+  "skills.inProject": "In this project",
+  "skills.edit": "Edit",
+  "skills.test": "Test…",
+  "skills.checkUpdate": "Check for updates",
+  "skills.checking": "Checking…",
+  "skills.rollBack": "Roll back",
+  "skills.removeAsk": "Remove {name} from the skill store? Its folder is deleted.",
+  "skills.rollBackAsk": "Put back the version of {name} its last install replaced? You can undo this the same way.",
+  "skills.update.same": "Up to date with {source}.",
+  "skills.update.changes": "{source} has changes: {changes}",
+  "skills.update.apply": "Update",
+  "skills.update.notNow": "Not now",
+  "skills.test.prompt": "A prompt that should use this skill",
+  "skills.test.asking": "Asking the model…",
+  "skills.test.run": "Run the test",
+  "skills.test.sends": "Sends the model your prompt, a one-line system prompt and the list of skills with their descriptions; nothing from your projects.",
+  "skills.test.picked": "The model loaded the skill.",
+  "skills.test.other": "The model loaded {name} instead.",
+  "skills.test.missed": "The model did not load the skill. Try a description that names the task and when to use it.",
+  // {reply} is the start of what the model answered.
+  "skills.test.said": "It said: {reply}",
+  "skills.test.cost": "One model call with the skills a session lists; it uses tokens.",
+  "skills.issues": "Skills that could not be loaded",
+
+  // The Providers page. {address} is a provider's address as typed; {store} is one of
+  // platform.secretStore.*.
+  "providers.ask.moveKey": "Send the saved API key of {name} to {address}? Enter a new key instead if it is for another service.",
+  "providers.ask.moveKeyDefault": "Send the saved API key of {name} to the default endpoint? Enter a new key instead if it is for another service.",
+  "providers.ask.delete": "Delete {name}? Its API key is removed from {store}.",
+  "providers.ask.confirmAddress": "Send the API key of {name} to {address}?",
+  "providers.ask.confirmAddressDefault": "Send the API key of {name} to its default endpoint?",
+  "providers.testing": "Testing…",
+  "providers.connected": { one: "Connected: {count} model", other: "Connected: {count} models" },
+  "providers.agents.title": "Agents you're signed in to",
+  "providers.agents.intro": "These need no key here: Freeloop starts the agent on your computer and it uses its own account. There is nothing to add.",
+  "providers.agents.ready": "ready",
+  "providers.agents.default": "default for new sessions",
+  "providers.agents.start": "Start a session with {name}",
+  "providers.keys.title": "API keys and local models",
+  "providers.keys.intro": "API keys are stored in {store}. Freeloop never shows a saved key again and only connects to the endpoints you add here.",
+  // Pieces of a provider's line, between dots.
+  "providers.devOnly": "development only",
+  "providers.defaultEndpoint": "default endpoint",
+  "providers.defaultModel": "default model {model}",
+  "providers.noDefaultModel": "default model none",
+  "providers.keySet": "key set",
+  "providers.addressChanged":
+    "This address was changed outside Freeloop, so the API key is not being sent. If you did not change it, something on this computer may be trying to get your key.",
+  "providers.useAddress": "Use this address",
+  "providers.test": "Test connection",
+  "providers.edit": "Edit",
+  "providers.delete": "Delete",
+  "providers.add": "Add provider",
+  "providers.editNamed": "Edit {name}",
+  // The provider form.
+  "providers.kind": "Kind",
+  "providers.localPreset": "{name} (local)",
+  "providers.name": "Name",
+  "providers.baseUrl": "Base URL",
+  "providers.apiKey": "API key",
+  "providers.optionalLocal": "(optional for local servers)",
+  "providers.plainHttp": "This address is plain http, so the key would travel unencrypted.",
+  "providers.keepKey": "Leave empty to keep the saved key",
+  "providers.defaultModelLabel": "Default model",
+  "providers.optional": "(optional)",
+  "providers.pickWhenStarting": "Pick one when starting a session",
+
+  // The Policy page. A tool's name (shell, read_file) is shown as given.
+  "rules.anyCall": "{tool}: any call",
+  // {star} is the * that ends a shell rule, as code.
+  "rules.intro":
+    "Rules decide tool calls before you are asked. Deny rules win over allow rules in every scope and in every mode, bypass included, except an agent's own auto mode, where the agent approves for itself. Allow rules never lift plan mode or protected paths. A shell rule ending in {star} matches a prefix and only ever approves a single plain command, never a chain, pipe or redirection.",
+  "rules.global.title": "Global",
+  "rules.global.note":
+    "Stored in rules.yaml in the app data folder; hand edits are picked up on the next tool call, and an allow rule added there waits for your approval in Settings.",
+  "rules.tool": "Tool",
+  "rules.command": "Command",
+  "rules.command.placeholder": "git status, or git * for a prefix",
+  "rules.path.placeholder": "src/**, or empty for any path",
+  "rules.add": "Add rule",
+  "rules.thisSession": "This session: {title}",
+  "rules.newSessionIn": "New session in {name}",
+  // {allowAlways} is the approval button's name, approval.allowAlways.
+  "rules.session.note": 'Created with "{allowAlways}" for this session; they end with it.',
+  "rules.none": "No rules.",
+  "rules.pending": "does not apply until you approve it in Settings",
+  "rules.delete": "Delete",
+  // "Would this be allowed?": a call checked without being made.
+  "rules.check.title": "Would this be allowed?",
+  "rules.check.where": "Where",
+  "rules.check.mode": "Mode",
+  "rules.check.itsMode": "Its mode",
+  "rules.check.defaultMode": "The default mode",
+  "rules.check.action": "Action",
+  "rules.check.command": "Command to check",
+  "rules.check.path": "Path to check",
+  "rules.check.submit": "Check",
+  // {rule} is the rule, as code; {where} its scope and file; {effect} one of panel.rule.*.
+  "rules.verdict.rule": "Rule {rule}, {where}",
+  "rules.verdict.overruled": "Overruled: {effect} {rule}, {where}",
+  "rules.verdict.pending": "Waits for your approval in Settings: {effect} {rule}",
+  // {sources} are the files the hooks come from.
+  "rules.verdict.hooks": {
+    one: "A hook would still run and could deny it, or make it ask by failing: {sources}.",
+    other: "{count} hooks would still run and could deny it, or make it ask by failing: {sources}.",
+  },
+  // {mode} is a permission mode's name; {root} a folder.
+  "rules.verdict.where": "In {mode} mode, in {root}.",
+  "rules.overview.title": "What else decides",
+  "rules.overview.for": "Show the policy for",
+  // {error} is the engine's reason, as given.
+  "rules.unreadable": "Some rules cannot be read, so everything but reads in the project asks: {error}",
+  // {harness} is the agent's name.
+  "rules.overview.mode": "{harness} in {mode} mode.",
+  "rules.overview.modeSandboxed": "{harness} in {mode} mode, commands in the sandbox.",
+  "rules.overview.trusted": "The project is trusted, so its own rules and hooks apply.",
+  "rules.overview.untrusted": "The project is not trusted, so its own rules and hooks do not apply.",
+  "rules.overview.projectDeny": "A project's rules can only deny.",
+  "rules.overview.agent": "What {harness} decides itself",
+  "rules.hooks.title": "Hooks",
+  "rules.hooks.none": "No hooks. A hook can deny a call, never allow one.",
+  "rules.hooks.pending": "does not run until you approve it in Settings",
+  "rules.protected.title": "Protected paths",
+  "rules.protected.always": "Never read or written, in every mode, whatever a rule says:",
+  // {paths} are file names, joined by commas.
+  "rules.protected.neverWritten": "Never written in a project: {paths}.",
+  // "accept edits" is the permission mode (mode.acceptEdits).
+  "rules.protected.actedOnLater": "Other programs act on these later, so accept edits asks before changing them: {paths}.",
+  "rules.protected.secrets": "Reading a file whose name says it holds secrets, such as .env, asks.",
+
+  // The policy check's actions, and its verdict. {why} is the engine's reason, as given.
+  "policy.tool.shell": "Run a command",
+  "policy.tool.edit": "Edit a file",
+  "policy.tool.read": "Read a file",
+  "policy.tool.fetch": "Fetch a URL",
+  "policy.allowed": "Allowed. {why}.",
+  "policy.denied": "Denied. {why}.",
+  "policy.asked": "You would be asked. {why}.",
+  // Where a rule lives, beside panel.scope.*.
+  "policy.scope.environment": "environment",
+  "policy.scope.profile": "profile",
+
+  // Token optimizers (HRN-019). {name} is an optimizer's name.
+  "optimizers.off": "Off",
+  // A new session's inherited choice; {name} is the optimizer or workflow, or optimizers.off.
+  "optimizers.fromProfile": "From the profile ({name})",
+  "optimizers.fromSettings": "From Settings ({name})",
+  "optimizers.intro":
+    "An optimizer runs an agent's shell commands through a program that shortens their output, so they cost fewer tokens. You still approve each command as the model wrote it. Shortened output can leave out something the agent needs, such as a commit message or the end of a large diff, so it is off unless you choose one. It works with the built-in agent and Claude Code; other agents run their commands themselves, with no hook to rewrite them.",
+  "optimizers.forNew": "For new sessions",
+  "optimizers.option.notApproved": "{name} (not approved)",
+  "optimizers.option.notInstalled": "{name} (not installed)",
+  "optimizers.option.unknown": "{name} (no such optimizer)",
+  "optimizers.profileNote": "A profile can choose its own, and each session can switch at any time from its header.",
+  "optimizers.waits":
+    "This choice comes from a file and waits for your approval in Settings → Permissions; until then new sessions start with it off. Choosing another here approves that one.",
+  "optimizers.looking": "Looking for them…",
+  // {source} is the optimizer's file.
+  "optimizers.fromSource": "From {source} in the data folder.",
+  "optimizers.foundAt": "Found at {path}.",
+  "optimizers.notInstalled": "Not installed.",
+  // {runs} is the command it would run, as code.
+  "optimizers.notApproved": "Not approved. This would run {runs} for every command of a session that uses it.",
+  "optimizers.approve": "Approve",
+  "optimizers.installing": "Installing…",
+  "optimizers.install": "Install {name}",
+  "optimizers.removeCopy": "Remove Freeloop's copy",
+  "optimizers.copy": "Copy",
+  "optimizers.copied": "Copied",
+  "optimizers.check": "Check it",
+  "optimizers.works": "Works.",
+  "optimizers.worksVersion": "Works: {version}.",
+  // {folder} is the folder's name and {doc} the document's, both as code.
+  "optimizers.addAnother":
+    "To add another, put a file in the {folder} folder of the data folder and approve it here. Freeloop runs the original command if a rewrite does anything more, and leaves commands with pipes or redirections as they are. {doc} lists the fields.",
+
+  // The import from Claude Code. What an item will do, on its badge.
+  "claudeImport.status.new": "new",
+  "claudeImport.status.same": "already here",
+  "claudeImport.status.changed": "replaces",
+  "claudeImport.status.unsupported": "not imported",
+  "claudeImport.status.invalid": "cannot load",
+  "claudeImport.items": { one: "{count} item", other: "{count} items" },
+  // {items} is claudeImport.items; {count} counts skills.
+  "claudeImport.result": { one: "Imported {items} and {count} skill.", other: "Imported {items} and {count} skills." },
+  "claudeImport.approveMcp": "Imported MCP servers run only after you approve them on the MCP page.",
+  "claudeImport.reading": "Reading Claude Code's settings…",
+  "claudeImport.group.rules": "Permission rules",
+  // {sources} and {missing} are files, joined by commas; {sources} may be claudeImport.nothing.
+  "claudeImport.readFrom": "Read from {sources}.",
+  "claudeImport.readFromMissing": "Read from {sources}; not found: {missing}.",
+  "claudeImport.nothing": "nothing",
+  "claudeImport.notWritten": "Nothing is written to Claude Code's files.",
+  // {store} is one of platform.secretStore.*; {secrets} the names of what moved.
+  "claudeImport.movedTo": "Moved to {store}: {secrets}",
+  "claudeImport.skillStore": "→ the skill store",
+  "claudeImport.scripts": "scripts: {scripts}",
+  "claudeImport.nothingToImport": "Claude Code has nothing to import here.",
+  "claudeImport.importSelected": "Import {count} selected",
+
+  // The import of an external agent's own sessions (SES-020).
+  "sessionImport.result": { one: "Imported {count} session.", other: "Imported {count} sessions." },
+  "sessionImport.sessions": { one: "{count} session", other: "{count} sessions" },
+  // {sessions} is sessionImport.sessions; {count} counts those that failed.
+  "sessionImport.resultFailed": { one: "Imported {sessions}; {count} could not be imported.", other: "Imported {sessions}; {count} could not be imported." },
+  "sessionImport.noAgents": "No external agent is set up, so there are no sessions to import.",
+  "sessionImport.intro":
+    "The agent copies each session you choose, so the original stays as it is, and the copy continues here. Importing calls no model. A transcript holds whatever the agent read, keys included, and is copied into Freeloop's data folder. What the agent had compacted away is not shown.",
+  "sessionImport.agent": "Agent",
+  "sessionImport.folder": "Folder",
+  "sessionImport.allFolders": "All folders",
+  "sessionImport.chooseFolder": "Choose folder…",
+  "sessionImport.looking": "Looking…",
+  "sessionImport.lookAgain": "Look again",
+  "sessionImport.find": "Find sessions",
+  "sessionImport.starting": "Starting the agent. The first time, it may have to be downloaded, which takes a moment.",
+  "sessionImport.none": "The agent has no sessions here.",
+  "sessionImport.filterLabel": "Filter the sessions",
+  "sessionImport.filter": "Filter",
+  "sessionImport.selectNone": "Select none",
+  "sessionImport.selectAll": "Select all",
+  "sessionImport.untitled": "Untitled session",
+  "sessionImport.folderGone": "folder gone",
+  // {open} is a button, sessionImport.open, that opens the session imported before.
+  "sessionImport.hereAlready": "here already {open}",
+  "sessionImport.open": "Open",
+  "sessionImport.importing": "Importing {current} of {total}…",
+  "sessionImport.importSelected": "Import {count} selected",
 } as const;

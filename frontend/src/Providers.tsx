@@ -3,6 +3,7 @@ import { secretStore } from "./platform.ts";
 import { ask } from "./ask.ts";
 import { keyMoves, plainRemote } from "./addresses.ts";
 import { EngineService, errorText, type HarnessInfo, type ModelInfo, type PresetInfo, type ProviderInfo } from "./api.ts";
+import { t } from "./i18n.ts";
 
 interface Props {
   providers: ProviderInfo[];
@@ -28,6 +29,10 @@ interface Form {
 
 const EMPTY: Form = { id: "", preset: "", name: "", type: "", baseUrl: "", apiKey: "", defaultModel: "" };
 
+// A connection test, kept as what happened and written at render, so a change of
+// language shows at once; an error is the engine's, shown as given.
+type TestState = { state: "testing" } | { state: "ok"; models: ModelInfo[] } | { state: "failed"; error: string };
+
 // presetOf maps a saved provider back to the preset it came from.
 function presetOf(p: ProviderInfo): string {
   return p.type === "openai_compat" ? p.preset || "custom" : p.type;
@@ -36,7 +41,7 @@ function presetOf(p: ProviderInfo): string {
 export default function Providers({ providers, onChanged, onError, agents, defaultProfileId, onStartWith }: Props) {
   const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [form, setForm] = useState<Form | null>(null);
-  const [tests, setTests] = useState<Record<string, { ok: boolean; text: string; models?: ModelInfo[] }>>({});
+  const [tests, setTests] = useState<Record<string, TestState>>({});
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -66,7 +71,10 @@ export default function Providers({ providers, onChanged, onError, agents, defau
     // The saved key goes along to a new address unless a new one is entered.
     const before = providers.find((p) => p.id === form.id);
     if (before?.hasKey && !form.apiKey && keyMoves(before.baseUrl, form.baseUrl === preset?.baseUrl ? "" : form.baseUrl)) {
-      if (!(await ask(`Send the saved API key of ${before.name} to ${form.baseUrl || "the default endpoint"}? Enter a new key instead if it is for another service.`))) return;
+      const question = form.baseUrl
+        ? t("providers.ask.moveKey", { name: before.name, address: form.baseUrl })
+        : t("providers.ask.moveKeyDefault", { name: before.name });
+      if (!(await ask(question))) return;
     }
     setBusy(true);
     EngineService.SaveProvider({
@@ -88,17 +96,14 @@ export default function Providers({ providers, onChanged, onError, agents, defau
   };
 
   const test = (id: string) => {
-    setTests((t) => ({ ...t, [id]: { ok: true, text: "Testing…" } }));
+    setTests((old) => ({ ...old, [id]: { state: "testing" } }));
     EngineService.TestProvider(id)
-      .then((models) => {
-        const list = models ?? [];
-        setTests((t) => ({ ...t, [id]: { ok: true, text: `Connected: ${list.length} model${list.length === 1 ? "" : "s"}`, models: list } }));
-      })
-      .catch((err) => setTests((t) => ({ ...t, [id]: { ok: false, text: errorText(err) } })));
+      .then((models) => setTests((old) => ({ ...old, [id]: { state: "ok", models: models ?? [] } })))
+      .catch((err) => setTests((old) => ({ ...old, [id]: { state: "failed", error: errorText(err) } })));
   };
 
   const remove = async (p: ProviderInfo) => {
-    if (!(await ask(`Delete ${p.name}? Its API key is removed from ${secretStore()}.`))) return;
+    if (!(await ask(t("providers.ask.delete", { name: p.name, store: secretStore() })))) return;
     EngineService.DeleteProvider(p.id).then(onChanged).catch(onError);
   };
 
@@ -109,24 +114,24 @@ export default function Providers({ providers, onChanged, onError, agents, defau
 
   return (
     <section className="page">
-      <h2>Providers</h2>
+      <h2>{t("settings.page.providers")}</h2>
       {agents && agents.length > 0 && (
         <section className="choice" aria-labelledby="signed-in-agents">
-          <h3 id="signed-in-agents">Agents you're signed in to</h3>
-          <p className="muted">These need no key here: Freeloop starts the agent on your computer and it uses its own account. There is nothing to add.</p>
+          <h3 id="signed-in-agents">{t("providers.agents.title")}</h3>
+          <p className="muted">{t("providers.agents.intro")}</p>
           <ul className="agent-choices">
             {agents.map((h) => (
               <li key={h.id} className="agent-choice">
                 <div>
                   <strong>{h.name}</strong>
-                  {h.missing ? <span className="error-text"> · {h.missing}</span> : <span className="ok"> · ready</span>}
-                  {defaultProfileId === h.id && <span className="muted"> · default for new sessions</span>}
+                  {h.missing ? <span className="error-text"> · {h.missing}</span> : <span className="ok"> · {t("providers.agents.ready")}</span>}
+                  {defaultProfileId === h.id && <span className="muted"> · {t("providers.agents.default")}</span>}
                   {h.description && <p>{h.description}</p>}
                   {h.notes && <p className="muted">{h.notes}</p>}
                 </div>
                 {!h.missing && onStartWith && (
                   <button className="primary" onClick={() => onStartWith(h.id)}>
-                    Start a session with {h.name}
+                    {t("providers.agents.start", { name: h.name })}
                   </button>
                 )}
               </li>
@@ -134,47 +139,42 @@ export default function Providers({ providers, onChanged, onError, agents, defau
           </ul>
         </section>
       )}
-      {agents && agents.length > 0 && <h3>API keys and local models</h3>}
-      <p className="muted">
-        API keys are stored in {secretStore()}. Freeloop never shows a saved key again and only connects to the endpoints you add here.
-      </p>
+      {agents && agents.length > 0 && <h3>{t("providers.keys.title")}</h3>}
+      <p className="muted">{t("providers.keys.intro", { store: secretStore() })}</p>
       <ul className="provider-list">
         {providers.map((p) => (
           <li key={p.id} className="card">
             <div>
               <strong>{p.name}</strong> <span className="muted">{presets.find((x) => x.id === presetOf(p))?.name ?? p.type}</span>
-              {p.builtin && <span className="muted"> · development only</span>}
+              {p.builtin && <span className="muted"> · {t("providers.devOnly")}</span>}
               <div className="muted">
-                {p.baseUrl || "default endpoint"} · default model {p.defaultModel || "none"}
-                {p.hasKey ? " · key set" : ""}
+                {p.baseUrl || t("providers.defaultEndpoint")} · {p.defaultModel ? t("providers.defaultModel", { model: p.defaultModel }) : t("providers.noDefaultModel")}
+                {p.hasKey ? ` · ${t("providers.keySet")}` : ""}
               </div>
               {p.addressChanged && (
                 <div className="banner warn row" role="alert">
-                  <span>
-                    This address was changed outside Freeloop, so the API key is not being sent. If you did not change it, something on this computer may be trying to get your key.
-                  </span>
+                  <span>{t("providers.addressChanged")}</span>
                   <button
                     onClick={async () => {
-                      if (!(await ask(`Send the API key of ${p.name} to ${p.baseUrl || "its default endpoint"}?`))) return;
+                      const question = p.baseUrl
+                        ? t("providers.ask.confirmAddress", { name: p.name, address: p.baseUrl })
+                        : t("providers.ask.confirmAddressDefault", { name: p.name });
+                      if (!(await ask(question))) return;
                       EngineService.ConfirmProviderAddress(p.id).then(onChanged).catch(onError);
                     }}
                   >
-                    Use this address
+                    {t("providers.useAddress")}
                   </button>
                 </div>
               )}
-              {tests[p.id] && (
-                <div className={tests[p.id].ok ? "ok" : "error-text"} role="status">
-                  {tests[p.id].text}
-                </div>
-              )}
+              {tests[p.id] && <TestResult test={tests[p.id]} />}
             </div>
             <div className="row">
-              <button onClick={() => test(p.id)}>Test connection</button>
-              {!p.builtin && <button onClick={() => edit(p)}>Edit</button>}
+              <button onClick={() => test(p.id)}>{t("providers.test")}</button>
+              {!p.builtin && <button onClick={() => edit(p)}>{t("providers.edit")}</button>}
               {!p.builtin && (
                 <button className="danger" onClick={() => remove(p)}>
-                  Delete
+                  {t("providers.delete")}
                 </button>
               )}
             </div>
@@ -184,58 +184,65 @@ export default function Providers({ providers, onChanged, onError, agents, defau
 
       {!form && (
         <button className="primary" onClick={startAdd} disabled={presets.length === 0}>
-          Add provider
+          {t("providers.add")}
         </button>
       )}
       {form && (
         <form className="card form" onSubmit={save}>
-          <h3>{form.id ? `Edit ${form.name}` : "Add provider"}</h3>
+          <h3>{form.id ? t("providers.editNamed", { name: form.name }) : t("providers.add")}</h3>
           <label>
-            Kind
+            {t("providers.kind")}
             <select value={form.preset} onChange={(e) => choosePreset(e.target.value)} disabled={!!form.id}>
               {presets.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.local ? " (local)" : ""}
+                  {p.local ? t("providers.localPreset", { name: p.name }) : p.name}
                 </option>
               ))}
             </select>
           </label>
           {preset?.note && <p className="muted">{preset.note}</p>}
           <label>
-            Name
+            {t("providers.name")}
             <input value={form.name} onChange={set("name")} required />
           </label>
           <label>
-            Base URL
+            {t("providers.baseUrl")}
             <input value={form.baseUrl} onChange={set("baseUrl")} placeholder={preset?.baseUrl || "http://localhost:8080/v1"} required={preset?.id === "custom"} />
           </label>
           <label>
-            API key {preset && !preset.needsKey && <span className="muted">(optional for local servers)</span>}
-            {plainRemote(form.baseUrl) && <span className="error-text"> This address is plain http, so the key would travel unencrypted.</span>}
+            {t("providers.apiKey")} {preset && !preset.needsKey && <span className="muted">{t("providers.optionalLocal")}</span>}
+            {plainRemote(form.baseUrl) && <span className="error-text"> {t("providers.plainHttp")}</span>}
             <input
               type="password"
               autoComplete="off"
               value={form.apiKey}
               onChange={set("apiKey")}
-              placeholder={form.id ? "Leave empty to keep the saved key" : ""}
+              placeholder={form.id ? t("providers.keepKey") : ""}
               required={!form.id && !!preset?.needsKey}
             />
           </label>
           <label>
-            Default model <span className="muted">(optional)</span>
-            <input value={form.defaultModel} onChange={set("defaultModel")} placeholder={preset?.local ? "Pick one when starting a session" : ""} />
+            {t("providers.defaultModelLabel")} <span className="muted">{t("providers.optional")}</span>
+            <input value={form.defaultModel} onChange={set("defaultModel")} placeholder={preset?.local ? t("providers.pickWhenStarting") : ""} />
           </label>
           <div className="row">
             <button type="submit" className="primary" disabled={busy}>
-              Save
+              {t("common.save")}
             </button>
             <button type="button" onClick={() => setForm(null)}>
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>
       )}
     </section>
+  );
+}
+
+function TestResult({ test }: { test: TestState }) {
+  return (
+    <div className={test.state === "failed" ? "error-text" : "ok"} role="status">
+      {test.state === "testing" ? t("providers.testing") : test.state === "ok" ? t("providers.connected", { count: test.models.length }) : test.error}
+    </div>
   );
 }

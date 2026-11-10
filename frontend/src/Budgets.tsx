@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EngineService, type BudgetState } from "./api.ts";
 import { budgetLine, budgetName } from "./budgets.ts";
+import { t } from "./i18n.ts";
 
 // The budgets and what this period has spent of each (PRV-017).
 export default function Budgets({ onOpenPrices, profileName }: { onOpenPrices?: () => void; profileName?: (id: string) => string }) {
@@ -18,15 +19,15 @@ export default function Budgets({ onOpenPrices, profileName }: { onOpenPrices?: 
   if (list.length === 0) {
     return onOpenPrices ? (
       <p className="muted usage-note">
-        No budget set.{" "}
+        {t("budgetsPage.none")}{" "}
         <button className="link" onClick={onOpenPrices}>
-          Set one beside the prices
+          {t("budgetsPage.setOne")}
         </button>
       </p>
     ) : null;
   }
   return (
-    <div className="usage-card budgets" aria-label="Budgets">
+    <div className="usage-card budgets" aria-label={t("budgetsPage.label")}>
       {list.map((b, i) => (
         <div key={i} className={`budget budget-${b.level || "ok"}`}>
           <div className="budget-head">

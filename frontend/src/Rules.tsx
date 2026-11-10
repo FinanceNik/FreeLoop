@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { EngineService, MODES, errorText, modeName, type PolicyCheck, type PolicyOverview, type ProjectInfo, type Rule, type Session } from "./api.ts";
 import { CHECK_TOOLS, headline, ruleWhere, toQuery } from "./policy.ts";
+import { t, type PlainKey } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 
 interface Props {
   // The session whose session-scoped rules to show, if any.
@@ -17,7 +19,14 @@ export const RULE_TOOLS = ["shell", "write_file", "edit_file", "read_file", "lis
 export function describeRule(r: Rule): string {
   if (r.command) return `${r.tool}: ${r.command}`;
   if (r.path) return `${r.tool}: ${r.path}`;
-  return `${r.tool}: any call`;
+  return t("rules.anyCall", { tool: r.tool });
+}
+
+// A rule's effect in words; one the engine names otherwise shows as given.
+const EFFECT: Record<string, PlainKey> = { allow: "panel.rule.allow", deny: "panel.rule.deny" };
+function effectName(effect: string): string {
+  const key = EFFECT[effect];
+  return key ? t(key) : effect;
 }
 
 export default function Rules({ session, projects, version, onError }: Props) {
@@ -59,47 +68,43 @@ export default function Rules({ session, projects, version, onError }: Props) {
 
   return (
     <section className="page">
-      <h2>Policy</h2>
+      <h2>{t("settings.page.rules")}</h2>
       <PolicyCheckForm session={session} projects={projects} version={version} />
-      <p className="muted">
-        Rules decide tool calls before you are asked. Deny rules win over allow rules in every scope and in every mode, bypass
-        included, except an agent's own auto mode, where the agent approves for itself. Allow rules never lift plan mode or protected paths. A shell rule ending in <code>*</code> matches a prefix and
-        only ever approves a single plain command, never a chain, pipe or redirection.
-      </p>
+      <p className="muted">{tNodes("rules.intro", { star: <code>*</code> })}</p>
 
-      <h3>Global</h3>
-      <p className="muted">Stored in rules.yaml in the app data folder; hand edits are picked up on the next tool call, and an allow rule added there waits for your approval in Settings.</p>
+      <h3>{t("rules.global.title")}</h3>
+      <p className="muted">{t("rules.global.note")}</p>
       <RuleList rules={global} onDelete={remove} />
 
       <form className="card form" onSubmit={add}>
         <div className="row">
-          <select value={form.effect} onChange={(e) => setForm({ ...form, effect: e.target.value })} aria-label="Effect">
-            <option value="allow">Allow</option>
-            <option value="deny">Deny</option>
+          <select value={form.effect} onChange={(e) => setForm({ ...form, effect: e.target.value })} aria-label={t("panel.rules.effect")}>
+            <option value="allow">{t("panel.rules.allow")}</option>
+            <option value="deny">{t("panel.rules.deny")}</option>
           </select>
-          <select value={form.tool} onChange={(e) => setForm({ ...form, tool: e.target.value })} aria-label="Tool">
-            {RULE_TOOLS.map((t) => (
-              <option key={t} value={t}>
-                {t === "*" ? "any tool" : t}
+          <select value={form.tool} onChange={(e) => setForm({ ...form, tool: e.target.value })} aria-label={t("rules.tool")}>
+            {RULE_TOOLS.map((tool) => (
+              <option key={tool} value={tool}>
+                {tool === "*" ? t("panel.rules.anyTool") : tool}
               </option>
             ))}
           </select>
           <input
-            aria-label={form.tool === "shell" ? "Command" : "Path pattern"}
-            placeholder={form.tool === "shell" ? "git status, or git * for a prefix" : "src/**, or empty for any path"}
+            aria-label={form.tool === "shell" ? t("rules.command") : t("panel.rules.path")}
+            placeholder={form.tool === "shell" ? t("rules.command.placeholder") : t("rules.path.placeholder")}
             value={form.pattern}
             onChange={(e) => setForm({ ...form, pattern: e.target.value })}
           />
           <button type="submit" className="primary">
-            Add rule
+            {t("rules.add")}
           </button>
         </div>
       </form>
 
       {session && (
         <>
-          <h3>This session: {session.title}</h3>
-          <p className="muted">Created with "Allow always" for this session; they end with it.</p>
+          <h3>{t("rules.thisSession", { title: session.title })}</h3>
+          <p className="muted">{t("rules.session.note", { allowAlways: t("approval.allowAlways") })}</p>
           <RuleList rules={local} />
         </>
       )}
@@ -110,19 +115,19 @@ export default function Rules({ session, projects, version, onError }: Props) {
 }
 
 function RuleList({ rules, onDelete }: { rules: Rule[]; onDelete?: (r: Rule) => void }) {
-  if (rules.length === 0) return <p className="muted">No rules.</p>;
+  if (rules.length === 0) return <p className="muted">{t("rules.none")}</p>;
   return (
     <ul className="provider-list">
       {rules.map((r, i) => (
         <li key={i} className="card">
           <div>
-            <span className={r.effect === "deny" ? "error-text" : "ok"}>{r.effect}</span> <code>{describeRule(r)}</code>
-            {r.pending && <span className="muted"> does not apply until you approve it in Settings</span>}
+            <span className={r.effect === "deny" ? "error-text" : "ok"}>{effectName(r.effect)}</span> <code>{describeRule(r)}</code>
+            {r.pending && <span className="muted"> {t("rules.pending")}</span>}
             <div className="muted">{r.source}</div>
           </div>
           {onDelete && (
             <button className="danger" onClick={() => onDelete(r)}>
-              Delete
+              {t("rules.delete")}
             </button>
           )}
         </li>
@@ -134,8 +139,8 @@ function RuleList({ rules, onDelete }: { rules: Rule[]; onDelete?: (r: Rule) => 
 // Where a call is judged: the session last open, or a project as a new session there
 // would be.
 function places(session: Session | null, projects: ProjectInfo[]) {
-  const out = session ? [{ id: `session:${session.id}`, label: `This session: ${session.title}` }] : [];
-  for (const p of projects) out.push({ id: `project:${p.root}`, label: `New session in ${p.name}` });
+  const out = session ? [{ id: `session:${session.id}`, label: t("rules.thisSession", { title: session.title }) }] : [];
+  for (const p of projects) out.push({ id: `project:${p.root}`, label: t("rules.newSessionIn", { name: p.name }) });
   return out;
 }
 
@@ -147,7 +152,7 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
   const [verdict, setVerdict] = useState<PolicyCheck | null>(null);
   const [error, setError] = useState("");
   const at = where.some((w) => w.id === input.where) ? input.where : (where[0]?.id ?? "");
-  const tool = CHECK_TOOLS.find((t) => t.id === input.tool) ?? CHECK_TOOLS[0];
+  const tool = CHECK_TOOLS.find((c) => c.id === input.tool) ?? CHECK_TOOLS[0];
 
   const check = (e?: FormEvent) => {
     e?.preventDefault();
@@ -170,18 +175,18 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
   if (where.length === 0) return null;
   const head = verdict && headline(verdict);
   return (
-    <form className="card form policy-check" onSubmit={check} aria-label="Would this be allowed?">
-      <h3>Would this be allowed?</h3>
+    <form className="card form policy-check" onSubmit={check} aria-label={t("rules.check.title")}>
+      <h3>{t("rules.check.title")}</h3>
       <div className="row">
-        <select aria-label="Where" value={at} onChange={(e) => setInput({ ...input, where: e.target.value })}>
+        <select aria-label={t("rules.check.where")} value={at} onChange={(e) => setInput({ ...input, where: e.target.value })}>
           {where.map((w) => (
             <option key={w.id} value={w.id}>
               {w.label}
             </option>
           ))}
         </select>
-        <select aria-label="Mode" value={input.mode} onChange={(e) => setInput({ ...input, mode: e.target.value })}>
-          <option value="">{at.startsWith("session:") ? "Its mode" : "The default mode"}</option>
+        <select aria-label={t("rules.check.mode")} value={input.mode} onChange={(e) => setInput({ ...input, mode: e.target.value })}>
+          <option value="">{at.startsWith("session:") ? t("rules.check.itsMode") : t("rules.check.defaultMode")}</option>
           {MODES.map((m) => (
             <option key={m.id} value={m.id}>
               {modeName(m.id)}
@@ -190,21 +195,21 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
         </select>
       </div>
       <div className="row">
-        <select aria-label="Action" value={input.tool} onChange={(e) => setInput({ ...input, tool: e.target.value })}>
-          {CHECK_TOOLS.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label}
+        <select aria-label={t("rules.check.action")} value={input.tool} onChange={(e) => setInput({ ...input, tool: e.target.value })}>
+          {CHECK_TOOLS.map((c) => (
+            <option key={c.id} value={c.id}>
+              {t(c.label)}
             </option>
           ))}
         </select>
         <input
-          aria-label={input.tool === "shell" ? "Command to check" : "Path to check"}
+          aria-label={input.tool === "shell" ? t("rules.check.command") : t("rules.check.path")}
           placeholder={tool.placeholder}
           value={input.what}
           onChange={(e) => setInput({ ...input, what: e.target.value })}
         />
         <button type="submit" className="primary" disabled={!input.what.trim()}>
-          Check
+          {t("rules.check.submit")}
         </button>
       </div>
       {error && <p className="error-text">{error}</p>}
@@ -213,23 +218,22 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
           <p className={head.tone === "ok" ? "ok" : head.tone === "error" ? "error-text" : "warn-text"}>{head.text}</p>
           {verdict.rule && (
             <p className="muted">
-              Rule <code>{describeRule(verdict.rule)}</code>, {ruleWhere(verdict.rule)}
+              {tNodes("rules.verdict.rule", { rule: <code>{describeRule(verdict.rule)}</code>, where: ruleWhere(verdict.rule) })}
             </p>
           )}
           {(verdict.overruled ?? []).map((r, i) => (
             <p key={i} className="muted">
-              Overruled: {r.effect} <code>{describeRule(r)}</code>, {ruleWhere(r)}
+              {tNodes("rules.verdict.overruled", { effect: effectName(r.effect), rule: <code>{describeRule(r)}</code>, where: ruleWhere(r) })}
             </p>
           ))}
           {(verdict.pending ?? []).map((r, i) => (
             <p key={`p${i}`} className="muted">
-              Waits for your approval in Settings: {r.effect} <code>{describeRule(r)}</code>
+              {tNodes("rules.verdict.pending", { effect: effectName(r.effect), rule: <code>{describeRule(r)}</code> })}
             </p>
           ))}
           {(verdict.hooks ?? []).length > 0 && (
             <p className="muted">
-              {verdict.hooks!.length === 1 ? "A hook" : `${verdict.hooks!.length} hooks`} would still run and could deny it, or make it ask by failing:{" "}
-              {verdict.hooks!.map((h) => h.source).join(", ")}.
+              {t("rules.verdict.hooks", { count: verdict.hooks!.length, sources: verdict.hooks!.map((h) => h.source).join(", ") })}
             </p>
           )}
           {(verdict.agent ?? []).map((a, i) => (
@@ -238,7 +242,7 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
             </p>
           ))}
           <p className="muted">
-            In {modeName(verdict.mode)} mode, in {verdict.root}.
+            {t("rules.verdict.where", { mode: modeName(verdict.mode), root: verdict.root })}
           </p>
         </div>
       )}
@@ -262,9 +266,9 @@ function Overview({ session, projects, version }: { session: Session | null; pro
   const scoped = (o.scopes ?? []).filter((s) => s.scope !== "global" && s.scope !== "session");
   return (
     <>
-      <h3>What else decides</h3>
+      <h3>{t("rules.overview.title")}</h3>
       {where.length > 1 && (
-        <select aria-label="Show the policy for" value={shown} onChange={(e) => setAt(e.target.value)}>
+        <select aria-label={t("rules.overview.for")} value={shown} onChange={(e) => setAt(e.target.value)}>
           {where.map((w) => (
             <option key={w.id} value={w.id}>
               {w.label}
@@ -272,10 +276,10 @@ function Overview({ session, projects, version }: { session: Session | null; pro
           ))}
         </select>
       )}
-      {o.rulesUnreadable && <p className="error-text">Some rules cannot be read, so everything but reads in the project asks: {o.rulesUnreadable}</p>}
+      {o.rulesUnreadable && <p className="error-text">{t("rules.unreadable", { error: o.rulesUnreadable })}</p>}
       <p className="muted">
-        {o.harnessName} in {modeName(o.mode)} mode{o.sandboxed ? ", commands in the sandbox" : ""}. The project is{" "}
-        {o.trusted ? "trusted, so its own rules and hooks apply" : "not trusted, so its own rules and hooks do not apply"}. A project's rules can only deny.
+        {t(o.sandboxed ? "rules.overview.modeSandboxed" : "rules.overview.mode", { harness: o.harnessName, mode: modeName(o.mode) })}{" "}
+        {t(o.trusted ? "rules.overview.trusted" : "rules.overview.untrusted")} {t("rules.overview.projectDeny")}
       </p>
       {scoped.map((s) => (
         <div key={s.scope}>
@@ -286,7 +290,7 @@ function Overview({ session, projects, version }: { session: Session | null; pro
       ))}
       {(o.agent ?? []).length > 0 && (
         <>
-          <h4>What {o.harnessName} decides itself</h4>
+          <h4>{t("rules.overview.agent", { harness: o.harnessName })}</h4>
           {(o.agent ?? []).map((a, i) => (
             <p key={i} className="muted">
               {a}
@@ -294,16 +298,16 @@ function Overview({ session, projects, version }: { session: Session | null; pro
           ))}
         </>
       )}
-      <h4>Hooks</h4>
+      <h4>{t("rules.hooks.title")}</h4>
       {(o.hooks ?? []).length === 0 ? (
-        <p className="muted">No hooks. A hook can deny a call, never allow one.</p>
+        <p className="muted">{t("rules.hooks.none")}</p>
       ) : (
         <ul className="provider-list">
           {(o.hooks ?? []).map((h, i) => (
             <li key={i} className="card">
               <div>
                 <code>{h.event}</code> {h.match && <code>{h.match}</code>} <span className="muted">{h.source}</span>
-                {!h.approved && <span className="muted"> does not run until you approve it in Settings</span>}
+                {!h.approved && <span className="muted"> {t("rules.hooks.pending")}</span>}
                 <div className="muted">{h.command}</div>
               </div>
             </li>
@@ -311,8 +315,8 @@ function Overview({ session, projects, version }: { session: Session | null; pro
         </ul>
       )}
       <details>
-        <summary>Protected paths</summary>
-        <p className="muted">Never read or written, in every mode, whatever a rule says:</p>
+        <summary>{t("rules.protected.title")}</summary>
+        <p className="muted">{t("rules.protected.always")}</p>
         <ul className="policy-paths">
           {(o.protected ?? []).map((p) => (
             <li key={p}>
@@ -321,8 +325,8 @@ function Overview({ session, projects, version }: { session: Session | null; pro
           ))}
         </ul>
         <p className="muted">
-          Never written in a project: {(o.neverWritten ?? []).map((p) => p).join(", ")}. Other programs act on these later, so accept edits asks before changing them:{" "}
-          {(o.actedOnLater ?? []).join(", ")}. Reading a file whose name says it holds secrets, such as .env, asks.
+          {t("rules.protected.neverWritten", { paths: (o.neverWritten ?? []).join(", ") })}{" "}
+          {t("rules.protected.actedOnLater", { paths: (o.actedOnLater ?? []).join(", ") })} {t("rules.protected.secrets")}
         </p>
       </details>
     </>

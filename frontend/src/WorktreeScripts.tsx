@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { t, type PlainKey } from "./i18n.ts";
+import { tNodes } from "./i18nNodes.tsx";
 import { EngineService, type ProjectScriptsInfo } from "./api.ts";
 
 // WorktreeScripts shows and edits a project's worktree scripts (SES-016)
@@ -7,10 +9,10 @@ import { EngineService, type ProjectScriptsInfo } from "./api.ts";
 // .freeloop/worktree.yaml field by field.
 
 const FIELDS = [
-  { key: "setup", label: "Setup", hint: "Runs once when the worktree is made, before the first message, such as npm install." },
-  { key: "run", label: "Run", hint: "Starts from the session's Run button in a terminal tab, such as npm run dev -- --port $FREELOOP_PORT." },
-  { key: "archive", label: "Archive", hint: "Runs before the worktree is removed, such as docker compose down." },
-] as const;
+  { key: "setup", label: "worktreeScripts.setup", hint: "worktreeScripts.setupHint" },
+  { key: "run", label: "worktreeScripts.run", hint: "worktreeScripts.runHint" },
+  { key: "archive", label: "worktreeScripts.archive", hint: "worktreeScripts.archiveHint" },
+] as const satisfies readonly { key: string; label: PlainKey; hint: PlainKey }[];
 
 export default function WorktreeScripts({ projectId, onError }: { projectId: string; onError: (err: unknown) => void }) {
   const [info, setInfo] = useState<ProjectScriptsInfo | null>(null);
@@ -30,7 +32,7 @@ export default function WorktreeScripts({ projectId, onError }: { projectId: str
   const eff = info.effective;
   const from = (k: "setup" | "run" | "archive" | "copy") => {
     const app = k === "copy" ? (info.app.copy ?? []).length > 0 : !!info.app[k];
-    return app ? "set in Freeloop" : ".freeloop/worktree.yaml";
+    return app ? t("worktreeScripts.fromApp") : ".freeloop/worktree.yaml";
   };
   const save = () =>
     EngineService.SetProjectScripts(projectId, {
@@ -54,9 +56,9 @@ export default function WorktreeScripts({ projectId, onError }: { projectId: str
       {info.repoError && <p className="banner warn">{info.repoError}</p>}
       {empty && !editing && (
         <p className="muted">
-          No worktree scripts: the worktree starts with the committed files only.{" "}
+          {t("worktreeScripts.none")}{" "}
           <button type="button" className="link" onClick={() => setEditing(true)}>
-            Add setup…
+            {t("worktreeScripts.add")}
           </button>
         </p>
       )}
@@ -64,17 +66,17 @@ export default function WorktreeScripts({ projectId, onError }: { projectId: str
         <ul className="worktree-scripts-list">
           {(eff.copy ?? []).length > 0 && (
             <li>
-              <span className="muted">Copies</span> {(eff.copy ?? []).map((c) => <code key={c}>{c}</code>)} <span className="muted">· {from("copy")}</span>
+              <span className="muted">{t("worktreeScripts.copies")}</span> {(eff.copy ?? []).map((c) => <code key={c}>{c}</code>)} <span className="muted">· {from("copy")}</span>
             </li>
           )}
           {FIELDS.filter((f) => eff[f.key]).map((f) => (
             <li key={f.key}>
-              <span className="muted">{f.label}</span> <code>{eff[f.key]}</code> <span className="muted">· {from(f.key)}</span>
+              <span className="muted">{t(f.label)}</span> <code>{eff[f.key]}</code> <span className="muted">· {from(f.key)}</span>
             </li>
           ))}
           <li>
             <button type="button" className="link" onClick={() => setEditing(true)}>
-              Edit…
+              {t("worktreeScripts.edit")}
             </button>
           </li>
         </ul>
@@ -82,26 +84,29 @@ export default function WorktreeScripts({ projectId, onError }: { projectId: str
       {editing && (
         <div className="worktree-scripts-form">
           <p className="muted">
-            Values here override the project's <code>.freeloop/worktree.yaml</code>; leave one empty to use the file's. Commands run in the worktree with the environment's variables and <code>FREELOOP_PORT</code>,{" "}
-            <code>FREELOOP_ROOT_PATH</code> and <code>FREELOOP_WORKTREE</code>: on this computer, or in the session's container in a Docker environment, where the main checkout's files are not
-            available. Copies always come from the main checkout on this computer.
+            {tNodes("worktreeScripts.intro", {
+              file: <code>{".freeloop/worktree.yaml"}</code>,
+              port: <code>{"FREELOOP_PORT"}</code>,
+              root: <code>{"FREELOOP_ROOT_PATH"}</code>,
+              worktree: <code>{"FREELOOP_WORKTREE"}</code>,
+            })}
           </p>
           <label>
-            Copy from the main checkout <span className="muted">(one path a line, such as .env)</span>
+            {t("worktreeScripts.copy")} <span className="muted">{t("worktreeScripts.copyHint")}</span>
             <textarea rows={2} value={form.copy} placeholder={(info.repo.copy ?? []).join("\n")} onChange={(e) => setForm({ ...form, copy: e.target.value })} />
           </label>
           {FIELDS.map((f) => (
             <label key={f.key}>
-              {f.label} <span className="muted">{f.hint}</span>
+              {t(f.label)} <span className="muted">{t(f.hint)}</span>
               <input value={form[f.key]} placeholder={info.repo[f.key] || ""} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
             </label>
           ))}
           <div className="row">
             <button type="button" className="primary" onClick={save}>
-              Save
+              {t("common.save")}
             </button>
             <button type="button" onClick={() => (setEditing(false), load())}>
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </div>
