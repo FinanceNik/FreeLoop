@@ -45,6 +45,8 @@ type ReviewRequest struct {
 	// model switches the reviewer's model before it reads anything, as an AFK run
 	// chose it (WFL-010).
 	model harness.OptionValue
+	// effort is switched after the model (WFL-012).
+	effort harness.OptionValue
 }
 
 // ReviewInfo is one review of a session.
@@ -126,6 +128,11 @@ func (e *Engine) RequestReview(ctx context.Context, req ReviewRequest) (session.
 	if req.model.ID != "" && req.model.Value != "" {
 		if err := e.SetSessionOption(ctx, reviewer.ID, req.model.ID, req.model.Value); err != nil {
 			return reviewer, fmt.Errorf("the review's model %s could not be chosen: %w", modelName(req.model.Value), err)
+		}
+	}
+	if req.effort.ID != "" && req.effort.Value != "" {
+		if err := e.SetSessionOption(ctx, reviewer.ID, req.effort.ID, req.effort.Value); err != nil {
+			return reviewer, fmt.Errorf("the review's effort %s could not be chosen: %w", req.effort.Value, err)
 		}
 	}
 	var b strings.Builder

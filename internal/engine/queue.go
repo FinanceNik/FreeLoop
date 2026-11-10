@@ -319,6 +319,11 @@ func (e *Engine) startTask(ctx context.Context, t config.Task) (string, error) {
 			return ses.ID, fmt.Errorf("its model %s could not be chosen: %w", modelName(t.Model), err)
 		}
 	}
+	if t.EffortOption != "" && t.Effort != "" {
+		if err := e.SetSessionOption(ctx, ses.ID, t.EffortOption, t.Effort); err != nil {
+			return ses.ID, fmt.Errorf("its effort %s could not be chosen: %w", t.Effort, err)
+		}
+	}
 	note := "Started from the queue."
 	if t.RunID != "" {
 		note = "Started by an AFK run: it works on one issue unattended. Requests wait for you in Needs attention."

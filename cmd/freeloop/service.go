@@ -605,6 +605,11 @@ func (s *EngineService) ProfileModels(ctx context.Context, root, profileID strin
 	return s.eng.ProfileModels(ctx, root, profileID)
 }
 
+// ModelEfforts lists the efforts a profile's run sessions can take on a model (WFL-012).
+func (s *EngineService) ModelEfforts(ctx context.Context, root, profileID, model string) (engine.ProfileEfforts, error) {
+	return s.eng.ModelEfforts(ctx, root, profileID, model)
+}
+
 func (s *EngineService) StartAFK(ctx context.Context, req engine.AFKStart) (config.AFKRun, error) {
 	return s.eng.StartAFK(ctx, req)
 }

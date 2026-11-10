@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { modelGroups, modelLabel, namedModel } from "./modelChoice.ts";
+import { keptEffort, modelGroups, modelLabel, namedModel } from "./modelChoice.ts";
 
 const choices = [
   { value: "big\nb", name: "b", group: "Big" },
@@ -30,4 +30,12 @@ test("a value reads as its model, with its provider's name when it is not among 
   assert.equal(modelLabel(choices, "small\nmine"), "mine (Small)");
   assert.equal(modelLabel(choices, "gone\nx"), "x (gone)");
   assert.equal(modelLabel(choices, ""), "");
+});
+
+test("an effort stays only while the model offers it", () => {
+  const levels = ["low", "medium", "high"].map((value) => ({ value }));
+  assert.equal(keptEffort(levels, "low"), "low");
+  assert.equal(keptEffort([], "low"), "");
+  assert.equal(keptEffort(levels, "max"), "");
+  assert.equal(keptEffort(levels, ""), "");
 });

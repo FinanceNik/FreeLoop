@@ -365,6 +365,10 @@ type AFKStart struct {
 	// profiles; empty keeps each profile's own model (WFL-010).
 	Model       string `json:"model"`
 	ReviewModel string `json:"reviewModel"`
+	// Effort and ReviewEffort are levels ModelEfforts offers for those models; empty
+	// keeps each profile's (WFL-012).
+	Effort       string `json:"effort"`
+	ReviewEffort string `json:"reviewEffort"`
 	// StartedBy says where it was started, for the record.
 	StartedBy string `json:"startedBy"`
 }
@@ -434,8 +438,17 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 	if err != nil {
 		return config.AFKRun{}, err
 	}
+	effortOption, effort, err := e.runEffort(ctx, project.Root, prof, req.Model, req.Effort)
+	if err != nil {
+		return config.AFKRun{}, err
+	}
+	reviewEffortOption, reviewEffort, err := e.runEffort(ctx, project.Root, review, req.ReviewModel, req.ReviewEffort)
+	if err != nil {
+		return config.AFKRun{}, err
+	}
 	run := config.AFKRun{
 		ModelOption: modelOption, Model: req.Model, ReviewModelOption: reviewOption, ReviewModel: req.ReviewModel,
+		EffortOption: effortOption, Effort: effort, ReviewEffortOption: reviewEffortOption, ReviewEffort: reviewEffort,
 		ID: fmt.Sprintf("afk_%d", time.Now().UnixNano()), WorkflowID: plan.WorkflowID, ProjectID: project.ID, ProjectRoot: project.Root,
 		ProfileID: prof, ReviewProfileID: review, EnvironmentID: plan.EnvironmentID, Mode: plan.Mode, Allow: allow,
 		MaxIssues: plan.MaxIssues, State: config.RunRunning, Steps: []config.AFKStep{}, StartedBy: req.StartedBy, StartedAt: time.Now().UTC(),
@@ -874,7 +887,7 @@ func (e *Engine) nextIssue(ctx context.Context, r config.AFKRun, w config.Workfl
 	task := config.Task{
 		Title: fmt.Sprintf("AFK %s: %s", next.ID, next.Title), Prompt: strings.TrimSpace(prompt), ProjectRoot: project.Root, ProfileID: r.ProfileID,
 		Mode: r.Mode, EnvironmentID: r.EnvironmentID, Workflow: r.WorkflowID, Allow: slices.Clone(r.Allow), RunID: r.ID, Tags: []string{AFKTag},
-		ModelOption: r.ModelOption, Model: r.Model,
+		ModelOption: r.ModelOption, Model: r.Model, EffortOption: r.EffortOption, Effort: r.Effort,
 	}
 	if r.Anchor != "" {
 		task.ShareWorktreeOf = r.Anchor

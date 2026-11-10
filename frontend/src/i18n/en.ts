@@ -1951,6 +1951,8 @@ export const en = {
   "afk.dialog.modelIssues": "Model for the issues",
   "afk.dialog.profileReviews": "Profile for the reviews",
   "afk.dialog.modelReviews": "Model for the reviews",
+  "afk.dialog.effortIssues": "Effort for the issues",
+  "afk.dialog.effortReviews": "Effort for the reviews",
   "afk.dialog.reviewHint": "A stronger model than the issues' catches more. Each finished issue is reviewed, read-only, before it waits for your QA.",
   "afk.dialog.allow": "Allow for this run's sessions",
   "afk.dialog.allowHint": "Unattended, a command that asks waits until you answer. Allow the ones it needs now; they hold for the run's sessions only. Anything else still asks.",
@@ -1967,6 +1969,8 @@ export const en = {
   "afk.model.profileOwnNamed": "The profile's own ({model})",
   "afk.model.other": "Other model on {provider}…",
   "afk.model.otherName": "Model name",
+  "afk.effort.profileOwnNamed": "The profile's ({effort})",
+  "afk.effort.none": "This model has no effort setting.",
 
   // A run in full (AFKRunView.tsx).
   "afk.run.title": "AFK run of {project}",

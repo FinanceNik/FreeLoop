@@ -12,6 +12,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/permission"
+	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
@@ -467,19 +468,7 @@ func TestAFKStopSaysHowTheTurnEnded(t *testing.T) {
 func TestAFKModelsFromEveryProvider(t *testing.T) {
 	ctx := context.Background()
 	e, root := afkEngine(t)
-	os.WriteFile(filepath.Join(e.dataDir, config.ProvidersFileName), []byte("version: 1\nproviders:\n"+
-		"  - {id: small, name: Small, type: scripted, defaultModel: tiny}\n"+
-		"  - {id: big, name: Big, type: scripted, defaultModel: b}\n"+
-		"  - {id: nokey, name: No key, type: anthropic, baseUrl: \"https://api.example.com\", defaultModel: k}\n"), 0o600)
-	if err := e.loadProviders(); err != nil {
-		t.Fatal(err)
-	}
-	withScript(e, "s")
-	withScript(e, "big")
-	withScript(e, "small")
-	if err := e.SaveProfileYAML("big", "name: Big\nprovider: big\nmodel: b\n"); err != nil {
-		t.Fatal(err)
-	}
+	twoProviders(t, e)
 	models, err := e.ProfileModels(ctx, root, "big")
 	if err != nil {
 		t.Fatal(err)
@@ -527,6 +516,76 @@ func TestAFKModelsFromEveryProvider(t *testing.T) {
 		rev, _ := e.store.GetSession(ctx, s.ReviewID)
 		if ses.ProviderID != "small" || ses.Model != "my-own" || rev.ProviderID != "small" || rev.Model != "scripted" {
 			t.Errorf("%s ran on %s/%s, its review on %s/%s", s.Issue, ses.ProviderID, ses.Model, rev.ProviderID, rev.Model)
+		}
+	}
+}
+
+// twoProviders gives the engine two scripted providers in its file, "big", whose model
+// takes no effort, and "small", whose models do, plus one with no key configured; the
+// profile "big" uses the first.
+func twoProviders(t *testing.T, e *Engine) {
+	t.Helper()
+	os.WriteFile(filepath.Join(e.dataDir, config.ProvidersFileName), []byte("version: 1\nproviders:\n"+
+		"  - {id: small, name: Small, type: scripted, defaultModel: tiny}\n"+
+		"  - {id: big, name: Big, type: scripted, defaultModel: b}\n"+
+		"  - {id: nokey, name: No key, type: anthropic, baseUrl: \"https://api.example.com\", defaultModel: k}\n"), 0o600)
+	if err := e.loadProviders(); err != nil {
+		t.Fatal(err)
+	}
+	withScript(e, "s")
+	withScript(e, "big")
+	e.mu.Lock()
+	e.providers.built["small"] = &configuredProvider{cfg: config.Provider{ID: "small", Name: "Small", Type: "scripted"}, p: scripted.New("small").WithEffort()}
+	e.mu.Unlock()
+	if err := e.SaveProfileYAML("big", "name: Big\nprovider: big\nmodel: b\n"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// WFL-012: a run's issues and reviews run at the efforts chosen for them; a model
+// without effort offers none and stores none, and an effort that is not one is refused.
+func TestAFKRunAtAChosenEffort(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	twoProviders(t, e)
+	small := "small" + modelSeparator + "scripted"
+	eff, err := e.ModelEfforts(ctx, root, "big", small)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var levels []string
+	for _, c := range eff.Choices {
+		levels = append(levels, c.Value)
+	}
+	if strings.Join(levels, ",") != "low,medium,high,xhigh,max" || eff.Default != "high" || eff.OptionID != optionEffortID {
+		t.Errorf("small's efforts: %+v", eff)
+	}
+	if none, _ := e.ModelEfforts(ctx, root, "big", ""); len(none.Choices) != 0 {
+		t.Errorf("the profile's own model, which takes no effort, offers %+v", none.Choices)
+	}
+	if opt, level, err := e.runEffort(ctx, root, "big", "big"+modelSeparator+"b", "low"); err != nil || opt != "" || level != "" {
+		t.Errorf("a model without effort stored %q %q, %v", opt, level, err)
+	}
+	if _, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "big", Model: small, Effort: "enormous"}); err == nil {
+		t.Error("an effort that is not one was taken")
+	}
+	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "big", ReviewProfileID: "big", Allow: []string{"git add *", "git commit *"},
+		Model: small, Effort: "low", ReviewModel: small, ReviewEffort: "max"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Effort != "low" || run.ReviewEffort != "max" {
+		t.Errorf("the run stored %q and %q", run.Effort, run.ReviewEffort)
+	}
+	run = waitRun(t, e, run.ID)
+	if run.State != config.RunFinished || len(run.Steps) != 2 {
+		t.Fatalf("run = %+v", run)
+	}
+	for _, s := range run.Steps {
+		ses, _ := e.store.GetSession(ctx, s.SessionID)
+		rev, _ := e.store.GetSession(ctx, s.ReviewID)
+		if ses.Effort != "low" || rev.Effort != "max" {
+			t.Errorf("%s ran at %q, its review at %q", s.Issue, ses.Effort, rev.Effort)
 		}
 	}
 }

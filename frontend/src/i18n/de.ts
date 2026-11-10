@@ -1720,6 +1720,8 @@ export const de = translationOf<typeof en>()({
   "afk.dialog.modelIssues": "Modell für die Issues",
   "afk.dialog.profileReviews": "Profil für die Reviews",
   "afk.dialog.modelReviews": "Modell für die Reviews",
+  "afk.dialog.effortIssues": "Aufwand für die Issues",
+  "afk.dialog.effortReviews": "Aufwand für die Reviews",
   "afk.dialog.reviewHint": "Ein stärkeres Modell als das der Issues findet mehr. Jedes fertige Issue bekommt ein Review, nur lesend, bevor es auf die QA wartet.",
   "afk.dialog.allow": "Für die Sitzungen dieses Laufs erlauben",
   "afk.dialog.allowHint": "Unbeaufsichtigt wartet ein Befehl, der fragt, bis eine Antwort kommt. Die nötigen Befehle jetzt erlauben; das gilt nur für die Sitzungen des Laufs. Alles andere fragt weiterhin.",
@@ -1733,6 +1735,8 @@ export const de = translationOf<typeof en>()({
   "afk.model.profileOwnNamed": "Wie im Profil ({model})",
   "afk.model.other": "Anderes Modell bei {provider}…",
   "afk.model.otherName": "Modellname",
+  "afk.effort.profileOwnNamed": "Wie im Profil ({effort})",
+  "afk.effort.none": "Dieses Modell hat keine Aufwandsstufe.",
 
   "afk.run.title": "AFK-Lauf von {project}",
   "afk.run.onBranch": "auf {branch}",

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { EngineService, modeName, type AFKPlan, type AFKRun, type Profile, type ProfileModels } from "./api.ts";
+import { EngineService, modeName, type AFKPlan, type AFKRun, type Profile, type ProfileEfforts, type ProfileModels } from "./api.ts";
 import { commandFrom, commandOutcome, defaultAllow } from "./afk.ts";
-import { modelGroups, namedModel } from "./modelChoice.ts";
+import { keptEffort, modelGroups, namedModel } from "./modelChoice.ts";
 import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 
@@ -28,6 +28,9 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   // The models the issues and the reviews switch to; empty keeps the profile's (WFL-010).
   const [model, setModel] = useState("");
   const [reviewModel, setReviewModel] = useState("");
+  // Their efforts, when the model takes one; empty keeps the profile's (WFL-012).
+  const [effort, setEffort] = useState("");
+  const [reviewEffort, setReviewEffort] = useState("");
   const [busy, setBusy] = useState(false);
   // Commands the user types in to allow as well, such as a check the plan missed (WFL-009).
   const [extra, setExtra] = useState<string[]>([]);
@@ -53,7 +56,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   const start = () => {
     if (!plan) return;
     setBusy(true);
-    EngineService.StartAFK({ projectRoot: plan.projectRoot, workflowId: plan.workflowId, profileId, reviewProfileId: reviewId, model, reviewModel, allow, extra, startedBy })
+    EngineService.StartAFK({ projectRoot: plan.projectRoot, workflowId: plan.workflowId, profileId, reviewProfileId: reviewId, model, reviewModel, effort, reviewEffort, allow, extra, startedBy })
       .then(onStarted)
       .catch(onError)
       .finally(() => setBusy(false));
@@ -119,6 +122,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                 </select>
               </label>
               <ModelPicker label={t("afk.dialog.modelIssues")} root={plan.projectRoot} profileId={profileId} value={model} onChange={setModel} onError={onError} />
+              <EffortPicker label={t("afk.dialog.effortIssues")} root={plan.projectRoot} profileId={profileId} model={model} value={effort} onChange={setEffort} onError={onError} />
               {!plan.reviewOff && (
                 <label>
                   {t("afk.dialog.profileReviews")}
@@ -139,6 +143,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
                 </label>
               )}
               {!plan.reviewOff && <ModelPicker label={t("afk.dialog.modelReviews")} root={plan.projectRoot} profileId={reviewId} value={reviewModel} onChange={setReviewModel} onError={onError} />}
+              {!plan.reviewOff && <EffortPicker label={t("afk.dialog.effortReviews")} root={plan.projectRoot} profileId={reviewId} model={reviewModel} value={reviewEffort} onChange={setReviewEffort} onError={onError} />}
             </div>
             {(plan.commands ?? []).length > 0 && (
               <fieldset className="afk-commands">
@@ -269,6 +274,43 @@ function ModelPicker({ label, root, profileId, value, onChange, onError }: { lab
         />
       )}
       {models?.note && <span className="muted">{models.note}</span>}
+    </label>
+  );
+}
+
+// EffortPicker chooses the effort a run's sessions switch to on their model: the
+// profile's, or a level the model offers; disabled for a model without effort.
+function EffortPicker({ label, root, profileId, model, value, onChange, onError }: { label: string; root: string; profileId: string; model: string; value: string; onChange: (v: string) => void; onError: (err: unknown) => void }) {
+  const [efforts, setEfforts] = useState<ProfileEfforts | null>(null);
+  useEffect(() => {
+    if (!profileId) return;
+    let live = true;
+    EngineService.ModelEfforts(root, profileId, model)
+      .then((eff) => {
+        if (!live) return;
+        setEfforts(eff);
+        onChange(keptEffort(eff.choices ?? [], value));
+      })
+      .catch(onError);
+    return () => {
+      live = false;
+    };
+  }, [root, profileId, model]);
+  const choices = efforts?.choices ?? [];
+  // An external agent that reported no effort has nothing to choose here.
+  if (efforts?.external && choices.length === 0) return null;
+  return (
+    <label>
+      {label}
+      <select value={value} disabled={choices.length === 0} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{efforts?.default ? t("afk.effort.profileOwnNamed", { effort: efforts.default }) : t("afk.model.profileOwn")}</option>
+        {choices.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.name || c.value}
+          </option>
+        ))}
+      </select>
+      {efforts && choices.length === 0 && <span className="muted">{t("afk.effort.none")}</span>}
     </label>
   );
 }

@@ -48,8 +48,13 @@ type AFKRun struct {
 	Model             string `json:"model,omitempty"`
 	ReviewModelOption string `json:"reviewModelOption,omitempty"`
 	ReviewModel       string `json:"reviewModel,omitempty"`
-	EnvironmentID     string `json:"environmentId"`
-	Mode              string `json:"mode"`
+	// The efforts they switch to, likewise, when their model takes one (WFL-012).
+	EffortOption       string `json:"effortOption,omitempty"`
+	Effort             string `json:"effort,omitempty"`
+	ReviewEffortOption string `json:"reviewEffortOption,omitempty"`
+	ReviewEffort       string `json:"reviewEffort,omitempty"`
+	EnvironmentID      string `json:"environmentId"`
+	Mode               string `json:"mode"`
 	// Allow are the shell rule patterns the user allowed for the run's sessions
 	// when starting it; they become each session's own rules.
 	Allow     []string `json:"allow"`

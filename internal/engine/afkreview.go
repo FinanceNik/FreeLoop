@@ -25,7 +25,7 @@ func (e *Engine) reviewIssue(ctx context.Context, r config.AFKRun, s config.AFKS
 	b, _ := env.FS().ReadFile(s.Path)
 	focus := config.Render(w.Review.Focus, map[string]string{"backlog": w.BacklogDir(), "issue": s.Path, "issueText": strings.TrimSpace(backlog.Body(b))})
 	rev, err := e.RequestReview(ctx, ReviewRequest{SessionID: sid, ProfileID: r.ReviewProfileID, Label: s.Issue, Focus: strings.TrimSpace(focus),
-		model: harness.OptionValue{ID: r.ReviewModelOption, Value: r.ReviewModel}})
+		model: harness.OptionValue{ID: r.ReviewModelOption, Value: r.ReviewModel}, effort: harness.OptionValue{ID: r.ReviewEffortOption, Value: r.ReviewEffort}})
 	if err != nil {
 		return "", err
 	}

@@ -47,6 +47,8 @@ type Step struct {
 type Provider struct {
 	id    string
 	steps []Step
+	// effort makes its models say they take an effort.
+	effort bool
 
 	mu       sync.Mutex
 	requests []provider.ChatRequest
@@ -65,7 +67,14 @@ func (p *Provider) ListModels(context.Context) ([]provider.ModelInfo, error) {
 }
 
 func (p *Provider) Capabilities(string) provider.ModelCaps {
-	return provider.ModelCaps{Source: provider.CapsStatic, Tools: true, ParallelTools: true, StableToolCallIDs: true, ContextWindow: 100_000, MaxOutput: 8_000}
+	return provider.ModelCaps{Source: provider.CapsStatic, Tools: true, ParallelTools: true, StableToolCallIDs: true, ContextWindow: 100_000, MaxOutput: 8_000, Effort: p.effort}
+}
+
+// WithEffort makes the provider's models say they take an effort, as a model with
+// effort levels does.
+func (p *Provider) WithEffort() *Provider {
+	p.effort = true
+	return p
 }
 
 // Requests returns every request received so far.

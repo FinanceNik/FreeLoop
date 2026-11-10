@@ -205,9 +205,13 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 	case ollama.Type:
 		p = ollama.New(ollama.Options{ID: cfg.ID, BaseURL: cfg.BaseURL})
 	case provider.TypeScripted:
-		if cfg.ID == TourProviderID {
+		switch cfg.ID {
+		case TourProviderID:
 			p = scripted.Tour(cfg.ID)
-		} else {
+		case DemoSmallProviderID:
+			// Its models take an effort, so a run's effort can be tried without a key.
+			p = scripted.Demo(cfg.ID).WithEffort()
+		default:
 			p = scripted.Demo(cfg.ID)
 		}
 	default:

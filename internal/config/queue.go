@@ -55,11 +55,14 @@ type Task struct {
 	// ModelOption and Model switch the session's model before its first message,
 	// through the session's own model option, as its model list does: the built-in
 	// agent's provider and model, or an external agent's own choice.
-	ModelOption string    `json:"modelOption,omitempty"`
-	Model       string    `json:"model,omitempty"`
-	RunID       string    `json:"runId,omitempty"`
-	State       string    `json:"state"`
-	AddedAt     time.Time `json:"addedAt"`
+	ModelOption string `json:"modelOption,omitempty"`
+	Model       string `json:"model,omitempty"`
+	// EffortOption and Effort switch its effort after the model (WFL-012).
+	EffortOption string    `json:"effortOption,omitempty"`
+	Effort       string    `json:"effort,omitempty"`
+	RunID        string    `json:"runId,omitempty"`
+	State        string    `json:"state"`
+	AddedAt      time.Time `json:"addedAt"`
 	// Set once it started: its session, and what holds it back or went wrong.
 	SessionID string    `json:"sessionId,omitempty"`
 	StartedAt time.Time `json:"startedAt,omitempty"`

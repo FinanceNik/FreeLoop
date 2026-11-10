@@ -57,3 +57,9 @@ export function modelLabel(choices: readonly ChoiceLike[], value: string): strin
   const group = choices.find((x) => split(x.value)[0] === provider)?.group || provider;
   return group ? `${model} (${group})` : model;
 }
+
+// keptEffort is the effort still chosen once the model's efforts are known: the same
+// level when the model offers it, else the profile's (WFL-012).
+export function keptEffort(choices: readonly { value: string }[], chosen: string): string {
+  return chosen && choices.some((c) => c.value === chosen) ? chosen : "";
+}

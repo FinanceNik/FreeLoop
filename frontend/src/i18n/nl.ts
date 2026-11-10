@@ -1713,6 +1713,8 @@ export const nl = translationOf<typeof en>()({
   "afk.dialog.modelIssues": "Model voor de issues",
   "afk.dialog.profileReviews": "Profiel voor de reviews",
   "afk.dialog.modelReviews": "Model voor de reviews",
+  "afk.dialog.effortIssues": "Inspanning voor de issues",
+  "afk.dialog.effortReviews": "Inspanning voor de reviews",
   "afk.dialog.reviewHint": "Een sterker model dan dat van de issues vindt meer. Elk afgerond issue krijgt een review, alleen lezend, voordat het op QA wacht.",
   "afk.dialog.allow": "Toestaan voor de sessies van deze run",
   "afk.dialog.allowHint": "Zonder toezicht wacht een opdracht die vraagt tot er een antwoord komt. De opdrachten die nodig zijn nu toestaan; dat geldt alleen voor de sessies van de run. Al het andere vraagt nog steeds.",
@@ -1726,6 +1728,8 @@ export const nl = translationOf<typeof en>()({
   "afk.model.profileOwnNamed": "Zoals in het profiel ({model})",
   "afk.model.other": "Ander model bij {provider}…",
   "afk.model.otherName": "Modelnaam",
+  "afk.effort.profileOwnNamed": "Zoals in het profiel ({effort})",
+  "afk.effort.none": "Dit model heeft geen inspanningsniveau.",
 
   "afk.run.title": "AFK-run van {project}",
   "afk.run.onBranch": "op {branch}",
