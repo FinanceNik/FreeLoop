@@ -2409,6 +2409,43 @@ details.choice[open] > summary h3::after {
   min-width: 0;
 }
 
+.board-lane-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+}
+
+/* A row folds away under its header: the chevron points down while it is open. */
+.board-lane-toggle {
+  padding: 2px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.board-lane-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.board-lane-toggle:disabled {
+  opacity: 0.4;
+}
+
+.board-lane-note {
+  margin: 0 0 8px;
+  font-size: calc(12rem / 14);
+}
+
+.board-filter select {
+  font-size: calc(12rem / 14);
+}
+
+.board-done-more {
+  margin: 6px 4px 0;
+  font-size: calc(12rem / 14);
+}
+
 .board-lane-archive {
   margin-left: auto;
   font-size: calc(12rem / 14);

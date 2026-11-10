@@ -44,6 +44,8 @@ When an agent working on an issue needs you, its card stays in **Working** with 
 
 In **In review**, an issue is **Agent reviewing** while the second agent reads it, and **Ready for your QA** when it is your turn: the card shows the start of the review's answer, and **QA done** moves it to **Done**. If a run stops at an issue, it goes back to **Backlog** with a red note saying why, until the next run starts.
 
+**Done** shows the last five issues of a project, the ones a run finished most recently first; **Show all** shows the rest. The arrow beside a project's name folds its row away, and it stays folded, except that a row with an issue waiting for you opens by itself. With several projects, the list in the header shows one of them or all.
+
 **Archive finished** removes done issues, and PRDs whose issues are all done, in a commit of their own, so later agents aren't misled by stale docs. Git history keeps them: `git log -- backlog/` lists them and `git show` brings one back.
 
 ## Run the AFK issues

@@ -243,6 +243,7 @@ const SAME_WORD = {
     "board.backlog",
     "board.lane.backlog",
     "board.issueCount",
+    "board.filter.label",
     "backlog.type.afk",
     "queue.project",
     "schedules.form.project",

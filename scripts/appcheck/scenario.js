@@ -1719,9 +1719,18 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   check("the Board says how many issues wait for the user", headerCount === "1 issue waiting for you", headerCount);
   check("the request is on the card, with its buttons and a way to its session", !!withText("button", "Skip", needs) && !!withText("button", "Open its session", needs), needs.textContent.slice(0, 160));
   check("the second issue does not wait", !issueCard("002")?.classList.contains("issue-needs"));
-  withText("button", "Skip", needs).click();
+  // A row collapsed while one of its issues waits for the user stays open, and says why.
+  const toggle = () => named("button", "Collapse workflow", laneEl()) ?? named("button", "Expand workflow", laneEl());
+  toggle().click();
+  await until("the note", () => laneEl()?.querySelector(".board-lane-note"), 4000);
+  check("a collapsed row with an issue waiting for the user stays open and says why", !!issueCard("001") && /waits for you/.test(laneEl().querySelector(".board-lane-note").textContent) && toggle().disabled, laneEl()?.querySelector(".board-lane-note")?.textContent);
+  withText("button", "Skip", issueCard("001")).click();
   await until("the card no longer waiting", () => !issueCard("001")?.classList.contains("issue-needs") && !document.querySelector(".board-waiting"), 30000);
   check("answering on the card takes the mark and the count away", !document.querySelector(".board-waiting"));
+  // Nothing waits now, so the row is folded as the user left it: open it again.
+  await until("the toggle usable", () => toggle() && !toggle().disabled, 8000);
+  if (named("button", "Expand workflow", laneEl())) toggle().click();
+  await until("the row open again", () => all(".board-col", laneEl()).length === 4, 4000);
   const line = await until("the run to finish", () => {
     const l = document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-line')?.textContent;
     return l && !l.includes("going on") && l;
@@ -1775,6 +1784,56 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   (await until("Needs attention", () => document.querySelector(".attention-link"), 8000)).click();
   await until("one left for QA", () => qa().length === 1, 10000);
   check("QA done on the Board takes the issue off Needs attention", qa().length === 1 && qa()[0].textContent.includes("Second slice"), qa().map((q) => q.textContent.slice(0, 60)).join(" | "));
+});
+
+// GUI-016: a row folds away under its header and stays folded, a filter picks one project,
+// and Done shows its last five with a way to all of them. The check's other project has
+// seven finished issues; the workflow's row is the other row.
+await step("the Board's rows collapse, a filter picks a project, and Done is capped", async () => {
+  const setSelect = (el, value) => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(el, value);
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  openSession("Check pile");
+  await until("the conversation", () => document.querySelector(".conversation"));
+  (await until("Trust project", () => withText("button", "Trust project", activePane()), 8000)).click();
+  await until("trusted", () => !withText("button", "Trust project", activePane()), 8000);
+  named(".footer-links button", "Board").click();
+  const rowOf = (name) => document.querySelector(`.board-lane[aria-label="Backlog of ${name}"]`);
+  await until("both rows", () => rowOf("pile") && rowOf("workflow"), 20000);
+  const doneCards = () => all(".board-col-done .backlog-card", rowOf("pile"));
+  check("Done shows five of seven finished issues, with Show all", doneCards().length === 5 && !!withText("button", "Show all 7", rowOf("pile")), `${doneCards().length} cards`);
+  withText("button", "Show all 7", rowOf("pile")).click();
+  await until("all seven", () => doneCards().length === 7, 4000);
+  check("Show all shows them all", doneCards().length === 7 && !!withText("button", "Show fewer", rowOf("pile")));
+  withText("button", "Show fewer", rowOf("pile")).click();
+  await until("five again", () => doneCards().length === 5, 4000);
+  check("and Show fewer goes back to five", doneCards().length === 5);
+
+  // A row collapses: its columns go, its header and counts stay, and it stays so.
+  named("button", "Collapse pile", rowOf("pile")).click();
+  await until("the row folded", () => all(".board-col", rowOf("pile")).length === 0, 4000);
+  check("a collapsed row keeps its header and counts", !!rowOf("pile").querySelector(".board-lane-title strong") && rowOf("pile").textContent.includes("0 open") && !!named("button", "Expand pile", rowOf("pile")), rowOf("pile").textContent.slice(0, 80));
+  check("the other row is not folded", all(".board-col", rowOf("workflow")).length === 4);
+  check("the choice is kept in the browser's storage", (() => { try { return JSON.parse(localStorage.getItem("freeloop:board-collapsed") ?? "[]").length === 1; } catch { return false; } })(), localStorage.getItem("freeloop:board-collapsed"));
+  named(".footer-links button", "Queue").click();
+  await until("the Queue", () => [...document.querySelectorAll(".page h2")].some((h) => h.textContent === "Queue"), 8000);
+  named(".footer-links button", "Board").click();
+  await until("the Board again", () => rowOf("pile"), 8000);
+  check("it is still folded when the Board is opened again", all(".board-col", rowOf("pile")).length === 0 && !!named("button", "Expand pile", rowOf("pile")));
+
+  // The filter lists the projects that have a row, and shows one or all.
+  const filter = await until("the filter", () => document.querySelector(".board-filter select"), 4000);
+  check("the filter lists all projects and each one with a row", [...filter.options].map((o) => o.textContent).join("|") === "All projects|pile|workflow", [...filter.options].map((o) => o.textContent).join("|"));
+  setSelect(filter, [...filter.options].find((o) => o.textContent === "workflow").value);
+  await until("one row", () => !rowOf("pile") && rowOf("workflow"), 4000);
+  check("the filter shows one project's row", !rowOf("pile") && !!rowOf("workflow"));
+  setSelect(filter, "");
+  await until("both rows again", () => rowOf("pile") && rowOf("workflow"), 4000);
+  check("and all of them again", !!rowOf("pile") && !!rowOf("workflow"));
+  named("button", "Expand pile", rowOf("pile")).click();
+  await until("the row open", () => all(".board-col", rowOf("pile")).length === 4, 4000);
+  check("an expanded row has its columns again", all(".board-col", rowOf("pile")).length === 4);
 });
 
 // However short the window, only the parts scroll, never the page: text for screen

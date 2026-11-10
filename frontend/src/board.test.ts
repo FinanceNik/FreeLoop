@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cardMeta, LANES, laneTitle, placeIssues, shortId, since, waitingIssues } from "./board.ts";
+import { capDone, cardMeta, LANES, laneTitle, placeIssues, readCollapsed, rowsFor, rowState, shortId, since, waitingIssues, writeCollapsed } from "./board.ts";
 import type { BacklogItem } from "./backlog.ts";
 import { setLanguage } from "./i18n.ts";
 
@@ -117,6 +117,49 @@ test("an issue a run stopped at is back in Backlog with the reason, until a newe
   assert.equal(placeIssues(items, { state: "running", steps: [{ issue: "001-a", title: "", state: "working" }] }).working[0].stopped, undefined);
   // No reason at all still says the run stopped there.
   assert.equal(placeIssues([item({ id: "001-a" })], { state: "stopped", steps: [{ issue: "001-a", title: "", state: "failed" }] }).backlog[0].stopped, "");
+});
+
+// GUI-016, decision 9: Done shows what the run finished most recently first, then the rest by
+// id, and only the last five until asked for all.
+test("Done is newest first by when the run finished each issue, then the rest by id, capped at five", () => {
+  const items = ["001-a", "002-b", "003-c", "004-d", "005-e", "006-f", "007-g", "008-h"].map((id) => item({ id, state: "done" }));
+  const at = (issue: string, endedAt: string) => ({ issue, title: "", state: "qa_done", endedAt });
+  const cols = placeIssues(items, { state: "finished", steps: [at("001-a", "2026-11-10T08:00:00Z"), at("006-f", "2026-11-10T09:00:00Z"), at("003-c", "2026-11-10T10:00:00Z")] });
+  assert.deepEqual(ids(cols.done), ["003-c", "006-f", "001-a", "002-b", "004-d", "005-e", "007-g", "008-h"]);
+  const capped = capDone(cols.done, false);
+  assert.deepEqual([ids(capped.shown), capped.hidden], [["003-c", "006-f", "001-a", "002-b", "004-d"], 3]);
+  assert.deepEqual([capDone(cols.done, true).shown.length, capDone(cols.done, true).hidden], [8, 0]);
+  assert.deepEqual([capDone(cols.done.slice(0, 5), false).shown.length, capDone(cols.done.slice(0, 5), false).hidden], [5, 0]);
+});
+
+// GUI-016, decision 3: a row collapses and stays so; a filter shows one project; a row with
+// an issue that waits for the user is shown open, whatever was chosen.
+test("a row collapses and the choice is kept", () => {
+  const store = (() => {
+    const data = new Map<string, string>();
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  })();
+  assert.deepEqual(readCollapsed(store), []);
+  writeCollapsed(store, ["prj_a", "prj_b"]);
+  assert.deepEqual(readCollapsed(store), ["prj_a", "prj_b"]);
+  // What cannot be read, or no storage at all, is no choice.
+  assert.deepEqual(readCollapsed({ getItem: () => "{not json", setItem: () => {} }), []);
+  assert.deepEqual(readCollapsed({ getItem: () => '{"a":1}', setItem: () => {} }), []);
+  assert.deepEqual(readCollapsed({ getItem: () => { throw new Error("blocked"); }, setItem: () => {} }), []);
+  assert.deepEqual(readCollapsed(undefined), []);
+  assert.doesNotThrow(() => writeCollapsed({ getItem: () => null, setItem: () => { throw new Error("full"); } }, ["x"]));
+  assert.deepEqual(rowState(false, 0), { open: true, forced: false });
+  assert.deepEqual(rowState(true, 0), { open: false, forced: false });
+  assert.deepEqual(rowState(true, 2), { open: true, forced: true });
+  assert.deepEqual(rowState(false, 2), { open: true, forced: false });
+});
+
+test("a filter shows one project's row or all of them", () => {
+  const rows = [{ projectId: "a" }, { projectId: "b" }, { projectId: "c" }];
+  assert.deepEqual(rowsFor(rows, "").map((r) => r.projectId), ["a", "b", "c"]);
+  assert.deepEqual(rowsFor(rows, "b").map((r) => r.projectId), ["b"]);
+  // A project that has no row any more (its backlog went) filters nothing out.
+  assert.deepEqual(rowsFor(rows, "gone").map((r) => r.projectId), ["a", "b", "c"]);
 });
 
 test("a card has the short id, who does it, and what it waits on or how long it has worked", () => {

@@ -21,6 +21,8 @@ export interface StepLike {
   // Its review's session, and what the run says of it (why it stopped there).
   reviewId?: string;
   note?: string;
+  // When the run finished with the issue (its review ended).
+  endedAt?: string;
 }
 
 export interface RunLike {

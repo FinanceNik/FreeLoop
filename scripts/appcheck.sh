@@ -76,6 +76,17 @@ start_app() {
 }
 start_app "$DATA/app.log"
 
+# A project with seven finished issues, for the Board's Done column, its cap and the
+# filter between projects (GUI-016); the check trusts it from its session.
+mkdir -p "$DATA/projects/pile/backlog/issues"
+git -C "$DATA/projects/pile" init -q
+for n in 1 2 3 4 5 6 7; do
+  printf -- '---\ntitle: Finished issue %s\nstatus: done\ntype: afk\nblockedBy: []\n---\n\n## What\nDone.\n' "$n" > "$DATA/projects/pile/backlog/issues/00$n-finished-$n.md"
+done
+git -C "$DATA/projects/pile" add . 
+git -C "$DATA/projects/pile" -c user.name=check -c user.email=check@example.com commit -q -m "Seven finished issues"
+"$APP" new "$DATA/projects/pile" -title "Check pile" -provider demo -model scripted -mode ask >/dev/null
+
 for name in alpha beta menu full plan workflow; do
   mkdir -p "$DATA/projects/$name"
   git -C "$DATA/projects/$name" init -q

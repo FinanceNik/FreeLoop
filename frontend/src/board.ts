@@ -45,6 +45,8 @@ export interface IssueCard {
   // Set on an issue a run stopped at, which is back in Backlog: why, as the step or the run
   // says it ("" when neither does). It goes when a newer run starts, which has no such step.
   stopped?: string;
+  // When the run finished with it, which orders Done.
+  endedAt?: string;
   // A cycle or a file the app cannot read, in words; empty when neither.
   note: string;
   // The whole title and the file, for hovering: the card cuts a long title short.
@@ -99,11 +101,66 @@ export function placeIssues(items: BacklogItem[] | null | undefined, run: RunLik
       waiting: column === "working" && step?.sessionId ? (waiting[step.sessionId] ?? 0) : 0,
       review: column === "review" ? (step?.state === "qa" ? "qa" : "reviewing") : undefined,
       stopped: column === "backlog" && step?.state === "failed" ? step.note || run?.reason || "" : undefined,
+      endedAt: step?.endedAt,
       note: it.cycle || it.problem ? relationsOf(it) : "",
       hover: it.path ? `${it.title}\n${it.path}` : it.title,
     });
   }
+  // Done: what the run finished most recently first, then the rest by id (a file carries no date).
+  out.done.sort((a, b) => {
+    if (a.endedAt && b.endedAt) return new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime() || a.id.localeCompare(b.id);
+    if (a.endedAt) return -1;
+    if (b.endedAt) return 1;
+    return a.id.localeCompare(b.id);
+  });
   return out;
+}
+
+// How many of Done's cards a row shows until asked for all of them.
+export const DONE_CAP = 5;
+
+// capDone keeps the first cards of Done, and says how many it left out.
+export function capDone<T>(cards: T[], all: boolean, cap: number = DONE_CAP): { shown: T[]; hidden: number } {
+  if (all || cards.length <= cap) return { shown: cards, hidden: 0 };
+  return { shown: cards.slice(0, cap), hidden: cards.length - cap };
+}
+
+// A row is open unless the user collapsed it, and then still open while one of its issues
+// waits for them, since what needs them is not to be hidden; `forced` says that is why.
+export function rowState(collapsed: boolean, waiting: number): { open: boolean; forced: boolean } {
+  return { open: !collapsed || waiting > 0, forced: collapsed && waiting > 0 };
+}
+
+// rowsFor is the rows a project filter leaves: one project's, or all; a filter naming a
+// project with no row any more leaves all.
+export function rowsFor<T extends { projectId: string }>(rows: T[], filter: string): T[] {
+  return filter && rows.some((r) => r.projectId === filter) ? rows.filter((r) => r.projectId === filter) : rows;
+}
+
+// The rows the user collapsed are kept in the browser's storage, by project; storage that
+// is missing, blocked or holds something else is no choice.
+const COLLAPSED_KEY = "freeloop:board-collapsed";
+
+export interface Store {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+export function readCollapsed(store: Store | undefined): string[] {
+  try {
+    const v = JSON.parse(store?.getItem(COLLAPSED_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeCollapsed(store: Store | undefined, ids: string[]): void {
+  try {
+    store?.setItem(COLLAPSED_KEY, JSON.stringify(ids));
+  } catch {
+    // Not kept this time; the choice still holds until the page closes.
+  }
 }
 
 // waitingIssues counts the cards whose agent waits for the user.

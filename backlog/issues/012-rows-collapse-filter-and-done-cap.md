@@ -1,6 +1,6 @@
 ---
 title: Rows collapse, a filter shows one project, and Done shows the last five
-status: open
+status: done
 type: afk
 blockedBy: [010-waiting-for-you-on-the-card]
 prd: workflow-board
@@ -18,3 +18,9 @@ Each project's row can be collapsed from its header and stays so; a filter at th
 
 ## Notes
 - PRD decisions 3 and 9.
+
+## Done
+- Done's order: a card with a run step, newest finish first (the step's `endedAt`, which the run sets when the review ends), then the rest by id; `capDone` keeps five and says how many it left out; a row has "Show all N" and then "Show fewer". A row's choice to show all is not kept.
+- A row collapses under its header with a chevron button (`aria-expanded`); the choice is kept in the browser's storage under `freeloop:board-collapsed`, by project, and unreadable or blocked storage is no choice. With an issue waiting for the user the row is shown open with a note and the button is disabled, and it folds again once nothing waits.
+- The filter is a list in the header, shown when there are several rows; it lists the projects with a row, and a project that has no row any more filters nothing. Its choice is not kept.
+- The check's setup now makes a project with seven finished issues (the oldest session, so the empty pane's short list of recent sessions still holds the session the panes step looks for), and trusts it from its session.

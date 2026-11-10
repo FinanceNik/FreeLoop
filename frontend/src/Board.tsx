@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { useRef } from "react";
-import { cardMeta, LANES, laneTitle, placeIssues, waitingIssues, type IssueCard } from "./board.ts";
+import { useRef, useState } from "react";
+import { capDone, cardMeta, LANES, laneTitle, placeIssues, readCollapsed, rowsFor, rowState, waitingIssues, writeCollapsed, type IssueCard } from "./board.ts";
 import { stepLabel } from "./afk.ts";
 import { counts } from "./backlog.ts";
 import type { BacklogInfo } from "./api.ts";
+import { ChevronIcon } from "./icons.tsx";
 import { t } from "./i18n.ts";
 
 // The Board is a scrum board of workflow issues (GUI-016): one row per project with a
@@ -40,11 +41,37 @@ export default function Board({
   const placed = backlogs.map((b) => placeIssues(b.issues, b.run, waiting));
   const waitingNow = placed.reduce((n, cols) => n + waitingIssues(cols), 0);
   const page = useRef<HTMLDivElement>(null);
+  // Which rows the user collapsed (kept by project), which show all of Done, and the
+  // project filter.
+  const store = typeof localStorage === "undefined" ? undefined : localStorage;
+  const [collapsed, setCollapsed] = useState<string[]>(() => readCollapsed(store));
+  const [allDone, setAllDone] = useState<string[]>([]);
+  const [filter, setFilter] = useState("");
+  const toggle = (id: string) =>
+    setCollapsed((list) => {
+      const next = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+      writeCollapsed(store, next);
+      return next;
+    });
+  const shownRows = rowsFor(backlogs.map((b, i) => ({ projectId: b.projectId, b, cols: placed[i] })), filter);
   return (
     <div className="board-page" ref={page}>
       <header className="board-header">
         <h2>{t("app.board")}</h2>
         <span className="muted">{t("board.issueCount", { count: total })}</span>
+        {backlogs.length > 1 && (
+          <label className="board-filter">
+            <span className="sr-only">{t("board.filter.label")}</span>
+            <select value={backlogs.some((b) => b.projectId === filter) ? filter : ""} onChange={(e) => setFilter(e.target.value)}>
+              <option value="">{t("board.filter.all")}</option>
+              {backlogs.map((b) => (
+                <option key={b.projectId} value={b.projectId}>
+                  {b.projectName}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {waitingNow > 0 && (
           // What matters most, first: the agents that wait for an answer, and a way to the first.
           <button className="link board-waiting" onClick={() => page.current?.querySelector(".issue-needs")?.scrollIntoView({ block: "center", behavior: "smooth" })}>
@@ -54,13 +81,24 @@ export default function Board({
       </header>
       {backlogs.length === 0 && <p className="muted board-empty">{t("board.noBacklogs")}</p>}
       <div className="board-lanes">
-        {backlogs.map((b, i) => {
-          const cols = placed[i];
+        {shownRows.map(({ b, cols }) => {
           const n = counts(b.issues);
+          const { open, forced } = rowState(collapsed.includes(b.projectId), waitingIssues(cols));
+          const done = capDone(cols.done, allDone.includes(b.projectId));
           return (
             <section key={b.projectId} className="board-lane" aria-label={t("board.backlogOf", { project: b.projectName })}>
               <header className="board-lane-head">
                 <div className="board-lane-title">
+                  <button
+                    className="icon-button board-lane-toggle"
+                    aria-expanded={open}
+                    aria-label={t(open ? "board.collapse" : "board.expand", { project: b.projectName })}
+                    title={t(open ? "board.collapse" : "board.expand", { project: b.projectName })}
+                    disabled={forced}
+                    onClick={() => toggle(b.projectId)}
+                  >
+                    <ChevronIcon />
+                  </button>
                   <strong>{b.projectName}</strong>
                   <span className="muted">
                     {" · "}
@@ -75,6 +113,8 @@ export default function Board({
                   </button>
                 )}
               </header>
+              {forced && <p className="muted board-lane-note">{t("board.openBecauseWaiting")}</p>}
+              {open && (
               <div className="board-lane-columns">
                 {LANES.map((lane) => (
                   <div key={lane} className={`board-col board-col-${lane}`} role="group" aria-label={laneTitle(lane)}>
@@ -82,15 +122,21 @@ export default function Board({
                       {laneTitle(lane)} <span className="muted">{cols[lane].length}</span>
                     </h3>
                     <ul>
-                      {cols[lane].map((card) => (
+                      {(lane === "done" ? done.shown : cols[lane]).map((card) => (
                         <li key={card.id}>
                           <Issue card={card} onOpen={onOpen} reply={b.run ? qa[`${b.run.id}:${card.id}`]?.reply : undefined} onQADone={b.run && onQADone ? () => onQADone(b.run!.id, card.id) : undefined} request={card.waiting > 0 && card.step?.sessionId ? renderRequest?.(card.step.sessionId) : null} />
                         </li>
                       ))}
                     </ul>
+                    {lane === "done" && (done.hidden > 0 || allDone.includes(b.projectId)) && cols.done.length > 5 && (
+                      <button className="link board-done-more" onClick={() => setAllDone((l) => (l.includes(b.projectId) ? l.filter((x) => x !== b.projectId) : [...l, b.projectId]))}>
+                        {done.hidden > 0 ? t("board.showAllDone", { count: cols.done.length }) : t("board.showFewerDone")}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
+              )}
             </section>
           );
         })}
