@@ -83,7 +83,10 @@ git -C "$DATA/projects/pile" init -q
 for n in 1 2 3 4 5 6 7; do
   printf -- '---\ntitle: Finished issue %s\nstatus: done\ntype: afk\nblockedBy: []\n---\n\n## What\nDone.\n' "$n" > "$DATA/projects/pile/backlog/issues/00$n-finished-$n.md"
 done
-git -C "$DATA/projects/pile" add . 
+# One carries markup that must not run, as the viewer's Markdown file does: an issue's text is
+# an agent's, so it reaches the panel through the Markdown renderer.
+printf '\n<img src=x onerror="window.pwned=1">\n' >> "$DATA/projects/pile/backlog/issues/001-finished-1.md"
+git -C "$DATA/projects/pile" add .
 git -C "$DATA/projects/pile" -c user.name=check -c user.email=check@example.com commit -q -m "Seven finished issues"
 "$APP" new "$DATA/projects/pile" -title "Check pile" -provider demo -model scripted -mode ask >/dev/null
 

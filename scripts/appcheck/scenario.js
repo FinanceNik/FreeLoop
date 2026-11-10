@@ -1748,6 +1748,24 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   // Both issues are done and reviewed, and wait for the user's QA: In review.
   await until("both issues in review", () => column(issueCard("001")) === "In review" && column(issueCard("002")) === "In review", 15000);
   check("the finished issues wait in review", column(issueCard("001")) === "In review" && column(issueCard("002")) === "In review", `${column(issueCard("001"))}, ${column(issueCard("002"))}`);
+  // Clicking a card opens a read-only panel: the issue's text, its file, what it waits on, and the
+  // sessions that did it and reviewed it, each opening that session (GUI-016).
+  issueCard("002").querySelector(".issue-title").click();
+  const panel = await until("the issue's panel", () => document.querySelector(".issue-panel"), 8000);
+  await until("the panel's text", () => panel.querySelector(".issue-panel-text")?.textContent.includes("Second slice, end to end."), 8000);
+  check("the panel has the issue's text, its file and what it waits on", panel.querySelector("h3")?.textContent === "Second slice" && panel.textContent.includes("backlog/issues/002-second-slice.md") && /Waits on: 001/.test(panel.textContent), panel.textContent.slice(0, 160));
+  check("the panel lists the session and the review, each opening its session", all(".issue-panel-sessions li", panel).length === 2 && /AFK 002/.test(panel.textContent) && /Review: 002/.test(panel.textContent) && all(".issue-panel-sessions button", panel).length === 2, all(".issue-panel-sessions li", panel).map((l) => l.textContent).join(" | "));
+  check("the panel changes nothing: its only buttons close it and open sessions", all("button", panel).every((b) => b.getAttribute("aria-label") === "Close" || b.closest(".issue-panel-sessions")), all("button", panel).map((b) => b.textContent || b.getAttribute("aria-label")).join(" | "));
+  check("the keyboard reaches the panel first", document.activeElement === panel.querySelector('button[aria-label="Close"]'), document.activeElement?.outerHTML.slice(0, 80));
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await until("the panel closed by Escape", () => !document.querySelector(".issue-panel"), 4000);
+  check("Escape closes the panel", !document.querySelector(".issue-panel"));
+  issueCard("001").querySelector(".issue-title").click();
+  await until("the panel again", () => document.querySelector(".issue-panel h3")?.textContent === "First slice", 8000);
+  document.querySelector('.issue-panel button[aria-label="Close"]').click();
+  await until("the panel closed by its button", () => !document.querySelector(".issue-panel"), 4000);
+  check("the close button closes it", !document.querySelector(".issue-panel"));
   // Nothing in a card is wider than the card, and in a narrow window the row scrolls
   // sideways instead of squeezing its columns.
   const wide = cards().filter((c) => c.scrollWidth > c.clientWidth + 1 || all("*", c).some((e) => e.getBoundingClientRect().right > c.getBoundingClientRect().right + 1));
@@ -1815,6 +1833,15 @@ await step("the Board's rows collapse, a filter picks a project, and Done is cap
   withText("button", "Show fewer", rowOf("pile")).click();
   await until("five again", () => doneCards().length === 5, 4000);
   check("and Show fewer goes back to five", doneCards().length === 5);
+
+  // An issue no run touched: its text, no session yet, and markup in it stays text.
+  withText(".issue-title", "Finished issue 1", rowOf("pile")).click();
+  const bare = await until("the finished issue's panel", () => document.querySelector(".issue-panel-text")?.textContent.includes("Done.") && document.querySelector(".issue-panel"), 8000);
+  check("an issue no run touched says no session worked on it", bare.textContent.includes("No session has worked on it yet."), bare.textContent.slice(0, 120));
+  await sleep(300);
+  check("markup in an issue's text is shown as text and never runs", !window.pwned && !bare.querySelector("img") && bare.querySelector(".issue-panel-text").textContent.includes("<img"), bare.querySelector(".issue-panel-text").innerHTML.slice(0, 160));
+  bare.querySelector('button[aria-label="Close"]').click();
+  await until("closed", () => !document.querySelector(".issue-panel"), 4000);
 
   // A row collapses: its columns go, its header and counts stay, and it stays so.
   named("button", "Collapse pile", rowOf("pile")).click();

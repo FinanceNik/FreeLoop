@@ -557,7 +557,7 @@ GUI-016 reworded: the Board becomes a scrum board of workflow issues, designed i
 3. **011, review and QA, and stopped issues.** *Built 2026-11-10.* In review's two states with the review's answer and QA done on the card (`review` and `stopped` in `placeIssues`); a stopped issue is back in Backlog with a red mark until a newer run starts.
 4. **012, rows collapse, a filter, the Done cap.** *Built 2026-11-10.* `capDone`, `rowState`, `rowsFor` and the stored choice in `frontend/src/board.ts`; Done is ordered by when the run finished each issue; a row with an issue waiting for the user stays open. The check seeds a second project with seven finished issues.
 5. **013, untrusted rows and the empty board's actions.** *Built 2026-11-10.* `BacklogInfo.Trusted`; an untrusted project with a backlog folder gets an empty row (the folder's existence is the only thing looked at), trusted from the row as from its session; the empty Board offers Start a workflow… and the help.
-6. **014, the read-only detail panel.**
+6. **014, the read-only detail panel.** *Built 2026-11-10.* `Engine.IssueDetail` (the issue by its id in a trusted project's backlog, its sessions from the runs, newest first) and `IssuePanel.tsx`.
 7. **015, a look in the running app (the user).**
 
 Not in: dragging, a Sessions view on the Board, filters beyond a project, parallel runs, changes to Needs attention.

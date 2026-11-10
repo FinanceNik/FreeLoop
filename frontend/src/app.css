@@ -2352,12 +2352,80 @@ details.choice[open] > summary h3::after {
 /* Board view (GUI-016). */
 .board-page {
   display: flex;
-  flex-direction: column;
   min-height: 0;
   height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* The Board itself scrolls; an open issue panel stands beside it. */
+.board-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: 18px 20px;
   box-sizing: border-box;
+}
+
+.issue-panel {
+  flex: none;
+  width: min(28rem, 45%);
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+}
+
+.issue-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.issue-panel-head h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.issue-panel-file code {
+  overflow-wrap: anywhere;
+}
+
+.issue-panel-text {
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+
+.issue-panel-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-panel-sessions li {
+  overflow-wrap: anywhere;
+}
+
+button.issue-title {
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+button.issue-title:hover {
+  text-decoration: underline;
 }
 
 .board-header {

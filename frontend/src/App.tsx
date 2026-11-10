@@ -1853,6 +1853,7 @@ export default function App() {
                 })
                 .catch(report)
             }
+            onError={report}
             onTrust={trustBacklog}
             onStartWorkflow={() => setScreen({ kind: "new", workflow: config?.defaults.workflow || "plan-slice-afk" })}
             onHelp={() => setScreen({ kind: "help", topic: "workflows" })}

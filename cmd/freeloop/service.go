@@ -579,6 +579,12 @@ func (s *EngineService) Backlogs(ctx context.Context) ([]engine.BacklogInfo, err
 	return s.eng.Backlogs(ctx)
 }
 
+// IssueDetail reads one issue of a trusted project's backlog, with the sessions that worked
+// on it, for the Board's panel (GUI-016).
+func (s *EngineService) IssueDetail(ctx context.Context, root, workflowID, issueID string) (engine.IssueDetail, error) {
+	return s.eng.IssueDetail(ctx, root, workflowID, issueID)
+}
+
 func (s *EngineService) Backlog(ctx context.Context, root, workflowID string) (engine.BacklogInfo, error) {
 	return s.eng.Backlog(ctx, root, workflowID)
 }

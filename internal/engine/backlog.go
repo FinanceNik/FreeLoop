@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/backlog"
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -317,4 +318,103 @@ func (e *Engine) backlogSummary(ctx context.Context, ses session.Session, w conf
 		return "(" + err.Error() + ")"
 	}
 	return cmp.Or(backlog.Summary(info.Issues), "(no issues yet)")
+}
+
+// IssueSession is a session that worked on an issue, or reviewed it, in one of the project's
+// AFK runs.
+type IssueSession struct {
+	SessionID string `json:"sessionId"`
+	Title     string `json:"title"`
+	// Kind is issue (the session that did the work) or review.
+	Kind string `json:"kind"`
+	// State is the run's step for it (working, reviewing, qa, qa_done or failed).
+	State     string    `json:"state"`
+	RunID     string    `json:"runId"`
+	StartedAt time.Time `json:"startedAt"`
+}
+
+// IssueDetail is one issue as the Board's panel shows it (GUI-016): read-only.
+type IssueDetail struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Path  string `json:"path"`
+	// Text is the file's body, Markdown, after its frontmatter.
+	Text    string   `json:"text"`
+	Status  string   `json:"status"`
+	Type    string   `json:"type"`
+	PRD     string   `json:"prd"`
+	WaitsOn []string `json:"waitsOn"`
+	Blocks  []string `json:"blocks"`
+	// Sessions are those of the project's runs for it, the newest first.
+	Sessions []IssueSession `json:"sessions"`
+}
+
+// IssueDetail reads one issue of a trusted project's backlog, found by its id among the
+// issues the backlog lists, so a path from the page reads nothing, and with the sessions
+// the project's runs used for it.
+func (e *Engine) IssueDetail(ctx context.Context, root, workflowID, issueID string) (IssueDetail, error) {
+	project, err := e.store.ProjectByRoot(ctx, environment.Canonical(root))
+	if err != nil {
+		return IssueDetail{}, err
+	}
+	w, err := e.backlogWorkflow(project, workflowID)
+	if err != nil {
+		return IssueDetail{}, err
+	}
+	info, err := e.projectBacklog(ctx, project, project.Root, w)
+	if err != nil {
+		return IssueDetail{}, err
+	}
+	i := slices.IndexFunc(info.Issues, func(it backlog.Item) bool { return it.ID == issueID })
+	if i < 0 || issueID == "" {
+		return IssueDetail{}, errors.New("no such issue in the backlog")
+	}
+	it := info.Issues[i]
+	env, err := e.localEnv(project.Root, nil)
+	if err != nil {
+		return IssueDetail{}, err
+	}
+	b, err := env.FS().ReadFile(it.Path)
+	if err != nil {
+		return IssueDetail{}, err
+	}
+	d := IssueDetail{ID: it.ID, Title: it.Title, Path: it.Path, Text: strings.TrimSpace(backlog.Body(b)), Status: it.Status, Type: it.Type, PRD: it.PRD, WaitsOn: it.WaitsOn, Blocks: it.Blocks, Sessions: []IssueSession{}}
+	runs, err := e.runs()
+	if err != nil {
+		return d, nil
+	}
+	type found struct {
+		at       time.Time
+		sessions []IssueSession
+	}
+	var all []found
+	for _, r := range runs.Runs {
+		if r.ProjectID != project.ID {
+			continue
+		}
+		for _, s := range r.Steps {
+			if s.Issue != issueID {
+				continue
+			}
+			f := found{at: s.StartedAt}
+			add := func(sid, kind string) {
+				if sid == "" {
+					return
+				}
+				title := sid
+				if ses, err := e.store.GetSession(ctx, sid); err == nil {
+					title = ses.Title
+				}
+				f.sessions = append(f.sessions, IssueSession{SessionID: sid, Title: title, Kind: kind, State: s.State, RunID: r.ID, StartedAt: s.StartedAt})
+			}
+			add(s.SessionID, "issue")
+			add(s.ReviewID, "review")
+			all = append(all, f)
+		}
+	}
+	slices.SortStableFunc(all, func(a, b found) int { return b.at.Compare(a.at) })
+	for _, f := range all {
+		d.Sessions = append(d.Sessions, f.sessions...)
+	}
+	return d, nil
 }

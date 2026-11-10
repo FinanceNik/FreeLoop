@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
-import { capDone, cardMeta, LANES, laneTitle, placeIssues, readCollapsed, rowsFor, rowState, waitingIssues, writeCollapsed, type IssueCard } from "./board.ts";
+import { capDone, cardMeta, LANES, type Lane, laneTitle, placeIssues, readCollapsed, rowsFor, rowState, waitingIssues, writeCollapsed, type IssueCard } from "./board.ts";
 import { stepLabel } from "./afk.ts";
 import { counts } from "./backlog.ts";
 import type { BacklogInfo } from "./api.ts";
 import { ChevronIcon } from "./icons.tsx";
+import IssuePanel from "./IssuePanel.tsx";
 import { t } from "./i18n.ts";
 
 // The Board is a scrum board of workflow issues (GUI-016): one row per project with a
@@ -21,6 +22,7 @@ export default function Board({
   onTrust,
   onStartWorkflow,
   onHelp,
+  onError = () => {},
   onOpen,
   onArchive,
   backlogActions,
@@ -40,6 +42,7 @@ export default function Board({
   // With no backlog anywhere: start a session with a workflow, or read how they work.
   onStartWorkflow?: () => void;
   onHelp?: () => void;
+  onError?: (err: unknown) => void;
   onOpen: (sessionId: string) => void;
   onArchive?: (b: BacklogInfo) => void;
   // Controls for a project's row, such as its AFK run (WFL-005).
@@ -49,6 +52,17 @@ export default function Board({
   const placed = backlogs.map((b) => placeIssues(b.issues, b.run, waiting));
   const waitingNow = placed.reduce((n, cols) => n + waitingIssues(cols), 0);
   const page = useRef<HTMLDivElement>(null);
+  // The issue whose panel is open, and what had the focus before, to give it back.
+  const [detail, setDetail] = useState<{ root: string; workflowId: string; id: string; column: Lane } | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const openDetail = (b: BacklogInfo, card: IssueCard) => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setDetail({ root: b.projectRoot, workflowId: b.workflowId, id: card.id, column: card.column });
+  };
+  const closeDetail = () => {
+    setDetail(null);
+    requestAnimationFrame(() => opener.current?.focus());
+  };
   // Which rows the user collapsed (kept by project), which show all of Done, and the
   // project filter.
   const store = typeof localStorage === "undefined" ? undefined : localStorage;
@@ -64,6 +78,7 @@ export default function Board({
   const shownRows = rowsFor(backlogs.map((b, i) => ({ projectId: b.projectId, b, cols: placed[i] })), filter);
   return (
     <div className="board-page" ref={page}>
+      <div className="board-main">
       <header className="board-header">
         <h2>{t("app.board")}</h2>
         <span className="muted">{t("board.issueCount", { count: total })}</span>
@@ -167,7 +182,7 @@ export default function Board({
                     <ul>
                       {(lane === "done" ? done.shown : cols[lane]).map((card) => (
                         <li key={card.id}>
-                          <Issue card={card} onOpen={onOpen} reply={b.run ? qa[`${b.run.id}:${card.id}`]?.reply : undefined} onQADone={b.run && onQADone ? () => onQADone(b.run!.id, card.id) : undefined} request={card.waiting > 0 && card.step?.sessionId ? renderRequest?.(card.step.sessionId) : null} />
+                          <Issue card={card} onDetail={() => openDetail(b, card)} onOpen={onOpen} reply={b.run ? qa[`${b.run.id}:${card.id}`]?.reply : undefined} onQADone={b.run && onQADone ? () => onQADone(b.run!.id, card.id) : undefined} request={card.waiting > 0 && card.step?.sessionId ? renderRequest?.(card.step.sessionId) : null} />
                         </li>
                       ))}
                     </ul>
@@ -184,6 +199,8 @@ export default function Board({
           );
         })}
       </div>
+      </div>
+      {detail && <IssuePanel root={detail.root} workflowId={detail.workflowId} issueId={detail.id} column={detail.column} onClose={closeDetail} onOpen={onOpen} onError={onError} />}
     </div>
   );
 }
@@ -191,13 +208,15 @@ export default function Board({
 // Issue is one card: the title in at most two lines, one line saying which issue it is,
 // who does it and what it waits on or how long it has worked, then a mark or an action
 // only where one applies. The whole title and the file are in the hover text.
-function Issue({ card, onOpen, request, reply, onQADone }: { card: IssueCard; onOpen: (sessionId: string) => void; request?: ReactNode; reply?: string; onQADone?: () => void }) {
+function Issue({ card, onDetail, onOpen, request, reply, onQADone }: { card: IssueCard; onDetail: () => void; onOpen: (sessionId: string) => void; request?: ReactNode; reply?: string; onQADone?: () => void }) {
   const [id, type, ...more] = cardMeta(card);
   const step = card.step;
   const waiting = !!step?.waiting && step.state === "working";
   return (
-    <div className={`board-card issue-card backlog-card issue-${card.column} backlog-${card.state}${card.waiting > 0 ? " issue-needs" : ""}${card.review ? ` issue-review-${card.review}` : ""}`} role="group" aria-label={`${id}: ${card.title}`} title={card.hover}>
-      <span className="issue-title">{card.title}</span>
+    <div className={`board-card issue-card backlog-card issue-${card.column} backlog-${card.state}${card.waiting > 0 ? " issue-needs" : ""}${card.review ? ` issue-review-${card.review}` : ""}`} role="group" aria-label={`${id}: ${card.title}`} title={card.hover} onClick={(e) => !(e.target as HTMLElement).closest("button, a, input, select, textarea, form, summary") && onDetail()}>
+      <button className="issue-title" onClick={onDetail} aria-haspopup="dialog">
+        {card.title}
+      </button>
       <span className="issue-meta">
         <span className="issue-id">{id}</span>
         <span className={`tag backlog-type-${card.type}`}>{type}</span>
