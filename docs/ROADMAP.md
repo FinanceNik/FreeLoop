@@ -562,6 +562,22 @@ GUI-016 reworded: the Board becomes a scrum board of workflow issues, designed i
 
 Not in: dragging, a Sessions view on the Board, filters beyond a project, parallel runs, changes to Needs attention.
 
+## Model sets for workflows (planned 2026-11-10, at the user's request)
+
+WFL-011 to WFL-015: plan on a big model and hand the AFK issues to a small one, set up once as a model set, and see what each issue and run cost. Designed in one conversation and written up as `backlog/prds/model-sets.md`, sliced into `backlog/issues/016` to `024`:
+
+1. **016, every callable provider's models in the AFK dialog** (WFL-011), with a second demo provider, "Demo small".
+2. **017, effort for a run** (WFL-012).
+3. **018, model sets in Settings** (WFL-013).
+4. **019, the planning stages switch to the set's model** (WFL-014).
+5. **020, a workflow session starts on the Planning model** (WFL-014).
+6. **021, the AFK dialog starts from the set; the Board shows the run's models** (WFL-014).
+7. **022, cost per issue and run on the Board** (WFL-015).
+8. **023, a run's costs in its pull request and on the Usage page** (WFL-015).
+9. **024, a try with real providers (the user).**
+
+Not in: a model per issue, a model per planning stage, model hints in workflow files, sets outside workflows, cost estimates, cost per commit for ordinary sessions.
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.
