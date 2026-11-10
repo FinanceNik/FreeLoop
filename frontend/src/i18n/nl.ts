@@ -630,7 +630,7 @@ export const nl = translationOf<typeof en>()({
 
   "trust.hook": "Hook-opdracht, {event}: {command}",
   "trust.hookMatching": "Hook-opdracht, {event} ({match}): {command}",
-  "trust.claudeHooks": "Hook-opdrachten van Claude Code in {path}: {hooks}",
+  "trust.agentHooks": "Hooks die een agent uit {path} uitvoert: {hooks}",
   "trust.agentAllows": "{path} zegt tegen zijn agent niet te vragen. Het beleid van Freeloop beslist nog steeds.",
   "trust.banner": "Niet-vertrouwd project: alleen algemene instellingen.",
   "trust.banner.tip": "Zonder de AGENTS.md, de instellingen in .freeloop/ en de Git-status van het project.",

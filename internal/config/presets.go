@@ -58,6 +58,11 @@ type HarnessPreset struct {
 	// for the policy page and the check (SEC-018). Plain words; a note with a mode
 	// applies in that mode only.
 	DecidesItself []AgentNote `yaml:"decidesItself,omitempty" json:"decidesItself"`
+	// RepoHooks are where in a project the agent finds hooks it runs by itself, with
+	// no permission request reaching the broker: folders whose JSON files are hooks,
+	// and JSON settings files with a "hooks" key. In a project the user has not
+	// trusted, the agent does not start while one holds any (SEC-006).
+	RepoHooks []string `yaml:"repoHooks,omitempty" json:"repoHooks"`
 	// Builtin is set for presets that ship with the app.
 	Builtin bool `yaml:"-" json:"builtin"`
 }
@@ -177,6 +182,27 @@ func BuiltinPresets() []HarnessPreset {
 		Env:     map[string]string{"OPENCODE_PERMISSION": `{"*":"ask"}`},
 		Notes:   "Needs Node.js. Add a provider once by running opencode auth login in a terminal, or add its API key as a secret of the session's environment. Without one it uses OpenCode's own hosted free models, so your prompts and code go there.",
 		Builtin: true,
+	}, {
+		// GitHub's own agent, which GitHub offers over ACP for other apps to start;
+		// it signs in by itself (HRN-008).
+		ID:          "copilot",
+		Name:        "Copilot CLI",
+		Description: "GitHub's agent, with your Copilot plan.",
+		Command:     "npx",
+		Args:        []string{"-y", "@github/copilot@1.0.109", "--acp"},
+		// Its autopilot mode turns on its own allow-all, so no app mode maps to it.
+		Modes: askingModes("https://agentclientprotocol.com/protocol/session-modes#agent", "https://agentclientprotocol.com/protocol/session-modes#plan"),
+		// A COPILOT_ALLOW_ALL in the user's shell would approve every tool call.
+		Env:   map[string]string{"COPILOT_ALLOW_ALL": "false"},
+		Notes: "Needs Node.js and a Copilot plan, your own or one an organization gives you. Sign in once by running npx @github/copilot login in a terminal; Freeloop never sees or stores the login. Each message uses the plan's premium requests as it would in a terminal, and an organization's Copilot policy must allow Copilot CLI.",
+		DecidesItself: []AgentNote{
+			{Text: "Copilot CLI runs commands it recognizes as read-only without asking, and what you once allowed for a folder in its terminal (\"don't ask again\") it allows here too."},
+			{Text: "A trusted project's hooks for Copilot CLI run without asking and can approve its tool calls. In a project you have not trusted, Copilot CLI does not start while it has any."},
+		},
+		// Its ACP mode trusts the folder it is started in, and runs these hooks even
+		// there; it has no setting the app could pass to stop them.
+		RepoHooks: []string{".github/hooks", ".github/copilot/settings.json", ".github/copilot/settings.local.json", ".claude/settings.json", ".claude/settings.local.json"},
+		Builtin:   true,
 	}}
 }
 

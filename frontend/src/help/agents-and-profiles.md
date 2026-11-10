@@ -7,7 +7,7 @@ Choose which agent a session runs, sign in to it and save the setup as a profile
 | Agent | What it is |
 | --- | --- |
 | Built-in | Freeloop's own. It runs on a provider you add and uses Freeloop's tools: reading and editing files, running commands and searching. |
-| External | A separate program Freeloop starts, such as Claude Code, Codex CLI, Gemini CLI, OpenCode or goose. It brings its own model access, so it doesn't use your providers. |
+| External | A separate program Freeloop starts, such as Claude Code, Codex CLI, Copilot CLI, Gemini CLI, OpenCode or goose. It brings its own model access, so it doesn't use your providers. |
 
 Freeloop never passes an external agent your providers' keys or a vendor login. If an agent can't start, the new-session form says why.
 
@@ -23,6 +23,7 @@ A subscription agent such as Claude Code signs in through its own program, in a 
 | --- | --- |
 | Claude Code | Run `claude` once and sign in. |
 | Codex CLI | Run `codex login`, or add `CODEX_API_KEY` or `OPENAI_API_KEY` as a secret of the session's environment. |
+| Copilot CLI | A Copilot plan, your own or one an organization gives you. Run `npx @github/copilot login` once. Each message uses the plan's premium requests, and the organization's Copilot policy must allow Copilot CLI. In a project you haven't trusted, it doesn't start while the project has hooks for it (`.github/hooks`, or hooks in `.github/copilot/settings.json` or `.claude/settings.json`), since it would run them without asking. |
 | OpenCode | Run `opencode auth login`, or add its API key as a secret of the environment. Without either it uses OpenCode's hosted free models, so your prompts and code go there. |
 | goose | Install it, then run `goose configure`. |
 | Gemini CLI | Add an API key as `GEMINI_API_KEY` in the environment's secrets. Don't use a Google login with it. |

@@ -21,6 +21,7 @@ npm_agent claude @agentclientprotocol/claude-agent-acp
 npm_agent gemini @google/gemini-cli
 npm_agent codex @agentclientprotocol/codex-acp
 npm_agent opencode opencode-ai
+npm_agent copilot @github/copilot
 if [ ! -x "$dir/goose/goose" ] || ! "$dir/goose/goose" --version | grep -q "$goose_version"; then
 	mkdir -p "$dir/goose"
 	curl -fsSL -o "$dir/goose/goose.tar.bz2" "https://github.com/block/goose/releases/download/v$goose_version/goose-$(uname -m | sed s/arm64/aarch64/)-apple-darwin.tar.bz2"

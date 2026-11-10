@@ -2,7 +2,7 @@
 
 **Run any coding agent. Keep your rules and your bill.**
 
-Freeloop is an open-source macOS app that runs Claude Code, Codex, Gemini CLI, OpenCode, Goose or its own agent, with your own models, under one permission policy and one cost view. Apache-2.0.
+Freeloop is an open-source macOS app that runs Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Goose or its own agent, with your own models, under one permission policy and one cost view. Apache-2.0.
 
 - **Your rules sit above every agent.** A repository's config can tell an agent to stop asking. In Freeloop it still asks you: a `.claude/settings.json` allowing `Bash(*)` gets a `git push` past Claude Code's own check and not past Freeloop's. An agent that switches itself to a looser mode stays where you put it. Every session shows what your policy stopped. Try it with `scripts/policy-demo.sh`.
 - **One honest bill across agents.** Tokens and estimated cost by agent, model and project, your account's limits, and a summary to share as a table or a picture. Vendors show only their own.

@@ -119,6 +119,11 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 	if !mode.Valid() {
 		mode = permission.ModeAsk
 	}
+	if p.Trusted == nil || !p.Trusted() {
+		if found := repoHooks(p.Env.FS(), h.Preset.RepoHooks); len(found) > 0 {
+			return nil, fmt.Errorf("%s would run this project's hooks by itself, without asking: %s. Trust the project to let them run, or remove them", h.Preset.Name, strings.Join(found, ", "))
+		}
+	}
 	s := &session{p: p, preset: h.Preset, env: p.Env, mode: mode, terms: map[string]*terminal{}}
 	ctx, cancel := context.WithTimeout(ctx, StartTimeout)
 	defer cancel()
@@ -152,6 +157,35 @@ func (h Harness) NewSession(ctx context.Context, p harness.Params) (harness.Sess
 	s.reportOptions(ns.ConfigOptions)
 	s.restoreOptions(ctx)
 	return s, nil
+}
+
+// repoHooks lists the project's files from which an agent would run hooks by itself
+// (HarnessPreset.RepoHooks): each JSON file in a folder named there, and each
+// settings file named there whose "hooks" key holds any.
+func repoHooks(fsys environment.FileSystem, places []string) []string {
+	var out []string
+	for _, place := range places {
+		if entries, err := fsys.ReadDir(place); err == nil {
+			for _, e := range entries {
+				if !e.IsDir && strings.HasSuffix(e.Name, ".json") {
+					out = append(out, place+"/"+e.Name)
+				}
+			}
+			continue
+		}
+		b, err := fsys.ReadFile(place)
+		if err != nil {
+			continue
+		}
+		var settings struct {
+			Hooks json.RawMessage `json:"hooks"`
+		}
+		// A file it cannot read may still be one the agent reads.
+		if json.Unmarshal(b, &settings) != nil || !slices.Contains([]string{"", "null", "{}", "[]"}, strings.Join(strings.Fields(string(settings.Hooks)), "")) {
+			out = append(out, place)
+		}
+	}
+	return out
 }
 
 // start spawns the agent and initializes it.

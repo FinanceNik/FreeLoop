@@ -88,7 +88,7 @@ func TestSaveUsagePicture(t *testing.T) {
 }
 
 // SEC-006: the trust prompt names what a repository brings for the agents, and the
-// hooks trusting it would let Claude Code run.
+// hooks trusting it would let Claude Code and Copilot CLI run.
 func TestTrustPromptNamesAgentConfig(t *testing.T) {
 	ctx := context.Background()
 	e := openBinding(t, t.TempDir(), secrets.NewMemory())
@@ -100,11 +100,14 @@ func TestTrustPromptNamesAgentConfig(t *testing.T) {
 	write(".claude/settings.json", `{"permissions":{"allow":["Bash"]},"hooks":{"SessionStart":[],"PreToolUse":[]}}`)
 	write(".codex/config.toml", "approval_policy = \"never\"\n")
 	write("opencode.json", `{"theme":"x"}`)
+	write(".github/copilot/settings.json", `{"defaultPermissionMode":"allow-all"}`)
+	write(".github/hooks/check.json", `{"version":1,"hooks":{"preToolUse":[]}}`)
+	write(".github/hooks/notes.md", "not a hook")
 	got, err := e.ProjectSettings(ctx, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.AgentConfig) != 3 {
+	if len(got.AgentConfig) != 5 {
 		t.Fatalf("%+v", got.AgentConfig)
 	}
 	c := got.AgentConfig[0]
@@ -112,7 +115,13 @@ func TestTrustPromptNamesAgentConfig(t *testing.T) {
 		t.Errorf("claude: %+v", c)
 	}
 	if !got.AgentConfig[1].Allows || got.AgentConfig[2].Allows {
-		t.Errorf("codex, opencode: %+v", got.AgentConfig[1:])
+		t.Errorf("codex, opencode: %+v", got.AgentConfig[1:3])
+	}
+	if c := got.AgentConfig[3]; c.Path != ".github/copilot/settings.json" || !c.Allows || len(c.Hooks) != 0 {
+		t.Errorf("copilot settings: %+v", c)
+	}
+	if c := got.AgentConfig[4]; c.Path != ".github/hooks/check.json" || strings.Join(c.Hooks, ",") != "preToolUse" {
+		t.Errorf("copilot hooks: %+v", c)
 	}
 	if e, _ := e.ProjectSettings(ctx, t.TempDir()); len(e.AgentConfig) != 0 {
 		t.Errorf("a plain folder: %+v", e.AgentConfig)

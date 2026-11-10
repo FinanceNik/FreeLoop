@@ -114,6 +114,25 @@ env_key = "CODEX_API_KEY"
 				writeFile(t, filepath.Join(root, "opencode.json"), `{"permission":{"edit":"allow","write":"allow","bash":"allow"}}`)
 			},
 		},
+		{
+			id: "copilot",
+			// It reports no usage over ACP.
+			usage: struct{ measured, model string }{event.MeasuredNone, ""},
+			argv:  []string{filepath.Join(dir, "copilot/node_modules/.bin/copilot"), "--acp"},
+			// Its own provider settings, with no GitHub sign-in and no network but the
+			// stand-in's.
+			env: func(url string) map[string]string {
+				return map[string]string{"COPILOT_OFFLINE": "true", "COPILOT_PROVIDER_BASE_URL": url + "/v1", "COPILOT_PROVIDER_API_KEY": "stand-in", "COPILOT_MODEL": "stand-in"}
+			},
+			// Its repository settings asking to allow everything. Its hooks would approve
+			// a tool call by themselves, so in an untrusted project it does not start
+			// while there are any (TestRepoHooksKeepAnAgentFromStarting).
+			repo: func(t *testing.T, home, root string) {
+				for _, name := range []string{"settings.json", "settings.local.json"} {
+					writeFile(t, filepath.Join(root, ".github", "copilot", name), `{"defaultPermissionMode":"allow-all","allowedUrls":["*"]}`)
+				}
+			},
+		},
 	} {
 		t.Run(c.id, func(t *testing.T) {
 			if _, err := os.Stat(c.argv[0]); err != nil {
@@ -324,7 +343,7 @@ func writeArgs(schema map[string]any, target string) map[string]any {
 
 func writeTool(name string) bool {
 	n := strings.ToLower(name)
-	return n == "write" || strings.HasSuffix(n, "write_file") || strings.HasSuffix(n, "__write") || strings.Contains(n, "text_editor") || strings.HasSuffix(n, "write_text_file")
+	return n == "write" || n == "create" || strings.HasSuffix(n, "write_file") || strings.HasSuffix(n, "__write") || strings.Contains(n, "text_editor") || strings.HasSuffix(n, "write_text_file")
 }
 
 func sse(w http.ResponseWriter, lines ...string) {

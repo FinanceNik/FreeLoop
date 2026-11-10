@@ -673,7 +673,7 @@ export const en = {
   // are from the project's files, as given.
   "trust.hook": "Hook, {event}: {command}",
   "trust.hookMatching": "Hook, {event} ({match}): {command}",
-  "trust.claudeHooks": "Claude Code hooks in {path}: {hooks}",
+  "trust.agentHooks": "Hooks an agent runs from {path}: {hooks}",
   "trust.agentAllows": "{path} tells its agent not to ask. Freeloop's policy still decides.",
   "trust.banner": "Untrusted project: global settings only.",
   "trust.banner.tip": "Without the project's AGENTS.md, .freeloop/ settings or git status.",

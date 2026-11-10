@@ -28,7 +28,7 @@ test("trusting names every hook it would let run, and agent settings that try to
   });
   assert.deepEqual(lines, [
     "Hook, session_start: make setup",
-    "Claude Code hooks in .claude/settings.json: SessionStart",
+    "Hooks an agent runs from .claude/settings.json: SessionStart",
     ".claude/settings.json tells its agent not to ask. Freeloop's policy still decides.",
     ".codex/config.toml tells its agent not to ask. Freeloop's policy still decides.",
   ]);
@@ -45,7 +45,7 @@ test("what trusting lets run is said in the language set", () => {
   });
   assert.deepEqual(lines, [
     "Hook-Befehl, pre_tool_use (bash): ./check.sh",
-    "Hook-Befehle von Claude Code in .claude/settings.json: SessionStart, Stop",
+    "Hooks, die ein Agent aus .claude/settings.json ausführt: SessionStart, Stop",
     ".claude/settings.json weist seinen Agenten an, nicht zu fragen. Die Richtlinie von Freeloop entscheidet trotzdem.",
   ]);
   setLanguage("en");

@@ -170,8 +170,8 @@ func (e *Engine) ProjectSettings(ctx context.Context, root string) (ProjectSetti
 // it for the user deciding whether to trust the project.
 type AgentConfigFile struct {
 	Path string `json:"path"`
-	// Hooks are the events whose commands Claude Code runs, once trusted, without
-	// asking anyone.
+	// Hooks are the events whose commands an agent such as Claude Code or Copilot CLI
+	// runs, once trusted, without asking anyone.
 	Hooks []string `json:"hooks,omitempty"`
 	// Allows says the file lets the agent run commands without asking it. The app's
 	// policy still decides; this says the repository tried.
@@ -179,7 +179,11 @@ type AgentConfigFile struct {
 }
 
 // agentConfigFiles are the files agents read from a project.
-var agentConfigFiles = []string{".claude/settings.json", ".claude/settings.local.json", ".mcp.json", ".codex/config.toml", ".gemini/settings.json", "opencode.json"}
+var agentConfigFiles = []string{".claude/settings.json", ".claude/settings.local.json", ".mcp.json", ".codex/config.toml", ".gemini/settings.json", "opencode.json",
+	".github/copilot/settings.json", ".github/copilot/settings.local.json"}
+
+// agentHookDirs are folders whose JSON files are hooks an agent runs: Copilot CLI's.
+var agentHookDirs = []string{".github/hooks"}
 
 // agentConfig reads what a repository brings for the agents. Reading shows it; only
 // trust lets an agent use it.
@@ -189,22 +193,35 @@ func (e *Engine) agentConfig(root string) []AgentConfigFile {
 	if err != nil {
 		return out
 	}
-	for _, name := range agentConfigFiles {
+	names := slices.Clone(agentConfigFiles)
+	for _, dir := range agentHookDirs {
+		entries, _ := env.FS().ReadDir(dir)
+		for _, de := range entries {
+			if !de.IsDir && strings.HasSuffix(de.Name, ".json") {
+				names = append(names, dir+"/"+de.Name)
+			}
+		}
+	}
+	for _, name := range names {
 		b, err := env.FS().ReadFile(name)
 		if err != nil {
 			continue
 		}
 		f := AgentConfigFile{Path: name}
-		var claude struct {
+		// Claude Code's settings and Copilot CLI's settings and hook files keep their
+		// hooks under the same key.
+		var settings struct {
 			Hooks       map[string]json.RawMessage `json:"hooks"`
 			Permissions struct {
 				Allow       []string `json:"allow"`
 				DefaultMode string   `json:"defaultMode"`
 			} `json:"permissions"`
 		}
-		if strings.HasPrefix(name, ".claude/") && json.Unmarshal(b, &claude) == nil {
-			f.Hooks = slices.Sorted(maps.Keys(claude.Hooks))
-			f.Allows = len(claude.Permissions.Allow) > 0 || claude.Permissions.DefaultMode == "bypassPermissions" || claude.Permissions.DefaultMode == "acceptEdits"
+		if strings.HasSuffix(name, ".json") && json.Unmarshal(b, &settings) == nil {
+			f.Hooks = slices.Sorted(maps.Keys(settings.Hooks))
+		}
+		if strings.HasPrefix(name, ".claude/") {
+			f.Allows = len(settings.Permissions.Allow) > 0 || settings.Permissions.DefaultMode == "bypassPermissions" || settings.Permissions.DefaultMode == "acceptEdits"
 		}
 		text := string(b)
 		switch name {
@@ -214,6 +231,8 @@ func (e *Engine) agentConfig(root string) []AgentConfigFile {
 			f.Allows = strings.Contains(text, "yolo") || strings.Contains(text, `"autoAccept": true`) || strings.Contains(text, `"autoAccept":true`)
 		case "opencode.json":
 			f.Allows = strings.Contains(text, `"allow"`)
+		case ".github/copilot/settings.json", ".github/copilot/settings.local.json":
+			f.Allows = strings.Contains(text, "allow-all")
 		}
 		out = append(out, f)
 	}

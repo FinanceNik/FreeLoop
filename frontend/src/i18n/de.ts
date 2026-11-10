@@ -631,7 +631,7 @@ export const de = translationOf<typeof en>()({
 
   "trust.hook": "Hook-Befehl, {event}: {command}",
   "trust.hookMatching": "Hook-Befehl, {event} ({match}): {command}",
-  "trust.claudeHooks": "Hook-Befehle von Claude Code in {path}: {hooks}",
+  "trust.agentHooks": "Hooks, die ein Agent aus {path} ausführt: {hooks}",
   "trust.agentAllows": "{path} weist seinen Agenten an, nicht zu fragen. Die Richtlinie von Freeloop entscheidet trotzdem.",
   "trust.banner": "Nicht vertrauenswürdiges Projekt: nur globale Einstellungen.",
   "trust.banner.tip": "Ohne AGENTS.md, die Einstellungen in .freeloop/ und den Git-Status des Projekts.",

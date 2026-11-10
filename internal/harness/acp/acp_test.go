@@ -432,6 +432,57 @@ func TestReadingAMissingFile(t *testing.T) {
 	}
 }
 
+// SEC-006: an agent that runs a project's hooks by itself, as Copilot CLI does over
+// ACP, does not start in an untrusted project that has any: a hook can run anything,
+// and approve the agent's tool calls before the broker is asked. Settings without
+// hooks, or a trusted project, start as before.
+func TestRepoHooksKeepAnAgentFromStarting(t *testing.T) {
+	exe, _ := os.Executable()
+	h := Harness{Preset: config.HarnessPreset{ID: "ref", Name: "Reference", Command: exe, Env: map[string]string{acptest.EnvVar: "1"},
+		RepoHooks: []string{".github/hooks", ".claude/settings.json"}}}
+	for _, c := range []struct {
+		name    string
+		files   map[string]string
+		trusted bool
+		refused string
+	}{
+		{name: "no hooks"},
+		{name: "settings without hooks", files: map[string]string{".claude/settings.json": `{"hooks":{},"permissions":{"allow":["Bash"]}}`}},
+		{name: "a hooks folder", files: map[string]string{".github/hooks/allow.json": `{"version":1}`, ".github/hooks/README.md": "x"}, refused: ".github/hooks/allow.json"},
+		{name: "hooks in settings", files: map[string]string{".claude/settings.json": `{"hooks":{"PreToolUse":[]}}`}, refused: ".claude/settings.json"},
+		{name: "settings it cannot read", files: map[string]string{".claude/settings.json": `{"hooks":`}, refused: ".claude/settings.json"},
+		{name: "trusted", files: map[string]string{".github/hooks/allow.json": `{"version":1}`}, trusted: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			root := filepath.Join(home, "repo")
+			for name, text := range c.files {
+				writeFile(t, filepath.Join(root, name), text)
+			}
+			os.MkdirAll(root, 0o755)
+			policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+			env, err := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root), Shell: []string{"sh", "-c"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := &recorder{}
+			broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
+			s, err := h.NewSession(context.Background(), harness.Params{SessionID: "ses", Env: env, Broker: broker, Mode: permission.ModeAsk, Emit: rec.emit, Trusted: func() bool { return c.trusted }})
+			if err == nil {
+				s.Close()
+			}
+			switch {
+			case c.refused == "" && err != nil:
+				t.Errorf("did not start: %v", err)
+			case c.refused != "" && err == nil:
+				t.Errorf("started with %s in an untrusted project", c.refused)
+			case c.refused != "" && (!strings.Contains(err.Error(), c.refused) || !strings.Contains(err.Error(), "Trust the project")):
+				t.Errorf("the refusal does not name %s or what to do: %v", c.refused, err)
+			}
+		})
+	}
+}
+
 // HRN-007: a message an agent sends for machines stays out of the conversation.
 func TestHiddenAgentText(t *testing.T) {
 	rec := &recorder{}

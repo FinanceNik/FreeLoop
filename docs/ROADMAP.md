@@ -578,6 +578,16 @@ WFL-011 to WFL-015: plan on a big model and hand the AFK issues to a small one, 
 
 Not in: a model per issue, a model per planning stage, model hints in workflow files, sets outside workflows, cost estimates, cost per commit for ordinary sessions.
 
+## Copilot CLI (planned 2026-11-10, at the user's request)
+
+The user has a Copilot plan from a client and wants to use it in Freeloop.
+
+1. **A Copilot CLI preset (HRN-007, SEC-006).** *Built 2026-11-10. `make verify-agents` runs `@github/copilot` 1.0.109 in its ACP mode on the stand-in, through its own provider settings and offline: it asks through the broker, writes when allowed, not when denied or in plan mode, and repository settings asking for allow-all change nothing. Signing in with a real Copilot plan is the user's check.*
+   - **Its own sign-in.** Freeloop starts the unmodified CLI, which GitHub documents for other apps to start over ACP, and never sees its login (HRN-008). Calling Copilot's internal model API from the built-in agent was ruled out: it needs the Copilot token.
+   - **Modes.** Every mode but plan maps to its Agent mode, which asks; plan to its Plan mode. Its Autopilot turns on its own allow-all, so nothing maps to it, and its "Allow All" session option is never offered, as no agent's permission option is. `COPILOT_ALLOW_ALL=false` keeps a shell setting from approving everything.
+   - **Repository hooks.** The run found that over ACP it trusts the folder it is started in and runs `.github/hooks/*.json` there: a `preToolUse` hook approved a write that was never asked about. It has no setting to stop that, so in an untrusted project the session does not start while the project has hooks for it (`HarnessPreset.RepoHooks`), and the trust prompt lists them.
+   - **Not shown:** usage, since it reports none over ACP; effort, which it takes only when started.
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.

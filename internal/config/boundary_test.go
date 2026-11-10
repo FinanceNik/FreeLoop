@@ -12,7 +12,7 @@ import (
 func TestPresetsCarryNoCredentials(t *testing.T) {
 	secretish := regexp.MustCompile(`(?i)(token|secret|password|cookie|oauth|session|bearer|sk-|ghp_|api[_-]?key)`)
 	// What a preset may set: switches, not secrets. Each is checked by name.
-	allowed := map[string]bool{"NO_BROWSER": true, "DEFAULT_AUTH_REQUEST": true, "OPENCODE_PERMISSION": true}
+	allowed := map[string]bool{"NO_BROWSER": true, "DEFAULT_AUTH_REQUEST": true, "OPENCODE_PERMISSION": true, "COPILOT_ALLOW_ALL": true}
 	for _, p := range BuiltinPresets() {
 		for _, a := range append([]string{p.Command}, p.Args...) {
 			if secretish.MatchString(a) {
@@ -22,6 +22,9 @@ func TestPresetsCarryNoCredentials(t *testing.T) {
 		for k, v := range p.Env {
 			if !allowed[k] {
 				t.Errorf("%s sets %s; a preset sets only known switches", p.ID, k)
+			}
+			if k == "COPILOT_ALLOW_ALL" && v != "false" {
+				t.Errorf("%s lets the agent approve by itself: %s=%s", p.ID, k, v)
 			}
 			if k == "DEFAULT_AUTH_REQUEST" && !strings.Contains(v, `"api-key"`) {
 				t.Errorf("%s asks for sign-in %s", p.ID, v)
