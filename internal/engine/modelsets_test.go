@@ -12,6 +12,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/harness/acp/acptest"
+	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
 // WFL-013: model sets are saved with an ID from their name, a row whose provider is
@@ -313,32 +314,7 @@ func TestAFKRunStartsFromTheSet(t *testing.T) {
 // its commit; unpriced usage is said, never counted as nothing.
 func TestRunCost(t *testing.T) {
 	ctx := context.Background()
-	e, root := afkEngine(t)
-	twoProviders(t, e)
-	c := e.Config()
-	c.Prices = append(c.Prices, config.Price{ProviderID: "small", Model: "tiny", Input: 1000, Output: 1000}, config.Price{ProviderID: "small", Model: "scripted", Input: 1000, Output: 1000})
-	if _, err := e.SaveSettings(c); err != nil {
-		t.Fatal(err)
-	}
-	ch, cancel := e.Subscribe()
-	defer cancel()
-	planning, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "big", ProviderID: "small", Model: "tiny"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := e.Prompt(ctx, planning.ID, "plan it"); err != nil {
-		t.Fatal(err)
-	}
-	waitIdle(t, ch, planning.ID)
-	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "big", ReviewProfileID: "big", Allow: []string{"git add *", "git commit *"},
-		Model: "small" + modelSeparator + "scripted", FromSession: planning.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	run = waitRun(t, e, run.ID)
-	if run.State != config.RunFinished {
-		t.Fatalf("run = %+v", run)
-	}
+	e, root, run, planning, ch := pricedRun(t)
 	before, err := e.RunCost(ctx, run.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -375,5 +351,77 @@ func TestRunCost(t *testing.T) {
 	detail, err := e.IssueDetail(ctx, root, "", run.Steps[0].Issue)
 	if err != nil || detail.Cost == nil || detail.Cost.Cost != rc.PerIssue[0].Cost {
 		t.Errorf("the issue's panel: %+v, %v", detail.Cost, err)
+	}
+}
+
+// pricedRun is a finished run on "small", whose models have prices, and reviewed on
+// "big", whose model has none, started from a planning session on small.
+func pricedRun(t *testing.T) (*Engine, string, config.AFKRun, session.Session, <-chan event.Event) {
+	t.Helper()
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	twoProviders(t, e)
+	c := e.Config()
+	c.Prices = append(c.Prices, config.Price{ProviderID: "small", Model: "tiny", Input: 1000, Output: 1000}, config.Price{ProviderID: "small", Model: "scripted", Input: 1000, Output: 1000})
+	if _, err := e.SaveSettings(c); err != nil {
+		t.Fatal(err)
+	}
+	ch, cancel := e.Subscribe()
+	t.Cleanup(cancel)
+	planning, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "big", ProviderID: "small", Model: "tiny"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Prompt(ctx, planning.ID, "plan it"); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, ch, planning.ID)
+	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "big", ReviewProfileID: "big", Allow: []string{"git add *", "git commit *"},
+		Model: "small" + modelSeparator + "scripted", FromSession: planning.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run = waitRun(t, e, run.ID)
+	if run.State != config.RunFinished {
+		t.Fatalf("run = %+v", run)
+	}
+	return e, root, run, planning, ch
+}
+
+// WFL-015: the usage report and its export say which run, issue and commit a row is
+// of, and a pull request drafted from a run's branch carries the run's cost line.
+func TestRunCostInUsageAndPullRequest(t *testing.T) {
+	ctx := context.Background()
+	e, _, run, planning, _ := pricedRun(t)
+	rep, err := e.UsageReport(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var issueRow, other bool
+	for _, r := range rep.Rows {
+		switch r.SessionID {
+		case run.Steps[0].SessionID:
+			issueRow = r.Run == run.ID && r.Issue == run.Steps[0].Issue && r.Commit == run.Steps[0].Commit && r.RunLabel != ""
+		case planning.ID:
+			other = r.Run == "" && r.Issue == ""
+		}
+	}
+	if !issueRow || !other {
+		t.Errorf("rows: %+v", rep.Rows)
+	}
+	path := filepath.Join(t.TempDir(), "usage.csv")
+	if err := e.ExportUsage(ctx, 1, path); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	header, rest, _ := strings.Cut(string(b), "\n")
+	if !strings.HasSuffix(header, ",run,issue,commit") || !strings.Contains(rest, run.ID+","+run.Steps[0].Issue+","+run.Steps[0].Commit) {
+		t.Errorf("export: %s", b)
+	}
+	if line := e.pullRequestCost(ctx, run.Steps[0].SessionID); !strings.HasPrefix(line, "Cost of this AFK run, estimated by Freeloop: ") || !strings.Contains(line, "Issues $") || !strings.Contains(line, "total $") {
+		t.Errorf("a run's session: %q", line)
+	}
+	if line := e.pullRequestCost(ctx, planning.ID); line != "" {
+		t.Errorf("a session of no run: %q", line)
 	}
 }

@@ -208,7 +208,12 @@ func (e *Engine) SuggestPullRequest(ctx context.Context, sid string) (PullReques
 	}
 	title, body, _ := strings.Cut(text, "\n")
 	title = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(title), "#"))
-	return PullRequestText{Title: title, Body: strings.TrimSpace(body)}, nil
+	body = strings.TrimSpace(body)
+	// A run's branch says what the run cost; the user can take the line out (WFL-015).
+	if line := e.pullRequestCost(ctx, sid); line != "" {
+		body = strings.TrimSpace(body + "\n\n" + line)
+	}
+	return PullRequestText{Title: title, Body: body}, nil
 }
 
 // CreatePullRequest pushes the session's branch to its remote and opens a

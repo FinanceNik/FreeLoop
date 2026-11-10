@@ -92,6 +92,12 @@ type UsageRow struct {
 	// tokens, less what they did.
 	SavedByCache float64 `json:"savedByCache"`
 	Priced       bool    `json:"priced"`
+	// Run, Issue and Commit say which AFK run, issue and commit the row's session
+	// worked on, and RunLabel names the run (WFL-015); empty outside runs.
+	Run      string `json:"run"`
+	RunLabel string `json:"runLabel"`
+	Issue    string `json:"issue"`
+	Commit   string `json:"commit"`
 }
 
 // UsageReport is the usage the analytics view works from (PRV-008): one row
@@ -118,9 +124,13 @@ func (e *Engine) UsageReport(ctx context.Context, days int) (UsageReport, error)
 		return UsageReport{}, err
 	}
 	prices := config.EffectivePrices(e.Config())
+	ofRun := e.runSessions(ctx)
 	rep.Rows = make([]UsageRow, 0, len(rows))
 	for _, u := range rows {
 		r := UsageRow{UsageRow: u}
+		if w, ok := ofRun[u.SessionID]; ok {
+			r.Run, r.RunLabel, r.Issue, r.Commit = w.run, w.label, w.issue, w.commit
+		}
 		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
 			r.Cost, r.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheWrite1hTokens), true
 			r.CostInput = p.Cost(u.InputTokens, 0, 0, 0, 0)
@@ -172,7 +182,7 @@ func (e *Engine) ExportUsage(ctx context.Context, days int, path string) error {
 	}
 	var b bytes.Buffer
 	w := csv.NewWriter(&b)
-	w.Write([]string{"day", "session", "title", "project", "agent", "provider", "model", "input", "output", "cache_read", "cache_write", "calls", "cost_usd"})
+	w.Write([]string{"day", "session", "title", "project", "agent", "provider", "model", "input", "output", "cache_read", "cache_write", "calls", "cost_usd", "run", "issue", "commit"})
 	n := func(v int64) string { return strconv.FormatInt(v, 10) }
 	for _, r := range rep.Rows {
 		cost := ""
@@ -180,7 +190,7 @@ func (e *Engine) ExportUsage(ctx context.Context, days int, path string) error {
 			cost = strconv.FormatFloat(r.Cost, 'f', 6, 64)
 		}
 		w.Write([]string{r.Day, r.SessionID, cell(r.Title), cell(r.ProjectRoot), r.HarnessID, cell(r.ProviderID), cell(r.Model),
-			n(r.InputTokens), n(r.OutputTokens), n(r.CacheReadTokens), n(r.CacheWriteTokens), n(r.Calls), cost})
+			n(r.InputTokens), n(r.OutputTokens), n(r.CacheReadTokens), n(r.CacheWriteTokens), n(r.Calls), cost, r.Run, cell(r.Issue), r.Commit})
 	}
 	w.Flush()
 	env, err := e.localEnv(filepath.Dir(path), nil)

@@ -1,6 +1,6 @@
 ---
 title: A run's costs in its pull request and on the Usage page
-status: open
+status: done
 type: afk
 blockedBy: [022-cost-per-issue-and-run]
 prd: model-sets
@@ -17,3 +17,8 @@ A pull request Freeloop drafts from a run's branch gets the run's breakdown as o
 
 ## Notes
 - Requirement WFL-015; PRD decision 10.
+
+## Done
+- `SuggestPullRequest` ends the drafted body with the run's line ("Cost of this AFK run, estimated by Freeloop: …") when the session is one of a run's issue or review sessions (`pullRequestCost` in `internal/engine/runcost.go`); the user sees it in the form and can delete it.
+- `UsageReport` rows carry `run`, `runLabel` (project · start), `issue` and `commit` for a run's issue and review sessions, and the CSV export adds `run`, `issue`, `commit` after `cost_usd`. The planning session's rows are not marked: they are per day and can hold work from before or after the run.
+- The Usage page groups "By workflow run" (`runKey` in `frontend/src/analytics.ts`); a run's row reads only, since a run is no filter of the other tabs.

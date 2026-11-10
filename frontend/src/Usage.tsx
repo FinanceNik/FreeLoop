@@ -6,7 +6,7 @@ import { heldStats, type ActivityRow as FoldedRow, type EffRow } from "./activit
 import { heldNote, reportingNotes } from "./reporting.ts";
 import Budgets from "./Budgets.tsx";
 import { EngineService, type ActivityReport, type HarnessInfo, type ProjectInfo, type ProviderInfo, type UsageReport, type UsageRow } from "./api.ts";
-import { byType, change, compact, daily, dailyByType, days, groupBy, OTHER, TOKEN_TYPES, topKeys, totals, value, weekStart, weeks, withoutCacheReads, type Metric } from "./analytics.ts";
+import { byType, change, compact, daily, dailyByType, days, groupBy, OTHER, TOKEN_TYPES, topKeys, totals, value, weekStart, weeks, withoutCacheReads, type Metric, runKey } from "./analytics.ts";
 import { formatCost } from "./cost.ts";
 import LiveUsage from "./LiveUsage.tsx";
 import UsageChart, { type Series } from "./UsageChart.tsx";
@@ -46,6 +46,7 @@ const GROUPS = [
   { id: "model", label: "usage.model", by: "usagePage.by.model", chart: "usagePage.chartLabel.model" },
   { id: "agent", label: "usagePage.group.agent", by: "usagePage.by.agent", chart: "usagePage.chartLabel.agent" },
   { id: "project", label: "sidebar.groupBy.project", by: "usagePage.by.project", chart: "usagePage.chartLabel.project" },
+  { id: "run", label: "usagePage.group.run", by: "usagePage.by.run", chart: "usagePage.chartLabel.run" },
 ] as const satisfies readonly { id: string; label: PlainKey; by: PlainKey; chart: Key }[];
 type GroupID = (typeof GROUPS)[number]["id"];
 const groupOf = (id: GroupID) => GROUPS.find((g) => g.id === id)!;
@@ -142,6 +143,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
     model: (r) => r.model || t("recentUsage.modelNotReported", { name: agent(r) }),
     agent,
     project,
+    run: (r) => runKey(r, t("usagePage.noRun")),
   };
 
   // A row with no tokens holds only turns an agent reported nothing for (PRV-008):
@@ -478,9 +480,14 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                         <tr key={g.key}>
                           <td>
                             {!byKind && <span className="usage-swatch" style={{ background: colorOf(top.includes(g.key) ? g.key : OTHER) }} />}
-                            <button className="link usage-pick" title={t("usagePage.showOnly")} onClick={() => setFilters({ ...filters, [byKind ? "model" : group]: g.key })}>
-                              {g.key}
-                            </button>
+                            {/* A run is no filter of the other tabs, so its row only reads. */}
+                            {group === "run" ? (
+                              <span>{g.key}</span>
+                            ) : (
+                              <button className="link usage-pick" title={t("usagePage.showOnly")} onClick={() => setFilters({ ...filters, [byKind ? "model" : group]: g.key })}>
+                                {g.key}
+                              </button>
+                            )}
                           </td>
                           <td className="usage-share-col">
                             <span className="usage-share">

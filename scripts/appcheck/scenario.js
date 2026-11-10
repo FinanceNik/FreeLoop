@@ -1819,6 +1819,16 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   // WFL-015: what it cost, by part and model; the demo's models have no price, which it says.
   const costLine = await until("the run's cost", () => document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-cost')?.textContent, 8000).catch(() => "");
   check("the run says what its issues and reviews cost, unpriced as such", /Issues unpriced on small/.test(costLine) && /Reviews unpriced on /.test(costLine) && /total unpriced$/.test(costLine) && !costLine.includes("$0"), costLine);
+  // And the Usage page groups by workflow run.
+  named(".footer-links button", "Usage").click();
+  (await until("the tokens tab", () => document.querySelector("#usage-tab-tokens"), 8000)).click();
+  const groupSel = await until("the grouping", () => all(".usage-filters label").find((l) => l.textContent.includes("Group by"))?.querySelector("select"), 8000);
+  check("the Usage page offers By workflow run", [...groupSel.options].some((o) => o.value === "run" && o.textContent === "Workflow run"), [...groupSel.options].map((o) => o.textContent).join(", "));
+  setSelect(groupSel, "run");
+  const runRow = await until("the run's row", () => all(".usage-page table tbody tr td:first-child").find((td) => /^workflow · \d{4}-\d\d-\d\d \d\d:\d\d$/.test(td.textContent.trim())), 8000).catch(() => null);
+  check("the demo run has its row", !!runRow, all(".usage-page table tbody tr td:first-child").map((td) => td.textContent).join(" | "));
+  named(".footer-links button", "Board").click();
+  await until("the Board again", laneEl, 8000);
   const afkRow = all(".session-row").find((r) => /AFK 001/.test(r.textContent));
   check("the issue's session ran on Demo small", /^Provider: Demo small/.test(afkRow?.querySelector(".source-mark")?.getAttribute("aria-label") ?? ""), afkRow?.querySelector(".source-mark")?.getAttribute("aria-label"));
   afkRow.click();

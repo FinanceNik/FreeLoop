@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { language, setLanguage } from "./i18n.ts";
-import { change, compact, daily, days, groupBy, niceTicks, OTHER, topKeys, totals, weekStart, weeks, byType, dailyByType, perCall, withoutCacheReads, type Row } from "./analytics.ts";
+import { change, compact, daily, days, groupBy, niceTicks, OTHER, runKey, topKeys, totals, weekStart, weeks, byType, dailyByType, perCall, withoutCacheReads, type Row } from "./analytics.ts";
 
 const row = (p: Partial<Row>): Row => ({
   day: "2026-10-30",
@@ -45,6 +45,23 @@ test("groups, the largest first by the metric", () => {
   const byCost = groupBy(rows, (r) => r.sessionId, "cost");
   assert.equal(byCost[0].key, "s1");
   assert.equal(byCost[0].cost, 1.5);
+});
+
+// WFL-015: by workflow run, the rows of no run together.
+test("rows group by their AFK run", () => {
+  const ofRuns = [
+    { ...row({ sessionId: "a", inputTokens: 10 }), runLabel: "freeloop · 2026-11-10 14:05" },
+    { ...row({ sessionId: "b", inputTokens: 20 }), runLabel: "freeloop · 2026-11-10 14:05" },
+    { ...row({ sessionId: "c", inputTokens: 5 }), runLabel: "" },
+  ];
+  const groups = groupBy(ofRuns, (r) => runKey(r, "Not in a run"), "tokens");
+  assert.deepEqual(
+    groups.map((g) => [g.key, g.input, g.sessions]),
+    [
+      ["freeloop · 2026-11-10 14:05", 30, 2],
+      ["Not in a run", 5, 1],
+    ],
+  );
 });
 
 test("top keys keep room for Other", () => {

@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -145,4 +148,83 @@ func (e *Engine) sessionCost(ctx context.Context, prices []config.Price, before 
 		part.Models = append(part.Models, m)
 	}
 	return part
+}
+
+// runWork is the run, issue and commit a session worked on.
+type runWork struct{ run, label, issue, commit string }
+
+// runSessions maps the sessions of AFK runs, their issues' and reviews', to what they
+// worked on.
+func (e *Engine) runSessions(ctx context.Context) map[string]runWork {
+	out := map[string]runWork{}
+	all, err := e.runs()
+	if err != nil {
+		return out
+	}
+	names := map[string]string{}
+	if projects, err := e.store.ListProjects(ctx); err == nil {
+		for _, p := range projects {
+			names[p.ID] = p.Name
+		}
+	}
+	for _, r := range all.Runs {
+		label := fmt.Sprintf("%s · %s", cmp.Or(names[r.ProjectID], filepath.Base(r.ProjectRoot)), r.StartedAt.Local().Format("2006-01-02 15:04"))
+		for _, s := range r.Steps {
+			for _, sid := range []string{s.SessionID, s.ReviewID} {
+				if sid != "" {
+					out[sid] = runWork{run: r.ID, label: label, issue: s.Issue, commit: s.Commit}
+				}
+			}
+		}
+	}
+	return out
+}
+
+// pullRequestCost is the line a pull request drafted from a run's branch carries:
+// what the run cost, by part and model. Empty for a session of no run.
+func (e *Engine) pullRequestCost(ctx context.Context, sid string) string {
+	w, ok := e.runSessions(ctx)[sid]
+	if !ok {
+		return ""
+	}
+	rc, err := e.RunCost(ctx, w.run)
+	if err != nil {
+		return ""
+	}
+	var parts []string
+	for _, p := range []struct {
+		name string
+		part CostPart
+	}{{"Planning", rc.Planning}, {"Issues", rc.Issues}, {"Reviews", rc.Reviews}} {
+		if len(p.part.Models) == 0 {
+			continue
+		}
+		var models []string
+		for _, m := range p.part.Models {
+			if !slices.Contains(models, m.Model) {
+				models = append(models, m.Model)
+			}
+		}
+		parts = append(parts, fmt.Sprintf("%s %s on %s", p.name, costWords(p.part.Cost, p.part.Unpriced), strings.Join(models, ", ")))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	parts = append(parts, "total "+costWords(rc.Total, rc.Unpriced))
+	return "Cost of this AFK run, estimated by Freeloop: " + strings.Join(parts, " · ") + "."
+}
+
+// costWords writes an amount in US dollars, saying when part of it has no price.
+func costWords(cost float64, unpriced bool) string {
+	if unpriced && cost == 0 {
+		return "unpriced"
+	}
+	out := fmt.Sprintf("$%.2f", cost)
+	if cost > 0 && cost < 0.01 {
+		out = "<$0.01"
+	}
+	if unpriced {
+		out += " + unpriced"
+	}
+	return out
 }

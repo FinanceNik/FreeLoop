@@ -94,6 +94,12 @@ export function groupBy<R extends Row>(rows: R[], key: (r: R) => string, metric:
     .sort((a, b) => value(b, metric) - value(a, metric) || tokensOf(b) - tokensOf(a) || a.key.localeCompare(b.key));
 }
 
+// runKey is the AFK run a row's session worked on, by its label (WFL-015), or none's
+// name for the rest.
+export function runKey(r: { runLabel?: string }, none: string): string {
+  return r.runLabel || none;
+}
+
 // The key of the series the rest fold into: a name no group has; its label is the language's.
 export const OTHER = "\u0000other";
 
