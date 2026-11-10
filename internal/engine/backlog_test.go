@@ -44,8 +44,21 @@ func TestBacklogNeedsTrust(t *testing.T) {
 	if _, err := e.AddProject(ctx, root); err != nil {
 		t.Fatal(err)
 	}
-	if list, _ := e.Backlogs(ctx); len(list) != 0 {
-		t.Errorf("an untrusted project's backlog was read: %+v", list)
+	// An untrusted project with a backlog folder gets a row to trust it by, and nothing in the
+	// folder is read for it: the folder is only looked for (SEC-006).
+	list, _ := e.Backlogs(ctx)
+	if len(list) != 1 || list[0].Trusted || len(list[0].Issues) != 0 || len(list[0].PRDs) != 0 || list[0].Finished != 0 || list[0].Folder != "backlog" || list[0].ProjectRoot == "" || list[0].ProjectName == "" {
+		t.Errorf("an untrusted project's row: %+v", list)
+	}
+	// A project without a backlog folder has no row, trusted or not.
+	other := gitRepo(t)
+	e.AddProject(ctx, other)
+	if list, _ := e.Backlogs(ctx); len(list) != 1 {
+		t.Errorf("a project with no backlog got a row: %+v", list)
+	}
+	e.SetProjectTrust(ctx, other, true)
+	if list, _ := e.Backlogs(ctx); len(list) != 1 {
+		t.Errorf("a trusted project with no backlog got a row: %+v", list)
 	}
 	if _, err := e.Backlog(ctx, root, ""); err == nil {
 		t.Error("an untrusted project's backlog was read")
@@ -58,6 +71,9 @@ func TestBacklogNeedsTrust(t *testing.T) {
 		t.Fatalf("backlogs = %+v, %v", list, err)
 	}
 	b := list[0]
+	if !b.Trusted {
+		t.Error("a trusted project's row says it is not trusted")
+	}
 	if b.WorkflowID != config.BuiltinWorkflowID || b.Folder != "backlog" || len(b.Issues) != 2 || len(b.PRDs) != 1 || b.Uncommitted {
 		t.Fatalf("backlog = %+v", b)
 	}

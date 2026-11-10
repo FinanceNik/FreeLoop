@@ -556,7 +556,7 @@ GUI-016 reworded: the Board becomes a scrum board of workflow issues, designed i
 2. **010, waiting for you on the card.** *Built 2026-11-10.* An issue whose session waits for an answer is marked "Waiting for you" and the request is answered on its card (`waiting` in `placeIssues`, `RequestView` on the card); the header counts them and scrolls to the first. The demo's first sliced issue asks a question, so `make check-app` has a real waiting card.
 3. **011, review and QA, and stopped issues.** *Built 2026-11-10.* In review's two states with the review's answer and QA done on the card (`review` and `stopped` in `placeIssues`); a stopped issue is back in Backlog with a red mark until a newer run starts.
 4. **012, rows collapse, a filter, the Done cap.** *Built 2026-11-10.* `capDone`, `rowState`, `rowsFor` and the stored choice in `frontend/src/board.ts`; Done is ordered by when the run finished each issue; a row with an issue waiting for the user stays open. The check seeds a second project with seven finished issues.
-5. **013, untrusted rows and the empty board's actions.**
+5. **013, untrusted rows and the empty board's actions.** *Built 2026-11-10.* `BacklogInfo.Trusted`; an untrusted project with a backlog folder gets an empty row (the folder's existence is the only thing looked at), trusted from the row as from its session; the empty Board offers Start a workflow… and the help.
 6. **014, the read-only detail panel.**
 7. **015, a look in the running app (the user).**
 

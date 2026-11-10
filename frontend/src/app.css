@@ -2432,6 +2432,18 @@ details.choice[open] > summary h3::after {
   opacity: 0.4;
 }
 
+.board-lane-untrusted .board-lane-head {
+  margin: 0;
+}
+
+.board-empty-board {
+  max-width: 44rem;
+}
+
+.board-empty-board p {
+  margin: 0 0 8px;
+}
+
 .board-lane-note {
   margin: 0 0 8px;
   font-size: calc(12rem / 14);

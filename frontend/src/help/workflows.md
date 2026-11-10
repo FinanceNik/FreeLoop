@@ -38,7 +38,7 @@ blockedBy: [001-store-a-draft]
 ---
 ```
 
-The **Board** shows a row for each trusted project that has a backlog, with a card for each issue in four columns: **Backlog**, **Working**, **In review** and **Done**. A card shows its title, its number, whether an agent (AFK) or a person does it, and in Backlog what it waits on. An issue the app can't read counts as one for a person. The Board only shows where each issue stands, from its file and the run; you don't move cards. Ordinary sessions are not on it: they are in the sidebar.
+The **Board** shows a row for each trusted project that has a backlog, with a card for each issue in four columns: **Backlog**, **Working**, **In review** and **Done**. A card shows its title, its number, whether an agent (AFK) or a person does it, and in Backlog what it waits on. An issue the app can't read counts as one for a person. A project that has a backlog folder but that you have not trusted shows a row with a **Trust project** button; nothing in its folder is read until you trust it. With no backlog anywhere, the Board says so and offers **Start a workflow…**. The Board only shows where each issue stands, from its file and the run; you don't move cards. Ordinary sessions are not on it: they are in the sidebar.
 
 When an agent working on an issue needs you, its card stays in **Working** with a strong **Waiting for you** mark, and the request, an approval or a question, is on the card: answer it there, or choose **Open its session**. The Board's header counts such issues, and clicking it takes you to the first.
 

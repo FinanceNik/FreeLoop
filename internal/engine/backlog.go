@@ -31,14 +31,17 @@ const (
 
 // BacklogInfo is a project's backlog as the Board shows it.
 type BacklogInfo struct {
-	ProjectID    string         `json:"projectId"`
-	ProjectRoot  string         `json:"projectRoot"`
-	ProjectName  string         `json:"projectName"`
-	WorkflowID   string         `json:"workflowId"`
-	WorkflowName string         `json:"workflowName"`
-	Folder       string         `json:"folder"`
-	Issues       []backlog.Item `json:"issues"`
-	PRDs         []backlog.PRD  `json:"prds"`
+	ProjectID    string `json:"projectId"`
+	ProjectRoot  string `json:"projectRoot"`
+	ProjectName  string `json:"projectName"`
+	WorkflowID   string `json:"workflowId"`
+	WorkflowName string `json:"workflowName"`
+	// Trusted says the project is trusted, so its backlog was read. An untrusted project
+	// with a backlog folder has a row with nothing in it, for the user to trust it by.
+	Trusted bool           `json:"trusted"`
+	Folder  string         `json:"folder"`
+	Issues  []backlog.Item `json:"issues"`
+	PRDs    []backlog.PRD  `json:"prds"`
 	// Finished counts the files "Archive finished" would move.
 	Finished int `json:"finished"`
 	// Uncommitted says the backlog has changes git has not committed, which a run,
@@ -96,6 +99,7 @@ func (e *Engine) projectBacklog(ctx context.Context, project session.Project, ro
 	if !project.Trusted {
 		return info, errors.New("the backlog is read only in a trusted project")
 	}
+	info.Trusted = true
 	env, err := e.localEnv(root, nil)
 	if err != nil {
 		return info, err
@@ -175,11 +179,17 @@ func (e *Engine) Backlogs(ctx context.Context) ([]BacklogInfo, error) {
 	}
 	out := []BacklogInfo{}
 	for _, p := range projects {
-		if !p.Trusted || !environment.IsDir(p.Root) {
+		if !environment.IsDir(p.Root) {
 			continue
 		}
 		w, err := e.backlogWorkflow(p, "")
 		if err != nil || !environment.IsDir(filepath.Join(p.Root, filepath.FromSlash(w.BacklogDir()))) {
+			continue
+		}
+		if !p.Trusted {
+			// Only that the folder is there, which is not reading it: nothing in an
+			// untrusted project is (SEC-006). The row lets the user trust the project.
+			out = append(out, BacklogInfo{ProjectID: p.ID, ProjectRoot: p.Root, ProjectName: p.Name, WorkflowID: w.ID, WorkflowName: w.Name, Folder: w.BacklogDir(), Issues: []backlog.Item{}, PRDs: []backlog.PRD{}})
 			continue
 		}
 		info, err := e.projectBacklog(ctx, p, p.Root, w)

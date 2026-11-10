@@ -702,12 +702,16 @@ await step("the side parts are resizable", async () => {
 
 // The Board is for workflow issues only (GUI-016): ordinary sessions stay in the sidebar
 // and Needs attention, and with no backlog the Board says so.
-await step("the Board shows no ordinary session", async () => {
+await step("the Board shows no ordinary session, and an untrusted project's row reads nothing", async () => {
   named(".footer-links button", "Board").click();
   const page = await until("the Board", () => document.querySelector(".board-page"), 8000);
   check("no ordinary session is on the Board", !withText(".board-card", "Check") && !page.textContent.includes("Check alpha") && !page.textContent.includes("Check long"), page.textContent.slice(0, 120));
-  check("with no backlog the Board says so", page.textContent.includes("No project has a backlog yet."), page.textContent.slice(0, 120));
   check("the old session columns are gone", all(".board-col h3, .board-column h3", page).length === 0 && !/Needs you|Running|Idle/.test(page.textContent), page.textContent.slice(0, 120));
+  // The project with a backlog folder that is not trusted yet has a row to trust it by, and
+  // nothing in its folder is read for it (SEC-006).
+  const row = await until("the untrusted project's row", () => page.querySelector('.board-lane-untrusted[aria-label="Backlog of pile"]'), 15000);
+  check("an untrusted project's row says so and offers to trust it", row.textContent.includes("Not trusted: trust it to see its backlog.") && !!withText("button", "Trust project", row), row.textContent.slice(0, 100));
+  check("nothing in its backlog is read or shown", !page.textContent.includes("Finished issue") && all(".board-col", row).length === 0, row.textContent.slice(0, 100));
   openSession("Check alpha");
   await until("the conversation", () => document.querySelector(".conversation"));
 });
@@ -849,12 +853,12 @@ await step("the attention view and the Board follow the language, without a relo
     board?.click();
     const shown = await until("the Board in Dutch", () => heading(".board-page") === "Bord", 8000).catch(() => false);
     check("Nederlands turns the Board's heading Dutch", shown, heading(".board-page"));
-    check("the Board's words are Dutch", boardText().includes("Nog geen project heeft een backlog."), boardText().slice(0, 100));
+    check("the Board's words are Dutch", boardText().includes("Niet vertrouwd: vertrouw het project om de backlog te zien."), boardText().slice(0, 100));
     check("the Queue icon is Dutch", !!named(".footer-links button", "Wachtrij"), all(".footer-links button").map((b) => b.getAttribute("aria-label")).join(", "));
     await pick("en");
     named(".footer-links button", "Board").click();
     await until("the Board in English", () => heading(".board-page") === "Board", 8000).catch(() => {});
-    check("English comes back", heading(".board-page") === "Board" && boardText().includes("No project has a backlog yet."), `${heading(".board-page")}; ${boardText().slice(0, 80)}`);
+    check("English comes back", heading(".board-page") === "Board" && boardText().includes("Not trusted: trust it to see its backlog."), `${heading(".board-page")}; ${boardText().slice(0, 80)}`);
     check("no reload in between", window.appcheckNotReloaded === true);
   } finally {
     // Later steps find English and the session they expect.
@@ -1687,6 +1691,8 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
     const firstCard = issueCard("001");
     check("the issue's card says so too", firstCard?.querySelector(".backlog-step-waiting")?.textContent.includes("AFK run: waiting to start"), firstCard?.textContent);
     const queueIcon = all(".footer-links button").find((b) => /^Queue\b/.test(b.getAttribute("aria-label") ?? ""));
+    // The icon looks at the queue every few seconds.
+    await until("the icon's count", () => /waiting/.test(queueIcon?.getAttribute("aria-label") ?? ""), 12000).catch(() => {});
     check("the Queue icon counts the run's issue waiting in the paused queue", /waiting/.test(queueIcon?.getAttribute("aria-label") ?? ""), queueIcon?.getAttribute("aria-label"));
     // Stopping the run while its issue waits for the queue puts the issue back in Backlog
     // with a red mark saying why (GUI-016); a new run that takes it up clears the mark.
@@ -1794,13 +1800,13 @@ await step("the Board's rows collapse, a filter picks a project, and Done is cap
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(el, value);
     el.dispatchEvent(new Event("change", { bubbles: true }));
   };
-  openSession("Check pile");
-  await until("the conversation", () => document.querySelector(".conversation"));
-  (await until("Trust project", () => withText("button", "Trust project", activePane()), 8000)).click();
-  await until("trusted", () => !withText("button", "Trust project", activePane()), 8000);
   named(".footer-links button", "Board").click();
   const rowOf = (name) => document.querySelector(`.board-lane[aria-label="Backlog of ${name}"]`);
-  await until("both rows", () => rowOf("pile") && rowOf("workflow"), 20000);
+  // The project is trusted from its row (it has no hooks to confirm); the row then fills in.
+  const untrusted = await until("the untrusted row", () => document.querySelector('.board-lane-untrusted[aria-label="Backlog of pile"]'), 15000);
+  withText("button", "Trust project", untrusted).click();
+  await until("both rows", () => rowOf("pile") && rowOf("workflow") && !rowOf("pile").classList.contains("board-lane-untrusted"), 20000);
+  check("trusting a project from its row fills the row in", all(".board-col", rowOf("pile")).length === 4);
   const doneCards = () => all(".board-col-done .backlog-card", rowOf("pile"));
   check("Done shows five of seven finished issues, with Show all", doneCards().length === 5 && !!withText("button", "Show all 7", rowOf("pile")), `${doneCards().length} cards`);
   withText("button", "Show all 7", rowOf("pile")).click();

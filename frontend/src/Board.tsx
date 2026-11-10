@@ -18,6 +18,9 @@ export default function Board({
   renderRequest,
   qa = {},
   onQADone,
+  onTrust,
+  onStartWorkflow,
+  onHelp,
   onOpen,
   onArchive,
   backlogActions,
@@ -32,6 +35,11 @@ export default function Board({
   qa?: Record<string, { reply: string }>;
   // The user checked an issue a run finished (WFL-006): it moves to Done.
   onQADone?: (runId: string, issue: string) => void;
+  // Trusts a project whose row says it is not trusted, so its backlog can be read (SEC-006).
+  onTrust?: (b: BacklogInfo) => void;
+  // With no backlog anywhere: start a session with a workflow, or read how they work.
+  onStartWorkflow?: () => void;
+  onHelp?: () => void;
   onOpen: (sessionId: string) => void;
   onArchive?: (b: BacklogInfo) => void;
   // Controls for a project's row, such as its AFK run (WFL-005).
@@ -79,9 +87,44 @@ export default function Board({
           </button>
         )}
       </header>
-      {backlogs.length === 0 && <p className="muted board-empty">{t("board.noBacklogs")}</p>}
+      {backlogs.length === 0 && (
+        <div className="board-empty-board">
+          <p className="muted board-empty">{t("board.noBacklogs")}</p>
+          <p className="muted board-empty">{t("board.empty.how")}</p>
+          <p className="row">
+            {onStartWorkflow && (
+              <button className="primary" onClick={onStartWorkflow}>
+                {t("board.empty.start")}
+              </button>
+            )}
+            {onHelp && (
+              <button className="link" onClick={onHelp}>
+                {t("board.empty.help")}
+              </button>
+            )}
+          </p>
+        </div>
+      )}
       <div className="board-lanes">
         {shownRows.map(({ b, cols }) => {
+          // A project the user has not trusted: a row with nothing read, and the way to trust it.
+          if (!b.trusted) {
+            return (
+              <section key={b.projectId} className="board-lane board-lane-untrusted" aria-label={t("board.backlogOf", { project: b.projectName })}>
+                <header className="board-lane-head">
+                  <div className="board-lane-title">
+                    <strong>{b.projectName}</strong>
+                    <span className="muted"> · {t("board.untrusted")}</span>
+                  </div>
+                  {onTrust && (
+                    <button className="primary" onClick={() => onTrust(b)}>
+                      {t("trust.banner.button")}
+                    </button>
+                  )}
+                </header>
+              </section>
+            );
+          }
           const n = counts(b.issues);
           const { open, forced } = rowState(collapsed.includes(b.projectId), waitingIssues(cols));
           const done = capDone(cols.done, allDone.includes(b.projectId));

@@ -70,6 +70,7 @@ import { contextHigh, contextLabel, contextTitle } from "./contextMeter.ts";
 import { sourceId, sourceIndex, type SourceChoices } from "./source.ts";
 import ContextMenu, { type MenuItem } from "./ContextMenu.tsx";
 import { ask } from "./ask.ts";
+import { trustLines } from "./trust.ts";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { applyFonts, type FontChoice } from "./fonts.ts";
@@ -327,6 +328,19 @@ export default function App() {
         </p>
       </div>
     );
+  };
+  // Trusting a project from its row on the Board, as from its session: the hooks its
+  // settings would run are shown first, and trusting waits for the user's yes (SEC-006).
+  const trustBacklog = async (b: BacklogInfo) => {
+    try {
+      const hooks = trustLines(await EngineService.ProjectSettings(b.projectRoot));
+      if (hooks.length > 0 && !(await ask(t("trust.confirm", { name: b.projectName, list: hooks.join("\n") })))) return;
+      await EngineService.SetProjectTrust(b.projectRoot, true);
+      refreshProjects();
+      refreshBacklogs();
+    } catch (err) {
+      report(t("trust.unreadable", { name: b.projectName, error: String(err) }));
+    }
   };
   const archiveBacklog = async (b: BacklogInfo) => {
     if (!(await ask(t("app.afk.archiveAsk", { count: b.finished, project: b.projectName })))) return;
@@ -1839,6 +1853,9 @@ export default function App() {
                 })
                 .catch(report)
             }
+            onTrust={trustBacklog}
+            onStartWorkflow={() => setScreen({ kind: "new", workflow: config?.defaults.workflow || "plan-slice-afk" })}
+            onHelp={() => setScreen({ kind: "help", topic: "workflows" })}
             onArchive={archiveBacklog}
             backlogActions={backlogActions}
             onOpen={(id) => openSession(id)}

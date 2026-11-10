@@ -111,6 +111,24 @@ await step("a new session starts from an external default profile", async () => 
   await until("back in a session", () => activePane().querySelector(".session-titleline h2")?.textContent === "Work 30", 8000);
 });
 
+// With no project holding a backlog, the Board says so in two lines and offers to start a
+// workflow, or to read how they work (GUI-016).
+await step("an empty Board offers to start a workflow", async () => {
+  named(".footer-links button", "Board").click();
+  const page = await until("the Board", () => document.querySelector(".board-page"), 8000);
+  check("an empty Board says there is no backlog and how one comes", page.textContent.includes("No project has a backlog yet.") && page.textContent.includes("A workflow turns a brief into those issues"), page.textContent.slice(0, 120));
+  check("and offers Start a workflow and the help", !!withText("button", "Start a workflow…", page) && !!withText("button", "How workflows work", page));
+  withText("button", "How workflows work", page).click();
+  await until("the workflows help", () => document.querySelector(".help-page h1")?.textContent === "Workflows", 8000);
+  check("the link opens the Workflows help", document.querySelector(".help-page h1")?.textContent === "Workflows");
+  named(".footer-links button", "Board").click();
+  withText("button", "Start a workflow…", await until("the Board again", () => document.querySelector(".board-page"), 8000)).click();
+  const form = await until("the new-session form", () => withText("label", "Workflow")?.querySelector("select"), 8000);
+  check("Start a workflow opens a new session with the workflow chosen", form.value === "plan-slice-afk", form.value);
+  openSession("Work 30");
+  await until("back in a session", () => activePane().querySelector(".session-titleline h2")?.textContent === "Work 30", 8000);
+});
+
 await step("every control has a name", async () => {
   const unnamed = [];
   for (const e of all("button, a[href], summary, [role=tab], [role=menuitem]")) {
