@@ -11,6 +11,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
+	"github.com/FinanceNik/Freeloop/internal/harness/acp/acptest"
 )
 
 // WFL-013: model sets are saved with an ID from their name, a row whose provider is
@@ -192,5 +193,64 @@ func TestPlanningStageSwitchesToTheSetsModel(t *testing.T) {
 	waitIdle(t, ch, ses.ID)
 	if got, _ := e.store.GetSession(ctx, ses.ID); got.ProviderID != "small" || count(event.UserMessageChunk, "") != sent+1 {
 		t.Errorf("on the current model: %s, %d messages", got.ProviderID, count(event.UserMessageChunk, ""))
+	}
+}
+
+// WFL-014: a session created with its workflow chosen starts on the workflow's
+// Planning model and effort; one that only takes the default workflow, or whose
+// profile runs an external agent, starts on its profile's.
+func TestWorkflowSessionStartsOnThePlanningModel(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	twoProviders(t, e)
+	if _, err := e.SaveModelSet(ctx, config.ModelSet{Name: "Split", Planning: config.ModelChoice{Provider: "small", Model: "tiny", Effort: "low"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.SetWorkflowModelSet(ctx, config.BuiltinWorkflowID, "split"); err != nil {
+		t.Fatal(err)
+	}
+	// The new-session form learns it from the list of workflows.
+	if i := slices.IndexFunc(e.Workflows(ctx), func(w WorkflowInfo) bool { return w.ID == config.BuiltinWorkflowID }); i < 0 || e.Workflows(ctx)[i].Planning == nil || e.Workflows(ctx)[i].Planning.Model != "tiny" || e.Workflows(ctx)[i].ModelSet != "Split" {
+		t.Errorf("workflows: %+v", e.Workflows(ctx))
+	}
+	chosen, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "big", Workflow: config.BuiltinWorkflowID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.store.GetSession(ctx, chosen.ID); got.ProviderID != "small" || got.Model != "tiny" || got.Effort != "low" {
+		t.Errorf("chosen: %s/%s at %q", got.ProviderID, got.Model, got.Effort)
+	}
+	// A model asked for by name wins.
+	named, _ := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "big", Workflow: config.BuiltinWorkflowID, ProviderID: "big", Model: "b"})
+	if named.ProviderID != "big" || named.Model != "b" {
+		t.Errorf("named: %s/%s", named.ProviderID, named.Model)
+	}
+	// The planning model named, as the new-session form fills it in, takes its effort.
+	filled, _ := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "big", Workflow: config.BuiltinWorkflowID, ProviderID: "small", Model: "tiny"})
+	if filled.Effort != "low" {
+		t.Errorf("filled in: effort %q", filled.Effort)
+	}
+	if _, err := e.SetDefaultWorkflow(ctx, config.BuiltinWorkflowID); err != nil {
+		t.Fatal(err)
+	}
+	byDefault, _ := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "big"})
+	if byDefault.Workflow != config.BuiltinWorkflowID || byDefault.ProviderID != "big" || byDefault.Model != "b" {
+		t.Errorf("by default: %q on %s/%s", byDefault.Workflow, byDefault.ProviderID, byDefault.Model)
+	}
+
+	exe, _ := os.Executable()
+	os.MkdirAll(filepath.Join(e.dataDir, config.PresetsDir), 0o700)
+	os.WriteFile(filepath.Join(e.dataDir, config.PresetsDir, "ref.yaml"), []byte("name: Reference agent\ncommand: "+exe+"\nenv:\n  "+acptest.EnvVar+": \"1\"\n"), 0o600)
+	e.loadPresets()
+	approvePending(t, e)
+	if err := e.SaveProfileYAML("agent", "name: Agent\nharness: ref\nmodel: ref-model\n"); err != nil {
+		t.Fatal(err)
+	}
+	agent, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "agent", Workflow: config.BuiltinWorkflowID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agent.HarnessID != "ref" || agent.ProviderID != "" || agent.Model != "ref-model" {
+		t.Errorf("an external agent: %s, %s/%s", agent.HarnessID, agent.ProviderID, agent.Model)
 	}
 }

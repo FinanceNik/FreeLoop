@@ -1684,6 +1684,7 @@ export const nl = translationOf<typeof en>()({
   "stage.blocked.runOnCurrent": "Uitvoeren met {model}",
   "stage.blocked.currentModel": "het huidige model",
   "stage.blocked.openSets": "Modelsets openen",
+  "newSession.fromModelSet": "Uit de modelset {name}, inspanning: {effort}",
   "workflows.forNewSessions": "Voor nieuwe sessies",
   "workflows.off": "Uit",
   "workflows.forNewSessionsHint": "Een profiel kan er zelf een kiezen, en elke sessie kan wisselen naast haar optimalisator.",

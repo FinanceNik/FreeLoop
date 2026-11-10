@@ -109,6 +109,20 @@ func (e *Engine) workflowModelSet(workflowID string) (config.ModelSet, bool) {
 	return c.ModelSets[i], true
 }
 
+// startingPlanning is the planning row a new session starts on: its workflow was
+// chosen for it, not taken by default, and the row names a built-in provider's model
+// that can be had (WFL-014).
+func (e *Engine) startingPlanning(req CreateSessionRequest) (config.ModelChoice, bool) {
+	if req.Workflow == "" || req.Workflow == config.WorkflowOff {
+		return config.ModelChoice{}, false
+	}
+	set, ok := e.workflowModelSet(req.Workflow)
+	if !ok || !set.Planning.Fixed() || set.Planning.Provider == "" || e.modelUnavailable(set.Planning) != "" {
+		return config.ModelChoice{}, false
+	}
+	return set.Planning, true
+}
+
 // AllModels are the models a set's rows can name: every model of every provider that
 // can be called unasked, and any named by hand.
 func (e *Engine) AllModels(ctx context.Context) ProfileModels {

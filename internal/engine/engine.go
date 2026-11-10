@@ -896,7 +896,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	if !mode.Valid() || mode.Unattended() {
 		mode = permission.ModeAsk
 	}
-	harnessID, model := builtin.ID, ""
+	harnessID, model, planEffort := builtin.ID, "", ""
 	if prof.Harness != "" && prof.Harness != builtin.ID {
 		// An external agent brings its own model access (HRN-005).
 		if _, err := e.runnablePreset(prof.Harness); err != nil {
@@ -910,6 +910,12 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 			model = strings.TrimSpace(prof.Model)
 		}
 	} else {
+		// A workflow chosen for the session starts it on its model set's planning model,
+		// unless a model was asked for (WFL-014).
+		planning, planned := e.startingPlanning(req)
+		if planned && req.ProviderID == "" && strings.TrimSpace(req.Model) == "" {
+			req.ProviderID, req.Model = planning.Provider, planning.Model
+		}
 		if req.ProviderID == "" {
 			req.ProviderID = prof.Provider
 		}
@@ -932,6 +938,12 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 		}
 		if err := e.requireTools(ctx, req.ProviderID, model); err != nil {
 			return session.Session{}, err
+		}
+		// On the planning model, as the new-session form fills it in, at its effort.
+		if planned && planning.Effort != "" && req.ProviderID == planning.Provider && model == planning.Model {
+			if caps, err := e.ModelCapabilities(ctx, req.ProviderID, model, false); err == nil && caps.Effort {
+				planEffort = planning.Effort
+			}
 		}
 	}
 	optimizer, err := e.chooseOptimizer(ctx, req, prof, harnessID, envCfg)
@@ -962,7 +974,7 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 	git.BaseCommit = git.Head
 	ses, err := e.store.CreateSession(ctx, session.Session{
 		Optimizer: optimizer, Workflow: e.chooseWorkflow(req, prof), Title: title, HarnessID: harnessID, ProjectID: project.ID, ProjectRoot: project.Root, EnvironmentID: envID,
-		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID,
+		BaseCommit: git.BaseCommit, Branch: git.Branch, ProviderID: req.ProviderID, Model: model, Mode: string(mode), ProfileID: prof.ID, Effort: planEffort,
 		Worktree: worktree, WorktreeBranch: worktreeBranch, ParentID: req.parent, PortBase: portBase,
 	})
 	if err != nil {
@@ -989,6 +1001,12 @@ func (e *Engine) CreateSession(ctx context.Context, req CreateSessionRequest) (s
 		w, _ := e.findWorkflow(ses.Workflow)
 		data, _ = json.Marshal(event.WorkflowChangedData{Workflow: w.ID, Name: w.Name})
 		if ev, err = e.store.Append(ctx, ses.ID, event.WorkflowChanged, data); err != nil {
+			return session.Session{}, err
+		}
+	}
+	if planEffort != "" {
+		data, _ = json.Marshal(event.EffortChangedData{Effort: planEffort})
+		if ev, err = e.store.Append(ctx, ses.ID, event.EffortChanged, data); err != nil {
 			return session.Session{}, err
 		}
 	}

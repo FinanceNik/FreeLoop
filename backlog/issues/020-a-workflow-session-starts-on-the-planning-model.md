@@ -1,6 +1,6 @@
 ---
 title: A session started with a workflow begins on its Planning model
-status: open
+status: done
 type: afk
 blockedBy: [019-planning-stages-switch-to-the-sets-model]
 prd: model-sets
@@ -17,3 +17,8 @@ A new session for which the user chose the workflow explicitly (Start a workflow
 
 ## Notes
 - Requirement WFL-014; PRD decision 8.
+
+## Done
+- `startingPlanning` (`internal/engine/modelsets.go`): a workflow chosen for the session, not the default, whose set's Planning row names a built-in provider's model that can be had. `CreateSession` starts on it when no model was asked for, and takes its effort (stored, and recorded as `effort_changed`) whenever the session starts on that model.
+- The new-session form always sends a provider and model, so it fills them in from `WorkflowInfo.Planning` when the workflow is chosen, still editable, with "From the model set …" under the model while they match.
+- Not tried in the app: "Start a workflow" from the Board, which opens the same form with the workflow chosen; the check chooses it in the form's picker.

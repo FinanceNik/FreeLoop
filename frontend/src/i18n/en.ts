@@ -1909,6 +1909,7 @@ export const en = {
   "stage.blocked.runOnCurrent": "Run on {model}",
   "stage.blocked.currentModel": "the current model",
   "stage.blocked.openSets": "Open model sets",
+  "newSession.fromModelSet": "From the model set {name}, at effort: {effort}",
   "workflows.forNewSessions": "For new sessions",
   "workflows.off": "Off",
   "workflows.forNewSessionsHint": "A profile can choose its own, and each session can switch from beside its optimizer.",

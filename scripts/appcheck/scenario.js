@@ -1591,6 +1591,14 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   check("the workflow keeps its model set", chosen.value === "big-plans-small-works", chosen.value);
   document.querySelector(".settings-nav .settings-back").click();
   await sleep(100);
+  // WFL-014: a workflow chosen in the new-session form brings its planning model, and says so.
+  named(".sidebar header button", "New session").click();
+  const field = (name) => [...document.querySelectorAll("label")].find((l) => l.firstChild?.textContent?.trim() === name);
+  const wfPick = await until("the form's workflow", () => field("Workflow")?.querySelector("select"), 8000);
+  await until("the workflows listed", () => [...wfPick.options].some((o) => o.value === "plan-slice-afk"), 8000);
+  setSelect(wfPick, "plan-slice-afk");
+  const fromSet = await until("the planning model", () => field("Provider")?.querySelector("select")?.value === "demo-small" && field("Model")?.querySelector("input")?.value === "small" && document.querySelector(".model-from-set"), 8000).catch(() => null);
+  check("the form starts a workflow's session on its planning model, and says from where", fromSet?.textContent === "From the model set Big plans, small works, at effort: The profile's", fromSet?.textContent ?? `${field("Provider")?.querySelector("select")?.value} ${field("Model")?.querySelector("input")?.value}`);
 
   // A trusted project, a session in it with the workflow, and /slice.
   openSession("Check workflow");

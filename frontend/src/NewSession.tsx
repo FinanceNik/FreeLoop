@@ -118,6 +118,15 @@ export default function NewSession({ providers, projects, environments, profiles
   // Started as a workflow: what it is about, sent to its first stage at once (WFL-008).
   const [brief, setBrief] = useState("");
   const chosenWorkflow = initialWorkflow ? workflows.find((w) => w.id === (workflow || initialWorkflow)) : undefined;
+  // A workflow chosen here starts the session on its model set's planning model
+  // (WFL-014): the fields take it, still editable, and say where it came from.
+  const planning = workflows.find((w) => w.id === workflow)?.planning;
+  const planningSet = workflows.find((w) => w.id === workflow)?.modelSet ?? "";
+  useEffect(() => {
+    if (!planning || !providers.some((p) => p.id === planning.provider)) return;
+    setProviderId(planning.provider);
+    setModel(planning.model);
+  }, [workflow, planning?.provider, planning?.model]);
   const firstStage = (chosenWorkflow?.stages ?? [])[0];
   useEffect(() => {
     EngineService.Workflows()
@@ -545,6 +554,9 @@ export default function NewSession({ providers, projects, environments, profiles
               );
             })}
           </datalist>
+          {planning && providerId === planning.provider && model.trim() === planning.model && (
+            <span className="muted model-from-set">{t("newSession.fromModelSet", { name: planningSet, effort: planning.effort || t("modelSets.effortDefault") })}</span>
+          )}
           {modelsError && <span className="error-text">{t("newSession.modelsFailed", { error: modelsError })}</span>}
           {!modelsError && models.length > 0 && (
             <span className="muted">

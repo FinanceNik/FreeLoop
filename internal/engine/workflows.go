@@ -256,6 +256,11 @@ type WorkflowInfo struct {
 	Stages []config.WorkflowStage `json:"stages"`
 	// Reason says why it cannot be used yet; empty when it can.
 	Reason string `json:"reason"`
+	// Planning is the planning model a session chosen with it starts on, from its
+	// model set, and ModelSet that set's name (WFL-014); none when not fixed or not
+	// to be had.
+	Planning *config.ModelChoice `json:"planning"`
+	ModelSet string              `json:"modelSet"`
 }
 
 // Workflows lists the workflows a session can choose.
@@ -265,6 +270,10 @@ func (e *Engine) Workflows(ctx context.Context) []WorkflowInfo {
 		info := WorkflowInfo{ID: w.ID, Name: w.Name, Stages: w.Stages}
 		if _, err := e.usableWorkflow(w.ID); err != nil {
 			info.Reason = err.Error()
+		}
+		if row, ok := e.startingPlanning(CreateSessionRequest{Workflow: w.ID}); ok {
+			set, _ := e.workflowModelSet(w.ID)
+			info.Planning, info.ModelSet = &row, set.Name
 		}
 		out = append(out, info)
 	}

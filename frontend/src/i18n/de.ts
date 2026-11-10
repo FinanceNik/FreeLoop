@@ -1691,6 +1691,7 @@ export const de = translationOf<typeof en>()({
   "stage.blocked.runOnCurrent": "Mit {model} ausführen",
   "stage.blocked.currentModel": "dem aktuellen Modell",
   "stage.blocked.openSets": "Modellsätze öffnen",
+  "newSession.fromModelSet": "Aus dem Modellsatz {name}, Aufwand: {effort}",
   "workflows.forNewSessions": "Für neue Sitzungen",
   "workflows.off": "Aus",
   "workflows.forNewSessionsHint": "Ein Profil kann einen eigenen wählen, und jede Sitzung kann ihn neben ihrem Optimierer wechseln.",
