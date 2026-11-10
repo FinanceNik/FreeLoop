@@ -48,8 +48,10 @@ type BacklogInfo struct {
 	// Uncommitted says the backlog has changes git has not committed, which a run,
 	// working from the last commit, would not see.
 	Uncommitted bool `json:"uncommitted"`
-	// Run is the project's AFK run going on, or its last one (WFL-005).
-	Run *config.AFKRun `json:"run"`
+	// Run is the project's AFK run going on, or its last one (WFL-005), and RunCost
+	// what it cost (WFL-015).
+	Run     *config.AFKRun `json:"run"`
+	RunCost *RunCost       `json:"runCost"`
 }
 
 // readBacklog reads a backlog folder through env. A missing folder is an empty
@@ -168,8 +170,17 @@ func (e *Engine) Backlog(ctx context.Context, root, workflowID string) (BacklogI
 		return BacklogInfo{}, err
 	}
 	info, err := e.projectBacklog(ctx, project, project.Root, w)
-	info.Run = e.lastRun(project.ID)
+	e.addRun(ctx, &info, project.ID)
 	return info, err
+}
+
+// addRun gives a backlog its project's last run and what that cost.
+func (e *Engine) addRun(ctx context.Context, info *BacklogInfo, projectID string) {
+	info.Run = e.lastRun(projectID)
+	if info.Run != nil {
+		rc := e.runCost(ctx, *info.Run)
+		info.RunCost = &rc
+	}
 }
 
 // Backlogs lists the backlogs of trusted projects that have one, for the Board.
@@ -197,7 +208,7 @@ func (e *Engine) Backlogs(ctx context.Context) ([]BacklogInfo, error) {
 		if err != nil {
 			continue
 		}
-		info.Run = e.lastRun(p.ID)
+		e.addRun(ctx, &info, p.ID)
 		out = append(out, info)
 	}
 	slices.SortFunc(out, func(a, b BacklogInfo) int { return strings.Compare(a.ProjectName, b.ProjectName) })
@@ -347,6 +358,8 @@ type IssueDetail struct {
 	Blocks  []string `json:"blocks"`
 	// Sessions are those of the project's runs for it, the newest first.
 	Sessions []IssueSession `json:"sessions"`
+	// Cost is what the newest run's session and review for it cost (WFL-015).
+	Cost *IssueCost `json:"cost"`
 }
 
 // IssueDetail reads one issue of a trusted project's backlog, found by its id among the
@@ -386,6 +399,7 @@ func (e *Engine) IssueDetail(ctx context.Context, root, workflowID, issueID stri
 	type found struct {
 		at       time.Time
 		sessions []IssueSession
+		step     config.AFKStep
 	}
 	var all []found
 	for _, r := range runs.Runs {
@@ -409,12 +423,17 @@ func (e *Engine) IssueDetail(ctx context.Context, root, workflowID, issueID stri
 			}
 			add(s.SessionID, "issue")
 			add(s.ReviewID, "review")
+			f.step = s
 			all = append(all, f)
 		}
 	}
 	slices.SortStableFunc(all, func(a, b found) int { return b.at.Compare(a.at) })
 	for _, f := range all {
 		d.Sessions = append(d.Sessions, f.sessions...)
+	}
+	if len(all) > 0 {
+		c := e.issueCost(ctx, all[0].step)
+		d.Cost = &c
 	}
 	return d, nil
 }

@@ -1,6 +1,6 @@
 ---
 title: What each issue and each run cost, on the Board
-status: open
+status: done
 type: afk
 blockedBy: [021-the-afk-dialog-starts-from-the-set]
 prd: model-sets
@@ -18,3 +18,9 @@ From the usage recorded per session and model, the engine gives a run's cost: Pl
 ## Notes
 - Usage is stored per day, session and model (PRV-008); price with the current table, as the Usage page does.
 - Requirement WFL-015; PRD decision 10.
+
+## Done
+- `internal/engine/runcost.go`: `RunCost` (and `runCost`, `issueCost`) prices each session's own `usage_update` events with the current table, as the Usage page does, so Planning stops exactly at the run's start; the daily usage rows cannot cut within a day.
+- The run records the session it was started from (`AFKStart.FromSession`, `AFKRun.PlanningSession`), passed when the dialog opens from a session's stage strip or `/afk`; from the Board or the palette there is no planning session and no Planning part.
+- `BacklogInfo.RunCost` and `IssueDetail.Cost` carry it to the Board's run (`runCostLine`) and the issue's panel (`issueCostLine`) in `frontend/src/afk.ts`; usage with no price or no tokens reads "unpriced", never $0.
+- Prices are per run read from transcripts on each Board refresh; fine for a run's few sessions, worth caching if runs grow.

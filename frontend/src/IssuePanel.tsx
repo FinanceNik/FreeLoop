@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { EngineService, type IssueDetail } from "./api.ts";
-import { stepLabel } from "./afk.ts";
+import { issueCostLine, stepLabel } from "./afk.ts";
 import { laneTitle, shortId, since, type Lane } from "./board.ts";
 import { Markdown } from "./Markdown.tsx";
 import { typeLabel } from "./backlog.ts";
@@ -90,6 +90,7 @@ export default function IssuePanel({
             <Markdown text={detail.text} />
           </div>
           <h4>{t("board.detail.sessions")}</h4>
+          {detail.cost && <p className="muted issue-panel-cost">{issueCostLine(detail.cost)}</p>}
           {(detail.sessions ?? []).length === 0 && <p className="muted">{t("board.detail.noSessions")}</p>}
           <ul className="issue-panel-sessions">
             {(detail.sessions ?? []).map((s) => (

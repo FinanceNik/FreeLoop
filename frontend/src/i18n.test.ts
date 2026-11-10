@@ -138,6 +138,8 @@ test("each catalogue has the English keys, forms and placeholders", () => {
 // Agent, Code, Model, Project, Context, Tokens and Servers, all OK.
 const SAME_WORD = {
   de: new Set([
+    "afk.cost.issues",
+    "afk.cost.reviews",
     "modelSets.row.issues",
     "modelSets.row.reviews",
     "modelSets.name",
@@ -199,6 +201,10 @@ const SAME_WORD = {
     "modelSets.row.issues",
     "modelSets.row.reviews",
     "modelSets.model",
+    "afk.cost.planning",
+    "afk.cost.issues",
+    "afk.cost.reviews",
+    "afk.cost.commit",
     "settings.build.version",
     "common.ok",
     "pending.kind.agent",

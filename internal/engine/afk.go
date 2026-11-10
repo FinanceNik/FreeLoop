@@ -383,6 +383,8 @@ type AFKStart struct {
 	ReviewEffort string `json:"reviewEffort"`
 	// StartedBy says where it was started, for the record.
 	StartedBy string `json:"startedBy"`
+	// FromSession is the session it was started from, where it was planned (WFL-015).
+	FromSession string `json:"fromSession"`
 }
 
 // StartAFK starts a run of a project's backlog: its first issue is queued at once.
@@ -463,7 +465,8 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 		ModelOption: modelOption, Model: req.Model, ReviewModelOption: reviewOption, ReviewModel: req.ReviewModel,
 		EffortOption: effortOption, Effort: effort, ReviewEffortOption: reviewEffortOption, ReviewEffort: reviewEffort,
 		ModelLabel: modelLabel, ReviewModelLabel: reviewLabel,
-		ID: fmt.Sprintf("afk_%d", time.Now().UnixNano()), WorkflowID: plan.WorkflowID, ProjectID: project.ID, ProjectRoot: project.Root,
+		PlanningSession: e.planningSession(ctx, req.FromSession, project.ID),
+		ID:              fmt.Sprintf("afk_%d", time.Now().UnixNano()), WorkflowID: plan.WorkflowID, ProjectID: project.ID, ProjectRoot: project.Root,
 		ProfileID: prof, ReviewProfileID: review, EnvironmentID: plan.EnvironmentID, Mode: plan.Mode, Allow: allow,
 		MaxIssues: plan.MaxIssues, State: config.RunRunning, Steps: []config.AFKStep{}, StartedBy: req.StartedBy, StartedAt: time.Now().UTC(),
 	}
@@ -664,6 +667,18 @@ func (e *Engine) followIssue(ctx context.Context, r config.AFKRun, s config.AFKS
 		}
 		e.finishIssue(ctx, r.ID, t.SessionID, w)
 	}
+}
+
+// planningSession is the session a run was started from, when it is of the run's
+// project.
+func (e *Engine) planningSession(ctx context.Context, sid, projectID string) string {
+	if sid == "" {
+		return ""
+	}
+	if ses, err := e.store.GetSession(ctx, sid); err == nil && ses.ProjectID == projectID {
+		return sid
+	}
+	return ""
 }
 
 // adoptSession records the session working on the current issue, and the first

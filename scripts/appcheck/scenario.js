@@ -1816,6 +1816,9 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   }, 150000);
   check("the run did both issues", line.startsWith("AFK run finished: 2 of 2 issues done"), line);
   check("the run's line says where its issues went", line.includes("Issues on small (Demo small) · low"), line);
+  // WFL-015: what it cost, by part and model; the demo's models have no price, which it says.
+  const costLine = await until("the run's cost", () => document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-cost')?.textContent, 8000).catch(() => "");
+  check("the run says what its issues and reviews cost, unpriced as such", /Issues unpriced on small/.test(costLine) && /Reviews unpriced on /.test(costLine) && /total unpriced$/.test(costLine) && !costLine.includes("$0"), costLine);
   const afkRow = all(".session-row").find((r) => /AFK 001/.test(r.textContent));
   check("the issue's session ran on Demo small", /^Provider: Demo small/.test(afkRow?.querySelector(".source-mark")?.getAttribute("aria-label") ?? ""), afkRow?.querySelector(".source-mark")?.getAttribute("aria-label"));
   afkRow.click();
@@ -1835,6 +1838,7 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   const panel = await until("the issue's panel", () => document.querySelector(".issue-panel"), 8000);
   await until("the panel's text", () => panel.querySelector(".issue-panel-text")?.textContent.includes("Second slice, end to end."), 8000);
   check("the panel has the issue's text, its file and what it waits on", panel.querySelector("h3")?.textContent === "Second slice" && panel.textContent.includes("backlog/issues/002-second-slice.md") && /Waits on: 001/.test(panel.textContent), panel.textContent.slice(0, 160));
+  check("the panel says what the issue cost, and its commit", /^Cost unpriced on .+ · commit [0-9a-f]{7}$/.test(panel.querySelector(".issue-panel-cost")?.textContent ?? ""), panel.querySelector(".issue-panel-cost")?.textContent);
   check("the panel lists the session and the review, each opening its session", all(".issue-panel-sessions li", panel).length === 2 && /AFK 002/.test(panel.textContent) && /Review: 002/.test(panel.textContent) && all(".issue-panel-sessions button", panel).length === 2, all(".issue-panel-sessions li", panel).map((l) => l.textContent).join(" | "));
   check("the panel changes nothing: its only buttons close it and open sessions", all("button", panel).every((b) => b.getAttribute("aria-label") === "Close" || b.closest(".issue-panel-sessions")), all("button", panel).map((b) => b.textContent || b.getAttribute("aria-label")).join(" | "));
   check("the keyboard reaches the panel first", document.activeElement === panel.querySelector('button[aria-label="Close"]'), document.activeElement?.outerHTML.slice(0, 80));

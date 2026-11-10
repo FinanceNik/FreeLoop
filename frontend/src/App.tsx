@@ -39,7 +39,7 @@ import Optimizers from "./Optimizers.tsx";
 import Workflows from "./Workflows.tsx";
 import AFKDialog from "./AFKDialog.tsx";
 import AFKRunView from "./AFKRunView.tsx";
-import { runLine, waitingStep } from "./afk.ts";
+import { runCostLine, runLine, waitingStep } from "./afk.ts";
 import Usage from "./Usage.tsx";
 import Compare from "./Compare.tsx";
 import Providers from "./Providers.tsx";
@@ -294,7 +294,8 @@ export default function App() {
     return () => clearInterval(every);
   }, []);
   // The AFK run's dialog (WFL-005), for a project's backlog.
-  const [afkFor, setAfkFor] = useState<{ root: string; workflowId?: string; startedBy: string } | null>(null);
+  // fromSession is the session it is started from, where its work was planned (WFL-015).
+  const [afkFor, setAfkFor] = useState<{ root: string; workflowId?: string; startedBy: string; fromSession?: string } | null>(null);
   const backlogActions = (b: BacklogInfo) => {
     const r = b.run;
     const going = r && (r.state === "running" || r.state === "paused");
@@ -306,6 +307,8 @@ export default function App() {
             {runLine(r)}
           </p>
         )}
+        {/* What it cost, by part and model (WFL-015). */}
+        {b.runCost && runCostLine(b.runCost) && <p className="muted backlog-run-cost">{runCostLine(b.runCost)}</p>}
         <p className="row">
           {!going && (
             <button className="primary" onClick={() => setAfkFor({ root: b.projectRoot, workflowId: b.workflowId, startedBy: "the Board" })}>
@@ -1211,7 +1214,7 @@ export default function App() {
         openSession(sid);
       }}
       prices={prices}
-      onRunAFK={(root, workflowId) => setAfkFor({ root, workflowId, startedBy: "/afk" })}
+      onRunAFK={(root, workflowId, fromSession) => setAfkFor({ root, workflowId, startedBy: "/afk", fromSession })}
       onOpenModelSets={() => setScreen({ kind: "workflows" })}
       onShowRun={(root) => setRunFor(root)}
       knownTags={tagsInUse}
@@ -1915,6 +1918,7 @@ export default function App() {
           workflowId={afkFor.workflowId}
           profiles={profiles}
           startedBy={afkFor.startedBy}
+          fromSession={afkFor.fromSession}
           onClose={() => setAfkFor(null)}
           onStarted={() => {
             setAfkFor(null);

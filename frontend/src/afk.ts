@@ -1,6 +1,7 @@
 // An AFK run in words (WFL-005, WFL-006): what the policy says of a command it will
 // want, which to offer allowed, and how far a run has got. Pure, so afk.test.ts
 // covers it.
+import { formatCost } from "./cost.ts";
 import { t, type PlainKey } from "./i18n.ts";
 
 export interface CommandLike {
@@ -110,5 +111,39 @@ export function runLine(r: RunLike): string {
   if (now) parts.push(`${now.issue} ${stepLabel(now)}`);
   if (r.reason && r.state !== "running") parts.push(r.reason);
   if (r.modelLabel) parts.push(t("afk.line.issuesOn", { model: [r.modelLabel, r.effort].filter(Boolean).join(" · ") }));
+  return parts.join(" · ");
+}
+
+// A run's cost and an issue's (WFL-015), as the engine's RunCost gives them.
+export interface CostPartLike {
+  cost: number;
+  unpriced: boolean;
+  models: { model: string }[] | null;
+}
+
+// costAmount is a part's priced sum, saying when some of it has no price.
+export function costAmount(p: CostPartLike): string {
+  if (p.unpriced && p.cost === 0) return t("afk.cost.unpricedOnly");
+  return p.unpriced ? `${formatCost(p.cost)} ${t("afk.cost.unpriced")}` : formatCost(p.cost);
+}
+
+const models = (p: CostPartLike) => [...new Set((p.models ?? []).map((m) => m.model))].join(", ");
+
+// runCostLine sums a run's cost up: each part with its models, then the total;
+// nothing before anything was used.
+export function runCostLine(rc: { planning: CostPartLike; issues: CostPartLike; reviews: CostPartLike; total: number; unpriced: boolean }): string {
+  const parts: string[] = [];
+  for (const [key, p] of [["afk.cost.planning", rc.planning], ["afk.cost.issues", rc.issues], ["afk.cost.reviews", rc.reviews]] as const) {
+    if ((p.models ?? []).length) parts.push(t("afk.cost.part", { part: t(key), cost: costAmount(p), models: models(p) }));
+  }
+  if (!parts.length) return "";
+  parts.push(t("afk.cost.total", { cost: costAmount({ cost: rc.total, unpriced: rc.unpriced, models: null }) }));
+  return parts.join(" · ");
+}
+
+// issueCostLine is an issue's session and review together, and its commit.
+export function issueCostLine(ic: CostPartLike & { commit: string }): string {
+  const parts = [(ic.models ?? []).length ? t("afk.cost.issue", { cost: costAmount(ic), models: models(ic) }) : t("afk.cost.none")];
+  if (ic.commit) parts.push(t("afk.cost.commit", { commit: ic.commit.slice(0, 7) }));
   return parts.join(" · ");
 }

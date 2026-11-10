@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { commandFrom, commandOutcome, defaultAllow, issueStep, runLine, stepLabel, waitingStep } from "./afk.ts";
+import { commandFrom, commandOutcome, costAmount, defaultAllow, issueCostLine, issueStep, runCostLine, runLine, stepLabel, waitingStep } from "./afk.ts";
 
 test("a run offers to allow what would ask, never what is denied", () => {
   const cmds = [
@@ -45,4 +45,17 @@ test("the project's other check targets are offered unticked (WFL-009)", () => {
   ];
   assert.deepEqual(defaultAllow(cmds), ["make test"]);
   assert.equal(commandFrom("project-more"), "another of the project's checks");
+});
+
+// WFL-015: what a run and an issue cost, by part and model, unpriced usage said.
+test("a run's cost in one line, and an issue's", () => {
+  const part = (cost: number, unpriced: boolean, ...models: string[]) => ({ cost, unpriced, models: models.map((model) => ({ providerId: "p", model, cost, priced: !unpriced })) });
+  assert.equal(costAmount(part(1.2, false)), "$1.20");
+  assert.equal(costAmount(part(0.5, true)), "$0.50 + unpriced");
+  assert.equal(costAmount(part(0, true)), "unpriced");
+  const rc = { planning: part(1.2, false, "opus"), issues: part(0.08, false, "qwen"), reviews: part(0, true, "b"), total: 1.28, unpriced: true };
+  assert.equal(runCostLine(rc), "Planning $1.20 on opus · Issues $0.08 on qwen · Reviews unpriced on b · total $1.28 + unpriced");
+  assert.equal(runCostLine({ ...rc, planning: part(0, false) }), "Issues $0.08 on qwen · Reviews unpriced on b · total $1.28 + unpriced");
+  assert.equal(runCostLine({ planning: part(0, false), issues: part(0, false), reviews: part(0, false), total: 0, unpriced: false }), "");
+  assert.equal(issueCostLine({ ...part(0.3, false, "qwen", "b"), commit: "0123456789abcdef" }), "Cost $0.30 on qwen, b · commit 0123456");
 });

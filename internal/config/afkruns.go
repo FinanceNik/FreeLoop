@@ -71,9 +71,12 @@ type AFKRun struct {
 	Branch   string    `json:"branch,omitempty"`
 	Steps    []AFKStep `json:"steps"`
 	// Started says how: from the Board, the palette, /afk or a schedule.
-	StartedBy string    `json:"startedBy,omitempty"`
-	StartedAt time.Time `json:"startedAt"`
-	EndedAt   time.Time `json:"endedAt,omitzero"`
+	StartedBy string `json:"startedBy,omitempty"`
+	// PlanningSession is the session the run was started from, whose cost up to the
+	// start is the run's planning (WFL-015).
+	PlanningSession string    `json:"planningSession,omitempty"`
+	StartedAt       time.Time `json:"startedAt"`
+	EndedAt         time.Time `json:"endedAt,omitzero"`
 }
 
 // AFKStep is one issue of a run.

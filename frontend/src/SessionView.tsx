@@ -67,7 +67,7 @@ interface Props {
   // The price table for cost estimates (PRV-008).
   prices: PriceEntry[];
   // Opens the AFK run's dialog for a project's backlog (WFL-005), for /afk.
-  onRunAFK?: (root: string, workflowId: string) => void;
+  onRunAFK?: (root: string, workflowId: string, fromSession: string) => void;
   // Opens the Workflows settings, where the model sets are (WFL-014).
   onOpenModelSets?: () => void;
   // Shows a project's AFK run in full (WFL-009).
@@ -629,7 +629,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   // about waits in the composer for it; an AFK run opens its dialog; any other runs.
   const nextStage = (stage: { command: string; kind?: string; needsInput?: boolean }) => {
     if (!workflow) return;
-    if (stage.kind === "afk") return onRunAFK?.(session.projectRoot, workflow.id);
+    if (stage.kind === "afk") return onRunAFK?.(session.projectRoot, workflow.id, session.id);
     if (stage.needsInput) {
       setDraft(`/${stage.command} `);
       requestAnimationFrame(() => {
@@ -657,7 +657,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     if (call && workflow && (workflow.stages ?? []).find((s) => s.command === call.command)?.kind === "afk") {
       setDraft("");
       forgetDraft(session.id);
-      onRunAFK?.(session.projectRoot, workflow.id);
+      onRunAFK?.(session.projectRoot, workflow.id, session.id);
       return;
     }
     if (call) {

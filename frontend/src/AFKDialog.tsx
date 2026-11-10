@@ -16,12 +16,14 @@ interface Props {
   workflowId?: string;
   profiles: Profile[];
   startedBy: string;
+  // The session it is started from, whose cost so far is the run's planning (WFL-015).
+  fromSession?: string;
   onClose: () => void;
   onStarted: (run: AFKRun) => void;
   onError: (err: unknown) => void;
 }
 
-export default function AFKDialog({ root, workflowId, profiles, startedBy, onClose, onStarted, onError }: Props) {
+export default function AFKDialog({ root, workflowId, profiles, startedBy, fromSession, onClose, onStarted, onError }: Props) {
   const [plan, setPlan] = useState<AFKPlan | null>(null);
   const [allow, setAllow] = useState<string[]>([]);
   const [profileId, setProfileId] = useState("");
@@ -67,7 +69,7 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   const start = () => {
     if (!plan) return;
     setBusy(true);
-    EngineService.StartAFK({ projectRoot: plan.projectRoot, workflowId: plan.workflowId, profileId, reviewProfileId: reviewId, model, reviewModel, effort, reviewEffort, allow, extra, startedBy })
+    EngineService.StartAFK({ projectRoot: plan.projectRoot, workflowId: plan.workflowId, profileId, reviewProfileId: reviewId, model, reviewModel, effort, reviewEffort, allow, extra, startedBy, fromSession: fromSession ?? "" })
       .then(onStarted)
       .catch(onError)
       .finally(() => setBusy(false));

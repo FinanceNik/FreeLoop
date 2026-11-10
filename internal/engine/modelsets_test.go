@@ -307,3 +307,73 @@ func TestAFKRunStartsFromTheSet(t *testing.T) {
 		}
 	}
 }
+
+// WFL-015: a run's cost splits into Planning (its starting session before the run
+// began), Issues and Reviews by model, each issue's into its session and review with
+// its commit; unpriced usage is said, never counted as nothing.
+func TestRunCost(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	twoProviders(t, e)
+	c := e.Config()
+	c.Prices = append(c.Prices, config.Price{ProviderID: "small", Model: "tiny", Input: 1000, Output: 1000}, config.Price{ProviderID: "small", Model: "scripted", Input: 1000, Output: 1000})
+	if _, err := e.SaveSettings(c); err != nil {
+		t.Fatal(err)
+	}
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	planning, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "big", ProviderID: "small", Model: "tiny"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Prompt(ctx, planning.ID, "plan it"); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, ch, planning.ID)
+	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "big", ReviewProfileID: "big", Allow: []string{"git add *", "git commit *"},
+		Model: "small" + modelSeparator + "scripted", FromSession: planning.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run = waitRun(t, e, run.ID)
+	if run.State != config.RunFinished {
+		t.Fatalf("run = %+v", run)
+	}
+	before, err := e.RunCost(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The planning session goes on after the run began; that is not the run's.
+	if _, err := e.Prompt(ctx, planning.ID, "and more"); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, ch, planning.ID)
+	rc, err := e.RunCost(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rc.Planning.Cost <= 0 || rc.Planning.Cost != before.Planning.Cost || rc.Planning.Unpriced {
+		t.Errorf("planning %+v, before %+v", rc.Planning, before.Planning)
+	}
+	if rc.Issues.Cost <= 0 || len(rc.Issues.Models) != 1 || rc.Issues.Models[0].Model != "scripted" || rc.Issues.Unpriced {
+		t.Errorf("issues %+v", rc.Issues)
+	}
+	if !rc.Reviews.Unpriced || rc.Reviews.Cost != 0 || !rc.Unpriced {
+		t.Errorf("reviews on an unpriced model: %+v, run unpriced %v", rc.Reviews, rc.Unpriced)
+	}
+	if got := rc.Planning.Cost + rc.Issues.Cost + rc.Reviews.Cost; rc.Total != got {
+		t.Errorf("total %v, parts %v", rc.Total, got)
+	}
+	if len(rc.PerIssue) != 2 {
+		t.Fatalf("per issue %+v", rc.PerIssue)
+	}
+	for i, ic := range rc.PerIssue {
+		if ic.Issue != run.Steps[i].Issue || ic.Commit != run.Steps[i].Commit || ic.Commit == "" || ic.Cost <= 0 || !ic.Unpriced {
+			t.Errorf("issue %d: %+v", i, ic)
+		}
+	}
+	detail, err := e.IssueDetail(ctx, root, "", run.Steps[0].Issue)
+	if err != nil || detail.Cost == nil || detail.Cost.Cost != rc.PerIssue[0].Cost {
+		t.Errorf("the issue's panel: %+v, %v", detail.Cost, err)
+	}
+}
