@@ -38,6 +38,8 @@ export interface IssueCard {
   // The run's step for it, when there is one, and when that began.
   step?: StepLike;
   startedAt?: string;
+  // How many requests its session has waiting for the user, while the run works on it.
+  waiting: number;
   // A cycle or a file the app cannot read, in words; empty when neither.
   note: string;
   // The whole title and the file, for hovering: the card cuts a long title short.
@@ -69,7 +71,7 @@ function columnOf(it: BacklogItem, step: StepLike | undefined): Lane {
 // placeIssues sorts a project's issues into the Board's columns, in the order the
 // engine listed them. The run's latest step for an issue counts; steps for issues no
 // longer in the backlog are ignored.
-export function placeIssues(items: BacklogItem[] | null | undefined, run: RunLike | null | undefined): Record<Lane, IssueCard[]> {
+export function placeIssues(items: BacklogItem[] | null | undefined, run: RunLike | null | undefined, waiting: Record<string, number> = {}): Record<Lane, IssueCard[]> {
   const out: Record<Lane, IssueCard[]> = { backlog: [], working: [], review: [], done: [] };
   const latest = new Map<string, StepLike>();
   for (const s of run?.steps ?? []) latest.set(s.issue, s);
@@ -87,11 +89,19 @@ export function placeIssues(items: BacklogItem[] | null | undefined, run: RunLik
       waitsOn: it.waitsOn ?? [],
       step,
       startedAt: step?.startedAt,
+      // Waiting is a mark and not a column: the issue stays where the run has it. Only the
+      // session working on the issue counts, not a review's.
+      waiting: column === "working" && step?.sessionId ? (waiting[step.sessionId] ?? 0) : 0,
       note: it.cycle || it.problem ? relationsOf(it) : "",
       hover: it.path ? `${it.title}\n${it.path}` : it.title,
     });
   }
   return out;
+}
+
+// waitingIssues counts the cards whose agent waits for the user.
+export function waitingIssues(cols: Record<Lane, IssueCard[]>): number {
+  return LANES.reduce((n, lane) => n + cols[lane].filter((c) => c.waiting > 0).length, 0);
 }
 
 // relationsOf says only what is wrong with an issue's place in the backlog: a cycle, or

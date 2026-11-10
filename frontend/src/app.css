@@ -2489,6 +2489,25 @@ details.choice[open] > summary h3::after {
   overflow-wrap: anywhere;
 }
 
+/* An issue whose agent waits for the user is what to find first: a strong mark and border. */
+.issue-needs {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.issue-mark-needs {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.board-waiting {
+  font-weight: 600;
+}
+
 .issue-done {
   opacity: 0.7;
 }

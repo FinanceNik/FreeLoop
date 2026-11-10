@@ -1790,6 +1790,8 @@ export const en = {
   "board.lane.done": "Done",
   "board.meta.started": "started {when}",
   "board.issueCount": { one: "{count} issue", other: "{count} issues" },
+  "board.waiting": "Waiting for you",
+  "board.waitingCount": { one: "{count} issue waiting for you", other: "{count} issues waiting for you" },
   "board.noBacklogs": "No project has a backlog yet.",
   "sidebar.queue.title": "Queue of tasks",
   "sidebar.queue.waiting": { one: "Queue, {count} task waiting", other: "Queue, {count} tasks waiting" },

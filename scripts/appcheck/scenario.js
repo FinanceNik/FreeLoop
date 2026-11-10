@@ -1694,6 +1694,17 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
     await until("resumed", () => !page.querySelector('[role="status"]')?.textContent.startsWith("Paused"), 5000);
     named(".footer-links button", "Board").click();
   }
+  // The first issue's session asks the user a question (its issue says to), so its card
+  // waits for the user with the request on it, and is answered there (GUI-016).
+  const needs = await until("the first issue waiting for the user", () => issueCard("001")?.classList.contains("issue-needs") && issueCard("001"), 60000);
+  check("a waiting issue stays in Working with a strong mark", column(needs) === "Working" && needs.textContent.includes("Waiting for you"), `${column(needs)}: ${needs.textContent.slice(0, 90)}`);
+  const headerCount = document.querySelector(".board-waiting")?.textContent ?? "";
+  check("the Board says how many issues wait for the user", headerCount === "1 issue waiting for you", headerCount);
+  check("the request is on the card, with its buttons and a way to its session", !!withText("button", "Skip", needs) && !!withText("button", "Open its session", needs), needs.textContent.slice(0, 160));
+  check("the second issue does not wait", !issueCard("002")?.classList.contains("issue-needs"));
+  withText("button", "Skip", needs).click();
+  await until("the card no longer waiting", () => !issueCard("001")?.classList.contains("issue-needs") && !document.querySelector(".board-waiting"), 30000);
+  check("answering on the card takes the mark and the count away", !document.querySelector(".board-waiting"));
   const line = await until("the run to finish", () => {
     const l = document.querySelector('[aria-label="Backlog of workflow"] .backlog-run-line')?.textContent;
     return l && !l.includes("going on") && l;

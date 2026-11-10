@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cardMeta, LANES, laneTitle, placeIssues, shortId, since } from "./board.ts";
+import { cardMeta, LANES, laneTitle, placeIssues, shortId, since, waitingIssues } from "./board.ts";
 import type { BacklogItem } from "./backlog.ts";
 import { setLanguage } from "./i18n.ts";
 
@@ -56,6 +56,27 @@ test("without a run, the files say it all; an issue the run is working on stays 
   assert.deepEqual(ids(retried.working), ["001-a"]);
   assert.deepEqual(placeIssues([], null), { backlog: [], working: [], review: [], done: [] });
   assert.deepEqual(placeIssues(null, undefined), { backlog: [], working: [], review: [], done: [] });
+});
+
+// GUI-016, decision 4: waiting is a mark, not a column. The card stays where the run has
+// it, and says how many requests its session has waiting for the user.
+test("an issue whose agent waits for the user is marked, and stays in its column", () => {
+  const items = [item({ id: "001-a" }), item({ id: "002-b" }), item({ id: "003-c" })];
+  const run = {
+    state: "running",
+    steps: [
+      { issue: "001-a", title: "", state: "working", sessionId: "s1" },
+      { issue: "002-b", title: "", state: "working", sessionId: "s2" },
+      { issue: "003-c", title: "", state: "reviewing", sessionId: "s3" },
+    ],
+  };
+  const cols = placeIssues(items, run, { s1: 2, s3: 1, other: 4 });
+  assert.deepEqual(cols.working.map((c) => [c.id, c.waiting]), [["001-a", 2], ["002-b", 0]]);
+  // Only the session working on an issue counts; a review does not stop the issue.
+  assert.equal(cols.review[0].waiting, 0);
+  assert.equal(waitingIssues(cols), 1);
+  assert.deepEqual(placeIssues(items, run).working.map((c) => c.waiting), [0, 0]);
+  assert.equal(waitingIssues(placeIssues(items, null, { s1: 1 })), 0);
 });
 
 test("a card has the short id, who does it, and what it waits on or how long it has worked", () => {

@@ -40,6 +40,8 @@ blockedBy: [001-store-a-draft]
 
 The **Board** shows a row for each trusted project that has a backlog, with a card for each issue in four columns: **Backlog**, **Working**, **In review** and **Done**. A card shows its title, its number, whether an agent (AFK) or a person does it, and in Backlog what it waits on. An issue the app can't read counts as one for a person. The Board only shows where each issue stands, from its file and the run; you don't move cards. Ordinary sessions are not on it: they are in the sidebar.
 
+When an agent working on an issue needs you, its card stays in **Working** with a strong **Waiting for you** mark, and the request, an approval or a question, is on the card: answer it there, or choose **Open its session**. The Board's header counts such issues, and clicking it takes you to the first.
+
 **Archive finished** removes done issues, and PRDs whose issues are all done, in a commit of their own, so later agents aren't misled by stale docs. Git history keeps them: `git log -- backlog/` lists them and `git show` brings one back.
 
 ## Run the AFK issues

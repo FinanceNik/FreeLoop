@@ -248,6 +248,11 @@ func lastPrompt(msgs []provider.Message) (string, int) {
 
 var issueIn = regexp.MustCompile(`Your issue is (\S+?):`)
 
+// askMarker, in an issue's text, makes the AFK session for it ask the user a question
+// before it starts (ask_user, which asks in every mode), so the Board's card for it
+// waits for the user. The sliced demo's first issue says it.
+const askMarker = "Ask which name the work file should have before starting."
+
 // workflowStep plays the built-in workflow's stages (WFL-002 to WFL-006), recognised by
 // their prompts' first line, so the app check can run the workflow end to end: slicing
 // writes two issues, the second blocked by the first, and commits them; an AFK session
@@ -255,7 +260,11 @@ var issueIn = regexp.MustCompile(`Your issue is (\S+?):`)
 func workflowStep(msgs []provider.Message) (Step, bool) {
 	prompt, pos := lastPrompt(msgs)
 	issue := func(id, title, blocked string) map[string]any {
-		return map[string]any{"path": "backlog/issues/" + id + ".md", "content": fmt.Sprintf("---\ntitle: %s\nstatus: open\ntype: afk\nblockedBy: [%s]\nprd: demo\n---\n\n## What\n%s, end to end.\n\n## Acceptance\n- It works.\n", title, blocked, title)}
+		extra := ""
+		if blocked == "" {
+			extra = "\n" + askMarker + "\n"
+		}
+		return map[string]any{"path": "backlog/issues/" + id + ".md", "content": fmt.Sprintf("---\ntitle: %s\nstatus: open\ntype: afk\nblockedBy: [%s]\nprd: demo\n---\n\n## What\n%s, end to end.\n%s\n## Acceptance\n- It works.\n", title, blocked, title, extra)}
 	}
 	plays := map[string][]Step{
 		"# Workflow stage: grill": {{Text: "First question: who is this for? I suggest: the people already using the app, who asked for it."}},
@@ -299,6 +308,11 @@ func workflowStep(msgs []provider.Message) (Step, bool) {
 		{Calls: []Call{{Name: "shell", Input: map[string]any{"command": "git add -A"}}}},
 		{Calls: []Call{{Name: "shell", Input: map[string]any{"command": "git commit -q -m '" + id + ": done'"}}}},
 		{Text: "Done: " + id + " is committed and marked done."},
+	}
+	if strings.Contains(prompt, askMarker) {
+		steps = append([]Step{{Text: "One question before I start.", Calls: []Call{{Name: "ask_user", Input: map[string]any{"questions": []map[string]any{
+			{"question": "Which name should the work file have?", "header": "Name", "options": []map[string]any{{"label": "By the issue"}, {"label": "Plain"}}},
+		}}}}}}, steps...)
 	}
 	if pos < len(steps) {
 		return steps[pos], true

@@ -47,7 +47,7 @@ import NewSession from "./NewSession.tsx";
 import Rules from "./Rules.tsx";
 import Environments from "./Environments.tsx";
 import Settings from "./Settings.tsx";
-import Attention from "./Attention.tsx";
+import Attention, { RequestView } from "./Attention.tsx";
 import { addError, errorHeading, type ShownError } from "./errorlist.ts";
 import { finishedTurn, markFinished, markRead, onScreen, parseUnread, UNREAD_KEY } from "./unread.ts";
 import Profiles from "./Profiles.tsx";
@@ -1823,7 +1823,17 @@ export default function App() {
         )}
         {screen.kind === "queue" && <Queue projects={projects} profiles={profiles} onOpen={openSession} onError={report} />}
         {screen.kind === "board" && (
-          <Board backlogs={backlogs} onArchive={archiveBacklog} backlogActions={backlogActions} onOpen={(id) => openSession(id)} />
+          <Board
+            backlogs={backlogs}
+            waiting={Object.fromEntries(attention.map((it) => [it.session.id, it.requests?.length ?? 0]))}
+            renderRequest={(sid) => {
+              const req = attention.find((it) => it.session.id === sid)?.requests?.[0];
+              return req ? <RequestView key={req.requestId} req={req} onError={report} /> : null;
+            }}
+            onArchive={archiveBacklog}
+            backlogActions={backlogActions}
+            onOpen={(id) => openSession(id)}
+          />
         )}
         {screen.kind === "attention" && (
           <Attention

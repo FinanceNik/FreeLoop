@@ -553,7 +553,7 @@ The interface in German and Dutch, chosen in Settings (GUI-048; the PRD and issu
 GUI-016 reworded: the Board becomes a scrum board of workflow issues, designed in one conversation and written up as `backlog/prds/workflow-board.md`, sliced into the issues `backlog/issues/009` to `015`. Built a slice at a time, each by the work-an-issue method with its tests and an app-check step:
 
 1. **009, swimlanes and the Queue icon.** *Built 2026-11-10.* Rows per project, four columns, compact cards (`placeIssues`, `cardMeta` in `frontend/src/board.ts`, `Board.tsx`); the session columns and the sessions' cards are gone; the Queue's icon in the sidebar counts waiting tasks. German and Dutch column names.
-2. **010, waiting for you on the card.** An issue whose session waits for an answer, marked and answered on its card; the header counts them.
+2. **010, waiting for you on the card.** *Built 2026-11-10.* An issue whose session waits for an answer is marked "Waiting for you" and the request is answered on its card (`waiting` in `placeIssues`, `RequestView` on the card); the header counts them and scrolls to the first. The demo's first sliced issue asks a question, so `make check-app` has a real waiting card.
 3. **011, review and QA, and stopped issues.** In review's two states with QA done; a stopped issue back in Backlog with a mark.
 4. **012, rows collapse, a filter, the Done cap.**
 5. **013, untrusted rows and the empty board's actions.**

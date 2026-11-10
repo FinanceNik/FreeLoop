@@ -1581,6 +1581,8 @@ export const de = translationOf<typeof en>()({
   "board.lane.done": "Erledigt",
   "board.meta.started": "gestartet {when}",
   "board.issueCount": { one: "{count} Issue", other: "{count} Issues" },
+  "board.waiting": "Wartet auf eine Entscheidung",
+  "board.waitingCount": { one: "{count} Issue wartet auf eine Entscheidung", other: "{count} Issues warten auf eine Entscheidung" },
   "board.noBacklogs": "Noch kein Projekt hat ein Backlog.",
   "sidebar.queue.title": "Warteschlange der Aufgaben",
   "sidebar.queue.waiting": { one: "Warteschlange, {count} Aufgabe wartet", other: "Warteschlange, {count} Aufgaben warten" },

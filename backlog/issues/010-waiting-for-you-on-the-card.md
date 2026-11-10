@@ -1,6 +1,6 @@
 ---
 title: An issue whose agent waits for an answer stands out and is answered on its card
-status: open
+status: done
 type: afk
 blockedBy: [009-swimlanes-of-workflow-issues]
 prd: workflow-board
@@ -20,3 +20,8 @@ When an AFK session working on an issue waits for an approval or an answer, its 
 - The Board already received the attention list and rendered a session's request with `RequestView`; reuse it for the card.
 - Needs attention keeps listing the same request; nothing there changes.
 - PRD decision 4.
+
+## Done
+- `placeIssues` takes the pending requests per session (`waiting`), marks only a card whose step is working, and `waitingIssues` counts them; the card shows the mark, the request (`RequestView`, as Needs attention shows it) and "Open its session". The header's count is a button that scrolls to the first.
+- The check needed a request that really asks: a command in the run's sandbox does not, so the demo's first sliced issue says to ask a question first (`askMarker` in the scripted provider), and its AFK session calls `ask_user`, which asks in every mode. The check answers it with Skip on the card.
+- An approval waiting on a card is the same request in the same view; only the question was tried in the app.

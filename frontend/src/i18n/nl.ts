@@ -1574,6 +1574,8 @@ export const nl = translationOf<typeof en>()({
   "board.lane.done": "Klaar",
   "board.meta.started": "gestart {when}",
   "board.issueCount": { one: "{count} issue", other: "{count} issues" },
+  "board.waiting": "Wacht op een beslissing",
+  "board.waitingCount": { one: "{count} issue wacht op een beslissing", other: "{count} issues wachten op een beslissing" },
   "board.noBacklogs": "Nog geen project heeft een backlog.",
   "sidebar.queue.title": "Wachtrij met taken",
   "sidebar.queue.waiting": { one: "Wachtrij, {count} taak wacht", other: "Wachtrij, {count} taken wachten" },
