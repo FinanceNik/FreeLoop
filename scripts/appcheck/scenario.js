@@ -1352,6 +1352,89 @@ await step("the usage pane's numbers follow the language, without a reload", asy
   }
 });
 
+await step("no control or heading is clipped in German or Dutch", async () => {
+  // GUI-048: German labels run about a third longer than English ones. In Deutsch and
+  // Nederlands the sidebar, a session with its composer controls, every Settings page and
+  // the usage pane are walked, and a control or heading whose words do not fit its box
+  // fails. What comes from a user, an agent or a file (a session's title, a path, a
+  // message) may be cut short on purpose, so only the app's own controls are measured.
+  window.appcheckNotReloaded = true;
+  const pick = async (value) => {
+    document.querySelector(".settings-link").click();
+    (await until("the Appearance page", () => withText(".settings-nav button", "Appearance") ?? withText(".settings-nav button", "Darstellung") ?? withText(".settings-nav button", "Weergave"))).click();
+    const select = await until("the language", () => document.querySelector(".settings-page select.language-select"));
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(`the page in ${value}`, () => document.documentElement.lang === value, 8000);
+    document.querySelector(".settings-nav .settings-back").click();
+    await sleep(200);
+  };
+  const CONTROLS = "button, [role=tab], [role=menuitem], h1, h2, h3, h4, legend, th, summary, label, .badge";
+  // Text that is not the app's own: titles, paths, names and what models wrote.
+  const THEIRS = ".session-row, .row-title, .conversation, .transcript, .markdown, .tag, .git-mark, .path, code, .help-snippet, .project-name, .session-title, .file-name, .diff, .usage-row-name, .model-name, select, option";
+  const clipped = (root, where) => {
+    if (!root) return [`${where}: not found`];
+    const out = [];
+    for (const el of [root, ...root.querySelectorAll("*")]) {
+      if (!el.matches(CONTROLS) && getComputedStyle(el).textOverflow !== "ellipsis") continue;
+      if (el.closest(THEIRS) || !el.getClientRects().length || !el.textContent.trim()) continue;
+      const style = getComputedStyle(el);
+      if (style.display === "inline" || style.visibility === "hidden") continue;
+      // A box that scrolls on purpose is not clipped.
+      if (/auto|scroll/.test(style.overflowX + style.overflowY)) continue;
+      const wide = el.scrollWidth > el.clientWidth + 1;
+      const tall = style.overflowY !== "visible" && el.scrollHeight > el.clientHeight + 1;
+      if (wide || tall) out.push(`${where}: ${el.tagName.toLowerCase()} "${el.textContent.trim().slice(0, 40)}" ${el.scrollWidth}x${el.scrollHeight} in ${el.clientWidth}x${el.clientHeight}`);
+    }
+    return out;
+  };
+  const found = [];
+  try {
+    for (const lang of ["de", "nl"]) {
+      await pick(lang);
+      openSession("Check alpha");
+      await until("the conversation", () => document.querySelector(".conversation"));
+      await sleep(200);
+      found.push(...clipped(document.querySelector(".sidebar"), `${lang} sidebar`));
+      found.push(...clipped(activePane(), `${lang} session`));
+      document.querySelector(".settings-link").click();
+      await until("Settings", () => document.querySelector(".settings-nav"));
+      const pages = all(".settings-nav button:not(.settings-back)").length;
+      for (let i = 0; i < pages; i++) {
+        const button = all(".settings-nav button:not(.settings-back)")[i];
+        button.click();
+        await sleep(250);
+        found.push(...clipped(document.querySelector(".settings-content"), `${lang} Settings, ${button.textContent.trim()}`));
+      }
+      found.push(...clipped(document.querySelector(".settings-nav"), `${lang} Settings' list`));
+      document.querySelector(".settings-nav .settings-back").click();
+      await sleep(200);
+      openSession("Check alpha");
+      await until("the workspace", () => document.querySelector(".pane"));
+      document.querySelector('.layout-switch button[aria-label]:nth-child(4)')?.click();
+      await sleep(300);
+      if (!document.querySelector(".pane-usage")) {
+        const show = { de: "Nutzung zeigen", nl: "Gebruik tonen" }[lang];
+        (await until("an empty pane's Show usage", () => all(".pane-empty .row button").find((b) => b.textContent === show), 5000).catch(() => null))?.click();
+      }
+      const usage = await until("the usage pane", () => document.querySelector(".pane-usage"), 5000).catch(() => null);
+      await sleep(300);
+      found.push(...clipped(usage, `${lang} usage pane`));
+      document.querySelector(".layout-switch button[aria-label]:nth-child(1)")?.click();
+      await sleep(200);
+    }
+  } finally {
+    if (document.documentElement.lang !== "en") await pick("en").catch(() => {});
+    if (document.querySelector(".settings-nav")) document.querySelector(".settings-nav .settings-back")?.click();
+    document.querySelector('.layout-switch button[aria-label="One pane"]')?.click();
+    await sleep(200);
+    openSession("Check alpha");
+    await until("the workspace", () => document.querySelector(".pane")).catch(() => {});
+  }
+  check("no control or heading is clipped in German or Dutch", found.length === 0, `${found.length}: ${found.slice(0, 15).join("; ")}`);
+  check("no reload in between", window.appcheckNotReloaded === true);
+});
+
 // The in-app demo (GUI-045): started from the palette, one scripted turn that meets each
 // answer of the policy, one demo at a time, and "Remove demo" leaves nothing behind. It
 // runs before the bypass step and removes what it made, so later steps find the app as

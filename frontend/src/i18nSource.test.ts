@@ -1,144 +1,25 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-// GUI-048: the views translated so far write no text of their own; all of it comes from
-// the catalogues in src/i18n/. A rough reading of the source, not a parser: text
-// between tags, text on a line of its own, words in a user-facing attribute, and string
+// GUI-048: the interface writes no text of its own; all of it comes from the
+// catalogues in src/i18n/. Every source file is read, but for these, which hold no
+// interface text: a rough reading of the source, not a parser, finds text between
+// tags, text on a line of its own, words in a user-facing attribute, and string
 // literals that read like a label or a sentence.
-const TRANSLATED = [
-  // The Settings page and what it is made of.
-  "Settings.tsx",
-  "SettingsNav.tsx",
-  "ShortcutsEditor.tsx",
-  "ColorEditor.tsx",
-  "SourceMarks.tsx",
-  "SourceMark.tsx",
-  "FontEditor.tsx",
-  "Costs.tsx",
-  "BudgetTable.tsx",
-  "Hooks.tsx",
-  // The sidebar and its footer, and the panes.
-  "App.tsx",
-  "Workspace.tsx",
-  "Tags.tsx",
-  "GitMark.tsx",
-  "ContextMenu.tsx",
-  "Splitter.tsx",
-  "sessionActivity.ts",
-  "filters.ts",
-  "unread.ts",
-  "source.ts",
-  "budgets.ts",
-  "search.ts",
-  // The session view and its composer.
-  "SessionView.tsx",
-  "composer.ts",
-  "attach.ts",
-  "imageprep.ts",
-  "images.ts",
-  "contextMeter.ts",
-  "trust.ts",
-  "cost.ts",
-  "drafts.ts",
-  "mentions.ts",
-  "scrollPlace.ts",
-  "commands.ts",
-  // The transcript: tool calls, thinking, permission prompts, plans.
-  "ToolView.tsx",
-  "PlanReview.tsx",
-  "AttachedImages.tsx",
-  "Markdown.tsx",
-  "SessionControls.tsx",
-  "WorkflowStrip.tsx",
-  "transcript.ts",
-  "planView.ts",
-  "workflows.ts",
-  "shortcuts.ts",
-  "a11y.ts",
-  // The right panel.
-  "SessionPanel.tsx",
-  "ContextLimit.tsx",
-  "ModelSees.tsx",
-  "PreviewPanel.tsx",
-  "TerminalPanel.tsx",
-  "preview.ts",
-  "terminal.ts",
-  "modelContext.ts",
-  "sizes.ts",
-  // The Diff and Files tabs. review.ts writes the message a review sends the agent,
-  // which stays English, and pdfview.ts the PDF frame's page, whose one word is PDF.
-  "DiffPanel.tsx",
-  "AgentReview.tsx",
-  "PullRequest.tsx",
-  "FilesPanel.tsx",
-  "PdfView.tsx",
-  "diff.ts",
-  // The Board and its Backlog column, and the attention view.
-  "Board.tsx",
-  "board.ts",
-  "backlog.ts",
-  "Attention.tsx",
-  "attentionview.ts",
-  // The usage pages and pane.
-  "Usage.tsx",
-  "UsageChart.tsx",
-  "Heatmap.tsx",
-  "UsageOverview.tsx",
-  "Compare.tsx",
-  "Budgets.tsx",
-  "activity.ts",
-  "analytics.ts",
-  "overview.ts",
-  "reporting.ts",
-  "UsageInsights.tsx",
-  "TokenFigures.tsx",
-  "CostSummary.tsx",
-  "costsummary.ts",
-  "UsagePane.tsx",
-  "LiveUsage.tsx",
-  "Limits.tsx",
-  "PaneRange.tsx",
-  "usagePane.ts",
-  "limits.ts",
-  "recentUsage.ts",
-  // Workflows, AFK runs, the queue and schedules.
-  "Workflows.tsx",
-  "AFKDialog.tsx",
-  "AFKRunView.tsx",
-  "afk.ts",
-  "Queue.tsx",
-  "queue.ts",
-  "Schedules.tsx",
-  "schedules.ts",
-  "IssuePicker.tsx",
-  // Profiles and environments.
-  "Profiles.tsx",
-  "Environments.tsx",
-  "WorktreeScripts.tsx",
-  // MCP servers and skills. The suggested servers are the app's own words.
-  "MCP.tsx",
-  "McpForm.tsx",
-  "McpRegistry.tsx",
-  "mcpSuggestions.ts",
-  "Skills.tsx",
-  // Providers, the policy, token optimizers and the imports.
-  "Providers.tsx",
-  "Rules.tsx",
-  "policy.ts",
-  "Optimizers.tsx",
-  "optimizers.ts",
-  "ClaudeImport.tsx",
-  "SessionImport.tsx",
-  "sessionimport.ts",
-  // The new-session dialog, onboarding, the palette and what shows an error.
-  "NewSession.tsx",
-  "Onboarding.tsx",
-  "Palette.tsx",
-  "palette.ts",
-  "ErrorBoundary.tsx",
-  "errorlist.ts",
-];
+const EXEMPT: Record<string, string> = {
+  "colors.ts": "CSS it writes",
+  "fonts.ts": "fonts' names",
+  "i18n.ts": "each language's name in that language",
+  "icons.tsx": "SVG paths",
+  "markdown.ts": "the Markdown parser",
+  "pdfview.ts": "the PDF frame's page, whose one word is PDF",
+  "platform.ts": "systems' names and their file managers'",
+  "review.ts": "the message a review sends the agent, which stays English",
+};
+
+// SOURCES are every component and module but the tests and the exempt ones.
+const SOURCES = readdirSync(new URL("./", import.meta.url)).filter((f) => /\.tsx?$/.test(f) && !/\.(test|typetest|d)\.ts$/.test(f) && !(f in EXEMPT));
 
 // What is not text to translate: a selector, a media query, the product's name, a key's
 // name as a key event gives it.
@@ -236,8 +117,10 @@ test("the source reading finds English written into a component", () => {
   assert.deepEqual(untranslated('document.querySelector<HTMLElement>(".pane-active textarea")?.focus();\ncase "Home":\n<h1>\n  Freeloop\n</h1>'), []);
 });
 
-test("every string in the translated views comes from the catalogues", () => {
-  const found = TRANSLATED.map((name) => [name, untranslated(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"))] as const);
+test("every string in the interface comes from the catalogues", () => {
+  assert.ok(SOURCES.length > 120, `${SOURCES.length} files`);
+  assert.deepEqual(Object.keys(EXEMPT).filter((name) => !existsSync(new URL(`./${name}`, import.meta.url))), [], "exempt files that are gone");
+  const found = SOURCES.map((name) => [name, untranslated(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"))] as const);
   assert.deepEqual(
     found.filter(([, texts]) => texts.length > 0),
     [],

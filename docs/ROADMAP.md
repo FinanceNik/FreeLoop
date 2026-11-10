@@ -546,7 +546,11 @@ The interface in German and Dutch, chosen in Settings (GUI-048; the PRD and issu
 1. **The setting, the module and the Settings page (backlog 001).** *Built 2026-11-08.* `ui.language` in `config.yaml` (`internal/config`), `frontend/src/i18n.ts` with the catalogues in `frontend/src/i18n/`, the picker beside Theme, `<html lang>`; the Settings page and what it is made of (the column, shortcuts, colours, fonts, marks, prices, usage, budgets, hooks, what waits for approval, the native dialog's buttons). A `make check-app` step switches to Deutsch and back.
 2. **Formats (backlog 002).** *Built 2026-11-09.* `locale()` in `frontend/src/i18n.ts`, which every number, date and time formatter takes (a source test holds them to it); tokens, costs (in US dollars), the charts' axis times and numbers in the catalogues' placeholders in the language's style. A `make check-app` step switches the usage pane to Deutsch and back.
 3. **The views used all day (backlog 003).** *Built 2026-11-09.* The sidebar and its footer, the session's header, the transcript's own words, the composer and its controls, the right panel, the Diff and Files tabs, and the app's own slash commands and mode names (`modeName` in `frontend/src/commands.ts`); what an agent advertises is shown as given. The source test reads all of them. A `make check-app` step switches the session to Deutsch and back.
-4. **The remaining views (004), the help pages (005), the menu bar and notifications (006), the guards against untranslated text and clipped labels (007), and the user's review of the wording (008).** *Not built.*
+4. **The remaining views (backlog 004).** *Built 2026-11-10.*
+5. **The help pages (backlog 005).** *Built 2026-11-10.* All thirteen in `frontend/src/help/de/` and `help/nl/`, translated with the interface's own words for every label; `help.test.ts` holds each to the English page's shape, code and shortcuts.
+6. **The menu bar and notifications (backlog 006).** *Built 2026-11-10.* `cmd/freeloop/words.go`, in the language the window resolved; notices carry what happened beside the engine's English. Wails' Help menu, which loaded wails.io into the window, became Freeloop Help.
+7. **The guards (backlog 007).** *Built 2026-11-10.* The source test reads every file but eight that hold no interface text; `make check-app` fails on a clipped control or heading in Deutsch and Nederlands.
+8. **The user's review of the wording (backlog 008).** *Open.*
 
 ## The Board as a workflow board (planned 2026-11-09, at the user's request)
 
