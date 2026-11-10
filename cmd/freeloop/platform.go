@@ -26,4 +26,7 @@ type platform struct {
 	EditorArgv, PDFArgv, FolderArgv func(path string) []string
 	// SystemInfo describes the machine for a problem report.
 	SystemInfo func() string
+	// MenuWords are the system's own names for menu items in a language, where they
+	// differ from menuWords (GUI-048).
+	MenuWords map[string]map[string]string
 }

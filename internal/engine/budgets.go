@@ -135,6 +135,7 @@ func (e *Engine) checkBudgets(ctx context.Context, now time.Time) {
 		if b.Level == BudgetWarning {
 			body = fmt.Sprintf("%s: $%.2f spent so far, %.0f%%.", b.name(), b.Spent, 100*b.Spent/b.Amount)
 		}
-		e.onNotice(Notice{Kind: "budget", Title: title, Body: body})
+		state := b
+		e.onNotice(Notice{Kind: "budget", Title: title, Body: body, Budget: &state})
 	}
 }

@@ -39,6 +39,9 @@ const ConfigEventName = "freeloop:config"
 // for it was clicked (GUI-008).
 const OpenSessionEventName = "freeloop:open-session"
 
+// OpenHelpEventName asks the UI to show the help, from the Help menu.
+const OpenHelpEventName = "freeloop:open-help"
+
 // mainWindowName names the main window; a session's own window (GUI-015)
 // is named by sessionWindowName and loads the page with ?session=<id>.
 const mainWindowName = "main"
@@ -57,6 +60,7 @@ func init() {
 	application.RegisterEvent[event.Event](EventName)
 	application.RegisterEvent[engine.ConfigChange](ConfigEventName)
 	application.RegisterEvent[string](OpenSessionEventName)
+	application.RegisterEvent[string](OpenHelpEventName)
 	application.RegisterEvent[[]string](FilesDroppedEventName)
 }
 

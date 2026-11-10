@@ -17,4 +17,5 @@ var thisPlatform = platform{
 	PDFArgv:        darwin.PDFArgv,
 	FolderArgv:     darwin.FolderArgv,
 	SystemInfo:     darwin.SystemInfo,
+	MenuWords:      darwin.MenuWords,
 }

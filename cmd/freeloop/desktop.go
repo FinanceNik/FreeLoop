@@ -3,9 +3,11 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"log"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,11 +19,12 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/engine"
 )
 
-// appMenu is Wails' default menu without the View menu's zoom items. Those would
-// claim ⌘+, ⌘- and ⌘0, which the app uses: for the Font size setting
-// (NFR-A11Y-002) and the attention view. Zooming the page also scales the layout,
-// which the setting does not.
-func appMenu() *application.Menu {
+// appMenu is Wails' default menu without the View menu's zoom items, in lang
+// (GUI-048). Those would claim ⌘+, ⌘- and ⌘0, which the app uses: for the Font size
+// setting (NFR-A11Y-002) and the attention view. Zooming the page also scales the
+// layout, which the setting does not. Its Help menu opens the app's own help, where
+// Wails' would load its website into the window.
+func appMenu(lang string, help func()) *application.Menu {
 	menu := application.NewMenu()
 	menu.AddRole(application.AppMenu)
 	menu.AddRole(application.FileMenu)
@@ -35,7 +38,8 @@ func appMenu() *application.Menu {
 	view.AddSeparator()
 	view.AddRole(application.ToggleFullscreen)
 	menu.AddRole(application.WindowMenu)
-	menu.AddRole(application.HelpMenu)
+	menu.AddSubmenu("Help").Add("Freeloop Help").OnClick(func(*application.Context) { help() })
+	localizeMenu(menu, lang, thisPlatform.MenuWords)
 	return menu
 }
 
@@ -54,6 +58,9 @@ type desktop struct {
 	dock  *dock.DockService
 	asked sync.Once
 	ok    bool
+	// lang is the interface's language, as the window resolved it (GUI-048).
+	mu   sync.Mutex
+	lang string
 }
 
 func newDesktop(eng *engine.Engine) *desktop {
@@ -67,7 +74,7 @@ func (d *desktop) services() []application.Service {
 // start wires the window; call it once the window exists.
 func (d *desktop) start(app *application.App, win *application.WebviewWindow) {
 	d.app, d.win = app, win
-	app.Menu.Set(appMenu())
+	app.Menu.Set(appMenu(d.language(), d.openHelp))
 	d.notes.OnNotificationResponse(func(r notifications.NotificationResult) {
 		if r.Error != nil {
 			return
@@ -87,6 +94,38 @@ func (d *desktop) start(app *application.App, win *application.WebviewWindow) {
 	})
 }
 
+// language is the interface's language, English until the window says.
+func (d *desktop) language() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return cmp.Or(d.lang, "en")
+}
+
+// setLanguage puts the menu and the notifications in lang, the interface's language
+// as the window resolved it; the menu is built again when it changes.
+func (d *desktop) setLanguage(lang string) {
+	if !slices.Contains(interfaceLanguages, lang) {
+		lang = "en"
+	}
+	d.mu.Lock()
+	changed := d.lang != lang
+	d.lang = lang
+	d.mu.Unlock()
+	if changed && d.app != nil {
+		d.app.Menu.Set(appMenu(lang, d.openHelp))
+	}
+}
+
+// openHelp brings the main window forward on the help.
+func (d *desktop) openHelp() {
+	if d.win == nil {
+		return
+	}
+	d.win.Show()
+	d.win.Focus()
+	d.app.Event.Emit(OpenHelpEventName, "")
+}
+
 func (d *desktop) notice(n engine.Notice) {
 	if d.win == nil || d.focused() {
 		return
@@ -103,10 +142,11 @@ func (d *desktop) notice(n engine.Notice) {
 	if !d.ok {
 		return
 	}
+	title, body := noticeText(n, d.language())
 	err := d.notes.SendNotification(notifications.NotificationOptions{
 		ID:       n.SessionID + "-" + n.Kind,
-		Title:    n.Title,
-		Body:     n.Body,
+		Title:    title,
+		Body:     body,
 		ThreadID: n.SessionID,
 		Data:     map[string]any{"sessionId": n.SessionID},
 	})

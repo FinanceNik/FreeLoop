@@ -23,6 +23,7 @@ func (*desktop) services() []application.Service                    { return nil
 func (*desktop) start(*application.App, *application.WebviewWindow) {}
 func (*desktop) notice(engine.Notice)                               {}
 func (*desktop) badge(int)                                          {}
+func (*desktop) setLanguage(string)                                 {}
 
 func (*desktop) closeGone(func(string) bool) {}
 

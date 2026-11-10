@@ -311,6 +311,15 @@ func (s *EngineService) SetProjectTrust(ctx context.Context, root string, truste
 	return s.eng.SetProjectTrust(ctx, root, trusted)
 }
 
+// SetInterfaceLanguage tells the desktop layer the interface's language, "en", "de"
+// or "nl", as the window resolved ui.language, for the menu bar and the
+// notifications (GUI-048).
+func (s *EngineService) SetInterfaceLanguage(lang string) {
+	if s.desk != nil {
+		s.desk.setLanguage(lang)
+	}
+}
+
 // SetProjectMuted turns a project's notifications off or on (GUI-008).
 func (s *EngineService) SetProjectMuted(ctx context.Context, projectID string, muted bool) error {
 	return s.eng.SetProjectMuted(ctx, projectID, muted)

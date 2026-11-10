@@ -13,14 +13,24 @@ import (
 // finished. The engine decides what is worth a notice; the desktop layer
 // decides whether to show it (only while the window is not focused) and how.
 
-// Notice is one thing to tell the user.
+// Notice is one thing to tell the user. Title and Body are in English; the desktop
+// layer writes them in the interface's language from what the notice says happened
+// (GUI-048), and shows these for a kind it does not know.
 type Notice struct {
 	SessionID string `json:"sessionId"`
 	ProjectID string `json:"projectId"`
-	// Kind is approval, error or finished.
+	// Kind is approval, error, finished or budget.
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
 	Body  string `json:"body"`
+	// Session is the session's title, and Detail what the approval asks for or the
+	// error says, as given.
+	Session string `json:"session,omitempty"`
+	Detail  string `json:"detail,omitempty"`
+	// StopReason is a finished turn's.
+	StopReason string `json:"stopReason,omitempty"`
+	// Budget is the budget a budget notice is about.
+	Budget *BudgetState `json:"budget,omitempty"`
 }
 
 var finishedLabel = map[string]string{
@@ -33,7 +43,7 @@ var finishedLabel = map[string]string{
 // noticeFor returns the notice ev calls for, if any. Notifications turned
 // off in config.yaml and muted projects get none.
 func (e *Engine) noticeFor(ctx context.Context, ev event.Event) (Notice, bool) {
-	var kind, body string
+	var kind, body, reason string
 	switch ev.Type {
 	case event.PermissionRequested:
 		var d struct{ Title, Command string }
@@ -53,7 +63,7 @@ func (e *Engine) noticeFor(ctx context.Context, ev event.Event) (Notice, bool) {
 		if !ok {
 			return Notice{}, false // cancelled by the user, or an error noticed already
 		}
-		kind, body = "finished", label
+		kind, body, reason = "finished", label, d.StopReason
 	default:
 		return Notice{}, false
 	}
@@ -69,9 +79,14 @@ func (e *Engine) noticeFor(ctx context.Context, ev event.Event) (Notice, bool) {
 		return Notice{}, false
 	}
 	title := map[string]string{"approval": "Approval needed", "error": "Session failed", "finished": "Session finished"}[kind]
+	detail := truncate(strings.TrimSpace(body), 200)
+	if kind == "finished" {
+		detail = ""
+	}
 	return Notice{
 		SessionID: ses.ID, ProjectID: ses.ProjectID, Kind: kind,
 		Title: title + ": " + ses.Title, Body: truncate(strings.TrimSpace(body), 200),
+		Session: ses.Title, Detail: detail, StopReason: reason,
 	}, true
 }
 

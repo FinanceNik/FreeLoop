@@ -8,6 +8,7 @@ import {
   EngineService,
   EVENT_NAME,
   OPEN_SESSION_EVENT_NAME,
+  OPEN_HELP_EVENT_NAME,
   errorText,
   type AttentionItem,
   type BacklogInfo,
@@ -470,6 +471,9 @@ export default function App() {
   setLanguage(language, systemLanguages);
   useEffect(() => {
     document.documentElement.lang = language;
+    // The menu bar and the notifications follow it (GUI-048); a session's own window
+    // leaves that to the main one.
+    if (!STANDALONE) EngineService.SetInterfaceLanguage(language).catch(() => {});
   }, [language]);
 
   // Appearance (GUI-011, GUI-025): theme, font size and fonts from config.yaml.
@@ -802,6 +806,8 @@ export default function App() {
   const openRef = useRef(openSession);
   openRef.current = openSession;
   useEffect(() => (STANDALONE ? undefined : Events.On(OPEN_SESSION_EVENT_NAME, ({ data }) => openRef.current(String(data)))), []);
+  // The Help menu.
+  useEffect(() => (STANDALONE ? undefined : Events.On(OPEN_HELP_EVENT_NAME, () => setScreen({ kind: "help" }))), []);
   // A link inside a session (a subagent's transcript, HRN-014).
   useEffect(() => {
     const open = (e: Event) => {

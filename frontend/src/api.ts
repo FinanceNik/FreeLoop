@@ -8,12 +8,13 @@ export type { Project, Session } from "../bindings/github.com/FinanceNik/Freeloo
 export type { Option as SessionOption } from "../bindings/github.com/FinanceNik/Freeloop/internal/harness/models";
 export type { Blocked } from "../bindings/github.com/FinanceNik/Freeloop/internal/netguard/models";
 
-// Must match EventName, ConfigEventName, OpenSessionEventName,
+// Must match EventName, ConfigEventName, OpenSessionEventName, OpenHelpEventName,
 // FilesDroppedEventName and TerminalEventName in
 // cmd/freeloop/main.go.
 export const EVENT_NAME = "freeloop:event";
 export const CONFIG_EVENT_NAME = "freeloop:config";
 export const OPEN_SESSION_EVENT_NAME = "freeloop:open-session";
+export const OPEN_HELP_EVENT_NAME = "freeloop:open-help";
 export const FILES_DROPPED_EVENT_NAME = "freeloop:files-dropped";
 export const TERMINAL_EVENT_NAME = "freeloop:terminal";
 
