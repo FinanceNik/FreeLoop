@@ -410,7 +410,7 @@ func TestAFKRunOnAChosenModel(t *testing.T) {
 	if models.OptionID != optionModelID || !slices.Contains(values, want) || models.Default != "m" {
 		t.Fatalf("models = %+v", models)
 	}
-	if _, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, Model: "s" + modelSeparator + "nope"}); err == nil {
+	if _, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, Model: "elsewhere" + modelSeparator + "nope"}); err == nil {
 		t.Error("a model not offered was taken")
 	}
 	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, Allow: []string{"git add *", "git commit *"}, Model: want, ReviewModel: want})
@@ -457,6 +457,76 @@ func TestAFKStopSaysHowTheTurnEnded(t *testing.T) {
 		e.emit(ses.ID, event.TurnEnded, event.TurnEndedData{StopReason: c.stop})
 		if got := e.endedBecause(ctx, ses.ID); got != c.want {
 			t.Errorf("%s/%q: %q, want %q", c.stop, c.problem, got, c.want)
+		}
+	}
+}
+
+// WFL-011: a built-in profile's run can take any listed model of any provider the user
+// can call unasked, its own provider's first; a provider without its key is left out,
+// a model none lists can be named, and the run's sessions move to that provider.
+func TestAFKModelsFromEveryProvider(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	os.WriteFile(filepath.Join(e.dataDir, config.ProvidersFileName), []byte("version: 1\nproviders:\n"+
+		"  - {id: small, name: Small, type: scripted, defaultModel: tiny}\n"+
+		"  - {id: big, name: Big, type: scripted, defaultModel: b}\n"+
+		"  - {id: nokey, name: No key, type: anthropic, baseUrl: \"https://api.example.com\", defaultModel: k}\n"), 0o600)
+	if err := e.loadProviders(); err != nil {
+		t.Fatal(err)
+	}
+	withScript(e, "s")
+	withScript(e, "big")
+	withScript(e, "small")
+	if err := e.SaveProfileYAML("big", "name: Big\nprovider: big\nmodel: b\n"); err != nil {
+		t.Fatal(err)
+	}
+	models, err := e.ProfileModels(ctx, root, "big")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var values []string
+	for _, c := range models.Choices {
+		values = append(values, c.Value)
+	}
+	listed := "small" + modelSeparator + "scripted"
+	if !slices.Contains(values, listed) || !slices.Contains(values, "small"+modelSeparator+"tiny") {
+		t.Errorf("the other provider's listed models are missing: %q", values)
+	}
+	if slices.ContainsFunc(values, func(v string) bool { return strings.HasPrefix(v, "nokey"+modelSeparator) }) {
+		t.Errorf("a provider without its key is offered: %q", values)
+	}
+	if len(models.Choices) == 0 || models.Choices[0].Group != "Big" || !models.Custom {
+		t.Errorf("first group %+v, custom %v", models.Choices, models.Custom)
+	}
+	// The listing is kept for a while, so opening the dialog again asks no provider.
+	e.mu.Lock()
+	at := e.modelLists["small"].at
+	e.mu.Unlock()
+	e.ProfileModels(ctx, root, "big")
+	e.mu.Lock()
+	again := e.modelLists["small"].at
+	e.mu.Unlock()
+	if at.IsZero() || !again.Equal(at) {
+		t.Errorf("the listing was asked again: %v then %v", at, again)
+	}
+	if _, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "big", Model: "nokey" + modelSeparator + "k"}); err == nil {
+		t.Error("a model of a provider without its key was taken")
+	}
+	// A model the provider does not list, named by the user.
+	own := "small" + modelSeparator + "my-own"
+	run, err := e.StartAFK(ctx, AFKStart{ProjectRoot: root, ProfileID: "big", Allow: []string{"git add *", "git commit *"}, Model: own, ReviewModel: listed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run = waitRun(t, e, run.ID)
+	if run.State != config.RunFinished || len(run.Steps) != 2 {
+		t.Fatalf("run = %+v", run)
+	}
+	for _, s := range run.Steps {
+		ses, _ := e.store.GetSession(ctx, s.SessionID)
+		rev, _ := e.store.GetSession(ctx, s.ReviewID)
+		if ses.ProviderID != "small" || ses.Model != "my-own" || rev.ProviderID != "small" || rev.Model != "scripted" {
+			t.Errorf("%s ran on %s/%s, its review on %s/%s", s.Issue, ses.ProviderID, ses.Model, rev.ProviderID, rev.Model)
 		}
 	}
 }

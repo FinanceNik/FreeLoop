@@ -1965,6 +1965,8 @@ export const en = {
   // The model picker's first choice: the profile's own model, named when known.
   "afk.model.profileOwn": "The profile's own",
   "afk.model.profileOwnNamed": "The profile's own ({model})",
+  "afk.model.other": "Other model on {provider}…",
+  "afk.model.otherName": "Model name",
 
   // A run in full (AFKRunView.tsx).
   "afk.run.title": "AFK run of {project}",

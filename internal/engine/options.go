@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/harness/builtin"
 	"github.com/FinanceNik/Freeloop/internal/permission"
+	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
@@ -192,6 +194,13 @@ func (e *Engine) setEffort(ctx context.Context, ses session.Session, effort stri
 // user marked or set as the default on the others, so opening a session asks one
 // provider at most.
 func (e *Engine) builtinOptions(ctx context.Context, ses session.Session) []harness.Option {
+	return e.modelOptions(ctx, ses, false)
+}
+
+// modelOptions are builtinOptions; with every set, the model choices hold the listed
+// models of every provider that can be called unasked, not only the session's, its
+// own provider's first (WFL-011). The listings are asked side by side, each cached.
+func (e *Engine) modelOptions(ctx context.Context, ses session.Session, every bool) []harness.Option {
 	model := harness.Option{
 		ID: optionModelID, Name: "Model", Category: harness.OptionModel,
 		Current: ses.ProviderID + modelSeparator + ses.Model, Custom: true,
@@ -202,10 +211,26 @@ func (e *Engine) builtinOptions(ctx context.Context, ses session.Session) []harn
 			model.Choices = append(model.Choices, harness.OptionChoice{Value: value, Name: name, Group: group})
 		}
 	}
-	for _, p := range e.ListProviders() {
-		if p.AddressChanged || (p.ID != ses.ProviderID && !canCallUnasked(p)) {
-			continue
+	providers := slices.DeleteFunc(e.ListProviders(), func(p ProviderInfo) bool {
+		return p.AddressChanged || (p.ID != ses.ProviderID && !canCallUnasked(p))
+	})
+	// The session's own provider first.
+	slices.SortStableFunc(providers, func(a, b ProviderInfo) int {
+		return cmp.Compare(boolRank(a.ID != ses.ProviderID), boolRank(b.ID != ses.ProviderID))
+	})
+	listed := make([][]string, len(providers))
+	var wg sync.WaitGroup
+	for i, p := range providers {
+		if p.ID == ses.ProviderID || every {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				listed[i] = e.listedModels(ctx, p.ID)
+			}()
 		}
+	}
+	wg.Wait()
+	for i, p := range providers {
 		if p.ID == ses.ProviderID {
 			add(p.Name, p.ID, ses.Model)
 		}
@@ -213,11 +238,9 @@ func (e *Engine) builtinOptions(ctx context.Context, ses session.Session) []harn
 			add(p.Name, p.ID, name)
 		}
 		add(p.Name, p.ID, p.DefaultModel)
-		if p.ID == ses.ProviderID {
-			for _, name := range e.listedModels(ctx, p.ID) {
-				if !slices.Contains(p.Hidden, name) {
-					add(p.Name, p.ID, name)
-				}
+		for _, name := range listed[i] {
+			if !slices.Contains(p.Hidden, name) {
+				add(p.Name, p.ID, name)
 			}
 		}
 	}
@@ -243,11 +266,19 @@ func (e *Engine) builtinOptions(ctx context.Context, ses session.Session) []harn
 // canCallUnasked reports a provider a model can be chosen on: it has its key, or
 // needs none.
 func canCallUnasked(p ProviderInfo) bool {
-	if p.HasKey || p.Builtin || p.Type == "ollama" {
+	if p.HasKey || p.Builtin || p.Type == "ollama" || p.Type == string(provider.TypeScripted) {
 		return true
 	}
 	u, err := url.Parse(p.BaseURL)
 	return err == nil && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")
+}
+
+// boolRank orders false before true.
+func boolRank(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // listedModels asks a provider for its models, at most every few minutes; one

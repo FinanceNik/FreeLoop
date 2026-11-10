@@ -32,6 +32,8 @@ type ProfileModels struct {
 	Default string `json:"default"`
 	// Note says where the choices come from, or why there are none.
 	Note string `json:"note"`
+	// Custom is set when a model the choices lack can be named (WFL-011).
+	Custom bool `json:"custom"`
 }
 
 // ProfileModels lists the models a profile's sessions in the project at root can be
@@ -60,9 +62,9 @@ func (e *Engine) ProfileModels(ctx context.Context, root, profileID string) (Pro
 		}
 		model := cmp.Or(prof.Model, p.cfg.DefaultModel)
 		ses := session.Session{ProviderID: providerID, Model: model, ProfileID: prof.ID, ProjectID: project.ID, HarnessID: builtin.ID}
-		for _, o := range e.builtinOptions(ctx, ses) {
+		for _, o := range e.modelOptions(ctx, ses, true) {
 			if o.Category == harness.OptionModel {
-				out.OptionID, out.Choices = o.ID, slices.Clone(o.Choices)
+				out.OptionID, out.Choices, out.Custom = o.ID, slices.Clone(o.Choices), o.Custom
 			}
 		}
 		out.Default = model
@@ -77,7 +79,7 @@ func (e *Engine) ProfileModels(ctx context.Context, root, profileID string) (Pro
 		out.Note = fmt.Sprintf("%s says which models it offers only once it runs. Open one of its sessions and choose its model there once; its models are then listed here.", name)
 		return out, nil
 	}
-	out.OptionID, out.Choices = o.ID, slices.Clone(o.Choices)
+	out.OptionID, out.Choices, out.Custom = o.ID, slices.Clone(o.Choices), o.Custom
 	out.Note = fmt.Sprintf("As %s listed them in your latest session with it.", name)
 	return out, nil
 }
@@ -108,6 +110,21 @@ func (e *Engine) reportedModels(ctx context.Context, harnessID string) (harness.
 		}
 	}
 	return harness.Option{}, false
+}
+
+// offers reports whether a run can take value: one of the choices, or, where a model
+// can be named, one on a provider the choices come from (WFL-011).
+func (m ProfileModels) offers(value string) bool {
+	if slices.ContainsFunc(m.Choices, func(c harness.OptionChoice) bool { return c.Value == value }) {
+		return true
+	}
+	providerID, model, ok := strings.Cut(value, modelSeparator)
+	if !m.Custom || !ok || strings.TrimSpace(model) == "" || strings.ContainsAny(model, "\r\n") {
+		return false
+	}
+	return slices.ContainsFunc(m.Choices, func(c harness.OptionChoice) bool {
+		return strings.HasPrefix(c.Value, providerID+modelSeparator)
+	})
 }
 
 // modelName is a model option's value as a person reads it: the built-in agent's

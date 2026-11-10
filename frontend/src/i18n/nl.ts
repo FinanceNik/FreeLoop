@@ -1724,6 +1724,8 @@ export const nl = translationOf<typeof en>()({
   "afk.dialog.starting": "Starten…",
   "afk.model.profileOwn": "Zoals in het profiel",
   "afk.model.profileOwnNamed": "Zoals in het profiel ({model})",
+  "afk.model.other": "Ander model bij {provider}…",
+  "afk.model.otherName": "Modelnaam",
 
   "afk.run.title": "AFK-run van {project}",
   "afk.run.onBranch": "op {branch}",

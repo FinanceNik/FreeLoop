@@ -1731,6 +1731,8 @@ export const de = translationOf<typeof en>()({
   "afk.dialog.starting": "Wird gestartet…",
   "afk.model.profileOwn": "Wie im Profil",
   "afk.model.profileOwnNamed": "Wie im Profil ({model})",
+  "afk.model.other": "Anderes Modell bei {provider}…",
+  "afk.model.otherName": "Modellname",
 
   "afk.run.title": "AFK-Lauf von {project}",
   "afk.run.onBranch": "auf {branch}",

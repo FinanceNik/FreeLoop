@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EngineService, modeName, type AFKPlan, type AFKRun, type Profile, type ProfileModels } from "./api.ts";
 import { commandFrom, commandOutcome, defaultAllow } from "./afk.ts";
+import { modelGroups, namedModel } from "./modelChoice.ts";
 import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 
@@ -191,33 +192,62 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, onClo
   );
 }
 
-// ModelPicker chooses the model a profile's sessions switch to for the run: the
-// built-in agent's provider models, or what an external agent last said it offers.
+// ModelPicker chooses the model a profile's sessions switch to for the run: for the
+// built-in agent every model of every provider that can be called unasked, the
+// profile's own first, or one named by hand (WFL-011); for an external agent what it
+// last said it offers.
 function ModelPicker({ label, root, profileId, value, onChange, onError }: { label: string; root: string; profileId: string; value: string; onChange: (v: string) => void; onError: (err: unknown) => void }) {
   const [models, setModels] = useState<ProfileModels | null>(null);
+  // The provider a model is being named on, while it is.
+  const [naming, setNaming] = useState("");
+  const [name, setName] = useState("");
   useEffect(() => {
     setModels(null);
+    setNaming("");
     if (!profileId) return;
     EngineService.ProfileModels(root, profileId)
       .then(setModels)
       .catch(onError);
   }, [root, profileId]);
   const choices = models?.choices ?? [];
-  const groups = [...new Set(choices.map((c) => c.group))];
-  const name = (v: string) => v.split("\n").pop() ?? v;
+  const groups = modelGroups(choices);
+  const listed = choices.some((c) => c.value === value);
+  const OTHER = "\u0000other:";
+  const selected = naming ? OTHER + naming : value && !listed ? OTHER + value.split("\n")[0] : value;
   return (
     <label>
       {label}
-      <select value={value} disabled={choices.length === 0} onChange={(e) => onChange(e.target.value)}>
+      <select
+        value={selected}
+        disabled={choices.length === 0}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v.startsWith(OTHER)) {
+            setNaming(v.slice(OTHER.length));
+            setName("");
+            onChange("");
+            return;
+          }
+          setNaming("");
+          onChange(v);
+        }}
+      >
         <option value="">{models?.default ? t("afk.model.profileOwnNamed", { model: models.default }) : t("afk.model.profileOwn")}</option>
         {groups.map((g) => {
-          const items = choices.filter((c) => c.group === g).map((c) => (
+          const items = g.items.map((c) => (
             <option key={c.value} value={c.value}>
-              {c.name || name(c.value)}
+              {c.name}
             </option>
           ));
-          return g ? (
-            <optgroup key={g} label={g}>
+          if (models?.custom && g.provider) {
+            items.push(
+              <option key={OTHER + g.provider} value={OTHER + g.provider}>
+                {t("afk.model.other", { provider: g.group })}
+              </option>,
+            );
+          }
+          return g.group ? (
+            <optgroup key={g.group} label={g.group}>
               {items}
             </optgroup>
           ) : (
@@ -225,6 +255,19 @@ function ModelPicker({ label, root, profileId, value, onChange, onError }: { lab
           );
         })}
       </select>
+      {(naming || (value && !listed)) && (
+        <input
+          aria-label={t("afk.model.otherName")}
+          placeholder={t("afk.model.otherName")}
+          value={naming ? name : value.split("\n").slice(1).join("")}
+          onChange={(e) => {
+            const provider = naming || value.split("\n")[0];
+            setNaming(provider);
+            setName(e.target.value);
+            onChange(namedModel(provider, e.target.value));
+          }}
+        />
+      )}
       {models?.note && <span className="muted">{models.note}</span>}
     </label>
   );

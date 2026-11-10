@@ -25,6 +25,10 @@ import (
 // DemoProviderID is the scripted provider offered in development builds.
 const DemoProviderID = "demo"
 
+// DemoSmallProviderID is a second scripted provider in development builds, so a run
+// can be sent to another provider without a key (WFL-011).
+const DemoSmallProviderID = "demo-small"
+
 // TourProviderID is the scripted provider behind the in-app demo (GUI-045). It exists
 // in every build, is not listed and is not saved, so no picker offers it.
 const TourProviderID = "freeloop-tour"
@@ -123,6 +127,10 @@ func (e *Engine) demoConfig() config.Provider {
 	return config.Provider{ID: DemoProviderID, Name: "Scripted demo", Type: string(provider.TypeScripted), DefaultModel: "scripted"}
 }
 
+func (e *Engine) demoSmallConfig() config.Provider {
+	return config.Provider{ID: DemoSmallProviderID, Name: "Demo small", Type: string(provider.TypeScripted), DefaultModel: "small"}
+}
+
 func (e *Engine) tourConfig() config.Provider {
 	return config.Provider{ID: TourProviderID, Name: "Freeloop tour", Type: string(provider.TypeScripted), DefaultModel: "tour"}
 }
@@ -139,9 +147,11 @@ func (e *Engine) ListProviders() []ProviderInfo {
 		out = append(out, pi)
 	}
 	if e.dev {
-		pi := info(e.demoConfig())
-		pi.Builtin = true
-		out = append(out, pi)
+		for _, c := range []config.Provider{e.demoConfig(), e.demoSmallConfig()} {
+			pi := info(c)
+			pi.Builtin = true
+			out = append(out, pi)
+		}
 	}
 	return out
 }
@@ -162,6 +172,8 @@ func (e *Engine) provider(id string) (*configuredProvider, error) {
 		cfg = e.providers.configs[i]
 	case e.dev && id == DemoProviderID:
 		cfg = e.demoConfig()
+	case e.dev && id == DemoSmallProviderID:
+		cfg = e.demoSmallConfig()
 	default:
 		e.mu.Unlock()
 		return nil, fmt.Errorf("no provider %q; add one under Providers", id)
@@ -260,7 +272,7 @@ func (e *Engine) SaveProvider(req SaveProviderRequest) (ProviderInfo, error) {
 		}
 	} else {
 		base := strings.Trim(slugChars.ReplaceAllString(strings.ToLower(req.Name), "-"), "-")
-		if base == "" || base == DemoProviderID || base == TourProviderID {
+		if base == "" || base == DemoProviderID || base == DemoSmallProviderID || base == TourProviderID {
 			base = "provider"
 		}
 		req.ID = base

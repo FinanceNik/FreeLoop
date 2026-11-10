@@ -421,7 +421,7 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 		if err != nil {
 			return "", err
 		}
-		if !slices.ContainsFunc(m.Choices, func(c harness.OptionChoice) bool { return c.Value == value }) {
+		if !m.offers(value) {
 			return "", fmt.Errorf("%s is not among the models offered for that profile", modelName(value))
 		}
 		return m.OptionID, nil

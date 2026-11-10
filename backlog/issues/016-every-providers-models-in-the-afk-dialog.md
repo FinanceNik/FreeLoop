@@ -1,6 +1,6 @@
 ---
 title: The AFK dialog lists every callable provider's models, and a run can take one from another provider
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: model-sets
@@ -21,3 +21,9 @@ The AFK dialog's Issues and Reviews model pickers list every model of every prov
 - The model option today adds only the default model of providers other than the session's (`builtinOptions`); `listedModels` already caches a provider's listing.
 - External agents: unchanged (PRD decision 2).
 - Requirement WFL-011; PRD decision 2.
+
+## Done
+- `modelOptions(ctx, ses, every)` (the built-in agent's model option) asks, with every set, each callable provider's listing side by side, cached as before; `ProfileModels` uses it and says `Custom`. The session's own provider comes first, in the composer's list too.
+- A model typed by hand is taken when the choices come from that provider (`ProfileModels.offers`); WFL-010's test now names an unoffered provider instead of an unlisted model.
+- "Callable unasked" also counts the scripted provider, which needs no key; "without its key" means none configured. A key configured but missing from the keychain is decision 9's, for 018.
+- In development mode `demo-small` ("Demo small", model `small`) stands beside the demo. `frontend/src/modelChoice.ts` groups the choices and names a typed model; the dialog has "Other model on <provider>…" per group.

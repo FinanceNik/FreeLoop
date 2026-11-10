@@ -1649,13 +1649,21 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   const reviewProfile = all("label", dialog).find((l) => l.textContent.startsWith("Profile for the reviews"))?.querySelector("select");
   setSelect(afkProfile, "afk-demo");
   if (reviewProfile) setSelect(reviewProfile, "afk-demo");
-  // WFL-010: the issues can go to another model than the profile's.
-  const issuesModel = await until("the issues' models", () => {
-    const sel = all("label", dialog).find((l) => l.textContent.startsWith("Model for the issues"))?.querySelector("select");
-    return sel && sel.options.length > 1 && sel;
-  }, 8000);
+  // WFL-010, WFL-011: the issues can go to another model than the profile's, on any
+  // provider that can be called unasked, here the second demo provider.
+  const smallModel = async (d) => {
+    const sel = await until("the issues' models", () => {
+      const el = all("label", d).find((l) => l.textContent.startsWith("Model for the issues"))?.querySelector("select");
+      return el && el.options.length > 1 && el;
+    }, 8000);
+    const small = [...sel.querySelectorAll('optgroup[label="Demo small"] option')].find((o) => o.value === "demo-small\nsmall");
+    if (small) setSelect(sel, small.value);
+    return sel;
+  };
+  const issuesModel = await smallModel(dialog);
   check("the run offers the profile's models", [...issuesModel.options].some((o) => o.value.endsWith("\nscripted")), [...issuesModel.options].map((o) => o.textContent).join(", "));
-  setSelect(issuesModel, [...issuesModel.options].find((o) => o.value.endsWith("\nscripted")).value);
+  check("and every callable provider's, grouped, with one to name", !!issuesModel.querySelector('optgroup[label="Demo small"]') && [...issuesModel.options].some((o) => o.textContent === "Other model on Demo small…"), all("optgroup", issuesModel).map((g) => g.label).join(", "));
+  check("the issues go to Demo small", issuesModel.value === "demo-small\nsmall", issuesModel.value);
   // WFL-009: a command of the user's own joins the list, ticked.
   const another = dialog.querySelector('input[aria-label="Another command to allow"]');
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(another, "npm run e2e");
@@ -1713,6 +1721,7 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
       const select = all("label", again).find((l) => l.textContent.startsWith(label))?.querySelector("select");
       if (select) setSelect(select, "afk-demo");
     }
+    await smallModel(again);
     await sleep(150);
     (await until("Start again", () => { const b = withText("button", "Start the run", again); return b && !b.disabled && b; }, 4000)).click();
     await until("the dialog closed again", () => !document.querySelector(".afk-dialog"), 8000);
@@ -1749,6 +1758,8 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
     return l && !l.includes("going on") && l;
   }, 150000);
   check("the run did both issues", line.startsWith("AFK run finished: 2 of 2 issues done"), line);
+  const afkRow = all(".session-row").find((r) => /AFK 001/.test(r.textContent));
+  check("the issue's session ran on Demo small", /^Provider: Demo small/.test(afkRow?.querySelector(".source-mark")?.getAttribute("aria-label") ?? ""), afkRow?.querySelector(".source-mark")?.getAttribute("aria-label"));
   // (Needs attention also counts the issues now ready for QA, so ask the sessions' own dots.)
   const needing = all(".session-row").filter((r) => r.querySelector(".status-dot")?.getAttribute("aria-label") === "Needs you");
   check("no unattended session waited for an approval", needing.length === 0, needing.map((r) => r.textContent.slice(0, 40)).join(" | "));

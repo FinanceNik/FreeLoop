@@ -566,7 +566,7 @@ Not in: dragging, a Sessions view on the Board, filters beyond a project, parall
 
 WFL-011 to WFL-015: plan on a big model and hand the AFK issues to a small one, set up once as a model set, and see what each issue and run cost. Designed in one conversation and written up as `backlog/prds/model-sets.md`, sliced into `backlog/issues/016` to `024`:
 
-1. **016, every callable provider's models in the AFK dialog** (WFL-011), with a second demo provider, "Demo small".
+1. **016, every callable provider's models in the AFK dialog** (WFL-011), with a second demo provider, "Demo small". *Built 2026-11-10.* `modelOptions` in `internal/engine/options.go`, `ProfileModels.offers`, `frontend/src/modelChoice.ts`.
 2. **017, effort for a run** (WFL-012).
 3. **018, model sets in Settings** (WFL-013).
 4. **019, the planning stages switch to the set's model** (WFL-014).
