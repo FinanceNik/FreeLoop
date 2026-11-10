@@ -569,7 +569,7 @@ WFL-011 to WFL-015: plan on a big model and hand the AFK issues to a small one, 
 1. **016, every callable provider's models in the AFK dialog** (WFL-011), with a second demo provider, "Demo small". *Built 2026-11-10.* `modelOptions` in `internal/engine/options.go`, `ProfileModels.offers`, `frontend/src/modelChoice.ts`.
 2. **017, effort for a run** (WFL-012). *Built 2026-11-10.* `ModelEfforts`, `runEffort` in `internal/engine/afkmodels.go`; the dialog's Effort pickers.
 3. **018, model sets in Settings** (WFL-013). *Built 2026-11-10.* `internal/config/modelsets.go`, `internal/engine/modelsets.go`, `ModelSets.tsx` and `ModelSelect.tsx`.
-4. **019, the planning stages switch to the set's model** (WFL-014).
+4. **019, the planning stages switch to the set's model** (WFL-014). *Built 2026-11-10.* `planningModel`, `RunStageOnCurrent`; the composer's notice with its two buttons.
 5. **020, a workflow session starts on the Planning model** (WFL-014).
 6. **021, the AFK dialog starts from the set; the Board shows the run's models** (WFL-014).
 7. **022, cost per issue and run on the Board** (WFL-015).

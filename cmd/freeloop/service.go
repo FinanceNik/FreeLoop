@@ -664,6 +664,12 @@ func (s *EngineService) RunStage(ctx context.Context, sessionID, command, input 
 	return s.eng.RunStage(ctx, sessionID, command, input)
 }
 
+// RunStageOnCurrent runs a stage on the session's own model, where its model set's
+// planning model cannot be had (WFL-014).
+func (s *EngineService) RunStageOnCurrent(ctx context.Context, sessionID, command, input string) (engine.StageResult, error) {
+	return s.eng.RunStageOnCurrent(ctx, sessionID, command, input)
+}
+
 // SetOptimizer switches a session's token optimizer (HRN-019).
 // OptimizerSavings says what a session's optimizer reports having saved, or nil.
 func (s *EngineService) OptimizerSavings(ctx context.Context, sessionID string) (*engine.OptimizerSavings, error) {

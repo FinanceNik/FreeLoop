@@ -39,7 +39,8 @@ const step = async (name, fn) => {
 // a request waited.
 const turn = async (title, afterSend = () => {}) => {
   const pane = activePane();
-  const ended = () => all(".turn-end", pane).length;
+  // A turn's end, not the notices and mode or model changes shown the same way.
+  const ended = () => all(".turn-stop", pane).length;
   const before = ended();
   const box = await until("the message box", () => pane.querySelector(".composer textarea"));
   box.focus();

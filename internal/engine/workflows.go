@@ -14,6 +14,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/session"
 	"github.com/FinanceNik/Freeloop/internal/skill"
 )
@@ -301,11 +302,25 @@ type StageResult struct {
 	Message string `json:"message"`
 	// SessionID is a session the stage started, such as a review.
 	SessionID string `json:"sessionId"`
+	// Blocked says why the stage did not start: the workflow's model set names a
+	// planning model the session cannot have (WFL-014). RunStageOnCurrent runs it on
+	// the session's own model instead.
+	Blocked string `json:"blocked"`
 }
 
 // RunStage invokes the stage of the session's workflow whose command is command, with
 // input what followed the command (WFL-002).
 func (e *Engine) RunStage(ctx context.Context, sid, command, input string) (StageResult, error) {
+	return e.runStage(ctx, sid, command, input, false)
+}
+
+// RunStageOnCurrent runs a stage on the session's own model, where its model set's
+// planning model cannot be had (WFL-014).
+func (e *Engine) RunStageOnCurrent(ctx context.Context, sid, command, input string) (StageResult, error) {
+	return e.runStage(ctx, sid, command, input, true)
+}
+
+func (e *Engine) runStage(ctx context.Context, sid, command, input string, onCurrent bool) (StageResult, error) {
 	ses, err := e.store.GetSession(ctx, sid)
 	if err != nil {
 		return StageResult{}, err
@@ -338,6 +353,12 @@ func (e *Engine) RunStage(ctx context.Context, sid, command, input string) (Stag
 	if err := e.skillsReady(ctx, ses, w, stage.Skill); err != nil {
 		return res, err
 	}
+	if !onCurrent {
+		if why, err := e.planningModel(ctx, ses, w); err != nil || why != "" {
+			res.Blocked = why
+			return res, err
+		}
+	}
 	if stage.Mode != "" && stage.Mode != ses.Mode {
 		if err := e.SetMode(ctx, sid, stage.Mode); err != nil {
 			return res, err
@@ -351,6 +372,75 @@ func (e *Engine) RunStage(ctx context.Context, sid, command, input string) (Stag
 	// words attach nothing.
 	_, err = e.enqueue(ctx, sid, queued{text: strings.TrimSpace(text), noMentions: true})
 	return res, err
+}
+
+// planningModel switches a session to its workflow's planning model and effort, from
+// the workflow's model set, before a planning stage (WFL-014), and says so in the
+// session. It says why when the session cannot have that model; nothing then changes.
+func (e *Engine) planningModel(ctx context.Context, ses session.Session, w config.Workflow) (string, error) {
+	set, ok := e.workflowModelSet(w.ID)
+	if !ok || !set.Planning.Fixed() {
+		return "", nil
+	}
+	row := set.Planning
+	report, err := e.SessionOptions(ctx, ses.ID)
+	if err != nil {
+		return "", err
+	}
+	option := func(category string) (harness.Option, bool) {
+		i := slices.IndexFunc(report.Options, func(o harness.Option) bool { return o.Category == category })
+		if i < 0 {
+			return harness.Option{}, false
+		}
+		return report.Options[i], true
+	}
+	want := row.Value()
+	model, ok := option(harness.OptionModel)
+	cannot := func(why string) string {
+		return fmt.Sprintf("The model set %s plans on %s, which this session cannot have: %s.", set.Name, row.Model, why)
+	}
+	switch {
+	case !ok:
+		return cannot("its agent offers no choice of model"), nil
+	case model.Current == want:
+	case slices.ContainsFunc(model.Choices, func(c harness.OptionChoice) bool { return c.Value == want }):
+	// A model named by hand is taken where the agent takes one, and of the same kind:
+	// the built-in agent's names its provider, an external agent's does not.
+	case model.Custom && strings.Contains(want, modelSeparator) == strings.Contains(model.Current, modelSeparator):
+	default:
+		return cannot("its agent does not offer it"), nil
+	}
+	if why := e.modelUnavailable(row); why != "" {
+		return cannot(why), nil
+	}
+	changed := false
+	if model.Current != want {
+		if err := e.SetSessionOption(ctx, ses.ID, model.ID, want); err != nil {
+			return "", err
+		}
+		changed = true
+		if report, err = e.SessionOptions(ctx, ses.ID); err != nil {
+			return "", err
+		}
+	}
+	effort := ""
+	if eff, ok := option(harness.OptionEffort); ok && row.Effort != "" && slices.ContainsFunc(eff.Choices, func(c harness.OptionChoice) bool { return c.Value == row.Effort }) {
+		effort = row.Effort
+		if eff.Current != row.Effort {
+			if err := e.SetSessionOption(ctx, ses.ID, eff.ID, row.Effort); err != nil {
+				return "", err
+			}
+			changed = true
+		}
+	}
+	if changed {
+		name := row.Model
+		if effort != "" {
+			name += " · " + effort
+		}
+		e.emit(ses.ID, event.Notice, event.NoticeData{Message: fmt.Sprintf("Switched to %s for this stage (model set %s).", name, set.Name)})
+	}
+	return "", nil
 }
 
 // skillsReady says why a stage cannot use its skill: missing, or turned off for the

@@ -1,6 +1,6 @@
 ---
 title: The planning stages switch the session to the set's Planning model
-status: open
+status: done
 type: afk
 blockedBy: [018-model-sets-in-settings]
 prd: model-sets
@@ -18,3 +18,8 @@ Running grill, PRD or slice in a session whose workflow has a set with a Plannin
 ## Notes
 - Prompt and afk stages are both stages; only the planning stages (the workflow's prompt-kind stages) use the Planning row.
 - Requirement WFL-014; PRD decision 6.
+
+## Done
+- `planningModel` in `internal/engine/workflows.go` runs before a prompt stage: the set's Planning model and effort through the session's own options, a notice naming the set, nothing when already there.
+- A model the session cannot have is not an error but `StageResult.Blocked`, which names the model and why, so the composer can show it with **Run on <model>** (`RunStageOnCurrent`) and **Open model sets**; nothing is sent. The new-session form's first stage reports it and leaves the brief in the box.
+- The app check counted every `.turn-end` as a turn's end, and a model change and a notice render that way too, so it stopped approving too early; a real turn's end is now also `.turn-stop`, which the check counts.

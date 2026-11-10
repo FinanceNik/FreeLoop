@@ -1568,7 +1568,7 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   typeIn(all("label", editor).find((l) => l.textContent.startsWith("Name")).querySelector("input"), "Big plans, small works");
   const rowModel = (legend) => all(".model-set-row", editor).find((f) => f.querySelector("legend")?.textContent === legend)?.querySelector("select");
   await until("the models", () => [...(rowModel("Issues")?.options ?? [])].some((o) => o.value === "demo-small\nsmall"), 8000);
-  setSelect(rowModel("Planning stages"), "demo\nscripted");
+  setSelect(rowModel("Planning stages"), "demo-small\nsmall");
   setSelect(rowModel("Issues"), "demo-small\nsmall");
   await sleep(100);
   const rowEffort = await until("the issues row's efforts", () => {
@@ -1579,7 +1579,7 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   await sleep(100);
   withText("button", "Save model set", editor).click();
   const saved = await until("the set listed", () => sets.querySelector('li[aria-label="Big plans, small works"]'), 8000);
-  check("the set lists its rows", /Planning stages\s*scripted/.test(saved.textContent) && /Issues\s*small · low/.test(saved.textContent) && /Reviews\s*Not fixed/.test(saved.textContent), saved.textContent);
+  check("the set lists its rows", /Planning stages\s*small/.test(saved.textContent) && /Issues\s*small · low/.test(saved.textContent) && /Reviews\s*Not fixed/.test(saved.textContent), saved.textContent);
   setSelect(all("label", card).find((l) => l.textContent.startsWith("Model set")).querySelector("select"), "big-plans-small-works");
   await sleep(300);
   document.querySelector(".settings-nav .settings-back").click();
@@ -1646,7 +1646,7 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   await sleep(150);
   const listed = all('.mention-picker[aria-label="Commands"] li', activePane()).map((l) => l.textContent);
   check("its stages are slash commands", ["grill", "prd", "slice", "afk"].every((c) => listed.some((l) => l.includes(c))), listed.join(" | ").slice(0, 200));
-  const ended = () => all(".turn-end", activePane()).length;
+  const ended = () => all(".turn-stop", activePane()).length;
   const before = ended();
   type(box, "/slice");
   await sleep(100);
@@ -1658,6 +1658,8 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   }, 45000);
   const sent = await until("the stage's prompt", () => all(".msg-user").find((m) => m.textContent.includes("Workflow stage: slice")), 5000).catch(() => null);
   check("the stage's prompt was sent", !!sent, all(".msg-user").map((m) => m.textContent.slice(0, 60)).join(" | "));
+  // WFL-014: the workflow's model set plans on Demo small, so the stage switched to it first.
+  check("the stage switched the session to the set's planning model", activePane().textContent.includes("Switched to small for this stage (model set Big plans, small works)."), activePane().querySelector(".session-sub")?.textContent);
   const writes = all(".tool.tool-completed", activePane()).filter((t) => t.querySelector("summary")?.textContent.includes("write_file"));
   check("a file written has a pen beside it", writes.length > 0 && writes.every((t) => t.querySelector('.edit-mark[aria-label="Edited a file"] svg')), `${writes.length} writes`);
 

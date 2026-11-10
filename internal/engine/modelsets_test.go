@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 )
 
@@ -101,5 +102,95 @@ func TestModelSets(t *testing.T) {
 	}
 	if eff := e.EffortsOf(ctx, "big"+modelSeparator+"b"); len(eff.Choices) != 0 {
 		t.Errorf("big's efforts: %+v", eff)
+	}
+}
+
+// WFL-014: a planning stage switches its session to the set's Planning model and
+// effort before its prompt, with a notice, and not again once there; a model that
+// cannot be had stops the stage, which can then run on the session's own model.
+func TestPlanningStageSwitchesToTheSetsModel(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	twoProviders(t, e)
+	b, _ := os.ReadFile(filepath.Join(e.dataDir, config.ProvidersFileName))
+	os.WriteFile(filepath.Join(e.dataDir, config.ProvidersFileName), append(b, []byte("  - {id: keyed, name: Keyed, type: anthropic, baseUrl: \"https://api.example.com\", apiKey: \"keychain://freeloop/providers/keyed\", defaultModel: k}\n")...), 0o600)
+	twoProvidersBuilt(t, e)
+	if _, err := e.InstallWorkflowSkills(ctx, config.BuiltinWorkflowID); err != nil {
+		t.Fatal(err)
+	}
+	set := config.ModelSet{Name: "Split", Planning: config.ModelChoice{Provider: "small", Model: "tiny", Effort: "low"}}
+	if _, err := e.SaveModelSet(ctx, set); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.SetWorkflowModelSet(ctx, config.BuiltinWorkflowID, "split"); err != nil {
+		t.Fatal(err)
+	}
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "big"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.SetWorkflow(ctx, ses.ID, config.BuiltinWorkflowID); err != nil {
+		t.Fatal(err)
+	}
+	ch, cancel := e.Subscribe()
+	defer cancel()
+	// The scripted agent plays the stages, writing their files, which asks.
+	stop := make(chan struct{})
+	defer close(stop)
+	approveAll(e, stop)
+	count := func(typ event.Type, text string) int {
+		evs, _ := e.store.Events(ctx, ses.ID, 0)
+		n := 0
+		for _, ev := range evs {
+			if ev.Type == typ && strings.Contains(string(ev.Data), text) {
+				n++
+			}
+		}
+		return n
+	}
+	res, err := e.RunStage(ctx, ses.ID, "grill", "add dark mode")
+	if err != nil || res.Blocked != "" {
+		t.Fatalf("grill: %+v, %v", res, err)
+	}
+	waitIdle(t, ch, ses.ID)
+	got, _ := e.store.GetSession(ctx, ses.ID)
+	if got.ProviderID != "small" || got.Model != "tiny" || got.Effort != "low" {
+		t.Errorf("after grill: %s/%s at %q", got.ProviderID, got.Model, got.Effort)
+	}
+	evs, _ := e.store.Events(ctx, ses.ID, 0)
+	notice := slices.IndexFunc(evs, func(ev event.Event) bool {
+		return ev.Type == event.Notice && strings.Contains(string(ev.Data), "Switched to tiny · low for this stage (model set Split)")
+	})
+	prompt := slices.IndexFunc(evs, func(ev event.Event) bool { return ev.Type == event.UserMessageChunk })
+	if notice < 0 || notice > prompt {
+		t.Errorf("the notice is at %d, the prompt at %d", notice, prompt)
+	}
+	if _, err := e.RunStage(ctx, ses.ID, "prd", ""); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, ch, ses.ID)
+	if n := count(event.ModelChanged, ""); n != 1 {
+		t.Errorf("%d model changes after a second stage on the same model", n)
+	}
+
+	// The Planning provider's key is not in the keychain: the stage stops and says why.
+	set.ID, set.Planning = "split", config.ModelChoice{Provider: "keyed", Model: "k"}
+	if _, err := e.SaveModelSet(ctx, set); err != nil {
+		t.Fatal(err)
+	}
+	sent := count(event.UserMessageChunk, "")
+	res, err = e.RunStage(ctx, ses.ID, "slice", "")
+	if err != nil || !strings.Contains(res.Blocked, "k on Keyed") {
+		t.Fatalf("a model that cannot be had: %+v, %v", res, err)
+	}
+	if count(event.UserMessageChunk, "") != sent {
+		t.Error("the stage sent its prompt anyway")
+	}
+	if _, err := e.RunStageOnCurrent(ctx, ses.ID, "slice", ""); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, ch, ses.ID)
+	if got, _ := e.store.GetSession(ctx, ses.ID); got.ProviderID != "small" || count(event.UserMessageChunk, "") != sent+1 {
+		t.Errorf("on the current model: %s, %d messages", got.ProviderID, count(event.UserMessageChunk, ""))
 	}
 }

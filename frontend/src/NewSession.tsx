@@ -273,7 +273,12 @@ export default function NewSession({ providers, projects, environments, profiles
         // yet, it waits in the box with its command, and the reason shows.
         if (initialWorkflow && first && brief.trim() && (!first.kind || first.kind === "prompt")) {
           const ran = await EngineService.RunStage(s.id, first.command, brief.trim()).then(
-            () => true,
+            // A model set's planning model the session cannot have leaves the brief in the
+            // box, where sending it again offers to run on the session's own model.
+            (res) => {
+              if (res.blocked) onError(new Error(res.blocked));
+              return !res.blocked;
+            },
             (err) => {
               onError(err);
               return false;

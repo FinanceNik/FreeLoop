@@ -68,6 +68,8 @@ interface Props {
   prices: PriceEntry[];
   // Opens the AFK run's dialog for a project's backlog (WFL-005), for /afk.
   onRunAFK?: (root: string, workflowId: string) => void;
+  // Opens the Workflows settings, where the model sets are (WFL-014).
+  onOpenModelSets?: () => void;
   // Shows a project's AFK run in full (WFL-009).
   onShowRun?: (root: string) => void;
   // Text for the composer, as after a fork (SES-009).
@@ -134,7 +136,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source, onRunAFK, onShowRun }: Props) {
+export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source, onRunAFK, onOpenModelSets, onShowRun }: Props) {
   // Beside other panes the panel starts closed and only the active pane shows
   // it; the remembered choice is for a session alone in the window.
   const split = !!onClosePane;
@@ -603,11 +605,19 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const [accepting, setAccepting] = useState(false);
   // runStage has the engine run a stage of the session's workflow; typed, it
   // clears the draft once accepted.
-  const runStage = (command: string, text: string, typed: boolean) => {
+  // A stage the workflow's model set could not start, and why (WFL-014).
+  const [blocked, setBlocked] = useState<{ command: string; text: string; typed: boolean; why: string } | null>(null);
+  const runStage = (command: string, text: string, typed: boolean, onCurrent = false) => {
     holdBottom.current = false;
     setAccepting(true);
-    EngineService.RunStage(session.id, command, text)
-      .then(() => {
+    const run = onCurrent ? EngineService.RunStageOnCurrent : EngineService.RunStage;
+    run(session.id, command, text)
+      .then((res) => {
+        if (res.blocked) {
+          setBlocked({ command, text, typed, why: res.blocked });
+          return;
+        }
+        setBlocked(null);
         if (!typed) return;
         forgetDraft(session.id);
         setDraft("");
@@ -1322,6 +1332,20 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </div>
           </form>
         )}
+        {blocked && (
+          <div className="stage-blocked" role="alert">
+            <p>{blocked.why}</p>
+            <p className="row">
+              <button className="primary" disabled={accepting} onClick={() => runStage(blocked.command, blocked.text, blocked.typed, true)}>
+                {t("stage.blocked.runOnCurrent", { model: session.model || t("stage.blocked.currentModel") })}
+              </button>
+              {onOpenModelSets && <button onClick={onOpenModelSets}>{t("stage.blocked.openSets")}</button>}
+              <button className="ghost" onClick={() => setBlocked(null)}>
+                {t("common.cancel")}
+              </button>
+            </p>
+          </div>
+        )}
         {workflow && (
           <WorkflowStrip
             workflow={workflow}
@@ -1727,7 +1751,7 @@ function ItemBody({
       return <ToolView item={item} roots={roots} onError={onError} />;
     case "turn_end":
       return (
-        <div className={`turn-end ${item.stopReason !== "end_turn" ? "turn-end-warn" : ""}`}>
+        <div className={`turn-end turn-stop ${item.stopReason !== "end_turn" ? "turn-end-warn" : ""}`}>
           {/* A turn that ended as usual says only when and what it cost (GUI-042). */}
           {item.stopReason === "end_turn" ? <span className="sr-only">{t("session.stop.endTurn")} · </span> : `${stopLabel(item.stopReason)} · `}
           {new Date(item.ts).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}

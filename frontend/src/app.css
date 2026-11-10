@@ -2734,6 +2734,25 @@ button.issue-title:hover {
   gap: 8px;
 }
 
+/* A stage the workflow's model set could not start (WFL-014), above the composer. */
+.stage-blocked {
+  margin: 0 12px 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning, var(--accent));
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.stage-blocked p {
+  margin: 0 0 6px;
+}
+
+.stage-blocked .row {
+  gap: 6px;
+  margin: 0;
+}
+
 /* Model sets (WFL-013): each set with its three rows, and the editor's rows. */
 .model-set-list {
   list-style: none;

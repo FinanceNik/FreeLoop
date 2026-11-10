@@ -1212,6 +1212,7 @@ export default function App() {
       }}
       prices={prices}
       onRunAFK={(root, workflowId) => setAfkFor({ root, workflowId, startedBy: "/afk" })}
+      onOpenModelSets={() => setScreen({ kind: "workflows" })}
       onShowRun={(root) => setRunFor(root)}
       knownTags={tagsInUse}
       onOpenCompare={(tag) => setScreen({ kind: "compare", tag })}
