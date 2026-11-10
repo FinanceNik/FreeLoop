@@ -1,7 +1,9 @@
 // The help pages (GUI-047): which topics there are, in what order, where each one
 // leads in the app, and searching their text. The pages themselves are Markdown in
-// src/help/, read by Help.tsx; this module has no runtime imports so `node --test`
-// can run it.
+// src/help/, English there and German and Dutch in src/help/de/ and src/help/nl/
+// (GUI-048), read by Help.tsx; this module imports only the catalogues, so `node
+// --test` can run it.
+import { t, type PlainKey } from "./i18n.ts";
 
 // A place in the app a topic can open: a screen's kind, or "demo" for the demo.
 export type HelpPlace =
@@ -25,6 +27,7 @@ export type HelpPlace =
   | "network"
   | "data";
 
+// A topic in the language in force.
 export interface HelpTopic {
   slug: string;
   title: string;
@@ -34,21 +37,29 @@ export interface HelpTopic {
 
 // The topics in reading order: the first steps, then what a session is made of,
 // then the settings, then what to do when something goes wrong.
-export const HELP_TOPICS: HelpTopic[] = [
-  { slug: "getting-started", title: "Getting started", opens: [{ label: "Try the demo", place: "demo" }, { label: "Open Providers", place: "providers" }] },
-  { slug: "sessions", title: "Sessions and panes", opens: [{ label: "New session", place: "new" }, { label: "Open the Board", place: "board" }, { label: "Open the Queue", place: "queue" }] },
-  { slug: "agents-and-profiles", title: "Agents and profiles", opens: [{ label: "Open Profiles", place: "profiles" }] },
-  { slug: "permissions", title: "Permissions and the policy", opens: [{ label: "Open Policy", place: "rules" }, { label: "Open Permissions settings", place: "permissions" }] },
-  { slug: "providers", title: "Providers and models", opens: [{ label: "Open Providers", place: "providers" }] },
-  { slug: "skills-and-mcp", title: "Skills and MCP servers", opens: [{ label: "Open Skills", place: "skills" }, { label: "Open MCP servers", place: "mcp" }] },
-  { slug: "environments", title: "Environments", opens: [{ label: "Open Environments", place: "environments" }] },
-  { slug: "token-optimizers", title: "Token optimizers", opens: [{ label: "Open Token optimizers", place: "optimizers" }] },
-  { slug: "workflows", title: "Workflows", opens: [{ label: "Open Workflows", place: "workflows" }, { label: "Open the Board", place: "board" }, { label: "Open Needs attention", place: "attention" }] },
-  { slug: "usage-and-budgets", title: "Usage, prices and budgets", opens: [{ label: "Open Usage", place: "usage" }, { label: "Open Prices and budgets", place: "costs" }] },
-  { slug: "keyboard", title: "Keyboard and the command palette", opens: [{ label: "Open Keyboard shortcuts", place: "keyboard" }] },
-  { slug: "privacy", title: "Privacy and your data", opens: [{ label: "Open Network settings", place: "network" }, { label: "Open Data settings", place: "data" }] },
-  { slug: "troubleshooting", title: "Troubleshooting", opens: [{ label: "Report a problem", place: "data" }] },
+const TOPICS: { slug: string; title: PlainKey; opens: { label: PlainKey; place: HelpPlace }[] }[] = [
+  { slug: "getting-started", title: "help.topic.gettingStarted", opens: [{ label: "help.open.demo", place: "demo" }, { label: "help.open.providers", place: "providers" }] },
+  { slug: "sessions", title: "help.topic.sessions", opens: [{ label: "help.open.new", place: "new" }, { label: "help.open.board", place: "board" }, { label: "help.open.queue", place: "queue" }] },
+  { slug: "agents-and-profiles", title: "help.topic.agentsAndProfiles", opens: [{ label: "help.open.profiles", place: "profiles" }] },
+  { slug: "permissions", title: "help.topic.permissions", opens: [{ label: "help.open.rules", place: "rules" }, { label: "help.open.permissions", place: "permissions" }] },
+  { slug: "providers", title: "help.topic.providers", opens: [{ label: "help.open.providers", place: "providers" }] },
+  { slug: "skills-and-mcp", title: "help.topic.skillsAndMcp", opens: [{ label: "help.open.skills", place: "skills" }, { label: "help.open.mcp", place: "mcp" }] },
+  { slug: "environments", title: "help.topic.environments", opens: [{ label: "help.open.environments", place: "environments" }] },
+  { slug: "token-optimizers", title: "help.topic.tokenOptimizers", opens: [{ label: "help.open.optimizers", place: "optimizers" }] },
+  { slug: "workflows", title: "help.topic.workflows", opens: [{ label: "help.open.workflows", place: "workflows" }, { label: "help.open.board", place: "board" }, { label: "help.open.attention", place: "attention" }] },
+  { slug: "usage-and-budgets", title: "help.topic.usageAndBudgets", opens: [{ label: "help.open.usage", place: "usage" }, { label: "help.open.costs", place: "costs" }] },
+  { slug: "keyboard", title: "help.topic.keyboard", opens: [{ label: "help.open.keyboard", place: "keyboard" }] },
+  { slug: "privacy", title: "help.topic.privacy", opens: [{ label: "help.open.network", place: "network" }, { label: "help.open.data", place: "data" }] },
+  { slug: "troubleshooting", title: "help.topic.troubleshooting", opens: [{ label: "help.open.report", place: "data" }] },
 ];
+
+// The topics' slugs, in reading order.
+export const HELP_SLUGS: readonly string[] = TOPICS.map((x) => x.slug);
+
+// helpTopics is the topics with their titles and buttons in the language in force.
+export function helpTopics(): HelpTopic[] {
+  return TOPICS.map((x) => ({ slug: x.slug, title: t(x.title), opens: x.opens.map((o) => ({ label: t(o.label), place: o.place })) }));
+}
 
 // A search result: the topic, and a line of its text around the first match.
 export interface HelpHit {

@@ -58,7 +58,7 @@ import MCP from "./MCP.tsx";
 import SettingsNav from "./SettingsNav.tsx";
 import { budgetLine, budgetName, worst } from "./budgets.ts";
 import { BellIcon, BoardIcon, BookIcon, ChevronIcon, FilterIcon, Logo, NavIcon as Icon, NewSessionIcon, QueueIcon, UsageIcon } from "./icons.tsx";
-import Help, { SHOWN_TOPICS } from "./Help.tsx";
+import Help, { shownTopics } from "./Help.tsx";
 import type { HelpPlace } from "./help.ts";
 import { clearSelectionOnClick } from "./selection.ts";
 import Splitter from "./Splitter.tsx";
@@ -1017,7 +1017,7 @@ export default function App() {
       page("backup", t("app.palette.backup"), () => setScreen({ kind: "data" }), { keywords: "export import settings providers profiles logs data" }),
       page("guide", t("app.palette.guide"), () => setScreen({ kind: "onboarding" }), { keywords: "onboarding first run" }),
       page("help", t("app.help"), () => setScreen({ kind: "help" }), { keywords: "docs documentation guide manual how" }),
-      ...SHOWN_TOPICS.map((topic) => ({ id: `help:${topic.slug}`, title: topic.title, group: "Help", keywords: "help docs guide how", run: () => setScreen({ kind: "help", topic: topic.slug }) })),
+      ...shownTopics().map((topic) => ({ id: `help:${topic.slug}`, title: topic.title, group: "Help", keywords: "help docs guide how", run: () => setScreen({ kind: "help", topic: topic.slug }) })),
       page("report", t("settings.report.title"), () => setScreen({ kind: "data" }), { keywords: "bug issue copy report logs crash help" }),
       {
         id: "app:find",

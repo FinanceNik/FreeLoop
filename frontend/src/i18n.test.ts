@@ -199,6 +199,7 @@ const SAME_WORD = {
     "sessionImport.agent",
   ]),
   nl: new Set([
+    "help.title",
     "modelSets.row.issues",
     "modelSets.row.reviews",
     "modelSets.model",

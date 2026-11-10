@@ -1386,6 +1386,48 @@ await step("the help is a book of topics, searchable, leading into the app", asy
   await until("the palette to close", () => !document.querySelector(".palette"), 4000);
 });
 
+await step("an open help page follows the language", async () => {
+  // GUI-048: a help page open while the language changes comes back in that language,
+  // on the same topic, its words from the translated page and not English.
+  window.appcheckNotReloaded = true;
+  const pick = async (value) => {
+    document.querySelector(".settings-link").click();
+    (await until("the Appearance page", () => withText(".settings-nav button", "Appearance") ?? withText(".settings-nav button", "Darstellung") ?? withText(".settings-nav button", "Weergave"))).click();
+    const select = await until("the language", () => document.querySelector(".settings-page select.language-select"));
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(`the page in ${value}`, () => document.documentElement.lang === value, 8000);
+    document.querySelector(".settings-nav .settings-back").click();
+    await sleep(100);
+  };
+  const title = () => document.querySelector(".help-page h1")?.textContent ?? "";
+  const body = () => document.querySelector(".help-body")?.textContent ?? "";
+  try {
+    named("button", "Help").click();
+    await until("the help", () => document.querySelector(".help-nav"), 5000);
+    withText(".help-topic", "Permissions and the policy").click();
+    await until("the permissions page", () => title() === "Permissions and the policy", 4000);
+    const english = body();
+    for (const [lang, heading, help] of [["de", "Berechtigungen und die Richtlinie", "Hilfe"], ["nl", "Toestemmingen en het beleid", "Help"]]) {
+      await pick(lang);
+      if (!document.querySelector(".help-page")) named("button", help)?.click();
+      const shown = await until(`the page in ${lang}`, () => title() === heading, 8000).catch(() => false);
+      check(`in ${lang} the open topic is shown in ${lang}`, shown, title());
+      check(`its text is the ${lang} page, not English`, body().length > 200 && body() !== english, body().slice(0, 80));
+      check(`the help's own words are ${lang}`, document.querySelector(".help-nav h2")?.textContent === help && document.querySelector(".help-nav input")?.placeholder !== "Search the help", document.querySelector(".help-nav input")?.placeholder);
+    }
+    await pick("en");
+    if (!document.querySelector(".help-page")) named("button", "Help")?.click();
+    await until("English again", () => title() === "Permissions and the policy", 8000).catch(() => {});
+    check("English comes back", title() === "Permissions and the policy" && body() === english, title());
+    check("no reload in between", window.appcheckNotReloaded === true);
+  } finally {
+    if (document.documentElement.lang !== "en") await pick("en").catch(() => {});
+    openSession("Check alpha");
+    await until("the conversation", () => document.querySelector(".conversation"));
+  }
+});
+
 await step("suggested MCP servers are added through the usual form", async () => {
   await openPalette("MCP servers");
   (await until("the entry", () => all(".palette-item").find((i) => i.querySelector(".palette-title")?.textContent === "MCP servers"), 4000)).click();

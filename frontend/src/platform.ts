@@ -92,7 +92,7 @@ const GLYPH_KEYS: Record<string, string> = { "↩": "Enter", "⌫": "Backspace",
 // forPlatform adapts text written for a Mac, such as a help page, to the system.
 // {{mac|other}} and {{mac|windows|linux}} choose words per system, and a shortcut
 // written with ⌘ ⌥ ⇧ ⌃ becomes Ctrl+Alt+Shift and the key outside a Mac. ⌘-click is
-// Ctrl-click there.
+// Ctrl-click there, and so are German ⌘-Klick and Dutch ⌘-klik.
 export function forPlatform(text: string): string {
   const chosen = text.replace(/\{\{([^{}]*)\}\}/g, (_, body: string) => {
     const ways = body.split("|");
@@ -100,9 +100,9 @@ export function forPlatform(text: string): string {
     return isMac ? ways[0] : (ways[1] ?? ways[0]);
   });
   if (isMac) return chosen;
-  return chosen.replace(/([⌘⌃⌥⇧]+)(-click|[^\s⌘⌃⌥⇧])/g, (_, mods: string, key: string) => {
+  return chosen.replace(/([⌘⌃⌥⇧]+)(-(?:click|Klick|klik)|[^\s⌘⌃⌥⇧])/g, (_, mods: string, key: string) => {
     const names = [...new Set([...mods].map((m) => GLYPH_NAMES[m]))].sort((a, b) => PC_ORDER.indexOf(a) - PC_ORDER.indexOf(b));
-    if (key === "-click") return `${names.join("+")}-click`;
+    if (key.startsWith("-")) return `${names.join("+")}${key}`;
     return [...names, GLYPH_KEYS[key] ?? key].join("+");
   });
 }

@@ -82,6 +82,8 @@ test("text written for a Mac reads right on each system", () => {
   setPlatform(LINUX);
   assert.equal(forPlatform(text), "Press Ctrl+K, then Ctrl+Shift+Enter. Ctrl-click a row. Ctrl+, opens Settings. Data is in ~/.config; a file manager.");
   assert.equal(forPlatform("⌥⌘1 and ⌘⇧⌫"), "Ctrl+Alt+1 and Ctrl+Shift+Backspace");
+  // A help page in German or Dutch writes the click in its language.
+  assert.equal(forPlatform("Mit ⌘-Klick öffnen, of met ⌘-klik"), "Mit Ctrl-Klick öffnen, of met Ctrl-klik");
 });
 
 test("the app's shortcuts use Ctrl on Windows and Linux, and the same config means the same", () => {
