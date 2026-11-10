@@ -16,6 +16,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/backlog"
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/environment"
+	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/harness"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/session"
@@ -692,7 +693,8 @@ func (e *Engine) finishIssue(ctx context.Context, id, sid string, w config.Workf
 		return
 	}
 	if is := backlog.ParseIssue(s.Path, b); is.Status != backlog.StatusDone {
-		stop("its session ended without marking it done", fmt.Sprintf("%s's session ended without marking it done; see the session for why.", s.Issue))
+		why := e.endedBecause(ctx, sid)
+		stop("its session "+why, fmt.Sprintf("%s's session %s; see the session for more.", s.Issue, why))
 		return
 	}
 	commit, note := e.commitLeftovers(ctx, env, *s)
@@ -712,6 +714,57 @@ func (e *Engine) finishIssue(ctx context.Context, id, sid string, w config.Workf
 		st.Commit, st.Note, st.State, st.EndedAt = commit, note, config.StepQA, time.Now().UTC()
 	})
 	e.KickRuns()
+}
+
+// endedBecause says, for an issue that is not done, how its session's last turn ended,
+// so the run does not call a cancelled or failed turn one that merely forgot to mark
+// the issue done.
+func (e *Engine) endedBecause(ctx context.Context, sid string) string {
+	evs, err := e.store.Events(ctx, sid, 0)
+	if err != nil {
+		return "ended without marking it done"
+	}
+	stop, problem := "", ""
+	for _, ev := range evs {
+		switch ev.Type {
+		case event.UserMessageChunk:
+			problem = ""
+		case event.Error:
+			var d event.ErrorData
+			if json.Unmarshal(ev.Data, &d) == nil {
+				problem = d.Message
+			}
+		case event.TurnEnded:
+			var d event.TurnEndedData
+			if json.Unmarshal(ev.Data, &d) == nil {
+				stop = d.StopReason
+			}
+		}
+	}
+	switch harness.StopReason(stop) {
+	case harness.StopCancelled:
+		return "was stopped before it marked the issue done"
+	case harness.StopError:
+		return "failed before it marked the issue done" + withProblem(problem)
+	case harness.StopMaxTokens:
+		return "ran out of output room before it marked the issue done"
+	case harness.StopMaxTurns:
+		return "reached its limit of steps before it marked the issue done"
+	case harness.StopRefusal:
+		return "was refused by the model before it marked the issue done"
+	}
+	if problem != "" {
+		return "hit a problem before it marked the issue done" + withProblem(problem)
+	}
+	return "ended without marking it done"
+}
+
+// withProblem is an error's text as a clause that follows a sentence.
+func withProblem(problem string) string {
+	if problem = strings.TrimSpace(problem); problem == "" {
+		return ""
+	}
+	return " (" + strings.TrimRight(problem, ".") + ")"
 }
 
 // commitLeftovers commits what an issue's session left uncommitted and returns the

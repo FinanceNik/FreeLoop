@@ -1583,9 +1583,6 @@ export default function App() {
               >
                 <UsageIcon />
               </button>
-              <button className="icon-button" aria-label={t("app.help")} title={t("sidebar.help.title")} aria-current={screen.kind === "help" ? "page" : undefined} onClick={() => setScreen({ kind: "help" })}>
-                <BookIcon />
-              </button>
               {/* Shown once anything is priced today, and whenever a budget is near or reached (PRV-017). */}
               {((today && (today.models ?? []).some((m) => m.priced)) || worst(budgets) !== "") && (
                 <button
@@ -1599,6 +1596,11 @@ export default function App() {
                   {`≈ ${formatCost(today?.cost ?? 0)}${today && ((today.models ?? []).some((m) => !m.priced) || (today.unreported ?? 0) > 0) ? "+" : ""}`}
                 </button>
               )}
+              {/* At the right end, over Settings: the four icons before the cost stand over
+                  the four layout icons, and the two pages about the app itself stack. */}
+              <button className="icon-button footer-help" aria-label={t("app.help")} title={t("sidebar.help.title")} aria-current={screen.kind === "help" ? "page" : undefined} onClick={() => setScreen({ kind: "help" })}>
+                <BookIcon />
+              </button>
             </div>
             <div className="footer-row">
               <div className="layout-switch" role="group" aria-label={t("sidebar.layout")}>

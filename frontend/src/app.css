@@ -456,6 +456,15 @@ fieldset {
   font-variant-numeric: tabular-nums;
 }
 
+/* Help ends the row, over Settings; the cost, when shown, sits just before it. */
+.footer-links .footer-help {
+  margin-left: auto;
+}
+
+.footer-links .footer-cost + .footer-help {
+  margin-left: 0;
+}
+
 .footer-links button[aria-current="page"] {
   background: var(--accent-soft);
   color: var(--link);

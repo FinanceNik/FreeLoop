@@ -429,3 +429,34 @@ func TestAFKRunOnAChosenModel(t *testing.T) {
 		}
 	}
 }
+
+// WFL-005: a run says how a session's last turn ended when its issue is not done, so a
+// stopped or failed turn is not called one that forgot to mark the issue.
+func TestAFKStopSaysHowTheTurnEnded(t *testing.T) {
+	ctx := context.Background()
+	e, root := afkEngine(t)
+	ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := e.endedBecause(ctx, ses.ID); got != "ended without marking it done" {
+		t.Errorf("no turn: %q", got)
+	}
+	cases := []struct{ stop, problem, want string }{
+		{"end_turn", "", "ended without marking it done"},
+		{"cancelled", "", "was stopped before it marked the issue done"},
+		{"error", "the provider said 429.", "failed before it marked the issue done (the provider said 429)"},
+		{"max_turns", "", "reached its limit of steps before it marked the issue done"},
+		{"end_turn", "a tool broke", "hit a problem before it marked the issue done (a tool broke)"},
+	}
+	for _, c := range cases {
+		e.emit(ses.ID, event.UserMessageChunk, map[string]any{"content": map[string]string{"type": "text", "text": "go"}})
+		if c.problem != "" {
+			e.emit(ses.ID, event.Error, event.ErrorData{Message: c.problem})
+		}
+		e.emit(ses.ID, event.TurnEnded, event.TurnEndedData{StopReason: c.stop})
+		if got := e.endedBecause(ctx, ses.ID); got != c.want {
+			t.Errorf("%s/%q: %q, want %q", c.stop, c.problem, got, c.want)
+		}
+	}
+}

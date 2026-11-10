@@ -82,19 +82,21 @@ await step("a session shows what it runs on", async () => {
 });
 
 // A profile on an agent with its own sign-in hides the provider, and says how to get it.
-// The sidebar's footer: the four layout icons sit under the first four of the five icons
-// above them, whether or not the bell is shown, and Settings stands alone at the lower
+// The sidebar's footer: the four layout icons sit under the four icons at the left of the
+// row above them, whether or not the bell is shown, and Help and Settings stack at the
 // right.
 await step("the footer's icons line up, with Settings at the lower right", async () => {
   const centre = (e) => { const r = e.getBoundingClientRect(); return Math.round(r.left + r.width / 2); };
-  const all5 = [...document.querySelector(".footer-links").children].filter((e) => !e.classList.contains("footer-cost"));
-  const top = all5.slice(0, 4);
+  const icons = [...document.querySelector(".footer-links").children].filter((e) => !e.classList.contains("footer-cost"));
+  const top = icons.slice(0, 4);
   const layout = [...document.querySelectorAll(".layout-switch button")];
-  check("five icons above and four layout icons below", all5.length === 5 && layout.length === 4, `${all5.length} and ${layout.length}`);
+  check("four icons and Help above, four layout icons below", icons.length === 5 && icons[4].classList.contains("footer-help") && layout.length === 4, `${icons.length} and ${layout.length}`);
   check("each layout icon is under the one above it", top.every((e, i) => Math.abs(centre(e) - centre(layout[i])) <= 1), `${top.map(centre)} vs ${layout.map(centre)}`);
   const settings = document.querySelector(".footer-row .settings-link").getBoundingClientRect();
   const row = document.querySelector(".footer-row").getBoundingClientRect();
   check("Settings is at the right end of the bottom row, after the layout icons", settings.left >= layout[3].getBoundingClientRect().right && Math.abs(settings.right - row.right) <= 2, `${settings.left}-${settings.right} in ${row.right}`);
+  const help = document.querySelector(".footer-help").getBoundingClientRect();
+  check("Help is right over Settings", Math.abs(help.right - settings.right) <= 1 && help.bottom <= settings.top, JSON.stringify([help.right, settings.right]));
   const cost = document.querySelector(".footer-cost")?.getBoundingClientRect();
   if (cost) check("Settings is under the cost", cost.right <= settings.right + 12 && cost.left < settings.right && cost.bottom <= settings.top, JSON.stringify([cost.left, cost.right, settings.left, settings.right]));
 });
@@ -573,7 +575,12 @@ await step("a click clears a selection", async () => {
   await clicked("the header's title", document.querySelector(".session-header h2"));
   const nav = document.querySelector(".sidebar nav");
   await clicked("the sidebar's empty space", nav, 0.5, 0.98);
-  await clicked("the footer's empty space", document.querySelector(".footer-links"), 0.98, 0.5);
+  // The gap between the icons at the left and Help at the right end.
+  const links = document.querySelector(".footer-links");
+  const lr = links.getBoundingClientRect();
+  const gapLeft = [...links.children].filter((e) => !e.classList.contains("footer-help") && !e.classList.contains("footer-cost")).pop().getBoundingClientRect().right;
+  const gapRight = (links.querySelector(".footer-cost") ?? links.querySelector(".footer-help")).getBoundingClientRect().left;
+  await clicked("the footer's empty space", links, (((gapLeft + gapRight) / 2) - lr.left) / lr.width, 0.5);
   // A button still does its work, and leaves no selection behind.
   const panel = named(".session-actions button", "Panel");
   const pressed = panel.getAttribute("aria-pressed");
