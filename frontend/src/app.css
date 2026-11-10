@@ -2734,6 +2734,46 @@ button.issue-title:hover {
   gap: 8px;
 }
 
+/* Model sets (WFL-013): each set with its three rows, and the editor's rows. */
+.model-set-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.model-set-list > li {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.model-set-list dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 6px 0;
+}
+
+.model-set-list dl > div {
+  display: contents;
+}
+
+.model-set-list dt {
+  color: var(--muted);
+}
+
+.model-set-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.model-set-row {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+}
+
 .afk-commands {
   border: 1px solid var(--border);
   border-radius: var(--r-md);

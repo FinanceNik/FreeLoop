@@ -92,6 +92,10 @@ type Config struct {
 	Web Web `yaml:"web,omitempty" json:"web"`
 	// MCP holds the server registry to browse (MCP-009).
 	MCP MCPSettings `yaml:"mcp,omitempty" json:"mcp"`
+	// ModelSets are the user's model sets, and WorkflowModelSets the one each
+	// workflow uses, by their IDs (WFL-013).
+	ModelSets         []ModelSet        `yaml:"modelSets,omitempty" json:"modelSets"`
+	WorkflowModelSets map[string]string `yaml:"workflowModelSets,omitempty" json:"workflowModelSets"`
 }
 
 // MCPSettings are settings for MCP as a whole; the servers are in mcp.yaml.
@@ -290,7 +294,10 @@ func (c *Config) Validate() []Issue {
 	c.Budgets, budgetIssues = validateBudgets(c.Budgets)
 	priceIssues = append(priceIssues, budgetIssues...)
 	c.Hooks, hookIssues = validateHooks(c.Hooks, "hooks")
-	return append(append(issues, priceIssues...), hookIssues...)
+	var setIssues []Issue
+	c.ModelSets, setIssues = validateModelSets(c.ModelSets)
+	setIssues = append(setIssues, validateWorkflowModelSets(c.WorkflowModelSets, c.ModelSets)...)
+	return append(append(append(issues, priceIssues...), hookIssues...), setIssues...)
 }
 
 // Save writes config.yaml.

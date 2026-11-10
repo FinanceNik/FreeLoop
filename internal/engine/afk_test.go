@@ -529,6 +529,12 @@ func twoProviders(t *testing.T, e *Engine) {
 		"  - {id: small, name: Small, type: scripted, defaultModel: tiny}\n"+
 		"  - {id: big, name: Big, type: scripted, defaultModel: b}\n"+
 		"  - {id: nokey, name: No key, type: anthropic, baseUrl: \"https://api.example.com\", defaultModel: k}\n"), 0o600)
+	twoProvidersBuilt(t, e)
+}
+
+// twoProvidersBuilt reloads the providers' file and builds the scripted ones again.
+func twoProvidersBuilt(t *testing.T, e *Engine) {
+	t.Helper()
 	if err := e.loadProviders(); err != nil {
 		t.Fatal(err)
 	}

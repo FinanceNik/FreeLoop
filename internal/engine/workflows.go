@@ -104,13 +104,16 @@ type WorkflowStatus struct {
 	// Fingerprint what to approve.
 	NeedsApproval bool   `json:"needsApproval"`
 	Fingerprint   string `json:"fingerprint"`
+	// ModelSet is the ID of the model set the user chose for it, if any (WFL-013).
+	ModelSet string `json:"modelSet"`
 }
 
 // ListWorkflows lists the workflows with their skills. Nothing is run.
 func (e *Engine) ListWorkflows(ctx context.Context) []WorkflowStatus {
 	out := []WorkflowStatus{}
 	for _, w := range e.workflowList() {
-		out = append(out, WorkflowStatus{Workflow: w, Skills: e.workflowSkills(w), NeedsApproval: !e.workflowApproved(w), Fingerprint: w.Fingerprint()})
+		out = append(out, WorkflowStatus{Workflow: w, Skills: e.workflowSkills(w), NeedsApproval: !e.workflowApproved(w), Fingerprint: w.Fingerprint(),
+			ModelSet: e.Config().WorkflowModelSets[w.ID]})
 	}
 	return out
 }

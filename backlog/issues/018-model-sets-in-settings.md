@@ -1,6 +1,6 @@
 ---
 title: Model sets made in Settings and given to a workflow
-status: open
+status: done
 type: afk
 blockedBy: [017-effort-for-a-run]
 prd: model-sets
@@ -19,3 +19,8 @@ Settings → Workflows gets a "Model sets" section: New, Edit, Duplicate and Del
 ## Notes
 - Strings in English, German and Dutch (the catalogues are typed against English).
 - Requirement WFL-013; PRD decisions 4, 5, 9.
+
+## Done
+- `config.ModelSet` (`internal/config/modelsets.go`): a row is a provider, model and effort, written as fields in `config.yaml` rather than the option's two-line value; `Validate` drops a bad set or a workflow naming a missing one, so `Save` refuses them.
+- Engine (`internal/engine/modelsets.go`): `ListModelSets` (rows unavailable, by name, and the workflows using each), `SaveModelSet` (an ID from the name, `-2` on a clash; an existing ID is edited), `DeleteModelSet`, `SetWorkflowModelSet`, `AllModels` and `EffortsOf` for the editor, `workflowModelSet` for the next slices, and `modelUnavailable`: a provider gone, or one whose key is configured but not in the keychain, or that needs one and has none.
+- The dialog's model picker became `ModelSelect.tsx`, shared with the set editor (`ModelSets.tsx`) on the Workflows page; each workflow card picks its set.

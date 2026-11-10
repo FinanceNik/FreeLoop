@@ -3,6 +3,7 @@ import { EngineService, modeName, type Config, type WorkflowSkill, type Workflow
 import { stageAction } from "./workflows.ts";
 import { t, type PlainKey } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
+import ModelSets from "./ModelSets.tsx";
 
 // The Settings page for workflows (WFL-001, WFL-003): what each one's stages do,
 // the skills it uses and what its AFK run will want allowed. Listing them runs
@@ -64,6 +65,14 @@ export default function Workflows({ config, version, onSaved, onError }: Props) 
       .finally(() => setInstalling(""));
   };
   const setDefault = (id: string) => EngineService.SetDefaultWorkflow(id).then(onSaved).catch(onError);
+  // WFL-013: the model set a workflow uses, kept in config.yaml, not in its file.
+  const setModelSet = (w: WorkflowStatus, id: string) =>
+    EngineService.SetWorkflowModelSet(w.id, id)
+      .then((c) => {
+        onSaved(c);
+        refresh();
+      })
+      .catch(onError);
   const needsInstall = (skills: WorkflowSkill[] | null) => (skills ?? []).some((s) => s.shipped && (s.state === "missing" || s.state === "outdated"));
 
   return (
@@ -84,6 +93,10 @@ export default function Workflows({ config, version, onSaved, onError }: Props) 
           <span className="muted">{t("workflows.forNewSessionsHint")}</span>
         </label>
       </div>
+      <ModelSets version={version} onSaved={(c) => {
+        onSaved(c);
+        refresh();
+      }} onError={onError} />
       {list === null && <p className="muted">{t("workflows.loading")}</p>}
       {(list ?? []).map((w) => (
         <div className="card workflow-card" key={w.id} aria-label={w.name}>
@@ -101,6 +114,20 @@ export default function Workflows({ config, version, onSaved, onError }: Props) 
               </p>
             </>
           )}
+          <div className="form">
+            <label>
+              {t("workflows.modelSet")}
+              <select value={w.modelSet ?? ""} onChange={(e) => setModelSet(w, e.target.value)}>
+                <option value="">{t("workflows.modelSet.none")}</option>
+                {(config.modelSets ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <span className="muted">{t("workflows.modelSet.hint")}</span>
+            </label>
+          </div>
           <h4>{t("workflows.stages")}</h4>
           <ol className="workflow-stages">
             {(w.stages ?? []).map((s) => (

@@ -610,6 +610,36 @@ func (s *EngineService) ModelEfforts(ctx context.Context, root, profileID, model
 	return s.eng.ModelEfforts(ctx, root, profileID, model)
 }
 
+// ListModelSets lists the model sets (WFL-013).
+func (s *EngineService) ListModelSets(ctx context.Context) []engine.ModelSetInfo {
+	return s.eng.ListModelSets(ctx)
+}
+
+// SaveModelSet adds or replaces a model set.
+func (s *EngineService) SaveModelSet(ctx context.Context, set config.ModelSet) (config.Config, error) {
+	return s.eng.SaveModelSet(ctx, set)
+}
+
+// DeleteModelSet removes a model set, and from its workflows.
+func (s *EngineService) DeleteModelSet(ctx context.Context, id string) (config.Config, error) {
+	return s.eng.DeleteModelSet(ctx, id)
+}
+
+// SetWorkflowModelSet has a workflow use a model set, or none.
+func (s *EngineService) SetWorkflowModelSet(ctx context.Context, workflowID, setID string) (config.Config, error) {
+	return s.eng.SetWorkflowModelSet(ctx, workflowID, setID)
+}
+
+// AllModels are the models a model set's rows can name.
+func (s *EngineService) AllModels(ctx context.Context) engine.ProfileModels {
+	return s.eng.AllModels(ctx)
+}
+
+// EffortsOf are the efforts the built-in agent offers on a model.
+func (s *EngineService) EffortsOf(ctx context.Context, model string) engine.ProfileEfforts {
+	return s.eng.EffortsOf(ctx, model)
+}
+
 func (s *EngineService) StartAFK(ctx context.Context, req engine.AFKStart) (config.AFKRun, error) {
 	return s.eng.StartAFK(ctx, req)
 }

@@ -138,6 +138,9 @@ test("each catalogue has the English keys, forms and placeholders", () => {
 // Agent, Code, Model, Project, Context, Tokens and Servers, all OK.
 const SAME_WORD = {
   de: new Set([
+    "modelSets.row.issues",
+    "modelSets.row.reviews",
+    "modelSets.name",
     "settings.build.version",
     "common.ok",
     "pending.kind.agent",
@@ -193,6 +196,9 @@ const SAME_WORD = {
     "sessionImport.agent",
   ]),
   nl: new Set([
+    "modelSets.row.issues",
+    "modelSets.row.reviews",
+    "modelSets.model",
     "settings.build.version",
     "common.ok",
     "pending.kind.agent",

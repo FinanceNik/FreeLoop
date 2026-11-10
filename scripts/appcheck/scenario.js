@@ -1556,6 +1556,39 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   withText("button", "Install skills", card).click();
   await until("the skills installed", () => card.textContent.includes("Installed grill-the-brief"), 8000);
   check("installing names what it wrote", !card.textContent.includes("not installed"), card.textContent.slice(0, 200));
+  // WFL-013: a model set, made here and given to the built-in workflow.
+  const sets = document.querySelector('.model-sets[aria-label="Model sets"]');
+  check("Settings → Workflows has model sets", !!sets && sets.textContent.includes("No model sets yet"), sets?.textContent.slice(0, 120));
+  withText("button", "New model set", sets).click();
+  const editor = await until("the set's editor", () => sets.querySelector(".model-set-editor"), 4000);
+  const typeIn = (el, text) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, text);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  typeIn(all("label", editor).find((l) => l.textContent.startsWith("Name")).querySelector("input"), "Big plans, small works");
+  const rowModel = (legend) => all(".model-set-row", editor).find((f) => f.querySelector("legend")?.textContent === legend)?.querySelector("select");
+  await until("the models", () => [...(rowModel("Issues")?.options ?? [])].some((o) => o.value === "demo-small\nsmall"), 8000);
+  setSelect(rowModel("Planning stages"), "demo\nscripted");
+  setSelect(rowModel("Issues"), "demo-small\nsmall");
+  await sleep(100);
+  const rowEffort = await until("the issues row's efforts", () => {
+    const el = all(".model-set-row", editor).find((f) => f.querySelector("legend")?.textContent === "Issues")?.querySelectorAll("select")[1];
+    return el && !el.disabled && el;
+  }, 8000);
+  setSelect(rowEffort, "low");
+  await sleep(100);
+  withText("button", "Save model set", editor).click();
+  const saved = await until("the set listed", () => sets.querySelector('li[aria-label="Big plans, small works"]'), 8000);
+  check("the set lists its rows", /Planning stages\s*scripted/.test(saved.textContent) && /Issues\s*small · low/.test(saved.textContent) && /Reviews\s*Not fixed/.test(saved.textContent), saved.textContent);
+  setSelect(all("label", card).find((l) => l.textContent.startsWith("Model set")).querySelector("select"), "big-plans-small-works");
+  await sleep(300);
+  document.querySelector(".settings-nav .settings-back").click();
+  await sleep(100);
+  document.querySelector(".settings-link").click();
+  (await until("the Workflows page again", () => withText(".settings-nav button", "Workflows"))).click();
+  const again = await until("the built-in workflow again", () => all(".workflow-card").find((c) => c.querySelector("h3")?.textContent === "Plan, slice, run AFK"), 8000);
+  const chosen = await until("its set", () => all("label", again).find((l) => l.textContent.startsWith("Model set"))?.querySelector("select"), 4000);
+  check("the workflow keeps its model set", chosen.value === "big-plans-small-works", chosen.value);
   document.querySelector(".settings-nav .settings-back").click();
   await sleep(100);
 
