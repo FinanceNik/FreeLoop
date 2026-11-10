@@ -18,6 +18,9 @@ export interface StepLike {
   sessionId?: string;
   // When the run began on the issue.
   startedAt?: string;
+  // Its review's session, and what the run says of it (why it stopped there).
+  reviewId?: string;
+  note?: string;
 }
 
 export interface RunLike {

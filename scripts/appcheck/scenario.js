@@ -1688,6 +1688,23 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
     check("the issue's card says so too", firstCard?.querySelector(".backlog-step-waiting")?.textContent.includes("AFK run: waiting to start"), firstCard?.textContent);
     const queueIcon = all(".footer-links button").find((b) => /^Queue\b/.test(b.getAttribute("aria-label") ?? ""));
     check("the Queue icon counts the run's issue waiting in the paused queue", /waiting/.test(queueIcon?.getAttribute("aria-label") ?? ""), queueIcon?.getAttribute("aria-label"));
+    // Stopping the run while its issue waits for the queue puts the issue back in Backlog
+    // with a red mark saying why (GUI-016); a new run that takes it up clears the mark.
+    withText("button", "Stop", laneEl()).click();
+    const back = await until("the stopped issue back in Backlog", () => column(issueCard("001")) === "Backlog" && issueCard("001").querySelector(".issue-mark-stopped") && issueCard("001"), 20000);
+    check("a stopped issue is back in Backlog with a red mark saying why", /The run stopped here: /.test(back.querySelector(".issue-mark-stopped").textContent) && getComputedStyle(back.querySelector(".issue-mark-stopped")).color !== getComputedStyle(back).color, back.querySelector(".issue-mark-stopped").textContent);
+    withText("button", "Run AFK issues…", laneEl()).click();
+    const again = await until("the run's dialog again", () => document.querySelector(".afk-dialog"), 8000);
+    await until("the plan again", () => again.textContent.includes("First:"), 8000);
+    for (const label of ["Profile for the issues", "Profile for the reviews"]) {
+      const select = all("label", again).find((l) => l.textContent.startsWith(label))?.querySelector("select");
+      if (select) setSelect(select, "afk-demo");
+    }
+    await sleep(150);
+    (await until("Start again", () => { const b = withText("button", "Start the run", again); return b && !b.disabled && b; }, 4000)).click();
+    await until("the dialog closed again", () => !document.querySelector(".afk-dialog"), 8000);
+    await until("a newer run takes the issue up", () => column(issueCard("001")) === "Working" && !issueCard("001").querySelector(".issue-mark-stopped"), 40000);
+    check("a newer run takes the issue up and the mark is gone", column(issueCard("001")) === "Working" && !issueCard("001").querySelector(".issue-mark-stopped"));
     queueIcon.click();
     const page = await until("the queue page", () => [...document.querySelectorAll(".page h2")].find((h) => h.textContent === "Queue")?.closest(".page"), 8000);
     (await until("Resume", () => withText("button", "Resume", page), 4000)).click();
@@ -1744,13 +1761,20 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   const qa = () => all(".attention-qa");
   await until("two issues ready for QA", () => qa().length === 2, 10000);
   check("each issue waits for QA with its review", qa().every((s) => s.textContent.includes("Ready for QA") && s.textContent.includes("found nothing wrong")), qa().map((s) => s.textContent.slice(0, 80)).join(" | "));
-  withText("button", "QA done", qa()[0]).click();
-  await until("one QA'd", () => qa().length === 1, 8000);
-  check("QA done takes an issue off the list", qa().length === 1);
-  // On the Board the QA'd issue is Done, and the other still waits in review.
+  // On the Board the same two cards say so too: "Ready for your QA", with the review's
+  // answer, and the buttons to check the issue off or to open its session and its review.
   named(".footer-links button", "Board").click();
+  const ready = await until("both cards ready for QA", () => issueCard("001")?.querySelector(".issue-mark-qa") && issueCard("002")?.querySelector(".issue-mark-qa") && issueCard("001"), 15000);
+  check("a card ready for QA says so, with the review's answer", ready.querySelector(".issue-mark-qa").textContent === "Ready for your QA" && ready.querySelector(".issue-reply")?.textContent.includes("found nothing wrong"), ready.textContent.slice(0, 160));
+  check("and has QA done, Open its session and Open the review", !!withText("button", "QA done", ready) && !!withText("button", "Open its session", ready) && !!withText("button", "Open the review", ready), all("button", ready).map((b) => b.textContent).join(" | "));
+  // QA done on the card moves it to Done, takes it out of Needs attention, and leaves the other.
+  withText("button", "QA done", ready).click();
   await until("the QA'd issue in Done", () => column(issueCard("001")) === "Done", 15000);
   check("the QA'd issue is Done and the other still in review", column(issueCard("001")) === "Done" && column(issueCard("002")) === "In review", `${column(issueCard("001"))}, ${column(issueCard("002"))}`);
+  check("a Done card has no QA button", !withText("button", "QA done", issueCard("001")));
+  (await until("Needs attention", () => document.querySelector(".attention-link"), 8000)).click();
+  await until("one left for QA", () => qa().length === 1, 10000);
+  check("QA done on the Board takes the issue off Needs attention", qa().length === 1 && qa()[0].textContent.includes("Second slice"), qa().map((q) => q.textContent.slice(0, 60)).join(" | "));
 });
 
 // However short the window, only the parts scroll, never the page: text for screen

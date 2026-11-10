@@ -42,6 +42,8 @@ The **Board** shows a row for each trusted project that has a backlog, with a ca
 
 When an agent working on an issue needs you, its card stays in **Working** with a strong **Waiting for you** mark, and the request, an approval or a question, is on the card: answer it there, or choose **Open its session**. The Board's header counts such issues, and clicking it takes you to the first.
 
+In **In review**, an issue is **Agent reviewing** while the second agent reads it, and **Ready for your QA** when it is your turn: the card shows the start of the review's answer, and **QA done** moves it to **Done**. If a run stops at an issue, it goes back to **Backlog** with a red note saying why, until the next run starts.
+
 **Archive finished** removes done issues, and PRDs whose issues are all done, in a commit of their own, so later agents aren't misled by stale docs. Git history keeps them: `git log -- backlog/` lists them and `git show` brings one back.
 
 ## Run the AFK issues

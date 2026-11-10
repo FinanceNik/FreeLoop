@@ -2504,6 +2504,43 @@ details.choice[open] > summary h3::after {
   font-weight: 600;
 }
 
+/* In review: the agent's review is quiet; the user's QA is what to do next. */
+.issue-mark-qa {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-weight: 600;
+}
+
+.issue-review-qa {
+  border-color: var(--accent);
+}
+
+/* The review's answer, as plain text, cut after a few lines. */
+.issue-reply {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  font-size: calc(12rem / 14);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.issue-mark-stopped {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.issue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
 .board-waiting {
   font-weight: 600;
 }

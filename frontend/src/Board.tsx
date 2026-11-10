@@ -15,6 +15,8 @@ export default function Board({
   backlogs,
   waiting = {},
   renderRequest,
+  qa = {},
+  onQADone,
   onOpen,
   onArchive,
   backlogActions,
@@ -25,6 +27,10 @@ export default function Board({
   waiting?: Record<string, number>;
   // The request a session waits on longest, answered on its card.
   renderRequest?: (sessionId: string) => ReactNode;
+  // What the review of an issue ready for QA answered, by run and issue ("run:issue").
+  qa?: Record<string, { reply: string }>;
+  // The user checked an issue a run finished (WFL-006): it moves to Done.
+  onQADone?: (runId: string, issue: string) => void;
   onOpen: (sessionId: string) => void;
   onArchive?: (b: BacklogInfo) => void;
   // Controls for a project's row, such as its AFK run (WFL-005).
@@ -78,7 +84,7 @@ export default function Board({
                     <ul>
                       {cols[lane].map((card) => (
                         <li key={card.id}>
-                          <Issue card={card} onOpen={onOpen} request={card.waiting > 0 && card.step?.sessionId ? renderRequest?.(card.step.sessionId) : null} />
+                          <Issue card={card} onOpen={onOpen} reply={b.run ? qa[`${b.run.id}:${card.id}`]?.reply : undefined} onQADone={b.run && onQADone ? () => onQADone(b.run!.id, card.id) : undefined} request={card.waiting > 0 && card.step?.sessionId ? renderRequest?.(card.step.sessionId) : null} />
                         </li>
                       ))}
                     </ul>
@@ -96,12 +102,12 @@ export default function Board({
 // Issue is one card: the title in at most two lines, one line saying which issue it is,
 // who does it and what it waits on or how long it has worked, then a mark or an action
 // only where one applies. The whole title and the file are in the hover text.
-function Issue({ card, onOpen, request }: { card: IssueCard; onOpen: (sessionId: string) => void; request?: ReactNode }) {
+function Issue({ card, onOpen, request, reply, onQADone }: { card: IssueCard; onOpen: (sessionId: string) => void; request?: ReactNode; reply?: string; onQADone?: () => void }) {
   const [id, type, ...more] = cardMeta(card);
   const step = card.step;
   const waiting = !!step?.waiting && step.state === "working";
   return (
-    <div className={`board-card issue-card backlog-card issue-${card.column} backlog-${card.state}${card.waiting > 0 ? " issue-needs" : ""}`} role="group" aria-label={`${id}: ${card.title}`} title={card.hover}>
+    <div className={`board-card issue-card backlog-card issue-${card.column} backlog-${card.state}${card.waiting > 0 ? " issue-needs" : ""}${card.review ? ` issue-review-${card.review}` : ""}`} role="group" aria-label={`${id}: ${card.title}`} title={card.hover}>
       <span className="issue-title">{card.title}</span>
       <span className="issue-meta">
         <span className="issue-id">{id}</span>
@@ -113,14 +119,30 @@ function Issue({ card, onOpen, request }: { card: IssueCard; onOpen: (sessionId:
         ))}
       </span>
       {card.waiting > 0 && <span className="issue-mark issue-mark-needs">{t("board.waiting")}</span>}
+      {card.review === "reviewing" && <span className="issue-mark muted">{t("board.review.agent")}</span>}
+      {card.review === "qa" && <span className="issue-mark issue-mark-qa">{t("board.review.qa")}</span>}
+      {card.review === "qa" && reply && <span className="issue-reply muted">{reply}</span>}
+      {card.stopped !== undefined && <span className="issue-mark issue-mark-stopped">{card.stopped ? t("board.stopped", { reason: card.stopped }) : t("board.stoppedHere")}</span>}
       {request}
       {card.note && <span className="issue-mark muted">{card.note}</span>}
       {waiting && <span className="issue-mark backlog-step-waiting">{t("board.afkStep", { step: stepLabel(step!) })}</span>}
-      {step?.sessionId && (
+      {(step?.sessionId || (card.review === "qa" && onQADone)) && (
         <span className="issue-actions">
-          <button className="link" onClick={() => onOpen(step.sessionId!)}>
-            {t("board.openSession")}
-          </button>
+          {card.review === "qa" && onQADone && (
+            <button className="primary" onClick={onQADone}>
+              {t("attention.qaFinished")}
+            </button>
+          )}
+          {step?.sessionId && (
+            <button className="link" onClick={() => onOpen(step.sessionId!)}>
+              {t("board.openSession")}
+            </button>
+          )}
+          {card.review && step?.reviewId && (
+            <button className="link" onClick={() => onOpen(step.reviewId!)}>
+              {t("attention.openReview")}
+            </button>
+          )}
         </span>
       )}
     </div>

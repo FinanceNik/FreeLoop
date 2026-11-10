@@ -40,6 +40,11 @@ export interface IssueCard {
   startedAt?: string;
   // How many requests its session has waiting for the user, while the run works on it.
   waiting: number;
+  // In review, whether the agent is still reviewing it or it waits for the user's QA.
+  review?: "reviewing" | "qa";
+  // Set on an issue a run stopped at, which is back in Backlog: why, as the step or the run
+  // says it ("" when neither does). It goes when a newer run starts, which has no such step.
+  stopped?: string;
   // A cycle or a file the app cannot read, in words; empty when neither.
   note: string;
   // The whole title and the file, for hovering: the card cuts a long title short.
@@ -92,6 +97,8 @@ export function placeIssues(items: BacklogItem[] | null | undefined, run: RunLik
       // Waiting is a mark and not a column: the issue stays where the run has it. Only the
       // session working on the issue counts, not a review's.
       waiting: column === "working" && step?.sessionId ? (waiting[step.sessionId] ?? 0) : 0,
+      review: column === "review" ? (step?.state === "qa" ? "qa" : "reviewing") : undefined,
+      stopped: column === "backlog" && step?.state === "failed" ? step.note || run?.reason || "" : undefined,
       note: it.cycle || it.problem ? relationsOf(it) : "",
       hover: it.path ? `${it.title}\n${it.path}` : it.title,
     });

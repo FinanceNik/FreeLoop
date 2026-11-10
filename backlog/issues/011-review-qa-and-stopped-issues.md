@@ -1,6 +1,6 @@
 ---
 title: In review shows the agent's review and the user's QA; a stopped issue goes back to Backlog
-status: open
+status: done
 type: afk
 blockedBy: [009-swimlanes-of-workflow-issues]
 prd: workflow-board
@@ -18,3 +18,8 @@ In review shows each issue in one of two states: "Agent reviewing", muted, and "
 ## Notes
 - The engine's QA item already carries the review's reply (`QAItem.Reply`); the run's steps carry `reviewId`, `note` and the run's `reason`.
 - PRD decisions 5 and 6.
+
+## Done
+- `placeIssues` sets `review` ("reviewing" or "qa") on cards in In review and `stopped` (the step's note, else the run's reason, else "") on a Backlog card whose latest step failed; a newer run has no such step, so the mark goes without anything clearing it. The card shows the review's answer (from the attention list's QA item, plain text cut after four lines) and QA done, Open its session and Open the review, reusing Needs attention's words.
+- QA done on the card calls the same `QADone` as the attention view, and the card moves to Done on the next refresh; the check confirms Needs attention loses the item.
+- The check stops the run while its first issue waits for the paused queue, sees the red mark, starts a new run, and sees the mark gone. "Agent reviewing" is covered by the unit test only: the demo's review is too quick for a check to catch it.

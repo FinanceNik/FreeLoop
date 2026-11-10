@@ -1830,6 +1830,15 @@ export default function App() {
               const req = attention.find((it) => it.session.id === sid)?.requests?.[0];
               return req ? <RequestView key={req.requestId} req={req} onError={report} /> : null;
             }}
+            qa={Object.fromEntries(attention.filter((it) => it.qa).map((it) => [`${it.qa!.runId}:${it.qa!.issue}`, { reply: it.qa!.reply }]))}
+            onQADone={(runId, issue) =>
+              EngineService.QADone(runId, issue)
+                .then(() => {
+                  refreshAttention();
+                  refreshBacklogs();
+                })
+                .catch(report)
+            }
             onArchive={archiveBacklog}
             backlogActions={backlogActions}
             onOpen={(id) => openSession(id)}

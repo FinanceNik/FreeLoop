@@ -79,6 +79,46 @@ test("an issue whose agent waits for the user is marked, and stays in its column
   assert.equal(waitingIssues(placeIssues(items, null, { s1: 1 })), 0);
 });
 
+// GUI-016, decisions 5 and 6: In review is the agent's review and then the user's QA, and
+// an issue a run stopped at is back in Backlog, with why, until a newer run starts.
+test("in review, the agent's review and the user's QA are told apart", () => {
+  const items = [item({ id: "001-a", state: "done" }), item({ id: "002-b", state: "done" }), item({ id: "003-c" })];
+  const cols = placeIssues(items, {
+    state: "running",
+    steps: [
+      { issue: "001-a", title: "", state: "reviewing", reviewId: "r1", sessionId: "s1" },
+      { issue: "002-b", title: "", state: "qa", reviewId: "r2", sessionId: "s2" },
+      { issue: "003-c", title: "", state: "working", sessionId: "s3" },
+    ],
+  });
+  assert.deepEqual(cols.review.map((c) => [c.id, c.review, c.step?.reviewId]), [["001-a", "reviewing", "r1"], ["002-b", "qa", "r2"]]);
+  assert.equal(cols.working[0].review, undefined);
+});
+
+test("an issue a run stopped at is back in Backlog with the reason, until a newer run", () => {
+  const items = [item({ id: "001-a" }), item({ id: "002-b" }), item({ id: "003-c" })];
+  const stopped = {
+    state: "stopped",
+    reason: "The session for 001-a failed: see the session",
+    steps: [
+      { issue: "001-a", title: "", state: "failed", note: "its session ended without marking it done", sessionId: "s1" },
+      { issue: "002-b", title: "", state: "failed", sessionId: "s2" },
+    ],
+  };
+  const cols = placeIssues(items, stopped);
+  assert.deepEqual(ids(cols.backlog), ["001-a", "002-b", "003-c"]);
+  // The step's own note says why; without one, the run's reason does.
+  assert.deepEqual(cols.backlog.map((c) => c.stopped), ["its session ended without marking it done", "The session for 001-a failed: see the session", undefined]);
+  assert.equal(cols.backlog[0].step?.sessionId, "s1");
+  // A newer run has not been to the issue yet: nothing marks it.
+  const newer = placeIssues(items, { state: "running", steps: [] });
+  assert.deepEqual(newer.backlog.map((c) => c.stopped), [undefined, undefined, undefined]);
+  // And one that has taken it up has it in Working, not stopped.
+  assert.equal(placeIssues(items, { state: "running", steps: [{ issue: "001-a", title: "", state: "working" }] }).working[0].stopped, undefined);
+  // No reason at all still says the run stopped there.
+  assert.equal(placeIssues([item({ id: "001-a" })], { state: "stopped", steps: [{ issue: "001-a", title: "", state: "failed" }] }).backlog[0].stopped, "");
+});
+
 test("a card has the short id, who does it, and what it waits on or how long it has worked", () => {
   const now = new Date("2026-11-10T12:00:00Z");
   const cards = placeIssues(
