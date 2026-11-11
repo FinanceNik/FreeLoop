@@ -627,6 +627,21 @@ Saving the look under a name and switching between looks, as Obsidian does with 
 1. **Style templates (GUI-053).** *Built 2026-11-11.* `internal/config/styles.go` (`styles/<id>.json`, the checks of `colors.json` and the fonts, `ui.style`), `internal/engine/styles.go`, the watcher and backups, `frontend/src/styles.ts` (comparing looks), `StylePicker.tsx` (Settings → Appearance), `applyStyle` and the palette's entries in `App.tsx`, and the help page `appearance.md`. Choosing a style copies it over `colors.json` and the fonts through the window's own debounced saves, so `colors.json` stays what is shown and GUI-022 and GUI-025 are unchanged.
 
 
+## Before going public: the policy holds and long sessions stay fast (planned 2026-11-11, after a review the user asked for)
+
+A review of the permission path, the engine and the window on 2026-11-11 found holes in the policy (a never-readable file readable through `/System/Volumes/Data`, `grep` showing a `.env` file unasked, `git "push"` passing a deny rule, a phone's key sent to every port of its host), a long session costing its whole length on every read and every event, agents never stopped once started, spending that is not counted, and documents behind the code. The plan is `backlog/prds/before-going-public.md`, with issues 033 to 056. The user decided the repository goes public once they are done.
+
+**The freeze holds until then.** About 31,000 lines came after the freeze of 2026-11-07. Until issue 056 is done: these issues and fixes for what they find, and nothing else. The phone's open issues (026 to 032) and sharing usage across devices wait.
+
+1. **The policy holds (033 to 039; SEC-003, SEC-005, SEC-017, SEC-020).** Each hole from a failing test, with its line in SECURITY.md.
+2. **A long session to measure with (040; NFR-PERF-002).** An 80,000-event fixture, a store benchmark, a fold timing and an app check step; the numbers to meet are in the PRD.
+3. **The engine reads what it is asked for (041, 042).** A seq found without parsing what is before it, reads outside the append lock, and no periodic work that reads a whole transcript.
+4. **The window does work in proportion to what changed (043 to 048).** Batches per frame, a fold that goes on from where it was, no transcript held for a session not on screen, a long session opening at its end if the numbers still ask for it, a boundary per pane, a lint rule for effects (OQ-055, agreed).
+5. **What runs is let go, and what is spent is counted (049 to 053; NFR-PERF-004, WFL-005, PRV-008, GUI-051).** Idle agents stopped after 30 minutes (OQ-053), an AFK step saved before it is acted on, usage for stopped calls and the app's own calls, a commit's cost from its own work.
+6. **The documents say what is, and the repository goes public (054 to 056).** VISION.md leads with the policy and the bill over every agent (OQ-054); Windows and Linux are run once or the README says they are not; then the steps in DEVELOPING.md and the first CI runs.
+
+*Not in:* splitting `Engine`, `App.tsx` and `SessionView.tsx`; one usage fold in place of four; the app check's fixed waits; a second security reading of what this one did not reach (Docker, bubblewrap, Windows, redaction, MCP sign-ins). After going public.
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.
