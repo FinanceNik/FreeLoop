@@ -44,7 +44,7 @@ In einem Projekt:
 
 - Agenten schreiben nie in `.git` oder `.freeloop` und nie außerhalb des Projekts.
 - Lesen außerhalb des Projekts fragt nach.
-- Auch das Lesen einer Datei, deren Name auf Geheimnisse hinweist, etwa `.env`, fragt nach, außer eine Erlaubnisregel deckt es ab oder die Sitzung ist im Umgehungsmodus.
+- Auch das Lesen einer Datei, deren Name auf Geheimnisse hinweist, etwa `.env`, fragt nach, außer eine Erlaubnisregel deckt es ab oder die Sitzung ist im Umgehungsmodus. Eine Suche über einen Ordner lässt solche Dateien aus und sagt, welche, außer man nennt sie im Pfad oder im Include; das fragt nach.
 
 > Diese Prüfungen gelten für die Datei-Werkzeuge. Ein freigegebener Shell-Befehl läuft mit den Rechten des eigenen Kontos, außer die Umgebung hat eine Sandbox.
 

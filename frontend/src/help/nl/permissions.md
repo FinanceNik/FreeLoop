@@ -44,7 +44,7 @@ In een project:
 
 - Agents schrijven nooit in `.git` of `.freeloop`, en nooit buiten het project.
 - Lezen buiten het project vraagt.
-- Ook het lezen van een bestand waarvan de naam zegt dat het geheimen bevat, zoals `.env`, vraagt, tenzij een toestaanregel het dekt of de sessie in omzeilmodus is.
+- Ook het lezen van een bestand waarvan de naam zegt dat het geheimen bevat, zoals `.env`, vraagt, tenzij een toestaanregel het dekt of de sessie in omzeilmodus is. Een zoekopdracht over een map laat zulke bestanden weg en zegt welke, tenzij je ze noemt in het pad of de include; dat vraagt.
 
 > Deze controles gelden voor de bestandshulpprogramma's. Een goedgekeurde shell-opdracht draait met de rechten van het eigen account, tenzij de omgeving een sandbox heeft.
 

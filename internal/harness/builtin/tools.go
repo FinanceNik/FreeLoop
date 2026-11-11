@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -278,23 +279,71 @@ func grepTool() *tool {
 				in.Path = "."
 			}
 			abs := s.env.Resolve(in.Path)
-			return &call{title: "Search for " + in.Pattern, paths: []string{abs}, run: func(ctx context.Context, _ permission.Decision) (result, error) {
-				matches, err := s.env.FS().Grep(ctx, abs, in.Pattern, in.Include, in.IgnoreCase, 200)
+			paths := []string{abs}
+			// An include that names secret files asks for them, so the user is asked as
+			// for a read; without one a search leaves such files out (SEC-017).
+			named := s.namesSecret(abs)
+			if v := secretInclude(in.Include); v != "" {
+				paths = append(paths, filepath.Join(abs, filepath.FromSlash(v)))
+				named = true
+			}
+			return &call{title: "Search for " + in.Pattern, paths: paths, run: func(ctx context.Context, d permission.Decision) (result, error) {
+				var left []string
+				var opts []environment.GrepOption
+				// A rule that allows every search and bypass mode are the user's choice of
+				// no questions; anything else only decided about what was named.
+				if !named && d.Actor != permission.ActorRule && d.Actor != permission.ActorMode {
+					opts = append(opts, environment.SkipSecrets(&left))
+				}
+				matches, err := s.env.FS().Grep(ctx, abs, in.Pattern, in.Include, in.IgnoreCase, 200, opts...)
 				if err != nil {
 					return result{}, err
 				}
 				matches = slices.DeleteFunc(matches, func(m environment.Match) bool { return s.hidden(m.Path) })
-				if len(matches) == 0 {
-					return result{text: "No matches."}, nil
-				}
 				var sb strings.Builder
 				for _, m := range matches {
 					fmt.Fprintf(&sb, "%s:%d: %s\n", m.Path, m.Line, m.Text)
+				}
+				if sb.Len() == 0 {
+					sb.WriteString("No matches.\n")
+				}
+				if len(left) > 0 {
+					shown := left[:min(len(left), 10)]
+					more := ""
+					if len(left) > len(shown) {
+						more = fmt.Sprintf(" and %d more", len(left)-len(shown))
+					}
+					fmt.Fprintf(&sb, "%d file(s) with a secret's name were left out: %s%s. Search one by naming it as the path or the include; the user is asked first.\n", len(left), strings.Join(shown, ", "), more)
 				}
 				return result{text: sb.String()}, nil
 			}}, nil
 		},
 	}
+}
+
+// namesSecret reports a path inside the project whose name says it holds secrets.
+func (s *session) namesSecret(abs string) bool {
+	rel, err := filepath.Rel(s.env.Root(), abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return environment.SecretPath(filepath.ToSlash(rel))
+}
+
+// secretInclude returns a path an include glob stands for when it would match files named
+// like secrets (".env", "*.pem", "**/secrets.yaml"), or "" when it would not.
+func secretInclude(include string) string {
+	if include == "" {
+		return ""
+	}
+	for _, fill := range []string{"x", ""} {
+		v := strings.NewReplacer("**", fill, "*", fill, "?", fill).Replace(filepath.ToSlash(include))
+		v = strings.Trim(v, "/")
+		if v != "" && environment.SecretPath(v) {
+			return v
+		}
+	}
+	return ""
 }
 
 func writeFile() *tool {

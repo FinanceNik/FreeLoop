@@ -590,7 +590,11 @@ func (f *localFS) Glob(ctx context.Context, dir, pattern string, limit int) ([]s
 	return out, err
 }
 
-func (f *localFS) Grep(ctx context.Context, dir, expr, include string, ignoreCase bool, limit int) ([]Match, error) {
+func (f *localFS) Grep(ctx context.Context, dir, expr, include string, ignoreCase bool, limit int, opts ...GrepOption) ([]Match, error) {
+	var cfg grepConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
 	if ignoreCase {
 		expr = "(?i)" + expr
 	}
@@ -602,6 +606,12 @@ func (f *localFS) Grep(ctx context.Context, dir, expr, include string, ignoreCas
 	err = f.walk(ctx, dir, func(abs, rel string) bool {
 		if include != "" && !MatchGlob(include, rel) && !MatchGlob(include, path.Base(rel)) {
 			return false
+		}
+		if cfg.secrets != nil {
+			if shown := f.env.rel(abs); secretPath(filepath.ToSlash(shown)) {
+				*cfg.secrets = append(*cfg.secrets, shown)
+				return false
+			}
 		}
 		file, err := f.openRead(abs)
 		if err != nil {

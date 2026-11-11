@@ -1,6 +1,6 @@
 ---
 title: Grep and glob ask before they show a secret file
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -18,3 +18,9 @@ Reading `.env` asks (SEC-017), but the check sees only the paths a request names
 
 ## Notes
 - `internal/permission/broker.go:515`; `internal/environment/local.go:539-632` (`walk`, `Grep`); `internal/harness/builtin/tools.go:252` (`hidden`).
+
+## Done
+- `environment.SkipSecrets` (a `GrepOption`, so `FileSystem.Grep` takes options) leaves the files of `SecretPath` out and says which; `grep` in `tools.go` uses it unless the path or the include names a secret (`secretInclude`), when it asks as a read does, or the decision is a rule's or bypass's. The note in the result lists up to ten files.
+- `glob` and `list_dir` were not changed; a test says they still list the name.
+- Not applicable: an external agent's search runs in its own process; what reaches the app is `fs/read_text_file` of a named path, which the broker already asks about.
+- The help pages (English, German, Dutch) and SECURITY.md say it.

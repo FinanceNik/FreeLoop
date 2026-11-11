@@ -376,6 +376,10 @@ The same kind of second name on the other systems, looked at:
 - **Linux, `/proc/self/root/...` and `/proc/<pid>/root`.** Magic links, which symlink resolution follows to `/`.
 - **Linux, a bind mount** of a protected folder somewhere else. A path alone cannot tell; a sandbox holds against it, and the session's environment should be one.
 
+### `grep` and a secret's name (issue 034)
+
+SEC-017 asks before a file with a secret's name (`.env`, `*.pem`, `id_ed25519`, `secrets.yaml`, `.aws/`) is read, but the check saw only the paths a request named, and `grep` names a folder: `grep` with `include: ".env"` returned its lines in ask mode with no question (reproduced by a test, 2026-11-11). The built-in `grep` now leaves such files out of a search over a folder and lists them in its result, so the model knows; it asks, as a read does, when the path or the include names them (an include such as `.env`, `*.pem` or `**/secrets.yaml`), and then shows the lines. A rule that allows every search, and bypass mode, show them as a read does. One list of names (`environment.SecretPath`) serves the read check, the sync and the search. `glob` and `list_dir` still show a file's name, which holds nothing. An external agent's own search runs in its process and never reaches this; only the `fs/read_text_file` it asks of the app does, and that is a read of a named path.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

@@ -84,6 +84,18 @@ const (
 	DefaultMaxOutput = 30 * 1024
 )
 
+// GrepOption changes what a search looks at.
+type GrepOption func(*grepConfig)
+
+type grepConfig struct{ secrets *[]string }
+
+// SkipSecrets leaves out the files whose names say they hold secrets (SecretPath) and
+// appends their paths, as they are met, to *left, so a search over a folder shows what
+// the user's yes to a search covered and says what it did not.
+func SkipSecrets(left *[]string) GrepOption {
+	return func(c *grepConfig) { c.secrets = left }
+}
+
 // FileSystem is a session's view of files. Paths may be relative to Root.
 type FileSystem interface {
 	ReadFile(path string) ([]byte, error)
@@ -97,7 +109,7 @@ type FileSystem interface {
 	// Grep searches files under dir whose relative path matches include (all
 	// files when empty) for the regular expression and returns at most limit
 	// matches.
-	Grep(ctx context.Context, dir, expr, include string, ignoreCase bool, limit int) ([]Match, error)
+	Grep(ctx context.Context, dir, expr, include string, ignoreCase bool, limit int, opts ...GrepOption) ([]Match, error)
 }
 
 // FileInfo describes one file or directory.

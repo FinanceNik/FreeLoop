@@ -44,7 +44,7 @@ In a project:
 
 - Agents never write into `.git` or `.freeloop`, or outside the project.
 - Reading outside the project asks.
-- Reading a file whose name says it holds secrets, such as `.env`, also asks, unless an allow rule covers it or the session is in bypass.
+- Reading a file whose name says it holds secrets, such as `.env`, also asks, unless an allow rule covers it or the session is in bypass. A search over a folder leaves such files out and says which, unless you name them in the path or the include, which asks.
 
 > These checks cover the file tools. An approved shell command runs as you, unless the environment is sandboxed.
 

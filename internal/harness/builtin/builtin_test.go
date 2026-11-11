@@ -601,3 +601,65 @@ func TestRestoreKeepsWhatFollowsAGap(t *testing.T) {
 		t.Errorf("the gap: %+v, %d", got[1], LostMessages(got))
 	}
 }
+
+// A search shows what a file holds, so one with a secret's name is left out unless the
+// search names it, and then the user is asked, as for a read (SEC-017). Reproduced on
+// 2026-11-11: grep with an include of .env returned its lines in ask mode with no question.
+func TestGrepLeavesOutSecretFilesUnlessNamed(t *testing.T) {
+	grep := func(mode permission.Mode, input map[string]any) (string, int) {
+		t.Helper()
+		f := setup(t, mode,
+			scripted.Step{Calls: []scripted.Call{{Name: "grep", Input: input}}},
+			scripted.Step{Text: "done"},
+		)
+		os.WriteFile(filepath.Join(f.root, ".env"), []byte("TOKEN=hunter2\n"), 0o600)
+		os.WriteFile(filepath.Join(f.root, "main.go"), []byte("// TOKEN is read from the environment\n"), 0o644)
+		os.MkdirAll(filepath.Join(f.root, "config"), 0o755)
+		os.WriteFile(filepath.Join(f.root, "config", "secrets.yaml"), []byte("TOKEN: hunter2\n"), 0o600)
+		os.WriteFile(filepath.Join(f.root, "deploy.pem"), []byte("TOKEN-pem\n"), 0o600)
+		os.WriteFile(filepath.Join(f.root, ".env.example"), []byte("TOKEN=\n"), 0o644)
+		stop := make(chan struct{})
+		defer close(stop)
+		f.answer("allow_once", stop)
+		if _, err := f.sess.Prompt(context.Background(), harness.Prompt{Text: "go"}); err != nil {
+			t.Fatal(err)
+		}
+		return f.prov.Requests()[1].Messages[2].Parts[0].Text, f.log.count(event.PermissionRequested)
+	}
+
+	for _, mode := range []permission.Mode{permission.ModeAsk, permission.ModeAcceptEdits} {
+		out, asked := grep(mode, map[string]any{"pattern": "TOKEN"})
+		if strings.Contains(out, "hunter2") || strings.Contains(out, "TOKEN-pem") || strings.Contains(out, "\n.env:") || strings.HasPrefix(out, ".env:") || strings.Contains(out, "deploy.pem:") || strings.Contains(out, "secrets.yaml:") {
+			t.Errorf("%s: a secret file's lines in the result:\n%s", mode, out)
+		}
+		if !strings.Contains(out, "main.go:1") || !strings.Contains(out, ".env.example:1") {
+			t.Errorf("%s: the ordinary files are missing:\n%s", mode, out)
+		}
+		if !strings.Contains(out, "left out") || !strings.Contains(out, ".env") {
+			t.Errorf("%s: the result does not say what was left out:\n%s", mode, out)
+		}
+		if asked != 0 {
+			t.Errorf("%s: a search over the folder asked %d times", mode, asked)
+		}
+	}
+	// Named by path, by include or by a wildcard that means such files: the user is asked,
+	// and a yes shows the lines.
+	for name, input := range map[string]map[string]any{
+		"the path":       {"pattern": "TOKEN", "path": ".env"},
+		"the include":    {"pattern": "TOKEN", "include": ".env"},
+		"a wildcard":     {"pattern": "TOKEN", "include": "*.pem"},
+		"a deep include": {"pattern": "TOKEN", "include": "**/secrets.yaml"},
+	} {
+		out, asked := grep(permission.ModeAsk, input)
+		if asked != 1 {
+			t.Errorf("%s: asked %d times, want 1", name, asked)
+		}
+		if !strings.Contains(out, "TOKEN") || strings.Contains(out, "left out") {
+			t.Errorf("%s: after a yes the lines are missing:\n%s", name, out)
+		}
+	}
+	// Bypass mode is the user's choice to have no questions.
+	if out, _ := grep(permission.ModeBypass, map[string]any{"pattern": "TOKEN"}); !strings.Contains(out, "hunter2") {
+		t.Errorf("bypass: the secret file was left out:\n%s", out)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -439,5 +440,54 @@ func TestTheSSHAgentCanBeKeptOut(t *testing.T) {
 		if strings.TrimSpace(string(out)) != want {
 			t.Errorf("NoSSHAgent %v: an agent sees %q; want %q", keep, out, want)
 		}
+	}
+}
+
+// A search can leave out the files whose names say they hold secrets and say which it
+// left out, so what it returns is what the user's yes to a search covered (SEC-017).
+func TestGrepCanLeaveOutSecretFiles(t *testing.T) {
+	l := newTest(t, nil)
+	for p, c := range map[string]string{
+		".env": "TOKEN=1\n", ".env.example": "TOKEN=\n", "main.go": "// TOKEN\n",
+		"config/secrets.yaml": "TOKEN: 1\n", "keys/deploy.pem": "TOKEN\n", ".aws/config": "TOKEN\n",
+	} {
+		l.FS().WriteFile(p, []byte(c))
+	}
+	ctx := context.Background()
+	all, err := l.FS().Grep(ctx, ".", "TOKEN", "", false, 0)
+	if err != nil || len(all) != 6 {
+		t.Fatalf("Grep without the option = %+v, %v", all, err)
+	}
+	var left []string
+	got, err := l.FS().Grep(ctx, ".", "TOKEN", "", false, 0, SkipSecrets(&left))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, m := range got {
+		paths = append(paths, m.Path)
+	}
+	sort.Strings(paths)
+	if strings.Join(paths, ",") != ".env.example,main.go" {
+		t.Errorf("matches = %v", paths)
+	}
+	sort.Strings(left)
+	if strings.Join(left, ",") != ".aws/config,.env,config/secrets.yaml,keys/deploy.pem" {
+		t.Errorf("left out = %v", left)
+	}
+	// A file that does not match the pattern is not reported as left out.
+	left = nil
+	l.FS().Grep(ctx, ".", "nothing-matches", "", false, 0, SkipSecrets(&left))
+	if len(left) != 4 {
+		t.Errorf("files left out are counted as they are met, matching or not: %v", left)
+	}
+	// A file's name is no secret: a listing still shows it.
+	if names, _ := l.FS().Glob(ctx, ".", "**/*", 0); !strings.Contains(strings.Join(names, ","), ".env,") {
+		t.Errorf("Glob = %v", names)
+	}
+	// The limit counts what is returned, not what was left out.
+	got, _ = l.FS().Grep(ctx, ".", "TOKEN", "", false, 2, SkipSecrets(new([]string)))
+	if len(got) != 2 {
+		t.Errorf("with a limit of 2: %+v", got)
 	}
 }
