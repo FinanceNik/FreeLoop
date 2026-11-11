@@ -37,6 +37,16 @@ The Limits section shows how much of an account limit an agent has reported usin
 
 Freeloop asks no vendor for these numbers. They come with an agent's own model calls, so a limit appears only after the agent's next call. API keys and local models report none.
 
+## What a commit costs
+
+The **Efficiency** tab of the Usage page shows, week by week, what each commit a session made cost: the session's use since its commit before, its subagents' included. If the same kind of work starts costing more, or a percent of an agent's limit buys less, a model or a plan has changed.
+
+- The median and the middle half are robust to the odd huge commit. **All spend per commit** and **Not followed by a commit** also count the work that never led to a commit.
+- **Per 1% of** a limit is what a percent of it bought, at today's prices. Use elsewhere, such as the agent in a terminal, takes from the same limit unseen and makes a percent look cheaper.
+- A change is named once the last 2 weeks and the 8 before each have enough commits. Until then the tab says it is too early.
+
+Commits made in a terminal, outside any session, are left out. **Export commits as CSV…** saves the list.
+
 ## Set budgets
 
 A budget is an amount of estimated spending. Under **Settings → Costs → Budgets**, click **Add a budget** and set:

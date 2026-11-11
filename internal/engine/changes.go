@@ -367,11 +367,12 @@ func (e *Engine) Commit(ctx context.Context, sid, message string) (string, error
 	if why := blocked(ctx, env); why != "" {
 		return "", errors.New(why)
 	}
+	before, _ := git(ctx, env, "rev-parse", "--verify", "--quiet", "HEAD")
 	if _, err := gitOK(ctx, env, "commit", "--quiet", "--cleanup=strip", "-m", message); err != nil {
 		return "", err
 	}
 	head, _ := git(ctx, env, "rev-parse", "HEAD")
-	e.gitChanged(ses.ID)
+	e.committed(ctx, ses.ID, env, strings.TrimSpace(before), true)
 	return strings.TrimSpace(head), nil
 }
 

@@ -1023,6 +1023,26 @@ func (s *EngineService) ExportUsage(ctx context.Context, days int) (string, erro
 	return path, s.eng.ExportUsage(ctx, days, path)
 }
 
+// WorkCost returns what each commit of the last weeks weeks cost, the spend around
+// them and what a percent of each limit bought (GUI-051).
+func (s *EngineService) WorkCost(ctx context.Context, weeks int) (engine.WorkReport, error) {
+	return s.eng.WorkCost(ctx, weeks)
+}
+
+// ExportWorkCost asks where to save the commits and their cost as CSV, and writes
+// them; "" if the user cancels.
+func (s *EngineService) ExportWorkCost(ctx context.Context, weeks int) (string, error) {
+	path, err := s.app.Dialog.SaveFile().
+		SetMessage("Export what each commit cost").
+		SetFilename("freeloop-commits.csv").
+		CanCreateDirectories(true).
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return "", err
+	}
+	return path, s.eng.ExportWorkCost(ctx, weeks, path)
+}
+
 // SaveUsagePicture asks where to save the cost summary's picture (GUI-029), which comes
 // as base64 PNG, and writes it. It returns "" if the user cancels.
 func (s *EngineService) SaveUsagePicture(ctx context.Context, data string) (string, error) {

@@ -37,6 +37,16 @@ Het onderdeel Limieten toont hoeveel van een accountlimiet een agent als verbrui
 
 Freeloop vraagt geen enkele leverancier om deze cijfers. Ze komen mee met de eigen modelaanroepen van een agent, dus een limiet verschijnt pas na de volgende aanroep van de agent. API-keys en lokale modellen melden er geen.
 
+## Wat een commit kost
+
+Het tabblad **Efficiëntie** van de gebruikspagina toont week na week wat elke commit van een sessie kostte: het verbruik van de sessie sinds haar vorige commit, haar subagents inbegrepen. Gaat hetzelfde soort werk meer kosten, of levert een procent van de limiet van een agent minder op, dan is een model of een abonnement veranderd.
+
+- De mediaan en de middelste helft zijn bestand tegen een enkele enorme commit. **Alle uitgaven per commit** en **Zonder volgende commit** tellen ook het werk mee dat tot geen commit leidde.
+- **Per 1% van** een limiet is wat een procent ervan opleverde, tegen de prijzen van vandaag. Verbruik elders, zoals de agent in een terminal, gaat ongezien van dezelfde limiet af en laat een procent goedkoper lijken.
+- Een verandering wordt genoemd zodra de laatste 2 weken en de 8 daarvoor elk genoeg commits hebben. Tot dan zegt het tabblad dat het te vroeg is.
+
+Commits vanuit een terminal, buiten elke sessie, zijn weggelaten. **Commits exporteren als CSV…** bewaart de lijst.
+
 ## Budgetten instellen
 
 Een budget is een bedrag aan geschatte uitgaven. Onder **Instellingen → Kosten → Budgetten** op **Budget toevoegen** klikken en instellen:

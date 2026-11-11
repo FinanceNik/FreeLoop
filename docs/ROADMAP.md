@@ -606,6 +606,13 @@ Dictating into the message box with a speech model run on this computer, good in
 
 1. **Voice input (GUI-050).** *Built 2026-11-11.* `internal/engine/voice.go` (status, the pinned download, dictations), `internal/config/voice.go` (pins), `environment.SaveDownload` and `InstallFolder`, `frontend/src/voice.ts` (downsampling, the silence cut, the WAV, insertion), `Dictation.tsx` (the button, recording through `public/capture-worklet.js`, the download dialog), `Voice.tsx` (Settings → Voice input), `scripts/whisper-cli.sh` (the Mac's program). *Not done:* Linux's web view is untried (OQ-048), and Windows only from the code: both wait for a machine to try them on.
 
+
+## What a unit of work costs (planned 2026-11-11, at the user's request)
+
+Models and subscriptions change under the user: one week Opus runs all day within the 5-hour limit, another a hard prompt takes half of it. GUI-051 keeps what each commit cost and what a percent of a limit bought, week by week, so the user can check (OQ-049). A second review against the code and the user's data changed the first design: commits are counted once, by SHA, for the session that made them, since parallel sessions in one checkout, reopened sessions, forks and `--no-ff` merges of worktrees each saw them again; usage per five minutes goes to a table of its own, since an older build prunes `usage_recent`; no PR units, since the data had none.
+
+1. **Cost per commit and per percent of a limit (GUI-051).** *Built 2026-11-11.* `git_state` lists the commits HEAD moved forward over (`newCommits` in `git.go`) and says when the app made them (`committed`); `internal/store/work.go` folds sessions into `work_commits`, `work_usage` and `usage_buckets` (made outside the migrations) and reads old transcripts with git once (`work_resolved`); `internal/engine/work.go` prices them (`WorkCost`, `ExportWorkCost`); `frontend/src/workcost.ts` and `WorkCost.tsx` show them in the Efficiency tab. On the user's data on 2026-11-11 the backfill took 10 s and found 113 commits since 2026-11-03. *Not done:* PRs as units, and history before 2026-11-03, when per-call usage and limit reports began.
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.

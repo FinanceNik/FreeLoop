@@ -424,16 +424,23 @@ func (e *Engine) refreshGitLater(r *runtime) {
 	})
 }
 
-// refreshGit records the session's git state when it changed.
+// refreshGit records the session's git state when it changed, with the commits
+// HEAD moved forward over since this runtime last looked (GUI-051).
 func (e *Engine) refreshGit(r *runtime) {
 	r.gitMu.Lock()
 	defer r.gitMu.Unlock()
-	st := gitState(context.Background(), r.host, e.trusted(r.projectID))
+	ctx := context.Background()
+	trusted := e.trusted(r.projectID)
+	st := gitState(ctx, r.host, trusted)
 	st.BaseCommit = r.base
-	if st == r.lastGit || (!st.Repo && !r.lastGit.Repo) {
+	if sameGit(st, r.lastGit) || (!st.Repo && !r.lastGit.Repo) {
 		return
 	}
+	prev := r.lastGit
 	r.lastGit = st
+	if prev.Repo && st.Repo {
+		st.Commits = newCommits(ctx, r.host, prev.Head, st.Head, trusted)
+	}
 	e.emit(r.sid, event.GitState, st)
 }
 

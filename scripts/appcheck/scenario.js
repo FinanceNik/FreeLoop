@@ -2040,6 +2040,14 @@ await step("a workflow slices a brief and runs its issues AFK", async () => {
   setSelect(groupSel, "run");
   const runRow = await until("the run's row", () => all(".usage-page table tbody tr td:first-child").find((td) => /^workflow · \d{4}-\d\d-\d\d \d\d:\d\d$/.test(td.textContent.trim())), 8000).catch(() => null);
   check("the demo run has its row", !!runRow, all(".usage-page table tbody tr td:first-child").map((td) => td.textContent).join(" | "));
+  // GUI-051: what each of the run's commits cost; the demo's models have no price, so in tokens.
+  (await until("the efficiency tab", () => document.querySelector("#usage-tab-efficiency"), 8000)).click();
+  const work = await until("what a commit costs", () => { const w = document.querySelector(".work-cost"); return w?.querySelector(".work-table tbody tr") && w; }, 20000).catch(() => null);
+  const counted = work?.querySelector(".work-table tbody tr td:nth-child(2)")?.textContent;
+  check("the run's commits are counted, in tokens as the demo has no price", Number(counted) >= 2 && /Median tokens per commit/.test(work?.textContent ?? ""), work?.textContent.slice(0, 240));
+  work?.querySelector(".work-table tbody tr td button.link")?.click();
+  const weekCommits = await until("the week's commits", () => all(".work-commits li", work).length >= 2, 4000).catch(() => false);
+  check("a week lists its commits, each opening its session", !!weekCommits && all(".work-commits li button.link", work).length >= 2, work?.querySelector(".work-commits")?.textContent);
   named(".footer-links button", "Board").click();
   await until("the Board again", laneEl, 8000);
   const afkRow = all(".session-row").find((r) => /AFK 001/.test(r.textContent));

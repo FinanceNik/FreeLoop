@@ -232,6 +232,27 @@ type GitStateData struct {
 	// Dirty is the number of changed files, -1 when it was not checked.
 	Dirty      int    `json:"dirty"`
 	BaseCommit string `json:"baseCommit"`
+	// Commits are those HEAD moved forward over since this session last looked,
+	// merges left out (GUI-051). A first look, or a move that is not a fast-forward
+	// (an amend, a rebase, a switch of branch), lists none.
+	Commits []CommitInfo `json:"commits,omitempty"`
+	// Cause is "commit" when the app made the commit for this session: the Diff tab's
+	// Commit, or an AFK run committing what its session left.
+	Cause string `json:"cause,omitempty"`
+}
+
+// CauseCommit marks a git_state that follows a commit the app made.
+const CauseCommit = "commit"
+
+// CommitInfo is one commit a session's HEAD moved over: when it was committed, and
+// its lines added and deleted and files changed, -1 when they were not counted
+// because the project is not trusted or its config could run a program.
+type CommitInfo struct {
+	SHA     string `json:"sha"`
+	At      int64  `json:"at"`
+	Added   int    `json:"added"`
+	Deleted int    `json:"deleted"`
+	Files   int    `json:"files"`
 }
 
 // CurrentModeData is the payload of current_mode_update.

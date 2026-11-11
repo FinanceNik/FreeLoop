@@ -51,6 +51,8 @@ type Options struct {
 type Store struct {
 	// recentMu keeps two folds of recent usage from counting an event twice.
 	recentMu sync.Mutex
+	// workMu does the same for the folds of commits and their usage (GUI-051).
+	workMu sync.Mutex
 	// rebuilt says why the database was rebuilt when it opened.
 	rebuilt  string
 	db       *sql.DB
@@ -97,6 +99,10 @@ func Open(opts Options) (*Store, error) {
 	}
 	if s.now == nil {
 		s.now = time.Now
+	}
+	if err := s.markWorkSince(); err != nil {
+		db.Close()
+		return nil, err
 	}
 	interval := opts.SyncInterval
 	if interval <= 0 {
@@ -630,6 +636,8 @@ var addedColumns = []struct{ table, column, definition string }{
 	// and turns it reported no tokens for.
 	{"usage", "turn_totals", "INTEGER NOT NULL DEFAULT 0"},
 	{"usage", "unreported", "INTEGER NOT NULL DEFAULT 0"},
+	// How far a session's commits and their usage are folded (GUI-051).
+	{"sessions", "work_seq", "INTEGER NOT NULL DEFAULT 0"},
 }
 
 // addColumns adds what addedColumns holds and the database does not.
@@ -678,7 +686,10 @@ func migrate(db *sql.DB) error {
 	if err := addColumns(db); err != nil {
 		return err
 	}
-	return addLimitsTable(db)
+	if err := addLimitsTable(db); err != nil {
+		return err
+	}
+	return addWorkTables(db)
 }
 
 // DeleteSession removes a session's transcript folder and its database row

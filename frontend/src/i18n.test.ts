@@ -140,6 +140,7 @@ const SAME_WORD = {
   de: new Set([
     "voice.megabytes",
     "voice.dialog.progress",
+    "work.commits",
     "afk.cost.partNoModel",
     "afk.cost.issues",
     "afk.cost.reviews",
@@ -203,6 +204,8 @@ const SAME_WORD = {
   nl: new Set([
     "voice.megabytes",
     "voice.dialog.progress",
+    "work.commits",
+    "work.week",
     "help.title",
     "modelSets.row.issues",
     "modelSets.row.reviews",

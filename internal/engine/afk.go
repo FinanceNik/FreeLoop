@@ -816,9 +816,14 @@ func (e *Engine) commitLeftovers(ctx context.Context, env environment.Environmen
 	if blocked(ctx, env) == "" {
 		if out, ok := git(ctx, env, "status", "--porcelain"); ok && strings.TrimSpace(out) != "" {
 			msg := fmt.Sprintf("%s: %s", s.Issue, s.Title)
+			before, _ := git(ctx, env, "rev-parse", "--verify", "--quiet", "HEAD")
 			if _, err := gitOK(ctx, env, "add", "--all"); err == nil {
 				if _, err := gitOK(ctx, env, "commit", "--quiet", "-m", msg); err == nil {
 					note = "Its session left changes uncommitted; the run committed them."
+					// The issue's work, so its session's (GUI-051).
+					if s.SessionID != "" {
+						e.committed(ctx, s.SessionID, env, strings.TrimSpace(before), true)
+					}
 				}
 			}
 		}

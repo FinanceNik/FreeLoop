@@ -367,7 +367,23 @@
         "branch": { "type": "string" },
         "head": { "type": "string" },
         "dirty": { "type": "integer", "minimum": -1, "description": "-1 when not checked, because the repository configures content filters git status could run." },
-        "baseCommit": { "type": "string" }
+        "baseCommit": { "type": "string" },
+        "commits": {
+          "type": "array",
+          "description": "Commits HEAD moved forward over since the session last looked, merges left out (GUI-051).",
+          "items": {
+            "type": "object",
+            "required": ["sha", "at", "added", "deleted", "files"],
+            "properties": {
+              "sha": { "type": "string" },
+              "at": { "type": "integer", "description": "Commit time, Unix seconds." },
+              "added": { "type": "integer", "minimum": -1 },
+              "deleted": { "type": "integer", "minimum": -1 },
+              "files": { "type": "integer", "minimum": -1 }
+            }
+          }
+        },
+        "cause": { "enum": ["commit"], "description": "The app made the commit for this session." }
       }
     },
     "usage": {

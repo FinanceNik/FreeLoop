@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -201,4 +202,92 @@ func fingerprint(ctx context.Context, env environment.Environment) (firstCommit,
 		remote = strings.TrimSpace(out)
 	}
 	return firstCommit, remote
+}
+
+// sameGit reports two git states the same apart from the commits listed with them.
+func sameGit(a, b event.GitStateData) bool {
+	return a.Repo == b.Repo && a.Branch == b.Branch && a.Head == b.Head && a.Dirty == b.Dirty && a.BaseCommit == b.BaseCommit
+}
+
+// maxNewCommits caps the commits one HEAD move lists.
+const maxNewCommits = 100
+
+// newCommits lists the commits a checkout's HEAD moved forward over, from old to
+// now, merges left out (GUI-051). A move that is not a fast-forward (an amend, a
+// rebase, a reset, a switch of branch) lists none. Their lines are counted only in
+// a trusted project whose config runs nothing; elsewhere only rev-list runs, which
+// is allowed plumbing.
+func newCommits(ctx context.Context, env environment.Environment, old, now string, trusted bool) []event.CommitInfo {
+	if old == "" || now == "" || old == now {
+		return nil
+	}
+	if _, ok := git(ctx, env, "merge-base", "--is-ancestor", old, now); !ok {
+		return nil
+	}
+	out, ok := git(ctx, env, "rev-list", "--no-merges", "--timestamp", "--max-count="+strconv.Itoa(maxNewCommits), now, "^"+old)
+	if !ok {
+		return nil
+	}
+	var commits []event.CommitInfo
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		at, sha, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok {
+			continue
+		}
+		when, _ := strconv.ParseInt(at, 10, 64)
+		commits = append(commits, event.CommitInfo{SHA: sha, At: when, Added: -1, Deleted: -1, Files: -1})
+	}
+	if len(commits) == 0 || !trusted || blocked(ctx, env) != "" {
+		return commits
+	}
+	for i := range commits {
+		out, ok := git(ctx, env, "diff-tree", "-r", "--root", "--no-commit-id", "--numstat", "--no-ext-diff", "--no-textconv", "--no-renames", commits[i].SHA)
+		if !ok {
+			continue
+		}
+		commits[i].Added, commits[i].Deleted, commits[i].Files = numstat(out)
+	}
+	return commits
+}
+
+// numstat adds up git's --numstat lines; a binary file counts as a file only.
+func numstat(out string) (added, deleted, files int) {
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.SplitN(line, "\t", 3)
+		if len(f) != 3 {
+			continue
+		}
+		files++
+		a, errA := strconv.Atoi(f[0])
+		d, errD := strconv.Atoi(f[1])
+		if errA == nil && errD == nil {
+			added += a
+			deleted += d
+		}
+	}
+	return added, deleted, files
+}
+
+// committed records a commit the app made for a session, the Diff tab's or an AFK
+// run's, as that session's (GUI-051): before is HEAD before it.
+func (e *Engine) committed(ctx context.Context, sid string, env environment.Environment, before string, trusted bool) {
+	st := gitState(ctx, env, trusted)
+	if !st.Repo || st.Head == "" || st.Head == before {
+		return
+	}
+	st.Cause = event.CauseCommit
+	st.Commits = newCommits(ctx, env, before, st.Head, trusted)
+	e.mu.Lock()
+	r, ok := e.runtimes[sid]
+	e.mu.Unlock()
+	if ok {
+		r.gitMu.Lock()
+		defer r.gitMu.Unlock()
+		st.BaseCommit = r.base
+		r.lastGit = st
+		r.lastGit.Commits, r.lastGit.Cause = nil, ""
+	} else if ses, err := e.store.GetSession(ctx, sid); err == nil {
+		st.BaseCommit = ses.BaseCommit
+	}
+	e.emit(sid, event.GitState, st)
 }

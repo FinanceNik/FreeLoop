@@ -37,6 +37,16 @@ Der Abschnitt Nutzungslimits zeigt, wie viel eines Kontolimits ein Agent als ver
 
 Freeloop fragt keinen Hersteller nach diesen Zahlen. Sie kommen mit den eigenen Modellaufrufen eines Agenten, sodass ein Limit erst nach dem nächsten Aufruf des Agenten erscheint. API-Keys und lokale Modelle melden keine.
 
+## Was ein Commit kostet
+
+Der Tab **Effizienz** der Nutzungsseite zeigt Woche für Woche, was jeder Commit einer Sitzung gekostet hat: den Verbrauch der Sitzung seit ihrem vorigen Commit, ihre Subagenten eingeschlossen. Kostet dieselbe Art Arbeit mehr oder bringt ein Prozent des Limits eines Agenten weniger, hat sich ein Modell oder ein Abo geändert.
+
+- Median und mittlere Hälfte halten einem einzelnen riesigen Commit stand. **Alle Ausgaben pro Commit** und **Ohne folgenden Commit** zählen auch die Arbeit, die zu keinem Commit führte.
+- **Pro 1 % von** einem Limit ist, was ein Prozent davon brachte, zu heutigen Preisen. Verbrauch anderswo, etwa durch den Agenten in einem Terminal, geht unbemerkt vom selben Limit ab und lässt ein Prozent billiger aussehen.
+- Eine Änderung wird genannt, sobald die letzten 2 Wochen und die 8 davor je genug Commits haben. Bis dahin sagt der Tab, dass es zu früh ist.
+
+Commits aus einem Terminal, außerhalb jeder Sitzung, sind nicht enthalten. **Commits als CSV exportieren…** speichert die Liste.
+
 ## Kostenrahmen festlegen
 
 Ein Kostenrahmen ist ein Betrag geschätzter Ausgaben. Unter **Einstellungen → Kosten → Kostenrahmen** auf **Kostenrahmen hinzufügen** klicken und festlegen:

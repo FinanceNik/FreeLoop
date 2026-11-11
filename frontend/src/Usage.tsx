@@ -11,6 +11,7 @@ import { formatCost } from "./cost.ts";
 import LiveUsage from "./LiveUsage.tsx";
 import UsageChart, { type Series } from "./UsageChart.tsx";
 import { ActivityView, ApprovalsView, EfficiencyView } from "./UsageInsights.tsx";
+import WorkCostView from "./WorkCost.tsx";
 import { basename } from "./paths.ts";
 import Limits from "./Limits.tsx";
 import CostSummaryPanel from "./CostSummary.tsx";
@@ -344,6 +345,17 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
         {tab === "activity" && <ActivityView rows={activityRows} since={since} until={until} rangeLabel={rangeLabel(range)} onOpenSession={onOpenSession} />}
         {tab === "approvals" && <ApprovalsView rows={activityRows} since={since} until={until} rangeLabel={rangeLabel(range)} onOpenSession={onOpenSession} onChanged={() => setReloads((n) => n + 1)} onError={onError} />}
         {tab === "efficiency" && <EfficiencyView usage={fetched.filter((r) => r.day >= since)} allUsage={fetched} rows={activityRows} today={until} modelOf={keyOf.model} projectOf={project} onOpenPrices={onOpenPrices} />}
+        {tab === "efficiency" && (
+          <div className="usage-body">
+            <WorkCostView
+              matches={(r) => (!filters.project || project(r) === filters.project) && (!filters.agent || agent(r) === filters.agent) && (!filters.model || keyOf.model(r as UsageRow) === filters.model)}
+              tagged={!!filters.tag}
+              cacheReads={cacheReads}
+              onOpenSession={onOpenSession}
+              onError={onError}
+            />
+          </div>
+        )}
         {tab === "tokens" && (
           <div className={loading && report ? "usage-body usage-loading" : "usage-body"}>
             {!report && loading && <p className="muted">{t("usagePage.loading")}</p>}
