@@ -21,6 +21,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,8 +32,8 @@ import (
 )
 
 const (
-	cookieName  = "freeloop_device"
-	cookieLife  = 90 * 24 * time.Hour
+	// A phone's key goes unused for this long before it stops working; use renews it.
+	keyLife     = 90 * 24 * time.Hour
 	pairLife    = 5 * time.Minute
 	pairTries   = 5
 	maxBody     = 64 << 10
@@ -57,6 +58,9 @@ type Server struct {
 	listErr string
 	pairing *pairing
 	devices []config.Device
+	// streams cancel what a phone has open, so signing it out ends them at once.
+	streams map[string]map[int]context.CancelFunc
+	nextRun int
 }
 
 // pairing is an open pairing window: the code the phone sends, and the phone that
@@ -252,6 +256,13 @@ func (s *Server) RemoveDevice(id string) error {
 		return err
 	}
 	s.devices = keep
+	for did, open := range s.streams {
+		if id == "" || did == id {
+			for _, cancel := range open {
+				cancel()
+			}
+		}
+	}
 	return nil
 }
 
@@ -323,14 +334,17 @@ func cleanName(s string) string {
 	return s
 }
 
-// device finds the paired phone a request's cookie belongs to, and notes it was
-// seen. A cookie of another Tailscale login than the one it paired as is refused.
+// device finds the paired phone a request's key belongs to, and notes it was seen.
+// The key is sent as a header the phone app adds, not as a cookie: a cookie goes to
+// every port of the same host, to whatever else runs there. A phone paired with a
+// Tailscale login must show that login, so the key replayed straight at the port by
+// something that took it is refused (SEC-020).
 func (s *Server) device(r *http.Request) (config.Device, bool) {
-	c, err := r.Cookie(cookieName)
-	if err != nil {
+	value, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok {
 		return config.Device{}, false
 	}
-	token, err := base64.RawURLEncoding.DecodeString(c.Value)
+	token, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil || len(token) != 32 {
 		return config.Device{}, false
 	}
@@ -341,7 +355,10 @@ func (s *Server) device(r *http.Request) (config.Device, bool) {
 		if subtle.ConstantTimeCompare([]byte(d.TokenHash), []byte(hash)) != 1 {
 			continue
 		}
-		if login := r.Header.Get(tsLogin); d.Login != "" && login != "" && login != d.Login {
+		if d.Login != "" && r.Header.Get(tsLogin) != d.Login {
+			return config.Device{}, false
+		}
+		if s.now().Sub(d.LastSeen) > keyLife {
 			return config.Device{}, false
 		}
 		if s.now().Sub(d.LastSeen) > time.Hour {
@@ -351,6 +368,32 @@ func (s *Server) device(r *http.Request) (config.Device, bool) {
 		return s.devices[i], true
 	}
 	return config.Device{}, false
+}
+
+// track registers a cancel for what the phone has open, and returns how to forget it.
+// A phone signed out meanwhile gets nothing.
+func (s *Server) track(id string, cancel context.CancelFunc) func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !slices.ContainsFunc(s.devices, func(d config.Device) bool { return d.ID == id }) {
+		cancel()
+		return func() {}
+	}
+	if s.streams == nil {
+		s.streams = map[string]map[int]context.CancelFunc{}
+	}
+	if s.streams[id] == nil {
+		s.streams[id] = map[int]context.CancelFunc{}
+	}
+	s.nextRun++
+	n := s.nextRun
+	s.streams[id][n] = cancel
+	return func() {
+		s.mu.Lock()
+		delete(s.streams[id], n)
+		s.mu.Unlock()
+		cancel()
+	}
 }
 
 // allowedHost checks a request's Host: this computer's address, or the name the
@@ -439,7 +482,9 @@ func (s *Server) authed(h handler) http.HandlerFunc {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "pair this phone first"})
 			return
 		}
-		h(w, r, d)
+		ctx, cancel := context.WithCancel(r.Context())
+		defer s.track(d.ID, cancel)()
+		h(w, r.WithContext(ctx), d)
 	}
 }
 
@@ -491,8 +536,8 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"id": p.claim.id})
 }
 
-// pairAnswer tells a waiting phone the user's answer, and with "allowed" sets its
-// cookie, once.
+// pairAnswer tells a waiting phone the user's answer, and with "allowed" its key,
+// once.
 func (s *Server) pairAnswer(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	s.mu.Lock()
@@ -505,7 +550,7 @@ func (s *Server) pairAnswer(w http.ResponseWriter, r *http.Request) {
 	if c != nil {
 		answer, token = c.answer, c.token
 		if answer == "allowed" {
-			s.pairing = nil // the cookie goes out once
+			s.pairing = nil // the key goes out once
 		}
 	}
 	s.mu.Unlock()
@@ -513,8 +558,8 @@ func (s *Server) pairAnswer(w http.ResponseWriter, r *http.Request) {
 	case c == nil:
 		writeJSON(w, http.StatusOK, map[string]string{"answer": "refused"})
 	case answer == "allowed":
-		http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", MaxAge: int(cookieLife.Seconds()), HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.Header.Get("X-Forwarded-Proto") == "https"})
-		writeJSON(w, http.StatusOK, map[string]string{"answer": "allowed"})
+		// The phone app keeps the key in its own storage and sends it as a header.
+		writeJSON(w, http.StatusOK, map[string]string{"answer": "allowed", "token": token})
 	default:
 		writeJSON(w, http.StatusOK, map[string]string{"answer": "waiting"})
 	}
@@ -525,7 +570,6 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, d config.Device)
 		failed(w, http.StatusInternalServerError, err)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

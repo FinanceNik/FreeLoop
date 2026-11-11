@@ -28,6 +28,7 @@ Auf einem iPhone gibt **Zum Home-Bildschirm** in Safari ein eigenes Symbol; frag
 ## Was privat bleibt
 
 - Freeloop antwortet nur auf diesem Computer. Tailscale bringt es verschlüsselt zum Telefon, und kein fremdes Gerät erreicht es.
-- Nur gekoppelte und auf dem Computer bestätigte Telefone kommen hinein. **Alle Telefone abmelden** auf der Seite beendet sie alle.
+- Nur gekoppelte und auf dem Computer bestätigte Telefone kommen hinein. **Alle Telefone abmelden** auf der Seite beendet sie alle, samt ihrer offenen Streams, sofort.
+- Der Schlüssel eines Telefons liegt im eigenen Speicher der Telefon-App und wird als Header gesendet, nie als Cookie. Eine andere Seite unter demselben Tailscale-Namen erhält ihn daher nie, und er gilt nicht unter einem anderen Tailscale-Login oder nach 90 Tagen ohne Nutzung. Ein Telefon, das mit einem früheren Build gekoppelt wurde, muss neu koppeln.
 - Befehle, die Agenten ausführen, erreichen den Port wie jeden auf diesem Computer, bekommen dort aber ohne gekoppeltes Telefon nichts.
 - Tailscale listet HTTPS-Zertifikate öffentlich, daher wird der Tailscale-Name des Computers öffentlich.

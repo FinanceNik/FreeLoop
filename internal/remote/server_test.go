@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"strconv"
 	"strings"
 	"testing"
@@ -26,6 +25,19 @@ type phone struct {
 	base   string
 	client *http.Client
 	login  string
+	// token is the key the phone holds, sent as a header (never a cookie, which every
+	// port of the same host would receive).
+	token string
+}
+
+// authorize puts the phone's key and login on a request, as the phone app does.
+func (p *phone) authorize(req *http.Request) {
+	if p.token != "" {
+		req.Header.Set("Authorization", "Bearer "+p.token)
+	}
+	if p.login != "" {
+		req.Header.Set(tsLogin, p.login)
+	}
 }
 
 func (p *phone) do(method, path string, body any, extra map[string]string) (*http.Response, map[string]any) {
@@ -41,9 +53,7 @@ func (p *phone) do(method, path string, body any, extra map[string]string) (*htt
 		req.Header.Set(phoneHeader, "1")
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if p.login != "" {
-		req.Header.Set(tsLogin, p.login)
-	}
+	p.authorize(req)
 	for k, v := range extra {
 		req.Header.Set(k, v)
 	}
@@ -87,8 +97,7 @@ func started(t *testing.T) (*engine.Engine, *Server, *phone) {
 	}
 	s.apply(st)
 	t.Cleanup(func() { s.apply(engine.RemoteState{}) })
-	jar, _ := cookiejar.New(nil)
-	return e, s, &phone{t: t, base: "http://127.0.0.1:" + strconv.Itoa(st.Port), client: &http.Client{Jar: jar}}
+	return e, s, &phone{t: t, base: "http://127.0.0.1:" + strconv.Itoa(st.Port), client: &http.Client{}}
 }
 
 func pairPhone(t *testing.T, s *Server, p *phone) {
@@ -111,11 +120,17 @@ func pairPhone(t *testing.T, s *Server, p *phone) {
 	if err := s.AnswerPairing(true); err != nil {
 		t.Fatal(err)
 	}
-	if _, out := p.do("GET", "/api/pair/"+id, nil, nil); out["answer"] != "allowed" {
+	resp, out = p.do("GET", "/api/pair/"+id, nil, nil)
+	token, _ := out["token"].(string)
+	if out["answer"] != "allowed" || len(token) < 40 {
 		t.Fatalf("after allowing: %v", out)
 	}
-	if _, out := p.do("GET", "/api/pair/"+id, nil, nil); out["answer"] != "refused" {
-		t.Errorf("the cookie went out twice: %v", out)
+	if c := resp.Header.Get("Set-Cookie"); c != "" {
+		t.Errorf("the key was also sent as a cookie: %s", c)
+	}
+	p.token = token
+	if _, out := p.do("GET", "/api/pair/"+id, nil, nil); out["answer"] != "refused" || out["token"] != nil {
+		t.Errorf("the key went out twice: %v", out)
 	}
 }
 
@@ -179,11 +194,30 @@ func TestPhoneMustBePairedOnThisComputer(t *testing.T) {
 	if st := s.Status(); len(st.Devices) != 1 || st.Devices[0].Login != "alice@example.com" {
 		t.Fatalf("devices: %+v", st.Devices)
 	}
-	// The cookie under another Tailscale login is refused.
+	// The key under another Tailscale login is refused, and so is the key with no login at
+	// all: replayed straight to the port by something that got hold of it.
 	p.login = "mallory@example.com"
 	if resp, _ := p.do("GET", "/api/summary", nil, nil); resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("another login: %d", resp.StatusCode)
 	}
+	p.login = ""
+	if resp, _ := p.do("GET", "/api/summary", nil, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("no login header: %d", resp.StatusCode)
+	}
+	// A cookie is not a key: another page on the same host receives one.
+	req, _ = http.NewRequest("GET", p.base+"/api/summary", nil)
+	req.AddCookie(&http.Cookie{Name: "freeloop_device", Value: p.token})
+	req.Header.Set(tsLogin, "alice@example.com")
+	if resp, err := p.client.Do(req); err != nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("the key as a cookie: %v %v", resp.StatusCode, err)
+	}
+	// A key goes stale after 90 days without use.
+	s.now = func() time.Time { return time.Now().Add(91 * 24 * time.Hour) }
+	p.login = "alice@example.com"
+	if resp, _ := p.do("GET", "/api/summary", nil, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("a key unused for 91 days: %d", resp.StatusCode)
+	}
+	s.now = time.Now
 	p.login = "alice@example.com"
 	if err := s.RemoveDevice(s.Status().Devices[0].ID); err != nil {
 		t.Fatal(err)
@@ -227,6 +261,7 @@ func TestPhoneApprovesOnceAndPrompts(t *testing.T) {
 
 	// The stream sends the session from its start.
 	sreq, _ := http.NewRequest("GET", p.base+"/api/sessions/"+ses.ID+"/stream?after=0", nil)
+	p.authorize(sreq)
 	sresp, err := p.client.Do(sreq)
 	if err != nil || sresp.StatusCode != http.StatusOK {
 		t.Fatalf("stream: %v %v", sresp.StatusCode, err)
@@ -303,5 +338,39 @@ func TestPhoneServerFollowsTheSettings(t *testing.T) {
 	s.apply(st)
 	if _, err := p.client.Get(p.base + "/phone/"); err == nil {
 		t.Error("still listening in local-only mode")
+	}
+}
+
+// A phone signed out from the computer loses the streams it has open at once, not at the
+// next reconnect.
+func TestARemovedPhonesStreamEnds(t *testing.T) {
+	_, s, p := started(t)
+	pairPhone(t, s, p)
+	req, _ := http.NewRequest("GET", p.base+"/api/stream", nil)
+	p.authorize(req)
+	resp, err := p.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("stream: %v %v", resp.StatusCode, err)
+	}
+	defer resp.Body.Close()
+	lines := bufio.NewScanner(resp.Body)
+	for lines.Scan() {
+		if strings.HasPrefix(lines.Text(), "data:") {
+			break
+		}
+	}
+	if err := s.RemoveDevice(s.Status().Devices[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan struct{})
+	go func() {
+		for lines.Scan() {
+		}
+		close(ended)
+	}()
+	select {
+	case <-ended:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the removed phone's stream stayed open")
 	}
 }
