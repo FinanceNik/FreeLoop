@@ -211,6 +211,10 @@ type UI struct {
 	// means the app's own.
 	TextFont string `yaml:"textFont,omitempty" json:"textFont"`
 	CodeFont string `yaml:"codeFont,omitempty" json:"codeFont"`
+	// Style is the ID of the saved style chosen last (GUI-053), whose colors
+	// and fonts were copied over colors.json and the fonts above. Empty means
+	// the app's own look.
+	Style string `yaml:"style,omitempty" json:"style"`
 	// Shortcuts are the user's changes to the app's keyboard shortcuts, by name
 	// (SET-006). A name left out keeps its default.
 	Shortcuts map[string]string `yaml:"shortcuts,omitempty" json:"shortcuts"`
@@ -292,6 +296,10 @@ func (c *Config) Validate() []Issue {
 	}
 	issues = append(issues, validateFont("ui.textFont", &c.UI.TextFont)...)
 	issues = append(issues, validateFont("ui.codeFont", &c.UI.CodeFont)...)
+	if c.UI.Style != "" && !idPattern.MatchString(c.UI.Style) {
+		issues = append(issues, Issue{Field: "ui.style", Message: fmt.Sprintf("%q is not a style's ID", c.UI.Style)})
+		c.UI.Style = ""
+	}
 	var priceIssues, hookIssues []Issue
 	c.Prices, priceIssues = validatePrices(c.Prices)
 	var budgetIssues []Issue

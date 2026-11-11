@@ -47,7 +47,7 @@ func (e *Engine) watch(interval time.Duration) {
 // the provider and environment they started with; new sessions and the next
 // permission check see the new settings.
 func (e *Engine) reload(changed []string) {
-	envs, profiles := false, false
+	envs, profiles, styles := false, false, false
 	for _, f := range changed {
 		switch {
 		case f == config.FileName:
@@ -78,6 +78,8 @@ func (e *Engine) reload(changed []string) {
 			e.loadMCP()
 		case f == config.ColorsFileName:
 			e.loadColors()
+		case strings.HasPrefix(f, config.StylesDir+string(filepath.Separator)):
+			styles = true
 		case strings.HasPrefix(f, config.EnvironmentsDir+string(filepath.Separator)):
 			envs = true
 		case strings.HasPrefix(f, config.ProfilesDir+string(filepath.Separator)):
@@ -92,6 +94,9 @@ func (e *Engine) reload(changed []string) {
 		default:
 			log.Printf("engine: no reload for %s", f)
 		}
+	}
+	if styles {
+		e.loadStyles()
 	}
 	if envs {
 		e.loadEnvironments()

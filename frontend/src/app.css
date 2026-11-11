@@ -4393,6 +4393,22 @@ table.hooks .hook-command {
   font-size: calc(12rem / 14);
 }
 
+/* The styles of Settings → Appearance (GUI-053). */
+.style-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.style-picker p {
+  margin: 0;
+}
+
+.style-name {
+  width: 16em;
+  max-width: 100%;
+}
+
 /* The colors of Settings → Appearance (GUI-022). */
 .color-editor {
   display: flex;

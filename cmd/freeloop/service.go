@@ -986,6 +986,30 @@ func (s *EngineService) OpenColors() error {
 	return s.eng.OpenInEditor(path)
 }
 
+// Styles lists the saved styles (GUI-053).
+func (s *EngineService) Styles() []config.Style {
+	return s.eng.Styles()
+}
+
+// SaveStyle writes a style; one without an ID is new.
+func (s *EngineService) SaveStyle(st config.Style) (config.Style, error) {
+	return s.eng.SaveStyle(st)
+}
+
+func (s *EngineService) DeleteStyle(id string) error {
+	return s.eng.DeleteStyle(id)
+}
+
+// ShowStyles shows the styles folder in the file manager, where a style is
+// shared by copying its file.
+func (s *EngineService) ShowStyles() error {
+	dir, err := s.eng.StylesFolder()
+	if err != nil {
+		return err
+	}
+	return s.app.Env.OpenFileManager(dir, false)
+}
+
 func (s *EngineService) ConfigIssues() []config.Issue {
 	return s.eng.ConfigIssues()
 }

@@ -41,17 +41,23 @@ func backedUp(rel string) bool {
 		return true
 	}
 	// A backslash or a drive's colon would be a separator or a drive on Windows.
-	if strings.Contains(rel, "..") || strings.HasPrefix(rel, "/") || strings.ContainsAny(rel, `\:`) || !strings.HasSuffix(rel, ".yaml") {
+	if strings.Contains(rel, "..") || strings.HasPrefix(rel, "/") || strings.ContainsAny(rel, `\:`) {
+		return false
+	}
+	dir, name := path.Split(rel)
+	dir = strings.TrimSuffix(dir, "/")
+	if dir == StylesDir {
+		return strings.HasSuffix(name, ".json") && !strings.HasPrefix(name, ".")
+	}
+	if !strings.HasSuffix(rel, ".yaml") {
 		return false
 	}
 	if slices.Contains([]string{FileName, ProvidersFileName, RulesFileName, MCPFileName, CapabilitiesFileName}, rel) {
 		return true
 	}
-	dir, name := path.Split(rel)
 	if name == "" || strings.HasPrefix(name, ".") {
 		return false
 	}
-	dir = strings.TrimSuffix(dir, "/")
 	return dir == EnvironmentsDir || dir == ProfilesDir || dir == PresetsDir || dir == OptimizersDir || dir == WorkflowsDir
 }
 

@@ -22,11 +22,14 @@ func Fingerprint(dir string) map[string]string {
 	add(RulesFileName)
 	add(MCPFileName)
 	add(ColorsFileName)
-	for _, sub := range []string{EnvironmentsDir, ProfilesDir, PresetsDir, OptimizersDir, WorkflowsDir} {
-		if entries, err := os.ReadDir(filepath.Join(dir, sub)); err == nil {
+	for _, sub := range []struct{ dir, ext string }{
+		{EnvironmentsDir, ".yaml"}, {ProfilesDir, ".yaml"}, {PresetsDir, ".yaml"}, {OptimizersDir, ".yaml"}, {WorkflowsDir, ".yaml"},
+		{StylesDir, ".json"},
+	} {
+		if entries, err := os.ReadDir(filepath.Join(dir, sub.dir)); err == nil {
 			for _, e := range entries {
-				if strings.HasSuffix(e.Name(), ".yaml") {
-					add(filepath.Join(sub, e.Name()))
+				if strings.HasSuffix(e.Name(), sub.ext) {
+					add(filepath.Join(sub.dir, e.Name()))
 				}
 			}
 		}

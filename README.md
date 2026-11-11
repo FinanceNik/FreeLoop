@@ -84,6 +84,7 @@ Everything is in one folder, readable and editable by hand; edits are picked up 
 | `workflows/*.yaml` | workflows of your own |
 | `optimizers/*.yaml` | token optimizers of your own |
 | `colors.json` | custom colors |
+| `styles/*.json` | saved styles: fonts and colors under a name |
 | `logs/freeloop.log` | the app's log, which stays on your computer; Settings → Data shows it |
 | `skills/` | the skill store |
 | `sessions/<id>/events.jsonl` | each session's transcript |

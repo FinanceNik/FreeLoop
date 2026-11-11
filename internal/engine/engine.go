@@ -143,6 +143,7 @@ type Engine struct {
 	rules   *ruleStore
 	cfg     config.Config
 	colors  config.Colors
+	styles  []config.Style
 	// loginEnv is what shell startup files set, for commands in a sandbox.
 	loginOnce sync.Once
 	loginEnv  map[string]string
@@ -301,6 +302,7 @@ func Open(opts Options) (*Engine, error) {
 	e.broker.SetRules(e.rules, e.rules)
 	e.broker.SetHooks(engineHooks{e})
 	e.loadColors()
+	e.loadStyles()
 	e.loadEnvironments()
 	e.loadPresets()
 	e.loadOptimizers()
@@ -491,10 +493,11 @@ const (
 	issueStorage      = "storage"
 	issueRebuilt      = "rebuilt"
 	issueColors       = "colors"
+	issueStyles       = "styles"
 	issueAddresses    = "addresses"
 )
 
-var issueOrder = []string{issueStorage, issueRebuilt, issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueWorkflows, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueAddresses}
+var issueOrder = []string{issueStorage, issueRebuilt, issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueWorkflows, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueStyles, issueAddresses}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()

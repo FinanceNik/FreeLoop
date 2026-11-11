@@ -914,6 +914,91 @@ await step("the app's settings are seven short pages", async () => {
   await sleep(100);
 });
 
+await step("a style keeps the fonts and colors, and choosing it brings them back", async () => {
+  // GUI-053: saved from what is on screen, switched to from the list and the
+  // palette, marked changed, reverted, and deleted with the look left as it is.
+  document.querySelector(".settings-link").click();
+  (await until("the Appearance page", () => withText(".settings-nav button", "Appearance"))).click();
+  await until("Appearance", () => document.querySelector(".settings-page h2")?.textContent === "Appearance");
+  const picker = await until("the styles", () => document.querySelector(".style-picker"));
+  const select = () => picker.querySelector("select.style-select");
+  const shown = () => select().selectedOptions[0]?.textContent ?? "";
+  const accent = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+  const setText = (input, value) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const pick = (value) => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select(), value);
+    select().dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  // A served build has no native dialogs, so this answers them.
+  let answer = "Cancel";
+  let asked = 0;
+  const real = window.fetch;
+  window.fetch = (u, o) => {
+    const text = decodeURIComponent(`${u}${o?.body ?? ""}`);
+    if (text.includes("not saved in a style") || text.includes("Delete the style Check paper?")) {
+      asked++;
+      return Promise.resolve(new Response(JSON.stringify(answer), { status: 200, headers: { "Content-Type": "application/json" } }));
+    }
+    return real(u, o);
+  };
+  try {
+    const own = accent();
+    check("the app's own look is chosen at first", select().value === "" && shown() === "Freeloop (default)", shown());
+    setText(named(".color-editor input.color-text", "Buttons value"), "#d14b8f");
+    await until("the new accent", () => accent() === "#d14b8f", 3000);
+    check("a color of the user's marks the app's own look changed", shown() === "Freeloop (default) (changed)", shown());
+
+    withText(".style-picker button", "Save as new…").click();
+    setText(await until("the name field", () => picker.querySelector("input.style-name")), "Check paper");
+    withText(".style-picker button", "Save").click();
+    await until("the new style chosen", () => shown() === "Check paper", 5000);
+    const id = select().value;
+    check("saving as new chooses the style", id === "check-paper", id);
+
+    pick("");
+    await until("the app's own accent", () => accent() === own, 3000);
+    check("the app's own look takes the colors away without asking", asked === 0 && select().value === "", `asked ${asked}`);
+    pick(id);
+    await until("the style's accent", () => accent() === "#d14b8f", 3000);
+    check("choosing the style brings its colors back", shown() === "Check paper", shown());
+
+    setText(named(".color-editor input.color-text", "Buttons value"), "#1f9d55");
+    await until("the changed mark", () => shown() === "Check paper (changed)", 3000);
+    check("a change offers Update and Revert", !!withText(".style-picker button", "Update style") && !!withText(".style-picker button", "Revert"));
+    await sleep(500);
+    pick("");
+    await sleep(600);
+    check("switching away from a change asks first", asked === 1, `asked ${asked} times`);
+    check("declining keeps the change", accent() === "#1f9d55" && shown() === "Check paper (changed)", `${accent()} ${shown()}`);
+    withText(".style-picker button", "Revert").click();
+    await until("the style's accent again", () => accent() === "#d14b8f", 3000);
+    check("Revert goes back to the style", shown() === "Check paper", shown());
+
+    pick("");
+    await until("the app's own accent", () => accent() === own, 3000);
+    await openPalette("Style: Check paper");
+    (await until("the palette entry", () => all(".palette-item").find((i) => i.querySelector(".palette-title")?.textContent === "Style: Check paper"), 3000)).click();
+    await until("the style from the palette", () => accent() === "#d14b8f", 3000);
+    check("the palette switches to a style", shown() === "Check paper", shown());
+
+    answer = "OK";
+    withText(".style-picker button", "Delete style").click();
+    await until("the style gone", () => !all("option", select()).some((o) => o.value === id), 5000);
+    check("deleting leaves the look as it is", accent() === "#d14b8f" && shown() === "Freeloop (default) (changed)", `${accent()} ${shown()}`);
+  } finally {
+    window.fetch = real;
+  }
+  // Leave the app's own colors for the steps after this one.
+  all(".color-editor button").find((b) => /^Reset (light|dark) colors$/.test(b.textContent) && !b.disabled)?.click();
+  await until("the app's own colors", () => shown() === "Freeloop (default)", 3000).catch(() => {});
+  await sleep(500);
+  document.querySelector(".settings-nav .settings-back").click();
+  await sleep(100);
+});
+
 await step("the Settings page follows the language chosen, at once", async () => {
   // GUI-048: picked beside Theme, it applies without a reload, and the page's lang follows.
   document.querySelector(".settings-link").click();

@@ -620,6 +620,13 @@ Following and steering sessions from the phone while away, as Claude's remote co
 
 1. **Phase 1: follow, approve once, message (GUI-052).** *Built 2026-11-11.* `internal/remote` (server, pairing, streams), `engine/remote.go` (state, summary, `DecideOnce`, `PromptFrom`), `engine/tailscale.go` (read-only), `config/remote.go` (settings, `devices.json`), keep-awake and App Nap in `internal/platform/*`, `cmd/freeloop/phone.go`, `frontend/src/Phone.tsx` (Settings) and `src/phone/*` (the phone app, its own build into `dist/phone`). *Not done:* push notifications (phase 2), a QR code (a library to agree to), Windows and Linux tried only by compiling, and use without Tailscale (OQ-051).
 
+## Style templates (planned 2026-11-11, at the user's request)
+
+Saving the look under a name and switching between looks, as Obsidian does with themes (GUI-053). Decided with the user: a style holds the fonts and the colors of both appearances, and not the text size; values only, no CSS, so a shared style can neither fetch anything nor hide part of the window; a change marks the style changed rather than writing into it; the app ships no styles of its own.
+
+1. **Style templates (GUI-053).** *Built 2026-11-11.* `internal/config/styles.go` (`styles/<id>.json`, the checks of `colors.json` and the fonts, `ui.style`), `internal/engine/styles.go`, the watcher and backups, `frontend/src/styles.ts` (comparing looks), `StylePicker.tsx` (Settings → Appearance), `applyStyle` and the palette's entries in `App.tsx`, and the help page `appearance.md`. Choosing a style copies it over `colors.json` and the fonts through the window's own debounced saves, so `colors.json` stays what is shown and GUI-022 and GUI-025 are unchanged.
+
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.

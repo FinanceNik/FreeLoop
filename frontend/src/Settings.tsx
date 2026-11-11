@@ -7,6 +7,8 @@ import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
 import SourceMarks from "./SourceMarks.tsx";
 import FontEditor from "./FontEditor.tsx";
+import StylePicker from "./StylePicker.tsx";
+import { lookOf } from "./styles.ts";
 import type { ColorSet } from "./colors.ts";
 import type { FontChoice } from "./fonts.ts";
 import { approvalChord, bindingOf, keyLabel } from "./shortcuts.ts";
@@ -16,7 +18,7 @@ import { PriceTable, UsageTable } from "./Costs.tsx";
 import BudgetTable from "./BudgetTable.tsx";
 import { HookTable, PendingCommands } from "./Hooks.tsx";
 import { groupPending, pendingLabel } from "./pending.ts";
-import { EngineService, type Blocked, type ConfigPreview, type ConfigRestore, type Config, type UpdateInfo, type BuildInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo } from "./api.ts";
+import { EngineService, type Blocked, type ConfigPreview, type ConfigRestore, type Config, type UpdateInfo, type BuildInfo, type EnvironmentInfo, type Profile, type ProjectInfo, type ProviderInfo, type Style } from "./api.ts";
 
 interface Props {
   // Which of the app's pages to show; one form holds them all, so moving between
@@ -34,6 +36,11 @@ interface Props {
   colors: ColorSet;
   onColors: (c: ColorSet) => void;
   onFonts: (f: FontChoice) => void;
+  // Saved styles (GUI-053), and what StylePicker needs to switch between them.
+  styles: Style[];
+  onApplyStyle: (style: Style | null, confirm?: boolean) => void;
+  onChooseStyle: (id: string) => void;
+  onStylesChanged: () => void;
   onSaved: (c: Config) => void;
   onError: (err: unknown) => void;
   // The session a problem report describes: the one last open, if any.
@@ -137,7 +144,7 @@ const SEARCH_EXAMPLE = "http://localhost:8888/search?format=json&q={query}";
 // while the user is on another page, so leaving the settings does not drop them.
 let waitingDraft: Pick<Config, "hooks" | "prices" | "budgets" | "web"> | null = null;
 
-export default function Settings({ page, config, providers, harnesses, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, onSaved, onError, reportSession }: Props) {
+export default function Settings({ page, config, providers, harnesses, environments, profiles, projects, onProjectsChanged, onImport, onProviders, colors, onColors, onFonts, styles, onApplyStyle, onChooseStyle, onStylesChanged, onSaved, onError, reportSession }: Props) {
   // A problem report: copied, and shown when asked, before it is pasted anywhere.
   const [report, setReport] = useState<string | null>(null);
   const [reportCopied, setReportCopied] = useState(false);
@@ -183,9 +190,10 @@ export default function Settings({ page, config, providers, harnesses, environme
         if (r) setRestored(r);
       })
       .catch(onError);
-  // ⌘+ and ⌘- change one field, and the fonts save themselves; the rest of the
-  // form may hold unsaved edits. Approving a command is not an edit either.
-  const { ui: { fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont, ...savedUi }, commandApprovals: _approvals, ...savedRest } = config;
+  // ⌘+ and ⌘- change one field, and the fonts and the style chosen save
+  // themselves; the rest of the form may hold unsaved edits. Approving a command
+  // is not an edit either.
+  const { ui: { fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont, style: savedStyle, ...savedUi }, commandApprovals: _approvals, ...savedRest } = config;
   // What the page saved itself comes back as a new config, and must not undo what is
   // being typed elsewhere on the page.
   const ownSave = useRef("");
@@ -199,8 +207,8 @@ export default function Settings({ page, config, providers, harnesses, environme
     if (ownSave.current !== settingsKey(config)) setForm(config);
   }, [JSON.stringify([savedRest, savedUi])]);
   useEffect(
-    () => setForm((f) => ({ ...f, ui: { ...f.ui, fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont } })),
-    [savedFontSize, savedTextFont, savedCodeFont],
+    () => setForm((f) => ({ ...f, ui: { ...f.ui, fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont, style: savedStyle } })),
+    [savedFontSize, savedTextFont, savedCodeFont, savedStyle],
   );
   // The opt-in update check (OQ-015).
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
@@ -354,6 +362,17 @@ export default function Settings({ page, config, providers, harnesses, environme
           />
           <span className="muted">{t("settings.fontSize.keys", { larger: keyLabel(bindingOf("textLarger")), smaller: keyLabel(bindingOf("textSmaller")) })}</span>
         </label>
+
+        <h3>{t("settings.styles.title")}</h3>
+        <StylePicker
+          styles={styles}
+          look={lookOf(colors, config.ui)}
+          chosen={config.ui.style}
+          onApply={onApplyStyle}
+          onChoose={onChooseStyle}
+          onChanged={onStylesChanged}
+          onError={onError}
+        />
 
         <h3>{t("settings.fonts.title")}</h3>
         <FontEditor textFont={config.ui.textFont} codeFont={config.ui.codeFont} onChange={onFonts} />

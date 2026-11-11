@@ -23,6 +23,7 @@ import {
   type Session,
   type UpdateInfo,
   type SessionHits,
+  type Style,
 } from "./api.ts";
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
 import { hitLabel, snippetParts } from "./search.ts";
@@ -78,6 +79,7 @@ import { trustLines } from "./trust.ts";
 import { describeActivity, foldActivity, NO_ACTIVITY, type Activity } from "./sessionActivity.ts";
 import { applyColors, type ColorSet } from "./colors.ts";
 import { applyFonts, type FontChoice } from "./fonts.ts";
+import { isChanged, lookOf, selectedStyle, styleColors, styleFonts } from "./styles.ts";
 import { preferredLanguages, resolveLanguage, setLanguage, t, type PlainKey } from "./i18n.ts";
 import { inSettings, isGeneral, isSettingsShortcut, MAX_FONT_SIZE, settingsStart, textSizeAfter, type GeneralPage } from "./settings.ts";
 import ClaudeImport from "./ClaudeImport.tsx";
@@ -211,7 +213,8 @@ export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
   setBindings(config?.ui.shortcuts);
   const fontPending = useRef<number | null>(null);
-  const fontsPending = useRef<FontChoice | null>(null);
+  // Fonts and the style chosen (GUI-025, GUI-053) not saved yet.
+  const fontsPending = useRef<Partial<FontChoice & { style: string }> | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "none" });
   const mainBox = useRef<HTMLElement>(null);
   const [heardScreen, setHeardScreen] = useState("");
@@ -495,6 +498,8 @@ export default function App() {
   // later; until then it is newer than the file, so a reload leaves it alone.
   const [colors, setColors] = useState<ColorSet>({});
   const colorsPending = useRef(false);
+  const colorsNow = useRef(colors);
+  colorsNow.current = colors;
   const colorSave = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => applyColors(colors), [colors]);
   const changeColors = (next: ColorSet) => {
@@ -530,6 +535,23 @@ export default function App() {
     EngineService.ConfigIssues()
       .then((list) => setIssues(list ?? []))
       .catch(report);
+    refreshStyles();
+  };
+
+  // Styles (GUI-053): saved sets of fonts and colors, switched to from Settings →
+  // Appearance or the palette by copying one over the fonts and colors in force.
+  const [styles, setStyles] = useState<Style[]>([]);
+  const refreshStyles = () =>
+    EngineService.Styles()
+      .then((list) => setStyles(list ?? []))
+      .catch(report);
+  const applyStyle = async (style: Style | null, confirm = true) => {
+    const now = configNow.current;
+    if (!now) return;
+    // A look that no style holds is lost by switching, so that asks first.
+    if (confirm && isChanged(lookOf(colorsNow.current, now.ui), selectedStyle(styles, now.ui.style)) && !(await ask(t("styles.discardAsk")))) return;
+    changeColors(styleColors(style));
+    changeLook({ ...styleFonts(style), style: style?.id ?? "" });
   };
 
   // Files edited by hand are reloaded by the engine (SET-001).
@@ -787,12 +809,14 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // The fonts of Settings → Appearance (GUI-025) show at once and are saved a
-  // moment later, as one change for a name being typed.
+  // The fonts of Settings → Appearance (GUI-025) and the style chosen (GUI-053)
+  // show at once and are saved a moment later, as one change for a name being
+  // typed.
   const fontsSave = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const changeFonts = (next: FontChoice) => {
+  const changeLook = (change: Partial<FontChoice & { style: string }>) => {
     const now = configNow.current;
     if (!now) return;
+    const next = { ...fontsPending.current, ...change };
     fontsPending.current = next;
     setConfig({ ...now, ui: { ...now.ui, ...next } });
     clearTimeout(fontsSave.current);
@@ -1043,7 +1067,17 @@ export default function App() {
       page("environments", t("settings.page.environments"), () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
       page("rules", t("settings.page.rules"), () => setScreen({ kind: "rules" }), { keywords: "permission rules allow deny would this be allowed check" }),
       page("settings", t("settings.title"), () => setScreen(settingsScreen()), { keywords: "preferences" }),
-      page("appearance", t("settings.page.appearance"), () => setScreen({ kind: "appearance" }), { keywords: "theme dark light font size colors provider marks" }),
+      page("appearance", t("settings.page.appearance"), () => setScreen({ kind: "appearance" }), { keywords: "theme dark light font size colors style styles template provider marks" }),
+      // Each saved style, once there is one, and the app's own look (GUI-053).
+      ...(styles.length === 0
+        ? []
+        : [null, ...styles].map((s) => ({
+            id: `app:style:${s?.id ?? ""}`,
+            title: t("app.palette.style", { name: s ? s.name : t("styles.own") }),
+            group: "Action" as const,
+            keywords: "style theme template look colors fonts appearance switch",
+            run: () => void applyStyle(s),
+          }))),
       page("keyboard", t("app.palette.keyboard"), () => setScreen({ kind: "keyboard" }), { keywords: "keys bindings" }),
       page("sessions", t("app.palette.sessions"), () => setScreen({ kind: "sessions" }), { keywords: "default provider model environment profile notify mute" }),
       page("costs", t("app.palette.costs"), () => setScreen({ kind: "costs" }), { keywords: "costs price budget spending limit" }),
@@ -1828,7 +1862,11 @@ export default function App() {
                   onProviders={() => setScreen({ kind: "providers" })}
                   colors={colors}
                   onColors={changeColors}
-                  onFonts={changeFonts}
+                  onFonts={changeLook}
+                  styles={styles}
+                  onApplyStyle={(s, confirm) => void applyStyle(s, confirm)}
+                  onChooseStyle={(style) => changeLook({ style })}
+                  onStylesChanged={refreshStyles}
                   reportSession={sessions.find((s) => s.id === lastSessionId) ?? null}
                 onSaved={setConfig} onError={report} />
               )}
