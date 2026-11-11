@@ -138,9 +138,9 @@ func Canonical(path string) string {
 		path = abs
 	}
 	if real, err := filepath.EvalSymlinks(path); err == nil {
-		return real
+		return Unaliased(real)
 	}
-	return filepath.Clean(path)
+	return Unaliased(filepath.Clean(path))
 }
 
 // Within reports whether p is dir or inside it, both resolved like

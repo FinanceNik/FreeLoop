@@ -141,9 +141,10 @@ func (p *Policy) Protected() []string { return slices.Clone(p.shown) }
 func canonical(p string) []string { return environment.Spellings(p) }
 
 // within reports whether p is dir or inside it, spelled as macOS volumes
-// compare names, so ~/.SSH is ~/.ssh and .GIT is .git (environment.FoldPath).
+// compare names, so ~/.SSH is ~/.ssh and .GIT is .git (environment.FoldPath), and
+// /System/Volumes/Data/Users/me is /Users/me (environment.Unaliased).
 func within(p, dir string) bool {
-	p, dir = environment.FoldPath(p), environment.FoldPath(dir)
+	p, dir = environment.FoldPath(environment.Unaliased(p)), environment.FoldPath(environment.Unaliased(dir))
 	return p == dir || strings.HasPrefix(p, dir+string(filepath.Separator))
 }
 
@@ -192,7 +193,7 @@ func (p *Policy) writeRefusal(root, path string) string {
 
 // pathParts returns path's names below whichever root it is in.
 func pathParts(roots []string, path string) []string {
-	fp := environment.FoldPath(path)
+	fp := environment.FoldPath(environment.Unaliased(path))
 	for _, r := range roots {
 		fr := environment.FoldPath(r)
 		if strings.HasPrefix(fp, fr+string(filepath.Separator)) {

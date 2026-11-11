@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -147,5 +148,28 @@ func TestPolicyOverview(t *testing.T) {
 	}
 	if !slices.Contains(o.ActedOnLater, ".envrc") || !slices.Contains(o.NeverWritten, ".git") || !slices.ContainsFunc(o.Protected, func(p string) bool { return strings.HasSuffix(p, ".ssh") }) {
 		t.Errorf("protected paths = %v, %v, %v", o.Protected, o.NeverWritten, o.ActedOnLater)
+	}
+}
+
+// `freeloop check` and the broker answer the same for a protected file spelled through
+// macOS's data volume: reproduced on 2026-11-11, where the plain path was denied and the
+// other only asked, and in bypass mode was not asked at all (SEC-005).
+func TestCheckPolicyHoldsThroughTheDataVolume(t *testing.T) {
+	if goruntime.GOOS != "darwin" {
+		t.Skip("the data volume is macOS's")
+	}
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+	key := filepath.Join(e.home, ".ssh", "id_ed25519")
+	for _, mode := range []string{"", "bypass", "accept_edits"} {
+		for _, path := range []string{key, "/System/Volumes/Data" + key} {
+			got, err := e.CheckPolicy(context.Background(), PolicyQuery{ProjectRoot: gitRepo(t), Tool: "read", Path: path, Mode: mode})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Outcome != "denied" || got.Actor != permission.ActorProtectedPath {
+				t.Errorf("%s in mode %q: %s by %s (%s)", path, mode, got.Outcome, got.Actor, got.Reason)
+			}
+		}
 	}
 }

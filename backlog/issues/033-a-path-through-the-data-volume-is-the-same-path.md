@@ -1,6 +1,6 @@
 ---
 title: A path spelled through the data volume is the same path
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -20,3 +20,9 @@ On a Mac `/System/Volumes/Data/Users/me` is `/Users/me`. It is a mount and not a
 - `internal/environment/local.go:96` and `:371` (`Resolve`, `realTarget`), `environment.Spellings`, `internal/permission/policy.go:145-165`.
 - Reproduced on 2026-11-11: the direct path is Denied, the alias "Asks you".
 - Writes and the Mac sandbox already hold through the alias.
+
+## Done
+- `environment.Unaliased` (`internal/environment/alias.go`) drops macOS's data volume name and Windows' `\\?\` prefix; `realTarget`, `Canonical`, `NewLocal`, the policy's `within` and `pathParts` and path rules' `matchPath` use it. The volume's name is a variable set from `runtime.GOOS` (the architecture test refuses a darwin-only file in `internal/environment`).
+- The tests that need a Mac skip elsewhere; the name's removal and the Windows prefix are tested on every system with the system as a parameter. All were run with the fix switched off and failed.
+- Not done: `freeloop check` was not run from a rebuilt app; `TestCheckPolicyHoldsThroughTheDataVolume` runs the same function it calls. Rebuild with `make package` to see it.
+- What was found on Windows and Linux is in SECURITY.md, "Review, 2026-11-11".

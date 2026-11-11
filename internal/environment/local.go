@@ -66,6 +66,7 @@ func NewLocal(opts LocalOptions) (*Local, error) {
 	if real, err := filepath.EvalSymlinks(root); err == nil {
 		root = real
 	}
+	root = Unaliased(root)
 	fi, err := os.Stat(root)
 	if err != nil {
 		return nil, fmt.Errorf("environment: %w", err)
@@ -367,16 +368,17 @@ func (f *localFS) read(p string) (string, error) {
 }
 
 // realTarget resolves symlinks in the longest existing prefix of abs, so a
-// write through a symlinked file or directory is checked where it lands.
+// write through a symlinked file or directory is checked where it lands. On a Mac the
+// data volume's name is dropped too, as it is another spelling of the same place.
 func realTarget(abs string) string {
 	dir, rest := abs, ""
 	for {
 		if real, err := filepath.EvalSymlinks(dir); err == nil {
-			return filepath.Join(real, rest)
+			return Unaliased(filepath.Join(real, rest))
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return abs
+			return Unaliased(abs)
 		}
 		rest = filepath.Join(filepath.Base(dir), rest)
 		dir = parent

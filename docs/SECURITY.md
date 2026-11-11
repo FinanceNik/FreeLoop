@@ -363,6 +363,19 @@ A workflow (WFL-001 to WFL-006) adds work that runs while nobody watches, so it 
 
 The backlog is written by agents, so it is untrusted text: it is read only in a trusted project and through the environment, its folder may not be `.freeloop`, `.git` or a folder other tools act on, its text goes into prompts with `@` mentions off, and an issue the app cannot parse counts as one for a person, so it never runs unattended. An agent can still write an AFK issue that a later run picks up; the run's issue cap bounds that, and such an issue runs under the same policy as any other. An issue counts as done only from its file in the run's worktree, never from what the agent says, and the run commits in its own worktree and branch, so nothing reaches the user's checkout until they merge it. A review is HRN-018's, read-only in plan mode; its findings reach no session unless the user sends them.
 
+## Review, 2026-11-11: one place with two names (issue 033)
+
+A review before the repository went public found that a path's second spelling got past the protected locations. On a Mac `/System/Volumes/Data/Users/me/.ssh/id_ed25519` is `/Users/me/.ssh/id_ed25519`; the name is a mount and not a link, so resolving symlinks left it alone and the policy compared strings. Reproduced with `freeloop check read_file`: the plain path was denied and the other only asked, and in bypass mode, or under a broad read rule, was read without a question, for `~/.ssh`, the app's data folder and the vendors' credential files alike. Writes already held (refused as outside the project), and so did the Mac sandbox.
+
+Fixed in `environment.Unaliased`, which every path check and every resolution now goes through: `Resolve`, `Canonical`, a project's root, the policy's `within` and `pathParts`, and path rules, whether the rule or the path carries the name. Tests: `internal/environment/alias_test.go`, `internal/permission/alias_test.go` (the policy, the rules and the environment's file tools and search) and `TestCheckPolicyHoldsThroughTheDataVolume`, each seen to fail with the fix switched off.
+
+The same kind of second name on the other systems, looked at:
+
+- **Windows, `\\?\C:\...` and `\\?\UNC\...`.** Not links either, and not handled before; the prefix is dropped (a test with the system as a parameter, since no Windows machine has run this; issue 055). `\\?\Volume{...}` and device paths are left as they are and so fall outside every root.
+- **Windows, 8.3 short names (`PROGRA~1`).** Go's symlink resolution reads them back as long names for a path that exists, so protected folders that exist are covered. One that does not exist yet, spelled by its short name, is not; accepted, since a name that is not there cannot be read.
+- **Linux, `/proc/self/root/...` and `/proc/<pid>/root`.** Magic links, which symlink resolution follows to `/`.
+- **Linux, a bind mount** of a protected folder somewhere else. A path alone cannot tell; a sandbox holds against it, and the session's environment should be one.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).
