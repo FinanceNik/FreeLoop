@@ -1,5 +1,5 @@
 import { Component, memo, useMemo, useRef, useState, type ReactNode } from "react";
-import { Browser, Clipboard } from "@wailsio/runtime";
+import { copyText, openURL } from "./host.ts";
 import { parseMarkdownAfter, safeHref, type Block, type Inline, type Parsed } from "./markdown.ts";
 import { locale, t } from "./i18n.ts";
 
@@ -132,7 +132,7 @@ function renderInline(nodes: Inline[]): ReactNode[] {
             title={href}
             onClick={(e) => {
               e.preventDefault();
-              Browser.OpenURL(href).catch(() => {});
+              openURL(href).catch(() => {});
             }}
           >
             {renderInline(n.children)}
@@ -146,7 +146,7 @@ function renderInline(nodes: Inline[]): ReactNode[] {
 function CodeBlock({ lang, text }: { lang: string; text: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () =>
-    Clipboard.SetText(text)
+    copyText(text)
       .catch(() => navigator.clipboard?.writeText(text))
       .then(() => {
         setCopied(true);

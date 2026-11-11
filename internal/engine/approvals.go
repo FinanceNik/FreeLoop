@@ -151,6 +151,9 @@ func settingsItems(c config.Config) []PendingCommand {
 	if u := c.MCP.RegistryURL; u != "" {
 		out = append(out, PendingCommand{Kind: pendingAddress, Source: config.FileName, Runs: "mcp.registryURL: browsing MCP servers asks " + u, Fingerprint: config.AddressFingerprint("mcp.registryURL", u)})
 	}
+	if c.Remote.Enabled {
+		out = append(out, PendingCommand{Kind: pendingSetting, Source: config.FileName, Runs: "remote.enabled: true, which lets paired phones read sessions, send messages and allow requests once", Fingerprint: config.RemoteFingerprint()})
+	}
 	if c.Updates.Check {
 		out = append(out, PendingCommand{Kind: pendingAddress, Source: config.FileName, Runs: "updates.check: true, which asks GitHub for a newer release once a day", Fingerprint: config.UpdatesFingerprint()})
 	}

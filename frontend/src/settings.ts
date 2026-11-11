@@ -8,7 +8,7 @@ import { pressed, type Keys } from "./shortcuts.ts";
 // The app's own settings, once one long General page, are pages of their own.
 export type GeneralPage = "appearance" | "keyboard" | "sessions" | "costs" | "permissions" | "network" | "data";
 
-export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "optimizers" | "workflows" | "rules" | "environments" | "schedules" | "voice" | GeneralPage;
+export type SettingsPage = "providers" | "profiles" | "skills" | "mcp" | "optimizers" | "workflows" | "rules" | "environments" | "schedules" | "voice" | "phone" | GeneralPage;
 
 // The group's title and each page's label are catalogue keys (GUI-048).
 export interface SettingsGroup {
@@ -47,6 +47,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: "appearance", label: "settings.page.appearance", icon: "appearance" },
       { id: "keyboard", label: "settings.page.keyboard", icon: "keyboard" },
       { id: "voice", label: "settings.page.voice", icon: "voice" },
+      { id: "phone", label: "settings.page.phone", icon: "phone" },
       { id: "sessions", label: "settings.page.sessions", icon: "sessions" },
       { id: "costs", label: "settings.page.costs", icon: "costs" },
       { id: "permissions", label: "settings.page.permissions", icon: "permissions" },
@@ -62,7 +63,9 @@ export function pageTitle(page: string): string {
   return t(p ? p.label : "settings.title");
 }
 
-export const GENERAL_PAGES = SETTINGS_GROUPS.at(-1)!.pages.map((p) => p.id) as GeneralPage[];
+// Named, not read off the last group: Voice input and Phone sit in it too, with pages
+// of their own.
+export const GENERAL_PAGES: GeneralPage[] = ["appearance", "keyboard", "sessions", "costs", "permissions", "network", "data"];
 
 export function isGeneral(kind: string): kind is GeneralPage {
   return (GENERAL_PAGES as string[]).includes(kind);

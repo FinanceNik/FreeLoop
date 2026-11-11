@@ -89,6 +89,8 @@ export interface PermissionState {
     optionId?: string;
     reason?: string;
     persisted?: { tool: string; command?: string; path?: string; scope: string };
+    // Where the user decided when not in this computer's window (GUI-052).
+    via?: string;
   };
 }
 
@@ -125,6 +127,9 @@ type ItemKinds =
       // The context was replaced after the checkpoint (a compaction or an
       // earlier rewind): rewinding restores the files only.
       filesOnly?: boolean;
+      // Where it was sent from when not this computer's window: "phone:<device>"
+      // (GUI-052).
+      via?: string;
     }
   | { kind: "agent"; key: string; rev: number; text: string }
   | { kind: "thought"; key: string; rev: number; text: string }
@@ -333,7 +338,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           }
           break;
         }
-        items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [], checkpointSeq: checkpoint ?? undefined });
+        items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [], checkpointSeq: checkpoint ?? undefined, ...(d.via ? { via: d.via } : {}) });
         checkpoint = null;
         break;
       }
@@ -441,7 +446,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           denied.push({ seq: item ? Number(item.key) : ev.seq, kind: d.actor ?? "", what: "", reason: d.reason ?? "", toolCallId: d.toolCallId });
         }
         if (!item) break;
-        const decided = { outcome: d.outcome, actor: d.actor, optionId: d.optionId, reason: d.reason, persisted: d.persisted };
+        const decided = { outcome: d.outcome, actor: d.actor, optionId: d.optionId, reason: d.reason, persisted: d.persisted, ...(d.via ? { via: d.via } : {}) };
         const permission: PermissionState = item.permission
           ? { ...item.permission, decided }
           : { requestId: d.requestId, options: [], decided };
@@ -749,4 +754,10 @@ export function hookMessage(d: Record<string, any>): string {
     return t(d.tool ? "transcript.hook.failedFor" : "transcript.hook.failed", { ...v, code });
   }
   return "";
+}
+
+// phoneName is the device a message or decision came from, from its via
+// ("phone:<device>", GUI-052); "" when it came from this computer's window.
+export function phoneName(via: string | undefined): string {
+  return via?.startsWith("phone:") ? via.slice("phone:".length) || "?" : "";
 }

@@ -533,7 +533,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 	s.mu.Unlock()
 	s.p.Emit(event.TurnStarted, struct{}{})
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "running"})
-	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}})
+	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}, Via: p.Via})
 	blocks := []sdk.ContentBlock{sdk.TextBlock(p.Text)}
 	if p.Note != "" {
 		blocks = append([]sdk.ContentBlock{sdk.TextBlock(p.Note)}, blocks...)

@@ -14,6 +14,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider"
+	"github.com/FinanceNik/Freeloop/internal/remote"
 	"github.com/FinanceNik/Freeloop/internal/session"
 )
 
@@ -26,6 +27,8 @@ type EngineService struct {
 	eng  *engine.Engine
 	app  *application.App
 	desk *desktop
+	// phone is the phone server (GUI-052).
+	phone *phone
 	// logPath is the app's log file.
 	logPath string
 
@@ -1041,6 +1044,49 @@ func (s *EngineService) ExportWorkCost(ctx context.Context, weeks int) (string, 
 		return "", err
 	}
 	return path, s.eng.ExportWorkCost(ctx, weeks, path)
+}
+
+// PhoneStatus is the phone server as Settings shows it (GUI-052).
+type PhoneStatus struct {
+	remote.Status
+	// KeepingAwake says the computer is kept from sleeping for a session now.
+	KeepingAwake bool `json:"keepingAwake"`
+}
+
+// PhoneStatus says whether the phone server listens, the pairing window, and the
+// paired phones.
+func (s *EngineService) PhoneStatus() PhoneStatus {
+	return PhoneStatus{Status: s.phone.srv.Status(), KeepingAwake: s.phone.awake.Load()}
+}
+
+// StartPhonePairing opens a pairing window and returns its code.
+func (s *EngineService) StartPhonePairing() (remote.PairingStatus, error) {
+	return s.phone.srv.StartPairing()
+}
+
+// AnswerPhonePairing is the user's answer to the phone waiting to be paired.
+func (s *EngineService) AnswerPhonePairing(allow bool) error {
+	return s.phone.srv.AnswerPairing(allow)
+}
+
+// CancelPhonePairing closes the pairing window.
+func (s *EngineService) CancelPhonePairing() {
+	s.phone.srv.CancelPairing()
+}
+
+// RemovePhone forgets a paired phone; "" forgets them all.
+func (s *EngineService) RemovePhone(id string) error {
+	return s.phone.srv.RemoveDevice(id)
+}
+
+// RenamePhone names a paired phone.
+func (s *EngineService) RenamePhone(id, name string) error {
+	return s.phone.srv.RenameDevice(id, name)
+}
+
+// Tailscale reads this computer's Tailscale setup, for the phone settings.
+func (s *EngineService) Tailscale(ctx context.Context) engine.TailscaleInfo {
+	return s.eng.Tailscale(ctx)
 }
 
 // SaveUsagePicture asks where to save the cost summary's picture (GUI-029), which comes

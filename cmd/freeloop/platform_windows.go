@@ -13,4 +13,6 @@ var thisPlatform = platform{
 	PDFArgv:    windows.PDFArgv,
 	FolderArgv: windows.FolderArgv,
 	SystemInfo: windows.SystemInfo,
+	NoNap:      windows.NoNap,
+	KeepAwake:  windows.KeepAwake,
 }

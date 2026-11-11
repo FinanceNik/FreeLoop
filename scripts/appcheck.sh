@@ -22,10 +22,14 @@ DATA=$(mktemp -d "${TMPDIR:-/tmp}/freeloop-appcheck.XXXXXX")
 export FREELOOP_HOME="$DATA/home" FREELOOP_DEV=1 FREELOOP_DEV_SECRETS=memory FREELOOP_DEV_VOICE=scripted WAILS_SERVER_PORT="$PORT"
 mkdir -p "$FREELOOP_HOME"
 # English whatever the computer prefers, so the checks read the words they look for.
-cat > "$FREELOOP_HOME/config.yaml" <<'YAML'
+cat > "$FREELOOP_HOME/config.yaml" <<YAML
 ui:
   onboarded: true
   language: en
+# The phone server (GUI-052) on a port of the check's own, not the one an installed
+# app may answer on.
+remote:
+  port: $((PORT + 1))
 YAML
 cat > "$FREELOOP_HOME/providers.yaml" <<'YAML'
 version: 1

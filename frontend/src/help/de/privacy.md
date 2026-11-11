@@ -36,6 +36,8 @@ Neben dem, was eingerichtet oder angefordert wird, etwa Anbieter, MCP-Server, Ag
 
 Ist unter Einstellungen → Netzwerk eine Suchadresse für die Websuche des eingebauten Agenten eingetragen, gehen die Suchanfragen dorthin. Jede Suche fragt vorher nach, sofern keine Erlaubnisregel und nicht der Umgehungsmodus sie durchlässt.
 
+Ist **Dem Telefon antworten** unter Einstellungen → Telefon an, lesen gekoppelte Telefone die Sitzungen über das eigene Tailscale-Netz. Freeloop selbst antwortet nur auf diesem Computer und verbindet sich dafür mit nichts. Der Nur-lokal-Modus schaltet es aus.
+
 ## Nur-lokal-Modus
 
 Unter Einstellungen → Netzwerk beschränkt **Nur lokal: Die App verbindet sich mit nichts außer diesem Computer** die eigenen Verbindungen der App auf diesen Computer.

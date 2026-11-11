@@ -36,6 +36,8 @@ Besides what you configure or ask for, such as providers, MCP servers, agents, S
 
 If you set a search address for the built-in agent's web search in Settings → Network, queries go there. Each search asks you first, unless an allow rule or bypass mode lets it through.
 
+With **Answer my phone** on in Settings → Phone, paired phones read your sessions over your own Tailscale network. Freeloop itself answers only on this computer and connects to nothing for it. Local-only mode turns it off.
+
 ## Local-only mode
 
 In Settings → Network, **Local only: the app connects to nothing but this computer** limits the app's own connections to this computer.

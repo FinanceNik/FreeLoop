@@ -20,6 +20,9 @@ type quitGuard struct {
 	eng       *engine.Engine
 	confirmed atomic.Bool
 	asking    atomic.Bool
+	// phoneOn says the phone server listens (GUI-052): closing the last window then
+	// hides it, since quitting would leave the phone with nothing to talk to.
+	phoneOn func() bool
 }
 
 func (q *quitGuard) shouldQuit() bool {
@@ -53,7 +56,17 @@ func (q *quitGuard) ask(c engine.QuitCheck) {
 // leave sessions running with nothing to show them.
 func (q *quitGuard) watch(win *application.WebviewWindow) {
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
-		if len(q.app.Window.GetAll()) == 1 && !q.shouldQuit() {
+		last := len(q.app.Window.GetAll()) == 1
+		if last && !q.confirmed.Load() && q.phoneOn != nil && q.phoneOn() {
+			e.Cancel()
+			if thisPlatform.HideOnClose {
+				win.Hide()
+			} else {
+				win.Minimise()
+			}
+			return
+		}
+		if last && !q.shouldQuit() {
 			e.Cancel()
 		}
 	})

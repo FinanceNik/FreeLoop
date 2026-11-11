@@ -4,7 +4,7 @@ import { editMark, quietCommand, toolStatusLabel, visibleCommand } from "./a11y.
 import { EngineService } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
 import { APPROVAL_GRACE_MS, approvalHint, approvalShortcut, formLabel, isTextField, optionKind, optionLabel } from "./shortcuts.ts";
-import { awaitingDecision, hookFailedText, lineDiff, type Item, type PermissionOption, type ToolContent } from "./transcript.ts";
+import { awaitingDecision, hookFailedText, lineDiff, phoneName, type Item, type PermissionOption, type ToolContent } from "./transcript.ts";
 import { planText } from "./planView.ts";
 import { agentQuestions } from "./forms.ts";
 import { PlanCard, PlanDecision } from "./PlanReview.tsx";
@@ -110,6 +110,7 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
           ) : (
             <span className={`decision decision-${decided.outcome}`}>{decisionText(decided.outcome, decided.actor)}</span>
           ))}
+        {shownDecision && phoneName(decided.via) && <span className="muted decision-via"> · {t("tool.decision.fromPhone", { name: phoneName(decided.via) })}</span>}
         {edited && (
           // A file edit that went through gets a pen, whatever allowed it.
           <span className="decision decision-allowed decision-icon edit-mark" role="img" aria-label={edited} title={edited}>

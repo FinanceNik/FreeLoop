@@ -6560,3 +6560,45 @@ table.hooks .hook-command {
 .voice-try {
   align-items: center;
 }
+
+/* Settings → Phone (GUI-052). */
+.phone-code {
+  font-family: var(--mono);
+  font-size: calc(22rem / 14);
+  letter-spacing: 0.06em;
+  margin: 4px 0;
+}
+
+.phone-link-text {
+  overflow-wrap: anywhere;
+}
+
+.phone-command {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.phone-confirm {
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-md);
+}
+
+.phone-devices {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.phone-devices li {
+  display: grid;
+  grid-template-columns: minmax(8em, 16em) 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.msg-via,
+.decision-via {
+  font-size: calc(12rem / 14);
+}

@@ -146,6 +146,9 @@ func AttachmentURI(name string) string { return "attachment:" + name }
 // MessageChunk is the payload of the three *_message_chunk / thought variants.
 type MessageChunk struct {
 	Content ContentBlock `json:"content"`
+	// Via says where a user's message was sent from when not this computer's
+	// window: "phone:<device>" (GUI-052).
+	Via string `json:"via,omitempty"`
 }
 
 // SessionStatusData is the payload of session_status.

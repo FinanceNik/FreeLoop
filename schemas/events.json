@@ -333,7 +333,10 @@
     "messageChunk": {
       "type": "object",
       "required": ["content"],
-      "properties": { "content": { "$ref": "#/$defs/contentBlock" } }
+      "properties": {
+        "content": { "$ref": "#/$defs/contentBlock" },
+        "via": { "type": "string", "description": "Where the user sent the message from, when not this computer's window: phone:<device> (GUI-052)." }
+      }
     },
     "sessionStatus": {
       "type": "object",

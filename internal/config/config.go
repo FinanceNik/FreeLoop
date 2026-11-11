@@ -98,6 +98,8 @@ type Config struct {
 	WorkflowModelSets map[string]string `yaml:"workflowModelSets,omitempty" json:"workflowModelSets"`
 	// Voice is voice input in the message box (GUI-050).
 	Voice Voice `yaml:"voice,omitempty" json:"voice"`
+	// Remote is the phone server (GUI-052).
+	Remote Remote `yaml:"remote,omitempty" json:"remote"`
 }
 
 // MCPSettings are settings for MCP as a whole; the servers are in mcp.yaml.

@@ -428,7 +428,7 @@ func (e *Engine) saveSettings(c config.Config, marks []string) (config.Config, e
 		}
 	}
 	// Off again, so a file turning one back on has to ask.
-	for fingerprint, on := range map[string]bool{config.BypassFingerprint(): c.Permissions.AllowBypass, config.UpdatesFingerprint(): c.Updates.Check} {
+	for fingerprint, on := range map[string]bool{config.BypassFingerprint(): c.Permissions.AllowBypass, config.UpdatesFingerprint(): c.Updates.Check, config.RemoteFingerprint(): c.Remote.Enabled} {
 		if mark, err := e.approvalMark(fingerprint); err == nil && !on {
 			c.CommandApprovals = slices.DeleteFunc(c.CommandApprovals, func(m string) bool { return m == mark })
 		}

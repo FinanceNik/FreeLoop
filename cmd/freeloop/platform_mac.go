@@ -18,4 +18,7 @@ var thisPlatform = platform{
 	FolderArgv:     darwin.FolderArgv,
 	SystemInfo:     darwin.SystemInfo,
 	MenuWords:      darwin.MenuWords,
+	NoNap:          darwin.NoNap,
+	KeepAwake:      darwin.KeepAwake,
+	HideOnClose:    true,
 }

@@ -25,6 +25,7 @@ export type HelpPlace =
   | "costs"
   | "keyboard"
   | "voice"
+  | "phone"
   | "network"
   | "data";
 
@@ -51,6 +52,7 @@ const TOPICS: { slug: string; title: PlainKey; opens: { label: PlainKey; place: 
   { slug: "usage-and-budgets", title: "help.topic.usageAndBudgets", opens: [{ label: "help.open.usage", place: "usage" }, { label: "help.open.costs", place: "costs" }] },
   { slug: "keyboard", title: "help.topic.keyboard", opens: [{ label: "help.open.keyboard", place: "keyboard" }] },
   { slug: "voice-input", title: "help.topic.voiceInput", opens: [{ label: "help.open.voice", place: "voice" }] },
+  { slug: "phone", title: "help.topic.phone", opens: [{ label: "help.open.phone", place: "phone" }] },
   { slug: "privacy", title: "help.topic.privacy", opens: [{ label: "help.open.network", place: "network" }, { label: "help.open.data", place: "data" }] },
   { slug: "troubleshooting", title: "help.topic.troubleshooting", opens: [{ label: "help.open.report", place: "data" }] },
 ];

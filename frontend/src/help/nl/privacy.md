@@ -36,6 +36,8 @@ Naast wat wordt ingesteld of gevraagd, zoals aanbieders, MCP-servers, agents, SS
 
 Als in Instellingen → Netwerk een zoekadres is ingesteld voor het zoeken op het web door de ingebouwde agent, gaan zoekopdrachten daarheen. Elke zoekopdracht vraagt eerst toestemming, tenzij een toestaanregel of de omzeilmodus hem doorlaat.
 
+Staat **De telefoon antwoorden** aan onder Instellingen → Telefoon, dan lezen gekoppelde telefoons de sessies via het eigen Tailscale-netwerk. Freeloop zelf antwoordt alleen op deze computer en maakt daarvoor nergens verbinding mee. De Alleen-lokaal-modus zet het uit.
+
 ## Alleen-lokaal-modus
 
 In Instellingen → Netwerk beperkt **Alleen lokaal: de app maakt alleen verbinding met deze computer** de eigen verbindingen van de app tot deze computer.

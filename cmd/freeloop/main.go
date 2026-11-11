@@ -166,7 +166,13 @@ func main() {
 		closers = append(closers, func() { srv.Close() })
 	}
 
-	svc := &EngineService{eng: eng}
+	// Sessions from the phone (GUI-052): off until turned on in Settings.
+	phoneCtx, stopPhone := context.WithCancel(context.Background())
+	closers = append(closers, stopPhone)
+	ph := startPhone(phoneCtx, eng, dataDir)
+	guard.phoneOn = ph.on
+
+	svc := &EngineService{eng: eng, phone: ph}
 	desk := newDesktop(eng)
 	app := application.New(application.Options{
 		Name:        "Freeloop",
@@ -217,6 +223,11 @@ func main() {
 
 	desk.start(app, win)
 	guard.watch(win)
+	// A hidden window comes back from the Dock (GUI-052).
+	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
+		win.Show()
+		win.Focus()
+	})
 
 	// Bridge: every event the engine persists goes to the UI. Events that
 	// change what needs attention also refresh the dock badge, once per

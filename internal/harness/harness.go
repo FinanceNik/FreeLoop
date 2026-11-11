@@ -347,6 +347,9 @@ type Prompt struct {
 	// Note is for the model, before the message. The transcript does not show it:
 	// the user did not write it.
 	Note string
+	// Via is where the user sent it from, for the transcript, when not this
+	// computer's window (GUI-052). The model does not see it.
+	Via string
 }
 
 // Subagents runs a child agent on a task and returns its final reply and

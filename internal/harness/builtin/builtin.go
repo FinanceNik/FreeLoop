@@ -260,7 +260,7 @@ func (s *session) appendUser(parts ...provider.Part) {
 func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopReason, error) {
 	s.p.Emit(event.TurnStarted, struct{}{})
 	s.p.Emit(event.SessionStatus, event.SessionStatusData{Status: "running"})
-	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}})
+	s.p.Emit(event.UserMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: p.Text}, Via: p.Via})
 	if strings.TrimSpace(p.Text) == "/"+CompactCommand && len(p.Resources) == 0 {
 		return s.endTurn(harness.StopEndTurn, s.compact(ctx, "manual"))
 	}

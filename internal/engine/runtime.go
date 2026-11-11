@@ -483,6 +483,8 @@ type queued struct {
 	// noMentions is set for text the user did not type (an MCP prompt's, a
 	// subagent's, a review's): its @ words attach no files.
 	noMentions bool
+	// via is where the user sent it from, when not this computer's window.
+	via string
 }
 
 // PromptWith sends a message with attached resources; see Prompt.
@@ -540,9 +542,10 @@ func (e *Engine) enqueue(ctx context.Context, sid string, q queued) (PromptResul
 func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 	for {
 		e.checkpoint(r)
-		p := harness.Prompt{Text: q.text}
+		p := harness.Prompt{Text: q.text, Via: q.via}
 		if !q.noMentions {
 			p = e.embedMentions(r.sid, r.env, q.text)
+			p.Via = q.via
 		}
 		p.Images = q.images
 		r.mu.Lock()
@@ -779,6 +782,36 @@ type DecideRequest struct {
 	Scope string `json:"scope"`
 	// Answers fill in a form request (MCP-008).
 	Answers map[string]any `json:"answers,omitempty"`
+}
+
+// PromptFrom sends a text message from elsewhere than this computer's window, which
+// the transcript records: via is "phone:<device>" (GUI-052).
+func (e *Engine) PromptFrom(ctx context.Context, sid, text, via string) (PromptResult, error) {
+	return e.enqueue(ctx, sid, queued{text: text, via: via})
+}
+
+// ErrDecideOnLaptop refuses an answer that only this computer's window may give.
+var ErrDecideOnLaptop = errors.New("answer this on the computer: from elsewhere only a plain request can be allowed or denied once")
+
+// DecideOnce answers a pending request from elsewhere than this computer's window
+// (GUI-052): only with an option whose kind is allow_once or reject_once, looked up
+// here, since an agent names its options as it likes; never a form, which "allow"
+// would send empty, nor a plan, whose options choose the mode that follows.
+func (e *Engine) DecideOnce(requestID, optionID, via string) error {
+	for _, r := range e.broker.Pending() {
+		if r.ID != requestID {
+			continue
+		}
+		if r.Form != nil || r.Kind == permission.KindSwitchMode {
+			return ErrDecideOnLaptop
+		}
+		i := slices.IndexFunc(r.Options, func(o permission.Option) bool { return o.ID == optionID })
+		if i < 0 || (r.Options[i].Kind != "allow_once" && r.Options[i].Kind != "reject_once") {
+			return ErrDecideOnLaptop
+		}
+		return e.broker.DecideVia(requestID, optionID, "", "", nil, via)
+	}
+	return permission.ErrUnknownRequest
 }
 
 // Decide answers a pending permission request.

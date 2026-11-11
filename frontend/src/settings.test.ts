@@ -8,7 +8,7 @@ setPlatform("MacIntel");
 
 test("every configuration page is listed once", () => {
   const ids = SETTINGS_GROUPS.flatMap((g) => g.pages.map((p) => p.id));
-  assert.deepEqual([...ids].sort(), ["appearance", "costs", "data", "environments", "keyboard", "mcp", "network", "optimizers", "permissions", "profiles", "providers", "rules", "schedules", "sessions", "skills", "voice", "workflows"]);
+  assert.deepEqual([...ids].sort(), ["appearance", "costs", "data", "environments", "keyboard", "mcp", "network", "optimizers", "permissions", "phone", "profiles", "providers", "rules", "schedules", "sessions", "skills", "voice", "workflows"]);
   assert.equal(new Set(ids).size, ids.length);
 });
 
@@ -70,6 +70,10 @@ test("the settings open on the page last shown, or Appearance", () => {
   assert.equal(settingsStart("session"), "appearance");
   assert.equal(isGeneral("network"), true);
   assert.equal(isGeneral("rules"), false);
+  // Pages of their own in the App group are no general page, which would draw a
+  // second, empty one above them.
+  assert.equal(isGeneral("voice"), false);
+  assert.equal(isGeneral("phone"), false);
 });
 
 test("a page's title and its group's are in the language in force (GUI-048)", () => {

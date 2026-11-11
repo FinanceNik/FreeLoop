@@ -38,6 +38,7 @@ import Board from "./Board.tsx";
 import Schedules from "./Schedules.tsx";
 import Optimizers from "./Optimizers.tsx";
 import Voice from "./Voice.tsx";
+import Phone from "./Phone.tsx";
 import Workflows from "./Workflows.tsx";
 import AFKDialog from "./AFKDialog.tsx";
 import AFKRunView from "./AFKRunView.tsx";
@@ -98,6 +99,7 @@ type Screen =
   | { kind: "schedules" }
   | { kind: "optimizers" }
   | { kind: "voice" }
+  | { kind: "phone" }
   | { kind: "workflows" }
   | { kind: "usage" }
   | { kind: "compare"; tag: string }
@@ -851,6 +853,28 @@ export default function App() {
     ask(true);
     return () => clearTimeout(timer);
   }, [config]);
+  // Whether the phone server answers, and keeps the computer awake (GUI-052): a word
+  // in the sidebar says so, since the app then stays running with its window closed.
+  const [phoneOn, setPhoneOn] = useState(false);
+  const [phoneAwake, setPhoneAwake] = useState(false);
+  useEffect(() => {
+    if (STANDALONE) return;
+    const ask = () =>
+      EngineService.PhoneStatus()
+        .then((p) => {
+          setPhoneOn(p.listening);
+          setPhoneAwake(p.keepingAwake);
+        })
+        .catch(() => {});
+    ask();
+    // The server starts within two seconds of a change.
+    const soon = setTimeout(ask, 2500);
+    const timer = setInterval(ask, 10000);
+    return () => {
+      clearTimeout(soon);
+      clearInterval(timer);
+    };
+  }, [config]);
   // The window's title follows its session's (a fork made here opens here).
   const standaloneTitle = STANDALONE ? selected?.title : undefined;
   useEffect(() => {
@@ -1013,6 +1037,7 @@ export default function App() {
       page("mcp", t("settings.page.mcp"), () => setScreen({ kind: "mcp" }), { keywords: "tools" }),
       page("optimizers", t("settings.page.optimizers"), () => setScreen({ kind: "optimizers" }), { keywords: "rtk tokens compress output default" }),
       page("voice", t("settings.page.voice"), () => setScreen({ kind: "voice" }), { keywords: "dictate dictation speech microphone whisper talk" }),
+      page("phone", t("settings.page.phone"), () => setScreen({ kind: "phone" }), { keywords: "mobile remote tailscale pair away gym" }),
       page("workflows", t("settings.page.workflows"), () => setScreen({ kind: "workflows" }), { keywords: "workflow prd slice afk backlog skills" }),
       page("schedules", t("settings.page.schedules"), () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
       page("environments", t("settings.page.environments"), () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
@@ -1544,6 +1569,11 @@ export default function App() {
               {t("settings.localOnly.title")}
             </button>
           )}
+        {phoneOn && (
+            <button className="link today" title={t(phoneAwake ? "sidebar.phone.awakeTitle" : "sidebar.phone.title")} onClick={() => setScreen({ kind: "phone" })}>
+              {t(phoneAwake ? "sidebar.phone.awake" : "sidebar.phone")}
+            </button>
+          )}
           <footer>
             <div className="footer-links">
               {/* With something waiting, the attention link above takes the bell's place; its
@@ -1805,6 +1835,7 @@ export default function App() {
               {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
               {screen.kind === "optimizers" && config && <Optimizers config={config} version={configVersion} onSaved={setConfig} onError={report} />}
               {screen.kind === "voice" && config && <Voice config={config} onSaved={setConfig} onError={report} />}
+              {screen.kind === "phone" && config && <Phone config={config} onSaved={setConfig} onError={report} />}
               {screen.kind === "workflows" && config && <Workflows config={config} version={configVersion} onSaved={setConfig} onError={report} />}
               {screen.kind === "schedules" && (
                 <Schedules projects={projects} profiles={profiles} providers={providers} harnesses={harnesses} defaults={config?.defaults} onOpenSession={(id) => openSession(id)} onError={report} />

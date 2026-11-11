@@ -203,6 +203,9 @@ type Decision struct {
 	// Answers are a form's values (MCP-008). They go back to the asker but
 	// not into the transcript, which records only the decision.
 	Answers map[string]any `json:"-"`
+	// Via says where the user decided when not in this computer's window:
+	// "phone:<device>" (GUI-052). The actor is the user all the same.
+	Via string `json:"via,omitempty"`
 }
 
 // Emitter records an event in a session's transcript.
@@ -567,6 +570,12 @@ func (b *Broker) Decide(requestID, optionID, reason string, scope Scope) error {
 
 // DecideWith is Decide with a form's answers, for a request with a Form.
 func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, answers map[string]any) error {
+	return b.DecideVia(requestID, optionID, reason, scope, answers, "")
+}
+
+// DecideVia is DecideWith from somewhere other than this computer's window, which
+// the decision records (GUI-052).
+func (b *Broker) DecideVia(requestID, optionID, reason string, scope Scope, answers map[string]any, via string) error {
 	b.mu.Lock()
 	p, ok := b.pending[requestID]
 	ok = ok && p.state == open // not answered, cancelled or being answered already
@@ -578,7 +587,7 @@ func (b *Broker) DecideWith(requestID, optionID, reason string, scope Scope, ans
 	if i < 0 {
 		return fmt.Errorf("permission: request %s has no option %q", requestID, optionID)
 	}
-	d := Decision{Outcome: Denied, OptionID: optionID, Actor: ActorUser, Reason: reason}
+	d := Decision{Outcome: Denied, OptionID: optionID, Actor: ActorUser, Reason: reason, Via: via}
 	if p.req.Form != nil && p.req.Options[i].Kind == "allow_once" {
 		d.Answers = answers
 	}

@@ -13,4 +13,6 @@ var thisPlatform = platform{
 	FolderArgv:     linux.FolderArgv,
 	SystemInfo:     linux.SystemInfo,
 	Confiner:       linux.Bubblewrap{},
+	NoNap:          linux.NoNap,
+	KeepAwake:      linux.KeepAwake,
 }

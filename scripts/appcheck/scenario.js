@@ -575,6 +575,38 @@ await step("voice input downloads its model once, then dictates at the caret", a
   await sleep(100);
 });
 
+await step("the phone page turns the phone server on, and pairs only with a code", async () => {
+  await openPalette("phone");
+  (await until("the palette entry", () => all(".palette-item").find((e) => e.textContent.trim().startsWith("Phone")), 3000)).click();
+  const page = await until("the phone page", () => all(".page").find((p) => p.querySelector("h2")?.textContent === "Phone"), 5000);
+  const status = () => page.querySelector('[role="status"]')?.textContent ?? "";
+  const enable = withText("label", "Answer my phone", page).querySelector("input");
+  enable.click();
+  await until("the server on", () => /^On, on this computer's port \d+\./.test(status()), 8000);
+  check("it says it answers on this computer's port", /^On, on this computer's port \d+\./.test(status()), status());
+  await until("the sidebar's word", () => withText("button.link.today", "Phone on"), 15000).catch(() => null);
+  check("the sidebar says the phone is on", !!withText("button.link.today", "Phone on"));
+  const start = () => all("button", page).find((b) => b.textContent === "Pair a phone…");
+  check("pairing waits for the name the phone reaches this computer by", start()?.disabled === true);
+  const host = withText("label", "The name your phone reaches", page).querySelector("input");
+  host.focus();
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(host, "phone.test");
+  host.dispatchEvent(new Event("input", { bubbles: true }));
+  host.blur();
+  await until("pairing offered", () => start() && !start().disabled, 8000);
+  start().click();
+  const code = await until("the code", () => page.querySelector(".phone-code")?.textContent, 5000);
+  check("the code is 20 letters and digits, in groups", /^[0-9A-Z]{4}(-[0-9A-Z]{4}){4}$/.test(code), code);
+  check("the address carries the code", page.querySelector(".phone-link-text")?.textContent === `https://phone.test:8443/phone/#pair=${code}`, page.querySelector(".phone-link-text")?.textContent);
+  withText("button", "Cancel", page).click();
+  await until("the window closed", () => !page.querySelector(".phone-code"), 5000);
+  enable.click();
+  await until("the server off", () => status() === "Off.", 8000);
+  check("turned off, it says so", status() === "Off.", status());
+  document.querySelector(".settings-nav .settings-back").click();
+  await sleep(200);
+});
+
 await step("the view follows a running agent", async () => {
   // Enough to overflow, and cards collapse along the way.
   await turn("Check alpha");

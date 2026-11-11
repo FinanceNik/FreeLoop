@@ -613,6 +613,13 @@ Models and subscriptions change under the user: one week Opus runs all day withi
 
 1. **Cost per commit and per percent of a limit (GUI-051).** *Built 2026-11-11.* `git_state` lists the commits HEAD moved forward over (`newCommits` in `git.go`) and says when the app made them (`committed`); `internal/store/work.go` folds sessions into `work_commits`, `work_usage` and `usage_buckets` (made outside the migrations) and reads old transcripts with git once (`work_resolved`); `internal/engine/work.go` prices them (`WorkCost`, `ExportWorkCost`); `frontend/src/workcost.ts` and `WorkCost.tsx` show them in the Efficiency tab. On the user's data on 2026-11-11 the backfill took 10 s and found 113 commits since 2026-11-03. *Not done:* PRs as units, and history before 2026-11-03, when per-call usage and limit reports began.
 
+
+## Sessions from the phone (planned 2026-11-11, at the user's request)
+
+Following and steering sessions from the phone while away, as Claude's remote control allows, without a relay or account (GUI-052, SEC-020, OQ-050). A second review against the code changed the design: sandboxed commands can reach a loopback port, so nothing on it works without a paired token, and pairing needs the user's yes on the computer (denying the port in the Mac sandbox was tried and does not hold); the app quit with its window, so it now hides; a form's Send is `allow_once` too, so the phone decides by kind and never answers forms or plans; a new actor would have broken the ACP approval memory, so the actor stays the user with a `via`; and one stream cannot resume across sessions, so there is a summary stream and one per session.
+
+1. **Phase 1: follow, approve once, message (GUI-052).** *Built 2026-11-11.* `internal/remote` (server, pairing, streams), `engine/remote.go` (state, summary, `DecideOnce`, `PromptFrom`), `engine/tailscale.go` (read-only), `config/remote.go` (settings, `devices.json`), keep-awake and App Nap in `internal/platform/*`, `cmd/freeloop/phone.go`, `frontend/src/Phone.tsx` (Settings) and `src/phone/*` (the phone app, its own build into `dist/phone`). *Not done:* push notifications (phase 2), a QR code (a library to agree to), Windows and Linux tried only by compiling, and use without Tailscale (OQ-051).
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.

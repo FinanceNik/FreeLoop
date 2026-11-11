@@ -31,6 +31,7 @@ import {
   toolRuns,
   type Item,
   type TranscriptEvent,
+  phoneName,
 } from "./transcript.ts";
 import { pickLabel } from "./a11y.ts";
 import AttachedImages from "./AttachedImages.tsx";
@@ -1937,6 +1938,7 @@ function ItemBody({
             <h3 className="sr-only">{t("session.item.you")}</h3>
             {item.images && item.images.length > 0 && <AttachedImages sid={sid} images={item.images} />}
             {item.text}
+            {phoneName(item.via) && <div className="muted msg-via">{t("session.item.fromPhone", { name: phoneName(item.via) })}</div>}
             {item.files.length > 0 && (
               <div className="attached" role="group" aria-label={t("session.item.attachedFiles")}>
                 {item.files.map((f) => (

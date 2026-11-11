@@ -29,4 +29,10 @@ type platform struct {
 	// MenuWords are the system's own names for menu items in a language, where they
 	// differ from menuWords (GUI-048).
 	MenuWords map[string]map[string]string
+	// NoNap keeps the system from slowing the app while hidden, and KeepAwake keeps
+	// the computer from sleeping when idle, each until released (GUI-052).
+	NoNap, KeepAwake func(reason string) (release func())
+	// HideOnClose hides the last window rather than minimising it, while the app has
+	// to stay running: a Mac's Dock brings it back.
+	HideOnClose bool
 }

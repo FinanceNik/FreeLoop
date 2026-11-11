@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:dev": "tsc && vite build --minify false --mode development",
-    "build": "tsc && vite build --mode production",
+    "build:dev": "tsc && vite build --minify false --mode development && vite build -c vite.phone.config.ts --minify false --mode development",
+    "build": "tsc && vite build --mode production && vite build -c vite.phone.config.ts --mode production",
     "typecheck": "tsc",
     "test": "node --test 'src/**/*.test.ts'"
   },
