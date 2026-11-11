@@ -2,42 +2,50 @@
 
 **Run any coding agent. Keep your rules and your bill.**
 
-Freeloop is an open-source macOS app that runs Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Goose or its own agent, with your own models, under one permission policy and one cost view. Apache-2.0.
+Freeloop is an open-source desktop app for macOS, Windows and Linux that runs Claude Code, Codex, Copilot CLI, Gemini CLI, OpenCode, Goose or its own agent, with your own models, under one permission policy and one cost view. Apache-2.0.
 
 - **Your rules sit above every agent.** A repository's config can tell an agent to stop asking. In Freeloop it still asks you: a `.claude/settings.json` allowing `Bash(*)` gets a `git push` past Claude Code's own check and not past Freeloop's. An agent that switches itself to a looser mode stays where you put it. Every session shows what your policy stopped. Try it with `scripts/policy-demo.sh`.
 - **One honest bill across agents.** Tokens and estimated cost by agent, model and project, your account's limits, and a summary to share as a table or a picture. Vendors show only their own.
 
 The limits: this decides what an agent asks to do. An approved shell command runs as you unless the environment is sandboxed, and only a sandbox or a container holds against an agent that does not ask. [docs/VISION.md](docs/VISION.md) says what has been tested with which agent, and [docs/SECURITY.md](docs/SECURITY.md) the rest.
 
-Status: early, and not yet released. Most of what v1 lists is built; [docs/ROADMAP.md](docs/ROADMAP.md) says what each milestone covers and what remains. Releases will not be signed or notarized. The specification is in `docs/`.
+Status: early, and not yet released. Most of what v1 lists is built; [docs/ROADMAP.md](docs/ROADMAP.md) says what each milestone covers and what remains. The Mac app is in daily use; the Windows and Linux builds are new and have not yet been run on a Windows or Linux desktop, so expect rough edges there. Releases are not signed or notarized. The specification is in `docs/`.
 
 ## What it does
 
-- **Your models.** The built-in agent runs on providers you add: Anthropic, OpenAI-compatible endpoints (OpenAI, OpenRouter, LM Studio, llama.cpp, vLLM) and Ollama. API keys go to the macOS Keychain, never into files.
+- **Your models.** The built-in agent runs on providers you add: Anthropic, OpenAI-compatible endpoints (OpenAI, OpenRouter, LM Studio, llama.cpp, vLLM) and Ollama. API keys go to the system's keychain (the macOS Keychain, Windows Credential Manager or the Secret Service on Linux), never into files.
 - **Switchable harnesses.** Besides the built-in agent, any agent that speaks the Agent Client Protocol runs as a harness from a preset. Claude Code ships as one: it runs the unmodified Claude Code through its ACP adapter and signs in by itself; Freeloop never sees or stores its login.
 - **Profiles.** A profile sets a session's harness, model, tools, prompt, permission rules, skills, MCP servers and slash commands, as a YAML file.
 - **Skills and MCP.** Agent Skills (`SKILL.md`) load unchanged, from the app's store or a trusted project. MCP servers run over stdio or Streamable HTTP after you approve exactly what they run. Both can be imported from Claude Code.
 - **One permission chokepoint.** Every tool call from every harness is decided by one broker: modes (ask, accept edits, plan, bypass), rules at global, environment, profile, project and session scope where deny always wins, and protected paths that are never touched.
-- **Many sessions.** A sidebar by project, an attention view that answers every waiting approval in one place, notifications and a dock badge, a diff and commit panel per session, and an optional git worktree per session so sessions on one repository never edit the same checkout, merged back from the panel.
+- **Many sessions.** A sidebar by project, an attention view that answers every waiting approval in one place, notifications (and a dock badge on a Mac), a diff and commit panel per session, and an optional git worktree per session so sessions on one repository never edit the same checkout, merged back from the panel.
+- **A sandbox.** On a Mac and on Linux, the "Local, sandboxed" environment runs commands under the macOS sandbox or bubblewrap: they write only in the project and read little outside it, so the built-in agent's commands run without asking while deny rules still win. Windows has no sandbox yet; use a Docker environment there.
 - **Containers.** A Docker environment runs each session's commands and agents in its own container, from an image or the project's devcontainer.json, with only the project folder shared (Docker Desktop, or Colima and the docker CLI).
-- **Another machine.** An SSH environment runs the built-in agent's commands on a machine you choose, in a working copy kept in sync with the project on your Mac. That machine is not trusted: secrets stay here, only regular files come back, and settings your Mac or an agent would act on do not.
+- **Another machine.** An SSH environment runs the built-in agent's commands on a machine you choose, in a working copy kept in sync with the project on your computer. That machine is not trusted: secrets stay here, only regular files come back, and settings your computer or an agent would act on do not.
+- **Workflows.** A workflow gives a session a slash command per stage. The built-in one goes from a brief to a design, a PRD and issues in the project's `backlog/` folder, then works the unattended issues one after another in a worktree, has a second agent review each, and lists it for you to check. The Board shows each project's issues as they move. A model set plans on a large model, hands the issues to a smaller one, and shows what each issue and run cost.
+- **Your language.** The interface in English, German or Dutch, and dictation into the message box through a speech model that runs on your computer.
 - **Projects you trust.** A project's `AGENTS.md`, `.freeloop/` settings and git status are used only after you trust it; its own settings can tighten permissions, never loosen them.
 
 ## Install
 
 ### Download a release
 
-Releases are on the repository's Releases page; during the private beta, you see them once you have been added to the repository. Download `Freeloop.dmg` and `SHA256SUMS`, and check the DMG before opening it:
+Releases are on the repository's Releases page. Download the file for your system and `SHA256SUMS`, and check the download before opening it:
 
 ```sh
-shasum -a 256 -c SHA256SUMS --ignore-missing
+shasum -a 256 -c SHA256SUMS --ignore-missing   # macOS
+sha256sum -c SHA256SUMS --ignore-missing       # Linux, or Git Bash on Windows
 ```
 
-Open the DMG and drag Freeloop to Applications. Releases are not signed or notarized, so macOS blocks a downloaded one the first time: try to open it, then choose Open Anyway in System Settings, under Privacy & Security. The Keychain asks again after each update, because the signature changes with every build. Needs a Mac with Apple Silicon (M1 or later) and macOS 14 or later; there is no Intel build.
+Releases are not signed, so your system warns about a downloaded one the first time.
+
+- **macOS:** `Freeloop.dmg`. Open it and drag Freeloop to Applications. macOS blocks it the first time: try to open it, then choose Open Anyway in System Settings, under Privacy & Security. The Keychain asks again after each update, because the signature changes with every build. Needs a Mac with Apple Silicon (M1 or later) and macOS 14 or later; there is no Intel build.
+- **Windows:** `Freeloop-<version>-windows-<arch>-setup.exe` installs Freeloop for your user alone, without administrator rights; the `-portable.zip` runs from any folder. Take `amd64` for most PCs and `arm64` for ARM ones. If SmartScreen stops it, choose More info, then Run anyway. Needs Windows 10 version 1809 or later with the Microsoft Edge WebView2 Runtime, which Windows 11 includes and the installer offers otherwise, and [Git for Windows](https://git-scm.com), since commands, hooks and the terminal run through Git Bash.
+- **Linux:** `Freeloop-<version>-linux-<arch>.AppImage`, which carries its own WebKitGTK, or the `.deb` for Debian and Ubuntu, which depends on GTK 3 and WebKitGTK 4.1 and recommends bubblewrap and git; `amd64` or `arm64`. Saving a key needs a running Secret Service, such as GNOME Keyring or KWallet.
 
 ### Build from source
 
-On a Mac with Apple Silicon and macOS 14 or later. You need Go, Node.js with npm and the Xcode command line tools.
+On a Mac with Apple Silicon and macOS 14 or later. You need Go, Node.js with npm, the Xcode command line tools, and cmake for voice input's speech program (`brew install cmake`).
 
 ```sh
 make tools     # once: install the pinned wails3 CLI
@@ -48,6 +56,8 @@ make dmg       # optional: bin/Freeloop.dmg with the app and a link to Applicati
 Move `bin/Freeloop.app` to Applications, or open the DMG and drag it there. A build you made yourself opens normally.
 
 To always open the current build, use `make install` instead of `make package`, from a terminal and not from inside Freeloop. It quits Freeloop, rebuilds it from the commit you have checked out, and leaves that as the only copy: the old one and any other Freeloop it finds go to the Trash. `make install INSTALL_DIR=~/Applications` puts the new one there. Settings → Data → "This build" says the version and the commit the running app was made from (`+dirty` if the files had uncommitted changes), so you can compare two computers; the same line starts a problem report, and `defaults read /path/to/Freeloop.app/Contents/Info FreeloopCommit` says it for a bundle on disk. A computer that updates by `git pull` needs `make install` after each pull, and has to quit the old app first, since opening an app that is already running only brings it forward.
+
+For Windows, `make windows-exe` builds `bin/windows-amd64/Freeloop.exe` and `bin/windows-arm64/Freeloop.exe` on any computer, since that build is pure Go; `make windows` adds the installers and portable zips and needs NSIS (`makensis`) and `zip`. For Linux, `make linux-package` builds the AppImage and the `.deb` in Docker, for Docker's own architecture. [docs/DEVELOPING.md](docs/DEVELOPING.md#build-and-test) has the details.
 
 ## First run
 
@@ -60,26 +70,27 @@ Want to see it first? "Try it with a demo" on the first-run screen, or "Try the 
 
 ## Where things live
 
-Everything is in `~/Library/Application Support/freeloop/`, readable and editable by hand; edits are picked up within a second.
+Everything is in one folder, readable and editable by hand; edits are picked up within a second. It is `~/Library/Application Support/freeloop/` on a Mac, `%AppData%\freeloop\` on Windows, and `~/.config/freeloop/` on Linux (or under `$XDG_CONFIG_HOME`).
 
 | File | Holds |
 |---|---|
-| `config.yaml` | settings and defaults |
-| `providers.yaml` | providers (keys are Keychain references) |
+| `config.yaml` | settings, defaults and model sets |
+| `providers.yaml` | providers (keys are keychain references) |
 | `profiles/*.yaml` | profiles |
 | `environments/*.yaml` | environments: variables, secrets as references, rules |
 | `rules.yaml` | global permission rules |
 | `mcp.yaml` | MCP servers |
 | `presets/harnesses/*.yaml` | external agents |
+| `workflows/*.yaml` | workflows of your own |
 | `optimizers/*.yaml` | token optimizers of your own |
 | `colors.json` | custom colors |
-| `logs/freeloop.log` | the app's log, which stays on this Mac; Settings shows it in Finder |
+| `logs/freeloop.log` | the app's log, which stays on your computer; Settings → Data shows it |
 | `skills/` | the skill store |
 | `sessions/<id>/events.jsonl` | each session's transcript |
 
 A project can add `.freeloop/rules.yaml` (deny rules) and `.freeloop/profiles/`, read once the project is trusted. Set `FREELOOP_HOME` to use another folder.
 
-Freeloop has no telemetry. It connects to the providers, MCP servers and agents you configure, and to three things only if you use them: the update check you can turn on in Settings (GitHub), a token optimizer's pinned download when you click it (GitHub), and the MCP registry when you browse it. [docs/SECURITY.md](docs/SECURITY.md) describes the threat model and the limits you should know, among them that the local environment is not a sandbox.
+Freeloop has no telemetry. It connects to the providers, MCP servers and agents you configure, and to four things only if you use them: the update check you can turn on in Settings (GitHub), a token optimizer's pinned download when you click it (GitHub), voice input's speech model when you download it (Hugging Face, and whisper.cpp from GitHub on Windows and Linux), and the MCP registry when you browse it. [docs/SECURITY.md](docs/SECURITY.md) describes the threat model and the limits you should know, among them that the local environment is not a sandbox.
 
 ## Develop
 

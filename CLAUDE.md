@@ -23,7 +23,7 @@ Status: M0 to M2 and nearly all of v1 are built; real-provider runs and a first 
 - The engine runs in-process behind a transport-agnostic API until v1; the daemon split is EXT-004.
 - SQLite through a pure-Go driver for index and metadata, one append-only JSONL file per session for transcripts, YAML for config, secrets only in the system keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service) behind the `Secrets` interface.
 - ACP (Agent Client Protocol over stdio) is the harness protocol. MCP goes through the official Go SDK targeting the 2026-07-28 revision. Skills use the Agent Skills `SKILL.md` format. Project instructions come from `AGENTS.md` first, `CLAUDE.md` as fallback, both read-only.
-- Apache-2.0. No telemetry; the only outbound traffic is to user-configured endpoints plus an opt-in update check, a pinned token optimizer download the user clicks, and the MCP registry when the user browses it.
+- Apache-2.0. No telemetry; the only outbound traffic is to user-configured endpoints plus an opt-in update check, a pinned token optimizer download the user clicks, voice input's pinned speech model (and, on Windows and Linux, whisper.cpp) when the user downloads it, and the MCP registry when the user browses it.
 
 ## Hard rules
 
@@ -41,14 +41,14 @@ Status: M0 to M2 and nearly all of v1 are built; real-provider runs and a first 
 
 ## Commands
 
-Prerequisites: Go (Homebrew), Node with npm, Xcode command line tools, and `make tools` once to install the pinned `wails3` CLI into `$(go env GOPATH)/bin`.
+Prerequisites: Go (Homebrew), Node with npm, Xcode command line tools, cmake (`make package` builds voice input's `whisper-cli` with it), and `make tools` once to install the pinned `wails3` CLI into `$(go env GOPATH)/bin`.
 
-- `make dev`: run the app with live reload. It sets `FREELOOP_DEV=1`, which adds a scripted demo provider so the whole loop can be tried without an API key. Set `FREELOOP_HOME=/some/dir` to keep dev data out of `~/Library/Application Support/freeloop`.
+- `make dev`: run the app with live reload. It sets `FREELOOP_DEV=1`, which adds a scripted demo provider so the whole loop can be tried without an API key. Set `FREELOOP_HOME=/some/dir` to keep dev data out of the real data folder (`~/Library/Application Support/freeloop` on a Mac, `%AppData%\freeloop` on Windows, `~/.config/freeloop` on Linux).
 - `make build` / `make package` / `make dmg`: production binary in `bin/` / ad-hoc signed `bin/Freeloop.app` / `bin/Freeloop.dmg` holding the app and a link to Applications. `make install`: quit Freeloop, rebuild it from this commit and leave that as the only copy (`INSTALL_DIR=`, `OPEN=1`; run it from a terminal, not from inside Freeloop). Every build is stamped with its commit (NFR-REL-006): Settings → Data, the problem report and the bundle's `FreeloopCommit` say it.
 - `make windows-exe` / `make windows`: the Windows exes for amd64 and arm64 from any machine (pure Go) / plus an NSIS installer and a portable zip each (needs `makensis` and `zip`). `make linux-package`: the AppImage and `.deb` in the Docker image `build/linux/Dockerfile`, for Docker's own architecture unless `LINUX_ARCHS="amd64 arm64"`. `make release` builds what the host can (`RELEASE_PLATFORMS=mac` for the Mac alone).
 - `make test`: Go tests under `internal/` and `cmd/` with the race detector, then frontend tests (`node --test`, no test framework). One Go test: `go test ./internal/<pkg>/ -run '^TestName$'`.
 - `make check-app`: drive the real interface on the real engine in a real WebKit view, on scratch data with the demo provider (`scripts/appcheck.sh`, the steps in `scripts/appcheck/scenario.js`), then again on a lived-in data folder (`lived-in.sh`, `lived-in.js`); helpers in `lib.js`. Needs no key. Run it after a change to the interface.
-- `make lint`: gofmt, `go vet`, the architecture boundary test (`internal/archtest`: ENV-001, Wails only in `cmd/freeloop`, macOS code only in `internal/platform/darwin`) and `tsc`. `GOOS=windows CGO_ENABLED=0 go vet ./internal/... ./cmd/...` checks the Windows build from any machine.
+- `make lint`: gofmt, `go vet`, the architecture boundary test (`internal/archtest`: ENV-001, Wails only in `cmd/freeloop`, macOS code only in `internal/platform/darwin`, cgo only there and in `internal/platform/linux`, the platform packages imported only by `cmd/freeloop`) and `tsc`. `GOOS=windows CGO_ENABLED=0 go vet ./internal/... ./cmd/...` checks the Windows build from any machine.
 - `make release`: `bin/release` with the DMG (and the Windows and Linux packages the host can build), each with its SBOM (`internal/sbom`, `cmd/freeloop-sbom`), build information and checksums (SEC-012). `make verify-repro` builds a commit twice from clean clones and compares every file (NFR-SEC-004; `REF=<tag>`). `make verify-deps` checks modules against `go.sum` and that `go.mod` is tidy; a build no longer tidies it.
 - `make memcheck`: package the app, run ten demo sessions in it on scratch data and check the idle footprint against 300 MB (NFR-PERF-004; the app's window opens while it runs).
 - `make verify-agents`: run the HRN-005 scenario with each preset's real agent at its pinned version on a local stand-in model (HRN-007; downloads the agents, needs no key).
@@ -64,4 +64,4 @@ Layout notes: the engine composes `internal/environment` (files and processes), 
 - A decision you cannot make from the docs goes into `docs/OPEN_QUESTIONS.md` with options and a recommendation; do not decide silently. Close a question with its outcome and the date.
 - More than one Claude Code session may be working in this checkout at the same time. Stage only the files you changed; never `git add -A` or `git commit -a`.
 - Ask before installing anything system-wide or adding a dependency; keep npm dependencies few and pinned.
-- After pushing code, wait for CI (`gh run watch`) and say how it went; a red run is fixed before new work. CI's Linux job runs on every push; the macOS job (build, lint, `make check-app`) runs on tags, weekly and by hand, so run `make check-app` locally after an interface change.
+- After pushing code, wait for CI (`gh run watch`) and say how it went; a red run is fixed before new work. CI's Linux and Windows jobs run on every push; the macOS job (build, lint, `make check-app`) runs on tags, weekly and by hand, so run `make check-app` locally after an interface change.
