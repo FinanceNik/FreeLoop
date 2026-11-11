@@ -549,10 +549,10 @@ type Usage struct {
 	Unreported int64 `json:"unreported"`
 }
 
-// pricedModel is the model a usage event counts under. An adjustment is a sum of
-// several calls, so its size says nothing about one prompt.
+// pricedModel is the model a usage event counts under. An adjustment or a turn's
+// total is a sum of several calls, so its size says nothing about one prompt.
 func pricedModel(model string, d event.UsageData) string {
-	if d.Adjustment {
+	if !d.OnePrompt() {
 		return model
 	}
 	return config.PricedModel(model, d.InputTokens+d.CacheReadTokens+d.CacheWriteTokens)

@@ -603,22 +603,7 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		stop = harness.StopCancelled
 	}
 	if !s.endCalls() && answered {
-		// The turn's total from its answer, priced by the model the agent says it is
-		// on, or said not to be there at all (PRV-008).
-		d := event.UsageData{Measured: event.MeasuredTurn, Model: s.currentModel()}
-		if u := a.res.Usage; u != nil {
-			d.InputTokens, d.OutputTokens = int64(u.InputTokens), int64(u.OutputTokens)
-			if u.CachedReadTokens != nil {
-				d.CacheReadTokens = int64(*u.CachedReadTokens)
-			}
-			if u.CachedWriteTokens != nil {
-				d.CacheWriteTokens = int64(*u.CachedWriteTokens)
-			}
-		}
-		if d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens == 0 {
-			d.Measured, d.Model = event.MeasuredNone, ""
-		}
-		s.p.Emit(event.UsageUpdate, d)
+		s.p.Emit(event.UsageUpdate, turnUsage(a.res.Usage, s.currentModel(), s.preset.InputCountsCache))
 	}
 	s.p.Emit(event.TurnEnded, event.TurnEndedData{StopReason: string(stop)})
 	status := "idle"
@@ -1243,4 +1228,28 @@ func shellWord(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// turnUsage is a turn's total from its answer, priced by the model the agent says it
+// is on, or said not to be there at all (PRV-008). Input that counts the cached tokens
+// too, as the preset says, has them taken out, since the app prices them apart; more
+// cached than input says they were counted apart after all.
+func turnUsage(u *sdk.Usage, model string, inputCountsCache bool) event.UsageData {
+	d := event.UsageData{Measured: event.MeasuredTurn, Model: model}
+	if u != nil {
+		d.InputTokens, d.OutputTokens = int64(u.InputTokens), int64(u.OutputTokens)
+		if u.CachedReadTokens != nil {
+			d.CacheReadTokens = int64(*u.CachedReadTokens)
+		}
+		if u.CachedWriteTokens != nil {
+			d.CacheWriteTokens = int64(*u.CachedWriteTokens)
+		}
+		if cached := d.CacheReadTokens + d.CacheWriteTokens; inputCountsCache && cached <= d.InputTokens {
+			d.InputTokens -= cached
+		}
+	}
+	if d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens == 0 {
+		d.Measured, d.Model = event.MeasuredNone, ""
+	}
+	return d
 }

@@ -31,6 +31,9 @@ export interface ModelCall {
   cacheWrite1hTokens?: number;
   // Adds what earlier calls' counts missed; it is no call itself.
   adjustment?: boolean;
+  // A turn's total as an external agent counted it: several calls, so its size says
+  // nothing about one prompt's.
+  turn?: boolean;
 }
 
 // globMatch matches like Go's path.Match: * is any run of characters but
@@ -101,7 +104,8 @@ export function estimate(prices: readonly PriceEntry[], calls: readonly ModelCal
       continue;
     }
     const prompt = c.inputTokens + c.cacheReadTokens + c.cacheWriteTokens;
-    const long = !c.adjustment && base.longPromptOver && prompt > base.longPromptOver;
+    // Long-prompt prices go by one call's prompt, which a sum of calls is not.
+    const long = !c.adjustment && !c.turn && base.longPromptOver && prompt > base.longPromptOver;
     const p = (long && findPrice(prices, providerId, model + LONG_PROMPT)) || base;
     const hour = c.cacheWrite1hTokens ?? 0;
     const write = p.cacheWrite ?? 0;

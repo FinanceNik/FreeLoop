@@ -185,6 +185,13 @@ const (
 	MeasuredNone = "none"
 )
 
+// OnePrompt says whether the tokens are one model call's, so their sum is the size of
+// one prompt, which a price for long prompts goes by. An adjustment and a turn's total
+// add up several calls.
+func (d UsageData) OnePrompt() bool {
+	return !d.Adjustment && d.Measured != MeasuredTurn
+}
+
 // ModelContextData is the payload of model_context (NFR-PRIV-003): what one kind of
 // model call for the session carries besides the conversation. Purpose is a
 // provider.Purpose* value; Sent says in words what else went with a call that is not a

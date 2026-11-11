@@ -500,6 +500,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           cacheWriteTokens: d.cacheWriteTokens ?? 0,
           cacheWrite1hTokens: d.cacheWrite1hTokens ?? 0,
           adjustment: d.adjustment === true,
+          turn: d.measured === "turn",
         };
         // An agent's report of its context spends nothing and is no call.
         const spent = c.inputTokens + c.outputTokens + c.cacheReadTokens + c.cacheWriteTokens > 0;

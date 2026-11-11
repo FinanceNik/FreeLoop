@@ -80,6 +80,8 @@ func TestUsageKeepsWhatPricesDependOn(t *testing.T) {
 		{InputTokens: 2, CacheWriteTokens: 50, CacheWrite1hTokens: 30, Model: "claude-haiku-5-5"},
 		{InputTokens: 2, CacheReadTokens: 100_000, Model: "claude-haiku-5-5"},
 		{OutputTokens: 7, CacheReadTokens: 200_000, Model: "claude-haiku-5-5", Adjustment: true},
+		// A turn's total adds up several calls: its size is no one prompt's.
+		{InputTokens: 300_000, Model: "claude-haiku-5-5", Measured: event.MeasuredTurn},
 	} {
 		b, _ := json.Marshal(d)
 		if _, err := s.Append(ctx, ses.ID, event.UsageUpdate, b); err != nil {
@@ -94,7 +96,7 @@ func TestUsageKeepsWhatPricesDependOn(t *testing.T) {
 		t.Fatalf("recent: %+v", recent)
 	}
 	base, long := recent[0], recent[1]
-	if base.Model != "claude-haiku-5-5" || base.CacheWrite != 50 || base.CacheWrite1h != 30 || base.Output != 7 || base.Calls != 1 {
+	if base.Model != "claude-haiku-5-5" || base.CacheWrite != 50 || base.CacheWrite1h != 30 || base.Output != 7 || base.Input != 300_002 || base.Calls != 2 {
 		t.Errorf("base: %+v", base)
 	}
 	if long.Model != "claude-haiku-5-5 (long prompt)" || long.CacheRead != 100_000 || long.Calls != 1 {
@@ -111,7 +113,7 @@ func TestUsageKeepsWhatPricesDependOn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(day) != 2 || day[0].CacheWrite1hTokens != 30 || day[0].Calls != 1 || day[1].Model != "claude-haiku-5-5 (long prompt)" || day[1].Calls != 1 {
+	if len(day) != 2 || day[0].CacheWrite1hTokens != 30 || day[0].Calls != 2 || day[1].Model != "claude-haiku-5-5 (long prompt)" || day[1].Calls != 1 {
 		t.Errorf("per day: %+v", day)
 	}
 }

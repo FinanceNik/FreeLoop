@@ -116,7 +116,9 @@ env_key = "CODEX_API_KEY"
 		},
 		{
 			id: "copilot",
-			// It reports no usage over ACP.
+			// On the stand-in, through its own provider settings, it reports no usage; on
+			// GitHub's models it reports a turn's total, its input counting the cached
+			// tokens (InputCountsCache).
 			usage: struct{ measured, model string }{event.MeasuredNone, ""},
 			argv:  []string{filepath.Join(dir, "copilot/node_modules/.bin/copilot"), "--acp"},
 			// Its own provider settings, with no GitHub sign-in and no network but the

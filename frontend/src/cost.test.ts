@@ -73,6 +73,8 @@ test("an hour's cache write and a long prompt pay their own prices", () => {
   near(estimate(prices, [call("m", 101, 0, 0)], own).cost, (101 * 5) / 1e6);
   near(estimate(prices, [call("m", 100, 0, 0)], own).cost, (100 * 1) / 1e6);
   near(estimate(prices, [call("plain", 0, 10, 10)], own).cost, (10 * 2) / 1e6);
+  // A turn's total adds up several calls, so it pays the price of the calls' own size.
+  near(estimate(prices, [{ ...call("m", 101, 0, 0), turn: true }], own).cost, (101 * 1) / 1e6);
 });
 
 test("a session's cost says how the agent counted it", () => {

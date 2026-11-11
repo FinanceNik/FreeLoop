@@ -124,7 +124,7 @@ func (e *Engine) sessionCost(ctx context.Context, prices []config.Price, before 
 				continue
 			}
 			k := key{cmp.Or(d.ProviderID, ses.ProviderID), cmp.Or(d.Model, ses.Model)}
-			if !d.Adjustment {
+			if d.OnePrompt() {
 				k.model = config.PricedModel(k.model, d.InputTokens+d.CacheReadTokens+d.CacheWriteTokens)
 			}
 			t := used[k]

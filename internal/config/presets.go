@@ -63,6 +63,11 @@ type HarnessPreset struct {
 	// and JSON settings files with a "hooks" key. In a project the user has not
 	// trusted, the agent does not start while one holds any (SEC-006).
 	RepoHooks []string `yaml:"repoHooks,omitempty" json:"repoHooks"`
+	// InputCountsCache says the input tokens the agent reports for a turn include
+	// the cached ones, as OpenAI's and Gemini's APIs count them, where the app counts
+	// them apart and prices them lower (PRV-008). Without it a turn that mostly read
+	// the cache cost about ten times what it did.
+	InputCountsCache bool `yaml:"inputCountsCache,omitempty" json:"inputCountsCache"`
 	// Builtin is set for presets that ship with the app.
 	Builtin bool `yaml:"-" json:"builtin"`
 }
@@ -146,7 +151,9 @@ func BuiltinPresets() []HarnessPreset {
 		// 0.66.0 gets the error as a plain object, so its check for one that
 		// means "not found" fails, and it refuses to create the file.
 		MissingFileIsEmpty: true,
-		Builtin:            true,
+		// Its turn's input is Gemini's promptTokenCount, which holds the cached part.
+		InputCountsCache: true,
+		Builtin:          true,
 	}, {
 		ID:          "codex",
 		Name:        "Codex CLI",
@@ -202,7 +209,10 @@ func BuiltinPresets() []HarnessPreset {
 		// Its ACP mode trusts the folder it is started in, and runs these hooks even
 		// there; it has no setting the app could pass to stop them.
 		RepoHooks: []string{".github/hooks", ".github/copilot/settings.json", ".github/copilot/settings.local.json", ".claude/settings.json", ".claude/settings.local.json"},
-		Builtin:   true,
+		// Its turn's input is the model's prompt_tokens, which hold the cached part; it
+		// keeps the uncached input as a figure of its own.
+		InputCountsCache: true,
+		Builtin:          true,
 	}}
 }
 
