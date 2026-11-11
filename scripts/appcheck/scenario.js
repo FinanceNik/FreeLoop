@@ -249,16 +249,40 @@ await step("a session's right-click menu", async () => {
   window.fetch = real;
 });
 
-// Opening a long transcript lands on its end and stays there while it settles.
+// Opening a long transcript lands on its end and stays there while it settles. No write
+// moves it away from the end on the way, not even one put right later in the frame: WebKit
+// draws nothing where the view was sent, so the conversation went blank in every such
+// frame, for as long as its items took to draw (9 s for 3,900 of them).
 await step("a long transcript opens at its end", async () => {
-  openSession("Check long");
-  const c = await until("the conversation", () => { const x = document.querySelector(".conversation"); return x && x.scrollHeight > x.clientHeight && x; });
-  const seen = [];
-  for (let i = 0; i < 30; i++) {
-    await sleep(100);
-    seen.push(Math.round(toTheEnd(c)));
+  const native = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+  let away = 0;
+  let writes = 0;
+  Object.defineProperty(Element.prototype, "scrollTop", {
+    configurable: true,
+    get() {
+      return native.get.call(this);
+    },
+    set(v) {
+      const atEnd = this.classList?.contains("conversation") && toTheEnd(this) <= 60;
+      native.set.call(this, v);
+      if (!atEnd) return;
+      writes++;
+      away = Math.max(away, toTheEnd(this));
+    },
+  });
+  try {
+    openSession("Check long");
+    const c = await until("the conversation", () => { const x = document.querySelector(".conversation"); return x && x.scrollHeight > x.clientHeight && x; });
+    const seen = [];
+    for (let i = 0; i < 30; i++) {
+      await sleep(100);
+      seen.push(Math.round(toTheEnd(c)));
+    }
+    check("a long transcript opens at its end", toTheEnd(c) <= 60, `${c.children.length} items, px from the end over 3 s: ${seen.filter((_, i) => i % 5 === 0).join(" ")} ... ${seen.at(-1)}`);
+    check("a long transcript is not moved from its end while it is drawn", away <= 60, `${writes} writes at the end, one left it ${Math.round(away)} px away`);
+  } finally {
+    Object.defineProperty(Element.prototype, "scrollTop", native);
   }
-  check("a long transcript opens at its end", toTheEnd(c) <= 60, `${c.children.length} items, px from the end over 3 s: ${seen.filter((_, i) => i % 5 === 0).join(" ")} ... ${seen.at(-1)}`);
 });
 
 const conversation = () => activePane().querySelector(".conversation");

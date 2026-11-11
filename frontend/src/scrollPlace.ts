@@ -83,13 +83,17 @@ export function drawOnce(box: HTMLElement): () => void {
     }
     if (batch.length === 0) return;
     const viewTop = box.getBoundingClientRect().top;
+    const top = box.scrollTop;
     const before = batch.map((el) => el.getBoundingClientRect());
     for (const el of batch) el.style.contentVisibility = "visible";
     const grown = heightAbove(
       batch.map((el, i) => ({ bottom: before[i].bottom, before: before[i].height, after: before[i].bottom <= viewTop ? el.getBoundingClientRect().height : before[i].height })),
       viewTop,
     );
-    if (grown !== 0) box.scrollTop += grown;
+    // From the place before, not the one now: at the end, a conversation that got shorter
+    // has already moved the view up by as much, and moving it again showed a place where
+    // nothing is drawn, so the view went blank for a frame in every such batch.
+    if (grown !== 0) box.scrollTop = top + grown;
     frame = requestAnimationFrame(step);
   };
   const start = () => {

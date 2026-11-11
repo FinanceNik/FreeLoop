@@ -121,6 +121,9 @@ let height = Double(ProcessInfo.processInfo.environment["APPCHECK_HEIGHT"] ?? ""
 let window = KeyWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: height), styleMask: [.borderless], backing: .buffered, defer: false)
 let mouse = Mouse()
 let configuration = WKWebViewConfiguration()
+// Storage of its own, for this run only: the window's storage outlived a run, so a check
+// that failed with the sidebar dragged wide left it wide for every step of the next run.
+configuration.websiteDataStore = .nonPersistent()
 configuration.userContentController.addScriptMessageHandler(mouse, contentWorld: .page, name: "mouse")
 let snap = Snap()
 configuration.userContentController.addScriptMessageHandler(snap, contentWorld: .page, name: "snap")
