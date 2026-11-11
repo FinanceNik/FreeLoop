@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -60,8 +61,11 @@ type hookCall struct {
 }
 
 // hooksOf returns the hooks in force for a runtime's session, read afresh
-// so edits and trust changes apply to the next event.
-func (e *Engine) hooksOf(ctx context.Context, r *runtime) []config.Hook {
+// so edits and trust changes apply to the next event. When the session's project or
+// profile cannot be looked up it returns the hooks it has with the reason: hooks it
+// could not read may have been guards, so the caller does not read the rest as all
+// there is (SEC-003).
+func (e *Engine) hooksOf(ctx context.Context, r *runtime) ([]config.Hook, error) {
 	hooks := append([]config.Hook{}, e.Config().Hooks...)
 	for i := range hooks {
 		hooks[i].Source = config.FileName
@@ -69,12 +73,13 @@ func (e *Engine) hooksOf(ctx context.Context, r *runtime) []config.Hook {
 	hooks = e.approvedHooks(r, hooks)
 	project, err := e.store.GetProject(ctx, r.projectID)
 	if err != nil {
-		return hooks
+		return hooks, fmt.Errorf("the session's project could not be looked up, so its hooks could not be read: %w", err)
 	}
 	pc := e.projectConfig(project)
 	// A trusted project's hooks, its profiles' included, run as the set the user
 	// approved: trusting it approved them as they were.
 	projectOK := e.projectHooksRun(r, project, pc)
+	var missing error
 	if prof, err := e.profileFor(project, r.profileID); err == nil {
 		var own []config.Hook
 		for _, h := range prof.Hooks {
@@ -87,11 +92,23 @@ func (e *Engine) hooksOf(ctx context.Context, r *runtime) []config.Hook {
 			own = nil
 		}
 		hooks = append(hooks, own...)
+	} else {
+		missing = fmt.Errorf("the session's profile could not be looked up, so its hooks could not be read: %w", err)
 	}
 	if !projectOK {
-		return hooks
+		return hooks, missing
 	}
-	return append(hooks, pc.Hooks...)
+	return append(hooks, pc.Hooks...), missing
+}
+
+// warned remembers what the log said, so a problem that every call meets is named once.
+var warned sync.Map
+
+func warnOnce(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if _, seen := warned.LoadOrStore(msg, true); !seen {
+		log.Print(msg)
+	}
 }
 
 // runHooks runs the hooks for event and tool in order. Block is the reason
@@ -99,9 +116,15 @@ func (e *Engine) hooksOf(ctx context.Context, r *runtime) []config.Hook {
 // out, could not start, was killed, was stopped or exited other than 0 and 2),
 // which only a guard's caller acts on. payload is added to the JSON the hooks
 // read.
-func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payload map[string]any) permission.HookResult {
+func (e *Engine) runHooks(ctx context.Context, r *runtime, ev, tool string, payload map[string]any) (res permission.HookResult) {
+	all, lookup := e.hooksOf(ctx, r)
+	if lookup != nil {
+		// Said as a hook that did not answer, which a guard's caller turns into a question.
+		warnOnce("engine: %s: %v", r.sid, lookup)
+		defer func() { res.Failed = strings.TrimPrefix(lookup.Error()+"; "+res.Failed, "; ") }()
+	}
 	var hooks []config.Hook
-	for _, h := range e.hooksOf(ctx, r) {
+	for _, h := range all {
 		if h.Matches(ev, tool) {
 			hooks = append(hooks, h)
 		}
@@ -210,7 +233,12 @@ func (h engineHooks) request(ctx context.Context, ev string, pc permission.Conte
 	}
 	h.e.mu.Unlock()
 	if r == nil {
-		return permission.HookResult{}
+		if req.SessionID == "" {
+			return permission.HookResult{}
+		}
+		// The session's hooks cannot be found, and one of them may be a guard.
+		warnOnce("engine: a request of %s, which has no running session, ran no hooks", req.SessionID)
+		return permission.HookResult{Failed: "the session is not running, so its hooks could not be run"}
 	}
 	return h.e.runHooks(ctx, r, ev, req.Tool, map[string]any{
 		"tool": req.Tool, "toolCallId": req.ToolCallID, "kind": req.Kind, "title": req.Title,

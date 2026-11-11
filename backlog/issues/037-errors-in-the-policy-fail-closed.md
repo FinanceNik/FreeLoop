@@ -1,6 +1,6 @@
 ---
 title: An error while reading the policy asks or denies, never allows
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -17,3 +17,8 @@ Three places let a call through when something could not be read (SEC-003): with
 
 ## Notes
 - `internal/permission/broker.go:458-462`; `internal/engine/hooks.go:70-90` and `:212`.
+
+## Done
+- Broker (`internal/permission/broker.go`): with unreadable rules, the unasked read excludes secret names and plan mode refuses a write. `TestUnreadableRulesAskAndPlanModeStillRefuses`, seen to fail without the change.
+- Engine (`internal/engine/hooks.go`): `hooksOf` returns the reason it could not read the project or profile; `runHooks` adds it to `Failed`; `engineHooks.request` fails a named session with no runtime; `warnOnce` logs each once. `TestGuardHooksFailClosedWhenTheyCannotBeLookedUp`.
+- The existing hook tests, `TestFailedGuardHookAsks` among them, pass unchanged.

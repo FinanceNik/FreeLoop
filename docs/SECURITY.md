@@ -401,6 +401,17 @@ The phone's key was the cookie `freeloop_device`. A browser sends a cookie to ev
 
 A phone paired with an earlier build holds a cookie nothing reads: it shows its pairing screen and pairs again; its old entry stays in the list until removed. What a command in a session's sandbox can do is as row 22 says: it can reach the port and gets nothing there without a key it cannot read. Tests: `internal/remote/server_test.go` (a key as a cookie, with no login, with another, stale, and a removed phone's stream), `frontend/src/phone/phone.test.ts` (the stream parser).
 
+### An error while reading the policy asks or denies (issue 037)
+
+Three places let a call through when something could not be read (found by reading, two of them then shown by tests, 2026-11-11): with `rules.yaml` unreadable, an in-project `.env` read was allowed unasked and a write in plan mode became a question where plan mode refuses it; a failed lookup of the session's project or profile dropped their guard hooks and ran the rest, where the same failure for rules fails closed; and a request of a session with no running runtime ran no hooks at all. Now:
+
+- with unreadable rules only a plain read inside the project goes ahead unasked (a file with a secret's name asks), and a write in plan mode is refused, since no rule is needed to know the mode refuses it;
+- a project or profile that cannot be looked up makes `runHooks` answer as a hook that did not, with the reason, which the broker turns into a question, in bypass mode too; the reason is on the approval card as for a hook that timed out;
+- a request that names a session with no running runtime does the same; a request that names no session is unchanged;
+- the log names each once (`engine: <session>: the session's profile could not be looked up…`), with no path contents.
+
+A session whose profile was deleted while it runs now asks for every call, saying so, until the profile is restored or the session given another. That is the price of not guessing whether the missing profile held a guard.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

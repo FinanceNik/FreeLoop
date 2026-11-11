@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/permission"
 	"github.com/FinanceNik/Freeloop/internal/provider/scripted"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
@@ -382,5 +384,59 @@ func TestProjectHooksRunAsApproved(t *testing.T) {
 	e = openFor(t, dir, mem)
 	if len(waiting()) != 1 {
 		t.Errorf("adopted twice: %+v", waiting())
+	}
+}
+
+// A guard hook that cannot be found is a guard that has not answered: when the project or
+// the profile cannot be looked up, or the session has no runtime, the call asks and says
+// why, as for a hook that failed, where it used to run none and go ahead (SEC-003, EXT-005).
+func TestGuardHooksFailClosedWhenTheyCannotBeLookedUp(t *testing.T) {
+	ctx := context.Background()
+	e := openTest(t, t.TempDir())
+	defer e.Close()
+
+	// A session whose project is gone.
+	r := &runtime{sid: "s", projectID: "prj_gone"}
+	if _, err := e.hooksOf(ctx, r); err == nil {
+		t.Error("hooksOf says nothing of a project that cannot be found")
+	}
+	res := e.runHooks(ctx, r, config.HookPreToolUse, "write_file", map[string]any{"tool": "write_file"})
+	if res.Failed == "" || res.Block != "" {
+		t.Errorf("runHooks for a project that cannot be found: %+v", res)
+	}
+
+	// A session whose profile is gone, in a project that is there.
+	root := t.TempDir()
+	if _, err := e.SetProjectTrust(ctx, root, true); err != nil {
+		t.Fatal(err)
+	}
+	projects, _ := e.store.ListProjects(ctx)
+	var pid string
+	for _, p := range projects {
+		if p.Root == environment.Canonical(root) {
+			pid = p.ID
+		}
+	}
+	if pid == "" {
+		t.Fatalf("the project was not recorded: %+v", projects)
+	}
+	r = &runtime{sid: "s", projectID: pid, profileID: "profile-that-was-deleted"}
+	if res := e.runHooks(ctx, r, config.HookPreToolUse, "write_file", nil); res.Failed == "" {
+		t.Errorf("runHooks for a profile that cannot be found: %+v", res)
+	}
+	// With the default profile there is nothing missing.
+	r = &runtime{sid: "s", projectID: pid}
+	if res := e.runHooks(ctx, r, config.HookPreToolUse, "write_file", nil); res.Failed != "" || res.Block != "" {
+		t.Errorf("runHooks with nothing missing: %+v", res)
+	}
+
+	// No runtime for a session that is named.
+	h := engineHooks{e}
+	pc := permission.Context{Mode: permission.ModeAcceptEdits}
+	if res := h.PreToolUse(ctx, pc, permission.Request{SessionID: "ses_stopped", Tool: "write_file"}); res.Failed == "" {
+		t.Errorf("a request of a session with no runtime ran no hooks and said nothing: %+v", res)
+	}
+	if res := h.PreToolUse(ctx, pc, permission.Request{Tool: "write_file"}); res.Failed != "" {
+		t.Errorf("a request of no session: %+v", res)
 	}
 }

@@ -456,8 +456,12 @@ func (b *Broker) decide(pc Context, req Request, rules []Rule, rulesErr error) (
 	// Rules that cannot be read may include deny rules: fail closed and
 	// ask for everything except reads inside the project.
 	if rulesErr != nil {
-		if (req.Kind.reads() || req.Kind == KindThink) && !outside {
+		switch {
+		case (req.Kind.reads() || req.Kind == KindThink) && !outside && !b.policy.secret(pc.Root, req.Paths):
 			return allow(ActorPolicy, "reads inside the project are allowed")
+		case pc.Mode == ModePlan && req.Kind.writes():
+			// No rule is needed to know a mode refuses this.
+			return deny(ActorMode, "plan mode is read-only until the plan is approved")
 		}
 		return Decision{}, false
 	}
