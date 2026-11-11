@@ -1,6 +1,6 @@
 ---
 title: A shell deny rule sees through quotes, noglob and the order of flags
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -19,3 +19,9 @@ prd: before-going-public
 ## Notes
 - `internal/permission/rules.go:194` and `:234`; `plain()` at `internal/permission/broker.go:506`.
 - The user's `dev-guard.sh` hook is outside the repository and matches text itself; it is not this issue.
+
+## Done
+- `commandsOf` (`internal/permission/rules.go`) reads every word unquoted, drops `=` from a zsh `=name`, knows `noglob` and `nocorrect`, follows `eval`, and reports what it could not see; `simpleCommands` is its list. `flagSetMatches` reads flag letters as a set for deny rules, with rm's long names. `hidesFromDenyRules` and the broker's `unseen` keep an allow rule from approving, and bypass from running, a command built at run time while a shell deny rule could apply.
+- Chosen over writing "a rule matches the words as written": the flag set. The help pages (English, German, Dutch) and SECURITY.md say how far a rule reaches.
+- The user's own `allow shell` rule now asks for such commands when a shell deny rule exists; ordinary variables in arguments do not.
+- `freeloop check` shares `decide`, so it gives the same answers (a rebuild shows it).

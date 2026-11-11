@@ -380,6 +380,16 @@ The same kind of second name on the other systems, looked at:
 
 SEC-017 asks before a file with a secret's name (`.env`, `*.pem`, `id_ed25519`, `secrets.yaml`, `.aws/`) is read, but the check saw only the paths a request named, and `grep` names a folder: `grep` with `include: ".env"` returned its lines in ask mode with no question (reproduced by a test, 2026-11-11). The built-in `grep` now leaves such files out of a search over a folder and lists them in its result, so the model knows; it asks, as a read does, when the path or the include names them (an include such as `.env`, `*.pem` or `**/secrets.yaml`), and then shows the lines. A rule that allows every search, and bypass mode, show them as a read does. One list of names (`environment.SecretPath`) serves the read check, the sync and the search. `glob` and `list_dir` still show a file's name, which holds nothing. An external agent's own search runs in its process and never reaches this; only the `fs/read_text_file` it asks of the app does, and that is a read of a named path.
 
+### Command rules and the way a word is spelled (issue 035)
+
+A shell deny rule unquoted only the first word of a command, so with `deny git push *` and `allow git *`, `git "push" origin main` was allowed by the rule in ask mode, and in a sandbox or bypass mode it ran unasked; `noglob git push`, `=git push` and `rm -fr` against `rm -rf *` got past too (reproduced by tests, 2026-11-11). Now:
+
+- every word is read as the shell reads it (`'push'`, `"push"`, `pu""sh`, `p\ush`), zsh's `noglob` and `nocorrect` are wrappers, `=git` is `git`, and `eval`'s words are read as a line, as `sh -c`'s are;
+- flag letters are read as a set, joined or split, in any order, and the command may carry more of them than the rule names: `rm -rf *` stops `rm -fr`, `rm -r -f`, `rm -rfv`, and `rm --recursive --force`, which rm's long names are made to read as. Other long options are not mapped: a rule on `--force` does not stop `-f`, since the two are different words to most programs;
+- a command whose program, or the subcommand of a program a shell deny rule names, is built when it runs (`$a push`, `git "$sub"`, `$(echo git) push`, a glob in the program) cannot be compared with the rule. While such a rule could apply, no allow rule approves it, so it asks even with `allow shell`, and bypass mode refuses it, since a deny rule wins at every scope. Variables elsewhere in a command, such as `echo $HOME`, change nothing.
+
+A rule is still a guard over the words of a command. It cannot see what a program does with its arguments: `make deploy` runs whatever the Makefile says, and a script runs its own lines. For that, a sandbox or a hook that reads the command (`profiles/`, `hooks/`) is the guard. Tests: `internal/permission/quoting_test.go`.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

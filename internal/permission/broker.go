@@ -469,12 +469,20 @@ func (b *Broker) decide(pc Context, req Request, rules []Rule, rulesErr error) (
 		!slices.ContainsFunc(rules, func(r Rule) bool { return r.Effect == Deny && r.Path != "" })
 	rewrittenHidesPath := req.Kind == KindExecute && req.RewrittenReadOnly && !rewrittenReadOnly
 
+	// A command whose program or subcommand is built when it runs cannot be compared
+	// with a deny rule that might apply to it, so no allow rule approves it, and bypass
+	// mode refuses it: bypass asks no one, and a deny rule wins at every scope (SEC-003).
+	unseen := req.Kind == KindExecute && hidesFromDenyRules(rules, req.Command)
+
 	switch pc.Mode {
 	case ModeBypass:
 		// Leaving the sandbox asks every time, whatever the mode: a user who chose
 		// a sandbox has not chosen to let the model walk out of it.
 		if req.LeavesSandbox {
 			return Decision{}, false
+		}
+		if unseen {
+			return deny(ActorPolicy, "the command builds its program or subcommand when it runs, so your deny rules cannot be checked against it")
 		}
 		return allow(ActorMode, "bypass mode")
 	case ModePlan:
@@ -492,7 +500,7 @@ func (b *Broker) decide(pc Context, req Request, rules []Rule, rulesErr error) (
 			return deny(ActorMode, "plan mode is read-only until the plan is approved")
 		}
 	}
-	if req.Kind != KindSwitchMode && !req.LeavesSandbox {
+	if req.Kind != KindSwitchMode && !req.LeavesSandbox && !unseen {
 		if r := match(Allow); r != nil {
 			return byRule(r)
 		}

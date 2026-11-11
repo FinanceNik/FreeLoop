@@ -31,6 +31,8 @@ Eine Regel nennt ein Werkzeug und optional einen Befehl oder Pfad und erlaubt od
 - Eine Verbotsregel hat auf jeder Ebene und in jedem Modus Vorrang, auch beim Umgehen.
 - Eine Erlaubnisregel hebt weder den Planmodus noch geschützte Pfade auf.
 - Eine Shell-Regel, die auf `*` endet, passt auf ein Präfix und gibt nur einen einzelnen einfachen Befehl frei, nie eine Kette, Pipe oder Umleitung.
+- Eine Shell-Verbotsregel passt auf die Wörter, die die Shell ausführt: `git "push"`, `git p\ush`, `noglob git push`, `eval "git push"` und `sh -c 'git push'` sind alle `git push`, und Flag-Buchstaben gelten als Menge: Eine Regel auf `rm -rf *` stoppt auch `rm -fr`, `rm -r -f`, `rm -rfv` und `rm --recursive --force`.
+- Ein Befehl, der sein Programm oder seinen Unterbefehl erst bei der Ausführung zusammensetzt, etwa `$a push` oder `git "$sub"`, lässt sich nicht mit einer Verbotsregel vergleichen. Solange eine Shell-Verbotsregel gelten könnte, gibt ihn keine Erlaubnisregel frei (es wird gefragt) und der Umgehungsmodus lehnt ihn ab.
 
 Auf einer Freigabekarte speichert **Immer erlauben** eine Regel für genau diesen Befehl oder Pfad. Kann eine Regel den Aufruf nicht abdecken, etwa bei einem Aufruf auf mehrere Dateien, wird er einmal erlaubt und nichts gespeichert. Die anderen Antworten sind **Einmal erlauben** und **Ablehnen**. Die Tastenkürzel sind ⌘↩, ⌘⇧↩ und ⌘⇧⌫.
 

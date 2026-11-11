@@ -155,6 +155,8 @@ func exactForm(cmd string) string { return strings.TrimSpace(blanks.ReplaceAllSt
 var wrappers = map[string]string{
 	"env": "uCS", "command": "", "exec": "a", "nohup": "", "time": "fo", "builtin": "", "nice": "n", "sudo": "ughpCrtUD", "doas": "uC",
 	"ionice": "cnp", "stdbuf": "ioe", "caffeinate": "tw", "xargs": "EILPdnsJR", "watch": "n", "timeout": "ks",
+	// zsh's precommand modifiers, which run what follows them.
+	"noglob": "", "nocorrect": "",
 	// A token optimizer's front end (HRN-019).
 	"rtk": "",
 }
@@ -178,13 +180,23 @@ func unquoted(word string) string {
 // simpleCommands returns the commands a line runs, unwrapped for matching
 // deny rules: each segment between operators, without enclosing
 // parentheses, braces or quotes, leading assignments, wrapper commands, a
-// leading backslash or a path on the program; sh -c strings are unwrapped
-// recursively.
+// leading backslash, a zsh =name or a path on the program, every word read as the
+// shell reads it, with its quotes and escapes removed; sh -c and eval strings are
+// unwrapped recursively.
 func simpleCommands(cmd string, depth int) []string {
-	var out []string
+	out, _ := commandsOf(cmd, depth)
+	return out
+}
+
+// commandsOf is simpleCommands and what it could not see: the programs whose
+// subcommand is built when the line runs ("git $sub"), and "" for a line whose program
+// is. A deny rule cannot be compared with those, so nothing that only a rule allows
+// may go ahead while one could apply (SEC-003).
+func commandsOf(cmd string, depth int) (out, unseen []string) {
 	if depth < 3 {
 		for _, m := range substitution.FindAllStringSubmatch(cmd, -1) {
-			out = append(out, simpleCommands(m[1]+m[2], depth+1)...)
+			inner, in := commandsOf(m[1]+m[2], depth+1)
+			out, unseen = append(out, inner...), append(unseen, in...)
 		}
 	}
 	for _, seg := range segments(cmd) {
@@ -231,17 +243,60 @@ func simpleCommands(cmd string, depth int) []string {
 		if len(fields) == 0 {
 			continue
 		}
-		fields[0] = filepath.Base(unquoted(fields[0]))
+		raw := slices.Clone(fields)
+		// What the words say once the shell has read them: 'push', "push" and pu""sh are
+		// push, and zsh's =git is the program git.
+		for i := range fields {
+			fields[i] = unquoted(fields[i])
+		}
+		fields[0] = filepath.Base(strings.TrimPrefix(fields[0], "="))
+		switch {
+		case strings.ContainsAny(raw[0], "$`") || (strings.ContainsAny(raw[0], "*?[") && raw[0] != "[" && raw[0] != "[["):
+			// A glob in the program word is expanded to the program that runs.
+			unseen = append(unseen, "")
+		case len(raw) > 1 && strings.ContainsAny(raw[1], "$`"):
+			unseen = append(unseen, fields[0])
+		}
 		simple := strings.Join(fields, " ")
 		out = append(out, simple)
 		if g := withoutGitOptions(fields); g != "" {
 			out = append(out, g)
 		}
 		if m := shellC.FindStringSubmatch(simple); m != nil && depth < 3 {
-			out = append(out, simpleCommands(strings.Trim(m[1], "'\""), depth+1)...)
+			inner, in := commandsOf(strings.Trim(m[1], "'\""), depth+1)
+			out, unseen = append(out, inner...), append(unseen, in...)
+		}
+		// eval runs its words as a line.
+		if fields[0] == "eval" && len(fields) > 1 && depth < 3 {
+			inner, in := commandsOf(strings.Join(raw[1:], " "), depth+1)
+			out, unseen = append(out, inner...), append(unseen, in...)
+			inner, in = commandsOf(strings.Join(fields[1:], " "), depth+1)
+			out, unseen = append(out, inner...), append(unseen, in...)
 		}
 	}
-	return out
+	return out, unseen
+}
+
+// hidesFromDenyRules reports a line that builds its program, or the subcommand of a
+// program a shell deny rule names, when it runs: "$a push", "git $sub".
+func hidesFromDenyRules(rules []Rule, cmd string) bool {
+	if cmd == "" || !strings.ContainsAny(cmd, "$`*?[") {
+		return false
+	}
+	var programs []string
+	for _, r := range rules {
+		if ok, _ := path.Match(r.Tool, "shell"); r.Effect == Deny && r.Command != "" && ok {
+			f := strings.Fields(unquoted(r.Command))
+			if len(f) > 0 {
+				programs = append(programs, f[0])
+			}
+		}
+	}
+	if len(programs) == 0 {
+		return false
+	}
+	_, unseen := commandsOf(cmd, 0)
+	return slices.ContainsFunc(unseen, func(p string) bool { return p == "" || slices.Contains(programs, p) })
 }
 
 // gitValueOptions are git's global options that take a separate value.
@@ -296,6 +351,67 @@ func commandMatches(pattern, cmd string) bool {
 	return cmd == pattern
 }
 
+// rmLong are the long names of rm's options that a rule on rm's short ones must see.
+var rmLong = map[string]string{"--recursive": "-r", "--force": "-f"}
+
+// flagForm reads the flag words after the program as sets of letters: -rf, -fr, -r -f
+// and rm's --recursive --force are one word, "-fr". A word of the form -x… with
+// single-letter flags is merged with the cluster before it, and its letters sorted.
+func flagForm(words []string) []string {
+	var out []string
+	var set string
+	flush := func() {
+		if set != "" {
+			l := strings.Split(set, "")
+			slices.Sort(l)
+			out = append(out, "-"+strings.Join(slices.Compact(l), ""))
+			set = ""
+		}
+	}
+	for i, w := range words {
+		if i > 0 && words[0] == "rm" {
+			if short, ok := rmLong[w]; ok {
+				w = short
+			}
+		}
+		if i > 0 && len(w) > 1 && w[0] == '-' && w[1] != '-' && strings.Trim(w[1:], "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") == "" {
+			if words[0] == "rm" {
+				w = strings.ReplaceAll(w, "R", "r") // rm's -R is its -r
+			}
+			set += w[1:]
+			continue
+		}
+		flush()
+		out = append(out, w)
+	}
+	flush()
+	return out
+}
+
+// flagSetMatches is commandMatches with flag letters read as sets (flagForm), where the
+// command may carry more letters than the rule names: `rm -rf *` stops rm -rfv x.
+func flagSetMatches(pattern, cmd string) bool {
+	prefix, star := strings.CutSuffix(normalize(pattern), " *")
+	pw, cw := flagForm(strings.Fields(prefix)), flagForm(strings.Fields(cmd))
+	if len(cw) < len(pw) || (!star && len(cw) != len(pw)) {
+		return false
+	}
+	for i, w := range pw {
+		if isCluster(w) && isCluster(cw[i]) && i > 0 {
+			if strings.Trim(w[1:], cw[i][1:]) != "" {
+				return false
+			}
+			continue
+		}
+		if cw[i] != w {
+			return false
+		}
+	}
+	return true
+}
+
+func isCluster(w string) bool { return len(w) > 1 && w[0] == '-' && w[1] != '-' }
+
 // matchCommand: a deny rule matches if any command the line runs matches.
 // An exact or literal allow rule matches exactly the line it names, as
 // written, operators included, since that is what the user approved; a
@@ -305,7 +421,9 @@ func (r Rule) matchCommand(cmd string) bool {
 		if r.Literal {
 			return exactForm(cmd) == exactForm(r.Command)
 		}
-		return slices.ContainsFunc(simpleCommands(cmd, 0), func(s string) bool { return commandMatches(r.Command, s) })
+		return slices.ContainsFunc(simpleCommands(cmd, 0), func(s string) bool {
+			return commandMatches(r.Command, s) || flagSetMatches(r.Command, s)
+		})
 	}
 	pattern := normalize(r.Command)
 	if r.Literal || (pattern != "*" && !strings.HasSuffix(pattern, " *")) {
