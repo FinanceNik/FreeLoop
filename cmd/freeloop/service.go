@@ -542,6 +542,44 @@ func (s *EngineService) RemoveOptimizer(ctx context.Context, id string) error {
 	return s.eng.RemoveOptimizer(ctx, id)
 }
 
+// VoiceStatus says whether voice input can run and how its download goes (GUI-050).
+func (s *EngineService) VoiceStatus() engine.VoiceStatus {
+	return s.eng.VoiceStatus()
+}
+
+// InstallVoice starts downloading the speech model, and whisper.cpp where the app
+// does not bundle it, on the user's asking.
+func (s *EngineService) InstallVoice() error {
+	return s.eng.InstallVoice()
+}
+
+// CancelVoiceInstall stops that download.
+func (s *EngineService) CancelVoiceInstall() {
+	s.eng.CancelVoiceInstall()
+}
+
+// RemoveVoice deletes what voice input downloaded.
+func (s *EngineService) RemoveVoice() error {
+	return s.eng.RemoveVoice()
+}
+
+// StartDictation starts the speech program for a recording that starts now; window
+// is the language the window is in.
+func (s *EngineService) StartDictation(window string) (string, error) {
+	return s.eng.StartDictation(window)
+}
+
+// FinishDictation turns a dictation's recording, a 16 kHz mono WAV in base64, into
+// text.
+func (s *EngineService) FinishDictation(ctx context.Context, id, wav string) (string, error) {
+	return s.eng.FinishDictation(ctx, id, wav)
+}
+
+// CancelDictation throws a dictation away.
+func (s *EngineService) CancelDictation(id string) {
+	s.eng.CancelDictation(id)
+}
+
 // TypeOptimizerInstall types a token optimizer's install command into a new
 // terminal in the session, for the user to run (HRN-019).
 func (s *EngineService) TypeOptimizerInstall(ctx context.Context, sessionID, id string) (engine.TerminalInfo, error) {

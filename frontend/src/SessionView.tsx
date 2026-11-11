@@ -52,6 +52,8 @@ import { Markdown } from "./Markdown.tsx";
 import SessionPanel, { showTool, type Tab as PanelTab } from "./SessionPanel.tsx";
 import { REVIEW_PLAN_EVENT } from "./PlanReview.tsx";
 import { usePaletteActions } from "./Palette.tsx";
+import DictateButton from "./Dictation.tsx";
+import { insertDictation } from "./voice.ts";
 import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
 import { drawOnce, HOLD_PLACE, holdsPlace, READER_PAUSE, readerScrolling, scrollsByKey, scrollsUpByKey, settledPlace } from "./scrollPlace.ts";
@@ -523,6 +525,20 @@ export default function SessionView({ session, events, focus, prices, initialDra
     requestAnimationFrame(() => {
       input.current?.focus();
       input.current?.setSelectionRange(text.length, text.length);
+    });
+  };
+  // dictated puts what voice input heard at the caret, in place of a selection
+  // (GUI-050). The box has the caret even when the click on the mic took the focus.
+  const dictated = (said: string) => {
+    const el = input.current;
+    const value = el?.value ?? draft;
+    const { text, caret } = insertDictation(value, el?.selectionStart ?? value.length, el?.selectionEnd ?? value.length, said);
+    setDraft(text);
+    recall.current = null;
+    setCaretAtEnd(caret === text.length);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(caret, caret);
     });
   };
   const stepRecall = (index: number) => {
@@ -1806,6 +1822,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   e.target.value = "";
                 }}
               />
+              <DictateButton active={active} onText={dictated} onAnnounce={setAnnouncement} />
               <button
                 className="ghost composer-attach"
                 aria-label={t("composer.attach")}

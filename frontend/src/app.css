@@ -6518,3 +6518,45 @@ table.hooks .hook-command {
 .model-sees-tools li {
   margin-bottom: 6px;
 }
+
+/* Voice input (GUI-050): the mic in the message box turns red while it records,
+   with a level meter and the time beside it. */
+.composer-dictate.recording {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.dictation-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  font-size: calc(12rem / 14);
+}
+
+.dictation-meter {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--danger);
+  transform-origin: left center;
+  transition: transform 80ms linear;
+}
+
+.dictation-clock {
+  color: var(--danger);
+}
+
+.dictation-note {
+  max-width: 28em;
+  font-size: calc(12rem / 14);
+  color: var(--muted, inherit);
+}
+
+.voice-progress {
+  width: 100%;
+}
+
+.voice-try {
+  align-items: center;
+}

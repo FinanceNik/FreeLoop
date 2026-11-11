@@ -57,8 +57,14 @@ tasks:
       # install); before the signature, which covers the file.
       - '{{if .COMMIT}}plutil -replace FreeloopCommit -string "{{.COMMIT}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Info.plist"{{else}}true{{end}}'
       - test "$(lipo -archs "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/{{.APP_NAME}}")" = "{{.MACOS_ARCH}}"
+      # The speech program voice input runs (GUI-050, `make whisper-cli`), beside the app.
+      - test -x "{{.BIN_DIR}}/whisper-cli" || { echo "bin/whisper-cli is missing; make package builds it (make whisper-cli)"; exit 1; }
+      - cp "{{.BIN_DIR}}/whisper-cli" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/"
       - xattr -cr "{{.BIN_DIR}}/{{.APP_NAME}}.app"
-      - codesign --force --deep --options runtime --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+      # The helper first, without the app's entitlements: only the app may open the
+      # microphone (build/darwin/entitlements.plist).
+      - codesign --force --options runtime --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/whisper-cli"
+      - codesign --force --options runtime --entitlements build/darwin/entitlements.plist --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - codesign --verify --deep --strict "{{.BIN_DIR}}/{{.APP_NAME}}.app"
 
   run:

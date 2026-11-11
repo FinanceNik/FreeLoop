@@ -17,7 +17,9 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(dirname "$HERE")
 PORT=${APPCHECK_PORT:-34391}
 DATA=$(mktemp -d "${TMPDIR:-/tmp}/freeloop-appcheck.XXXXXX")
-export FREELOOP_HOME="$DATA/home" FREELOOP_DEV=1 FREELOOP_DEV_SECRETS=memory WAILS_SERVER_PORT="$PORT"
+# FREELOOP_DEV_VOICE: dictation answers with a fixed text and records a tone, as the
+# check has no microphone and no speech model (GUI-050).
+export FREELOOP_HOME="$DATA/home" FREELOOP_DEV=1 FREELOOP_DEV_SECRETS=memory FREELOOP_DEV_VOICE=scripted WAILS_SERVER_PORT="$PORT"
 mkdir -p "$FREELOOP_HOME"
 # English whatever the computer prefers, so the checks read the words they look for.
 cat > "$FREELOOP_HOME/config.yaml" <<'YAML'

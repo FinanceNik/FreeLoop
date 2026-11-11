@@ -66,9 +66,9 @@ type lockFile struct {
 	} `json:"packages"`
 }
 
-// Build returns the bill for a binary's build information and the frontend's
-// package-lock.json.
-func Build(app App, info *debug.BuildInfo, packageLock []byte) ([]byte, error) {
+// Build returns the bill for a binary's build information, the frontend's
+// package-lock.json and the native programs the app carries.
+func Build(app App, info *debug.BuildInfo, packageLock []byte, natives ...Native) ([]byte, error) {
 	if info == nil {
 		return nil, errors.New("no build information")
 	}
@@ -110,6 +110,9 @@ func Build(app App, info *debug.BuildInfo, packageLock []byte) ([]byte, error) {
 		}
 		c.Hashes = []hash{h}
 		out = append(out, c)
+	}
+	for _, n := range natives {
+		out = append(out, n.component())
 	}
 	slices.SortFunc(out, func(a, b component) int {
 		return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.Version, b.Version))

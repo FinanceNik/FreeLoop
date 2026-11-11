@@ -25,6 +25,8 @@
             <string>14.0.0</string>
         <key>NSHighResolutionCapable</key>
             <string>true</string>
+        <key>NSMicrophoneUsageDescription</key>
+            <string>Freeloop listens only while you dictate into the message box. The speech is turned into text on this computer.</string>
         <key>NSHumanReadableCopyright</key>
             <string>Copyright 2026 The Freeloop Authors. Apache-2.0.</string>
         <key>NSAppTransportSecurity</key>

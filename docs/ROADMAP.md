@@ -599,6 +599,13 @@ The message box completes from what is already known, with no model call (GUI-04
 
 1. **Earlier prompts, the session's files first, command hints (GUI-049).** *Built 2026-11-11.* `frontend/src/history.ts` keeps the prompts sent from the box, redacted, up to 500, removed with their session; the box shows the grey rest of this project's newest prompt that starts like the text (one line, caret at the end), → or End takes it, ⌥→ (Ctrl+→) a word, Escape hides it; ↑ recalls, prefix-filtered after one line of text, between lines first; **Search earlier prompts** is in the palette. `@` ranks the files the session's tools and messages named, then git's changes, ahead of the rest (`sessionFiles` in `mentions.ts`), and an ACP agent's `input.hint` shows in the picker and after `/name `. *Not done:* no shortcut for the search (Alt and a letter opens menus outside a Mac, Ctrl+R reloads), no hint field in profile files yet, and prompts from before this version are not in the history, since a transcript cannot tell which were typed.
 
+
+## Voice input (planned 2026-11-11, at the user's request)
+
+Dictating into the message box with a speech model run on this computer, good in German and Dutch (GUI-050, OQ-047). A second review against whisper.cpp's source replaced a resident `whisper-server` with one `whisper-cli` per dictation, reading the recording from stdin, which opens no port and keeps nothing running.
+
+1. **Voice input (GUI-050).** *Built 2026-11-11.* `internal/engine/voice.go` (status, the pinned download, dictations), `internal/config/voice.go` (pins), `environment.SaveDownload` and `InstallFolder`, `frontend/src/voice.ts` (downsampling, the silence cut, the WAV, insertion), `Dictation.tsx` (the button, recording through `public/capture-worklet.js`, the download dialog), `Voice.tsx` (Settings → Voice input), `scripts/whisper-cli.sh` (the Mac's program). *Not done:* Linux's web view is untried (OQ-048), and Windows only from the code: both wait for a machine to try them on.
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.

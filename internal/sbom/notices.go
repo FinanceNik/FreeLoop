@@ -17,6 +17,10 @@ import (
 type NoticeSources struct {
 	// ModCache is `go env GOMODCACHE`, NodeModules the frontend's node_modules.
 	ModCache, NodeModules fs.FS
+	// Natives are the native programs the app carries, with their license files
+	// read from NativeRoot.
+	Natives    []Native
+	NativeRoot fs.FS
 }
 
 // Notices writes the license and notice files of everything in a build, the same
@@ -67,7 +71,7 @@ func Notices(app App, info *debug.BuildInfo, packageLock []byte, src NoticeSourc
 			missing = append(missing, p.name+" "+p.version)
 			continue
 		}
-		fmt.Fprintf(&out, "\n\n================================================================\n%s %s\n================================================================\n", p.name, p.version)
+		heading(&out, p.name, p.version)
 		for _, f := range files {
 			b, err := fs.ReadFile(p.root, path.Join(p.dir, f))
 			if err != nil {
@@ -78,7 +82,19 @@ func Notices(app App, info *debug.BuildInfo, packageLock []byte, src NoticeSourc
 			out.WriteString("\n")
 		}
 	}
+	for _, n := range src.Natives {
+		text, err := n.noticeOf(src.NativeRoot)
+		if err != nil {
+			return nil, nil, err
+		}
+		heading(&out, n.Name, n.Version)
+		out.WriteString("\n" + text + "\n")
+	}
 	return out.Bytes(), missing, nil
+}
+
+func heading(out *bytes.Buffer, name, version string) {
+	fmt.Fprintf(out, "\n\n================================================================\n%s %s\n================================================================\n", name, version)
 }
 
 // licenseFiles names a package's license and notice files, in order.

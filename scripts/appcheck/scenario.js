@@ -544,6 +544,37 @@ await step("earlier prompts come back, and @ puts the session's files first", as
   await sleep(100);
 });
 
+await step("voice input downloads its model once, then dictates at the caret", async () => {
+  const pane = activePane();
+  const box = pane.querySelector(".composer textarea");
+  const mic = () => pane.querySelector("button.composer-dictate");
+  const shortcut = () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "D", metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+  type(box, "Fix it");
+  box.setSelectionRange(3, 3);
+  await until("the mic", mic, 3000);
+  check("the mic is named, with its shortcut", mic().getAttribute("aria-label") === "Dictate" && mic().getAttribute("aria-keyshortcuts") === "Meta+Shift+D" && mic().title.includes("D"), mic().title);
+  mic().click();
+  const named = '[role=dialog][aria-label="Download the speech model"]';
+  const dialog = await until("the download dialog", () => document.querySelector(named), 3000);
+  check("before downloading, it says what and from where", /Hugging Face/.test(dialog.textContent) && /\d MB/.test(dialog.textContent) && /MIT/.test(dialog.textContent), dialog.textContent);
+  withText("button", "Download", dialog).click();
+  await until("the dialog to close once the model is there", () => !document.querySelector(named), 6000);
+  mic().click();
+  await until("recording", () => mic().getAttribute("aria-pressed") === "true", 3000);
+  await sleep(1200);
+  check("while it records, the time shows and the mic stops it", /^0:0[1-2]$/.test(pane.querySelector(".dictation-clock")?.textContent ?? "") && mic().getAttribute("aria-label") === "Stop and insert the words", pane.querySelector(".dictation-clock")?.textContent);
+  mic().click();
+  await until("the words", () => /Dictated/.test(box.value), 5000);
+  check("the words go in at the caret, with spaces, and nothing is sent", /^Fix Dictated \d\.\d seconds\. it$/.test(box.value), box.value);
+  shortcut();
+  await until("recording from the shortcut", () => mic().getAttribute("aria-pressed") === "true", 3000);
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  await sleep(300);
+  check("Escape throws the recording away", mic().getAttribute("aria-pressed") === "false" && /^Fix Dictated \d\.\d seconds\. it$/.test(box.value), box.value);
+  type(box, "");
+  await sleep(100);
+});
+
 await step("the view follows a running agent", async () => {
   // Enough to overflow, and cards collapse along the way.
   await turn("Check alpha");

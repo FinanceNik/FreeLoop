@@ -34,6 +34,7 @@ Type `/` first to search only the open session's commands: modes, the commands i
 | Open Needs attention | ⌘0 |
 | Larger text | ⌘= |
 | Smaller text | ⌘- |
+| Dictate into the message box | ⌘⇧D |
 | Move to the pane on the left, right, above, below | {{⌃⇧← ⌃⇧→ ⌃⇧↑ ⌃⇧↓|Alt+Shift+← Alt+Shift+→ Alt+Shift+↑ Alt+Shift+↓}} |
 | Approval: allow once | Y |
 | Approval: allow always | A |

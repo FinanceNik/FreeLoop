@@ -49,6 +49,8 @@ export const SHORTCUTS: ShortcutInfo[] = [
   { id: "attention", label: "shortcut.attention", key: "Meta+0" },
   { id: "textLarger", label: "shortcut.textLarger", key: "Meta+=" },
   { id: "textSmaller", label: "shortcut.textSmaller", key: "Meta+-" },
+  // Starts and stops voice input in the message box (GUI-050).
+  { id: "dictate", label: "shortcut.dictate", key: "Meta+Shift+D" },
   // ⌃⇧ and an arrow on a Mac. Elsewhere Ctrl+Shift and an arrow selects a word in a
   // text field, so Alt+Shift and an arrow.
   pane("paneLeft", "shortcut.paneLeft", "ArrowLeft"),

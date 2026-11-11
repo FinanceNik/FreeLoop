@@ -96,6 +96,8 @@ type Config struct {
 	// workflow uses, by their IDs (WFL-013).
 	ModelSets         []ModelSet        `yaml:"modelSets,omitempty" json:"modelSets"`
 	WorkflowModelSets map[string]string `yaml:"workflowModelSets,omitempty" json:"workflowModelSets"`
+	// Voice is voice input in the message box (GUI-050).
+	Voice Voice `yaml:"voice,omitempty" json:"voice"`
 }
 
 // MCPSettings are settings for MCP as a whole; the servers are in mcp.yaml.

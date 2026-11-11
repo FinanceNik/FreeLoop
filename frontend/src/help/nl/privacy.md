@@ -27,10 +27,11 @@ Wat een aanbieder met de gegevens doet, regelen zijn eigen voorwaarden. Een mode
 
 ## Andere verbindingen
 
-Naast wat wordt ingesteld of gevraagd, zoals aanbieders, MCP-servers, agents, SSH-machines, het git-adres van een vaardigheid of een pagina die de agent met goedkeuring ophaalt, maakt Freeloop verbinding met drie dingen, en alleen als ze worden gebruikt:
+Naast wat wordt ingesteld of gevraagd, zoals aanbieders, MCP-servers, agents, SSH-machines, het git-adres van een vaardigheid of een pagina die de agent met goedkeuring ophaalt, maakt Freeloop verbinding met vier dingen, en alleen als ze worden gebruikt:
 
 - De updatecontrole staat uit tot **Eén keer per dag op een nieuwere versie controleren** wordt aangezet in Instellingen → Netwerk. Ze vraagt GitHub naar de nieuwste uitgave en stuurt niets over deze kopie van de app. **Nu controleren** voert haar één keer uit.
 - De download van een token-optimalisator gebeurt alleen bij een klik op de installatieknop ervan, zoals **RTK installeren**, in Instellingen → Token-optimalisatoren. Hij komt van GitHub, in een vastgezette versie, en wordt gecontroleerd tegen een bekende checksum.
+- Het spraakmodel van spraakinvoer wordt alleen gedownload bij een klik op **Downloaden**, in het berichtvak of in Instellingen → Spraakinvoer. Het komt van Hugging Face, en op Windows en Linux whisper.cpp van GitHub, elk vastgezet en gecontroleerd tegen een bekende checksum. Wat je zegt wordt op deze computer tekst en wordt nergens heen gestuurd.
 - Het MCP-register wordt alleen benaderd als het wordt doorzocht via **Een register doorzoeken…** op de pagina MCP-servers. Het krijgt de zoekwoorden op het gekozen registeradres.
 
 Als in Instellingen → Netwerk een zoekadres is ingesteld voor het zoeken op het web door de ingebouwde agent, gaan zoekopdrachten daarheen. Elke zoekopdracht vraagt eerst toestemming, tenzij een toestaanregel of de omzeilmodus hem doorlaat.

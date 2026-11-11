@@ -34,6 +34,7 @@ Met `/` vooraan wordt alleen in de opdrachten van de open sessie gezocht: modi, 
 | ‘Vraagt aandacht’ openen | ⌘0 |
 | Grotere tekst | ⌘= |
 | Kleinere tekst | ⌘- |
+| Dicteren in het berichtvak | ⌘⇧D |
 | Naar het paneel links, rechts, erboven, eronder | {{⌃⇧← ⌃⇧→ ⌃⇧↑ ⌃⇧↓|Alt+Shift+← Alt+Shift+→ Alt+Shift+↑ Alt+Shift+↓}} |
 | Goedkeuring: eenmaal toestaan | Y |
 | Goedkeuring: altijd toestaan | A |

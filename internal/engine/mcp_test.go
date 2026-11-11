@@ -31,6 +31,9 @@ func TestMain(m *testing.M) {
 	if acptest.Serve() {
 		return
 	}
+	if os.Getenv("FREELOOP_FAKE_WHISPER") != "" {
+		os.Exit(fakeWhisper())
+	}
 	if os.Getenv("FREELOOP_OAUTH_TEST_SERVER") != "" {
 		newFakeOAuth(nil)
 		select {}

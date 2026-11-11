@@ -60,12 +60,15 @@ contents:
 depends:
   - libgtk-3-0
   - libwebkit2gtk-4.1-0
-# The sandbox (bubblewrap), a Secret Service for API keys, and git for the
-# project's state and the Diff tab.
+# The sandbox (bubblewrap), a Secret Service for API keys, git for the
+# project's state and the Diff tab, and for voice input (GUI-050) GStreamer's
+# microphone source for the web view and the OpenMP library whisper.cpp loads.
 recommends:
   - bubblewrap
   - gnome-keyring | kwalletmanager
   - git
+  - gstreamer1.0-pipewire | gstreamer1.0-pulseaudio
+  - libgomp1
 
 scripts:
   postinstall: ./build/linux/nfpm/scripts/postinstall.sh

@@ -69,6 +69,9 @@ type Options struct {
 	Home string
 	// Dev offers the scripted demo provider.
 	Dev bool
+	// ScriptedVoice answers dictation with a fixed text instead of running the
+	// speech model, and fakes its download, for `make check-app` (GUI-050).
+	ScriptedVoice bool
 	// WatchInterval is how often the config files are checked for hand
 	// edits (SET-001). Zero means one second; negative turns watching off.
 	WatchInterval time.Duration
@@ -169,6 +172,8 @@ type Engine struct {
 
 	// bg tracks background work (git refreshes) that Close waits for.
 	bg sync.WaitGroup
+	// voice is voice input's download and dictations (GUI-050).
+	voice *voice
 	// notifying is the notice goroutine, which ends when the bus closes.
 	notifying sync.WaitGroup
 
@@ -241,6 +246,7 @@ func Open(opts Options) (*Engine, error) {
 		}
 	}
 	e := &Engine{
+		voice:         newVoice(opts.ScriptedVoice),
 		gh:            "gh",
 		hookProgram:   opts.HookProgram,
 		sshConfig:     opts.SSHConfig,
@@ -372,6 +378,7 @@ func (e *Engine) Close() error {
 	e.closeTerminals("")
 	e.terms.pumps.Wait()
 	e.mcp.StopAll()
+	e.voice.close()
 	close(e.quit)
 	e.watching.Wait()
 	e.bg.Wait()

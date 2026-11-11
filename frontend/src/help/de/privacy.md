@@ -27,10 +27,11 @@ Was ein Anbieter mit den Daten macht, regeln seine eigenen Bedingungen. Ein Mode
 
 ## Weitere Verbindungen
 
-Neben dem, was eingerichtet oder angefordert wird, etwa Anbieter, MCP-Server, Agenten, SSH-Rechner, die Git-Adresse einer Fähigkeit oder eine Seite, die der Agent mit Freigabe abruft, verbindet sich Freeloop mit drei Dingen, und nur, wenn sie genutzt werden:
+Neben dem, was eingerichtet oder angefordert wird, etwa Anbieter, MCP-Server, Agenten, SSH-Rechner, die Git-Adresse einer Fähigkeit oder eine Seite, die der Agent mit Freigabe abruft, verbindet sich Freeloop mit vier Dingen, und nur, wenn sie genutzt werden:
 
 - Die Suche nach Updates ist aus, bis **Einmal täglich nach einer neueren Version suchen** unter Einstellungen → Netzwerk eingeschaltet wird. Die Suche fragt GitHub nach der neuesten Veröffentlichung und sendet nichts über diese Kopie der App. **Jetzt prüfen** führt sie einmal aus.
 - Der Download eines Token-Optimierers geschieht nur beim Klick auf seine Schaltfläche zum Installieren, etwa **RTK installieren**, unter Einstellungen → Token-Optimierer. Er kommt von GitHub, in einer festgelegten Version, und wird gegen eine bekannte Prüfsumme geprüft.
+- Das Sprachmodell der Spracheingabe wird nur beim Klick auf **Herunterladen** geladen, im Nachrichtenfeld oder unter Einstellungen → Spracheingabe. Es kommt von Hugging Face, unter Windows und Linux whisper.cpp von GitHub, jeweils festgelegt und gegen eine bekannte Prüfsumme geprüft. Das Gesagte wird auf diesem Computer zu Text und nirgendwohin gesendet.
 - Das MCP-Verzeichnis wird nur kontaktiert, wenn es über **Ein Verzeichnis durchsuchen…** auf der Seite MCP-Server durchsucht wird. Es erhält die Suchbegriffe an der gewählten Verzeichnisadresse.
 
 Ist unter Einstellungen → Netzwerk eine Suchadresse für die Websuche des eingebauten Agenten eingetragen, gehen die Suchanfragen dorthin. Jede Suche fragt vorher nach, sofern keine Erlaubnisregel und nicht der Umgehungsmodus sie durchlässt.

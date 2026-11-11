@@ -64,6 +64,13 @@ func init() {
 	application.RegisterEvent[[]string](FilesDroppedEventName)
 }
 
+// windowPermissions lets the page open the microphone for dictation (GUI-050)
+// without the web view asking on top of the system, which still asks once. The
+// page is the app's own, and model output never reaches it as markup.
+var windowPermissions = map[application.PermissionType]application.Permission{
+	application.PermissionMicrophone: application.PermissionAllow,
+}
+
 func main() {
 	// Inside a sandbox, before anything that needs the data folder (OQ-037).
 	if len(os.Args) > 1 && os.Args[1] == environment.SandboxBridgeArg {
@@ -104,7 +111,7 @@ func main() {
 	}
 	eng, err := engine.Open(engine.Options{
 		HookProgram: hookProgram,
-		DataDir:     dataDir, Secrets: secretStore(), Confiner: thisPlatform.Confiner, ProcessStarted: thisPlatform.ProcessStarted, GroupMembers: thisPlatform.GroupMembers, EditorArgv: thisPlatform.EditorArgv, PDFArgv: thisPlatform.PDFArgv, FolderArgv: thisPlatform.FolderArgv, SystemInfo: thisPlatform.SystemInfo, Dev: devEnv("FREELOOP_DEV") == "1",
+		DataDir:     dataDir, Secrets: secretStore(), Confiner: thisPlatform.Confiner, ProcessStarted: thisPlatform.ProcessStarted, GroupMembers: thisPlatform.GroupMembers, EditorArgv: thisPlatform.EditorArgv, PDFArgv: thisPlatform.PDFArgv, FolderArgv: thisPlatform.FolderArgv, SystemInfo: thisPlatform.SystemInfo, Dev: devEnv("FREELOOP_DEV") == "1", ScriptedVoice: devEnv("FREELOOP_DEV_VOICE") == "scripted",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: devEnv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).
@@ -202,6 +209,7 @@ func main() {
 		URL:       "/",
 		// Only elements marked data-file-drop-target accept drops.
 		EnableFileDrop: true,
+		Permissions:    windowPermissions,
 	})
 	win.OnWindowEvent(events.Common.WindowFilesDropped, func(ev *application.WindowEvent) {
 		app.Event.Emit(FilesDroppedEventName, ev.Context().DroppedFiles())

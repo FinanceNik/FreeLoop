@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 const lock = `{"packages": {
@@ -91,5 +92,44 @@ func TestBadInput(t *testing.T) {
 	none := `{"packages": {"node_modules/x": {"version": "1.0.0"}}}`
 	if _, err := Build(App{}, info(), []byte(none)); err == nil {
 		t.Error("a package with no hash was accepted")
+	}
+}
+
+// GUI-050: the speech program a Mac app carries is in the bill, by its source's
+// checksum, and its license is in the notices.
+func TestNativeProgram(t *testing.T) {
+	root := fstest.MapFS{
+		"bin/whisper-cli.json":    {Data: []byte(`{"name":"whisper.cpp","version":"1.9.5","purl":"pkg:github/ggml-org/whisper.cpp@v1.9.5","sha256":"` + strings.Repeat("ab", 32) + `","license":"MIT","includes":"miniaudio (MIT-0)","licenseFile":"whisper-cli.LICENSE"}`)},
+		"bin/whisper-cli.LICENSE": {Data: []byte("MIT License\n\nCopyright (c) 2023-2026 The ggml authors\n")},
+		"bin/broken.json":         {Data: []byte(`{"name":"x","licenseFile":"../../etc/passwd"}`)},
+	}
+	n, err := ReadNative(root, "bin/whisper-cli.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadNative(root, "bin/broken.json"); err == nil {
+		t.Error("an incomplete description was read")
+	}
+	b, err := Build(App{Name: "Freeloop", Version: "0.0.1"}, info(), []byte(lock), n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got bom
+	json.Unmarshal(b, &got)
+	found := false
+	for _, c := range got.Components {
+		if c.Name == "whisper.cpp" {
+			found = c.PURL == "pkg:github/ggml-org/whisper.cpp@v1.9.5" && len(c.Hashes) == 1 && c.Hashes[0].Alg == "SHA-256"
+		}
+	}
+	if !found {
+		t.Errorf("whisper.cpp is not in the bill: %s", b)
+	}
+	text, _, err := Notices(App{Name: "Freeloop", Version: "0.0.1"}, &debug.BuildInfo{}, []byte(`{"packages":{}}`), NoticeSources{Natives: []Native{n}, NativeRoot: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(text, []byte("whisper.cpp 1.9.5")) || !bytes.Contains(text, []byte("The ggml authors")) || !bytes.Contains(text, []byte("It includes miniaudio (MIT-0).")) {
+		t.Errorf("notices:\n%s", text)
 	}
 }

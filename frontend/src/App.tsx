@@ -37,6 +37,7 @@ import { OPEN_SESSION_DOM_EVENT } from "./ToolView.tsx";
 import Board from "./Board.tsx";
 import Schedules from "./Schedules.tsx";
 import Optimizers from "./Optimizers.tsx";
+import Voice from "./Voice.tsx";
 import Workflows from "./Workflows.tsx";
 import AFKDialog from "./AFKDialog.tsx";
 import AFKRunView from "./AFKRunView.tsx";
@@ -96,6 +97,7 @@ type Screen =
   | { kind: "queue" }
   | { kind: "schedules" }
   | { kind: "optimizers" }
+  | { kind: "voice" }
   | { kind: "workflows" }
   | { kind: "usage" }
   | { kind: "compare"; tag: string }
@@ -1010,6 +1012,7 @@ export default function App() {
       page("skills", t("settings.page.skills"), () => setScreen({ kind: "skills" })),
       page("mcp", t("settings.page.mcp"), () => setScreen({ kind: "mcp" }), { keywords: "tools" }),
       page("optimizers", t("settings.page.optimizers"), () => setScreen({ kind: "optimizers" }), { keywords: "rtk tokens compress output default" }),
+      page("voice", t("settings.page.voice"), () => setScreen({ kind: "voice" }), { keywords: "dictate dictation speech microphone whisper talk" }),
       page("workflows", t("settings.page.workflows"), () => setScreen({ kind: "workflows" }), { keywords: "workflow prd slice afk backlog skills" }),
       page("schedules", t("settings.page.schedules"), () => setScreen({ kind: "schedules" }), { keywords: "scheduled recurring cron timer nightly" }),
       page("environments", t("settings.page.environments"), () => setScreen({ kind: "environments" }), { keywords: "docker secrets variables" }),
@@ -1801,6 +1804,7 @@ export default function App() {
               )}
               {screen.kind === "environments" && <Environments environments={environments} onChanged={refreshEnvironments} onError={report} />}
               {screen.kind === "optimizers" && config && <Optimizers config={config} version={configVersion} onSaved={setConfig} onError={report} />}
+              {screen.kind === "voice" && config && <Voice config={config} onSaved={setConfig} onError={report} />}
               {screen.kind === "workflows" && config && <Workflows config={config} version={configVersion} onSaved={setConfig} onError={report} />}
               {screen.kind === "schedules" && (
                 <Schedules projects={projects} profiles={profiles} providers={providers} harnesses={harnesses} defaults={config?.defaults} onOpenSession={(id) => openSession(id)} onError={report} />

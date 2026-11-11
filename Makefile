@@ -14,7 +14,7 @@ VERSION := $(shell sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml)
 # shasum on macOS; sha256sum where Perl's shasum is missing (Git for Windows). Same output.
 SHA256 := $(shell command -v shasum >/dev/null 2>&1 && echo "shasum -a 256" || echo sha256sum)
 
-.PHONY: help tools dev build package install check-app dmg notices windows windows-exe windows-tools linux-package linux-package-arch release release-mac release-windows release-linux release-sums verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
+.PHONY: help tools dev build package whisper-cli install check-app dmg notices windows windows-exe windows-tools linux-package linux-package-arch release release-mac release-windows release-linux release-sums verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-19s %s\n", $$1, $$2}'
@@ -28,8 +28,12 @@ dev: ## Run the app in development mode with live reload (offers the scripted de
 build: ## Build a production binary into bin/
 	$(WAILS) build
 
-package: ## Build bin/Freeloop.app (ad-hoc signed; SHIPPED=1 for the build users get)
+package: whisper-cli ## Build bin/Freeloop.app (ad-hoc signed; SHIPPED=1 for the build users get)
 	$(WAILS) package $(if $(filter 1,$(SHIPPED)),SHIPPED=1)
+
+# The speech program voice input runs (GUI-050), which the Mac app carries; needs cmake.
+whisper-cli: ## Build bin/whisper-cli from whisper.cpp's pinned source (macOS)
+	scripts/whisper-cli.sh
 
 install: ## Quit Freeloop, rebuild it from this commit and leave that as the only copy (INSTALL_DIR=~/Applications, OPEN=1)
 	scripts/install.sh
@@ -51,10 +55,13 @@ dmg: package notices ## Build bin/Freeloop.dmg from bin/Freeloop.app
 	rm -rf bin/dmg
 	@echo "bin/Freeloop.dmg"
 
+# The speech program a Mac app carries (GUI-050), in its bill and notices.
+NATIVE = $(if $(wildcard bin/Freeloop.app/Contents/MacOS/whisper-cli),-native bin/whisper-cli.json)
+
 # The licenses of everything in the app, which its licenses say must go with it.
 notices: ## Write bin/THIRD_PARTY_NOTICES.txt from what bin/Freeloop.app was built with
 	go run ./cmd/freeloop-sbom -notices -modcache "$$(go env GOMODCACHE)" -node-modules frontend/node_modules \
-		-binary bin/Freeloop.app/Contents/MacOS/Freeloop \
+		-binary bin/Freeloop.app/Contents/MacOS/Freeloop $(NATIVE) \
 		-version $(VERSION) < frontend/package-lock.json > bin/THIRD_PARTY_NOTICES.txt
 
 # Windows (NFR-XPLAT-003) is pure Go (WebView2 through go-webview2), so it
@@ -119,7 +126,7 @@ release: ## Build bin/release for RELEASE_PLATFORMS (default: what this host can
 release-mac: dmg
 	mkdir -p bin/release
 	cp bin/Freeloop.dmg bin/THIRD_PARTY_NOTICES.txt bin/release/
-	go run ./cmd/freeloop-sbom -binary bin/Freeloop.app/Contents/MacOS/Freeloop \
+	go run ./cmd/freeloop-sbom -binary bin/Freeloop.app/Contents/MacOS/Freeloop $(NATIVE) \
 		-version $(VERSION) < frontend/package-lock.json > bin/release/Freeloop.sbom.cdx.json
 	{ echo "commit $$(git rev-parse HEAD)"; go version; echo "node $$(node --version)"; clang --version | head -1; \
 		echo "macOS SDK $$(xcrun --show-sdk-version)"; echo "wails3 $(WAILS_VERSION)"; } > bin/release/BUILDINFO.txt

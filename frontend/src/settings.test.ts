@@ -8,7 +8,7 @@ setPlatform("MacIntel");
 
 test("every configuration page is listed once", () => {
   const ids = SETTINGS_GROUPS.flatMap((g) => g.pages.map((p) => p.id));
-  assert.deepEqual([...ids].sort(), ["appearance", "costs", "data", "environments", "keyboard", "mcp", "network", "optimizers", "permissions", "profiles", "providers", "rules", "schedules", "sessions", "skills", "workflows"]);
+  assert.deepEqual([...ids].sort(), ["appearance", "costs", "data", "environments", "keyboard", "mcp", "network", "optimizers", "permissions", "profiles", "providers", "rules", "schedules", "sessions", "skills", "voice", "workflows"]);
   assert.equal(new Set(ids).size, ids.length);
 });
 

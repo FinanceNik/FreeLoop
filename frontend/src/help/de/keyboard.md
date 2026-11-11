@@ -34,6 +34,7 @@ Mit `/` am Anfang wird nur in den Befehlen der offenen Sitzung gesucht: Modi, di
 | „Braucht Aufmerksamkeit“ öffnen | ⌘0 |
 | Größerer Text | ⌘= |
 | Kleinerer Text | ⌘- |
+| In das Nachrichtenfeld diktieren | ⌘⇧D |
 | Zum Bereich links, rechts, darüber, darunter | {{⌃⇧← ⌃⇧→ ⌃⇧↑ ⌃⇧↓|Alt+Shift+← Alt+Shift+→ Alt+Shift+↑ Alt+Shift+↓}} |
 | Freigabe: einmal erlauben | Y |
 | Freigabe: immer erlauben | A |

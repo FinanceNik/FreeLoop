@@ -178,13 +178,14 @@ func (d *desktop) openWindow(sid, title string) error {
 		return nil
 	}
 	d.app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:      name,
-		Title:     title,
-		Width:     900,
-		Height:    760,
-		MinWidth:  520,
-		MinHeight: 400,
-		URL:       "/?session=" + url.QueryEscape(sid),
+		Name:        name,
+		Title:       title,
+		Width:       900,
+		Height:      760,
+		MinWidth:    520,
+		MinHeight:   400,
+		URL:         "/?session=" + url.QueryEscape(sid),
+		Permissions: windowPermissions,
 	}).Show()
 	return nil
 }
