@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { matchCommands, modeCommands, modeCommand, modeHint, modeName, MODES, slashQuery } from "./commands.ts";
+import { commandHint, matchCommands, modeCommands, modeCommand, modeHint, modeName, MODES, slashQuery } from "./commands.ts";
 import { setLanguage } from "./i18n.ts";
 
 test("slashQuery is the first word after a leading slash", () => {
@@ -54,4 +54,15 @@ test("the app's modes and mode commands follow the language", () => {
   // A mode the app does not know, such as an agent's own, is shown as given.
   assert.equal(modeName("yolo"), "yolo");
   assert.equal(modeHint("yolo"), undefined);
+});
+
+// GUI-049: where a command's input goes, the box says what it expects.
+test("a command's hint shows once its name and a space are typed, until more is", () => {
+  const list = [{ name: "review", description: "", hint: "pull request number" }, { name: "plain", description: "" }];
+  assert.equal(commandHint("/review ", list), "pull request number");
+  assert.equal(commandHint("/review", list), "");
+  assert.equal(commandHint("/review 12", list), "");
+  assert.equal(commandHint("/plain ", list), "");
+  assert.equal(commandHint("/other ", list), "");
+  assert.equal(commandHint("say /review ", list), "");
 });

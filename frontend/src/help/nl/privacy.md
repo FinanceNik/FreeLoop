@@ -13,6 +13,8 @@ Freeloop bewaart zijn gegevens in één map, {{`~/Library/Application Support/fr
 
 API-keys, MCP-aanmeldtokens en geheimen van omgevingen staan in {{de macOS-sleutelhanger|Windows Referentiebeheer|de sleutelbos van het systeem}}. Bestanden zoals `providers.yaml` bevatten alleen verwijzingen ernaar, en sleutels van aanbieders komen nooit in de omgeving van een opdracht terecht.
 
+De prompts die vanuit het berichtvak worden verzonden, worden bewaard om ze aan te vullen en terug te halen (Toetsenbord en opdrachtenpalet), in de eigen opslag van het app-venster in plaats van in deze map: tot 500, met geheimen die Freeloop kent eerst vervangen. Een prompt verdwijnt als zijn sessie wordt verwijderd. De lijst begint leeg met de versie die hem invoerde, en in de servermodus houdt elke browser een eigen lijst bij.
+
 > Transcripten zijn platte tekst, alleen beschermd door bestandsrechten. Freeloop vervangt geheimen die het kent voordat het een transcript opslaat. Niet op te vangen zijn een wachtwoord dat in een bericht wordt getypt, een sleutel die een opdracht van elders afdrukt, of een geheim korter dan acht tekens.
 
 ## Wat naar een aanbieder gaat

@@ -592,6 +592,12 @@ The user has a Copilot plan from a client and wants to use it in Freeloop.
    - **Repository hooks.** The run found that over ACP it trusts the folder it is started in and runs `.github/hooks/*.json` there: a `preToolUse` hook approved a write that was never asked about. It has no setting to stop that, so in an untrusted project the session does not start while the project has hooks for it (`HarnessPreset.RepoHooks`), and the trust prompt lists them.
    - **Not shown:** usage, since it reports none over ACP; effort, which it takes only when started.
 
+## Completion without a model (planned 2026-11-11, at the user's request)
+
+The message box completes from what is already known, with no model call (GUI-049). A second review against the code changed the first design: history is recorded where the user presses send, not in the engine, which could not tell a typed prompt from a stage's or a schedule's, and it lives with the drafts in the window's storage, so the engine, the events and the harnesses do not change.
+
+1. **Earlier prompts, the session's files first, command hints (GUI-049).** *Built 2026-11-11.* `frontend/src/history.ts` keeps the prompts sent from the box, redacted, up to 500, removed with their session; the box shows the grey rest of this project's newest prompt that starts like the text (one line, caret at the end), → or End takes it, ⌥→ (Ctrl+→) a word, Escape hides it; ↑ recalls, prefix-filtered after one line of text, between lines first; **Search earlier prompts** is in the palette. `@` ranks the files the session's tools and messages named, then git's changes, ahead of the rest (`sessionFiles` in `mentions.ts`), and an ACP agent's `input.hint` shows in the picker and after `/name `. *Not done:* no shortcut for the search (Alt and a letter opens menus outside a Mac, Ctrl+R reloads), no hint field in profile files yet, and prompts from before this version are not in the history, since a transcript cannot tell which were typed.
+
 ## Later (unscheduled)
 
 PRV-013, HRN-015, SKL-009, EXT-006, EXT-007, a native Windows sandbox (OQ-044), general work agents beyond coding, team features.

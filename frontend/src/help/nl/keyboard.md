@@ -69,3 +69,22 @@ De letters Y, A en N werken alleen als geen tekstveld de focus heeft. Deze werke
 In Vraagt aandacht kiezen J en K of de pijltoetsen welk verzoek de toetsen beantwoorden.
 
 > Een nieuwe kaart negeert deze toetsen even nadat hij verschijnt, zodat een toets die voor iets anders werd ingedrukt geen aanroep kan goedkeuren die nog niet is gelezen.
+
+## Eerdere prompts en aanvullen in het berichtvak
+
+Het berichtvak vult aan met wat eerder is getypt. Daarvoor gaat niets naar een model.
+
+| Toetsen | Doet |
+| --- | --- |
+| → of End | De grijze rest overnemen van een eerdere prompt die net zo begint als de tekst |
+| {{⌥→|Ctrl+→}} | Het volgende woord ervan overnemen |
+| Escape | De grijze tekst verbergen tot er verder wordt getypt |
+| ↑ in een leeg vak | De eerdere prompts van dit project terughalen, de nieuwste eerst |
+| ↑ na één regel tekst | Alleen de prompts terughalen die ermee beginnen |
+| ↓ | Weer vooruit; na de nieuwste komt terug wat in het vak stond |
+
+- De grijze tekst verschijnt alleen bij één regel met de cursor aan het eind, en alleen uit de prompts van dit project.
+- In een prompt van meerdere regels gaan ↑ en ↓ eerst tussen de regels.
+- **Eerdere prompts doorzoeken** in het palet toont de prompts met elk woord uit het vak, die van dit project eerst. Enter zet er een in het vak zonder hem te verzenden.
+- Na `@` staan de bestanden die de sessie heeft gelezen, bewerkt of genoemd bovenaan, daarna die welke git als gewijzigd meldt.
+- Na de naam van een opdracht en een spatie toont het vak wat de opdracht verwacht, als de agent dat aangeeft.

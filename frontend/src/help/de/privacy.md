@@ -13,6 +13,8 @@ Freeloop legt seine Daten in einem Ordner ab, {{`~/Library/Application Support/f
 
 API-Keys, MCP-Anmelde-Token und Geheimnisse der Umgebungen liegen {{im macOS-Schlüsselbund|in der Windows-Anmeldeinformationsverwaltung|im Schlüsselbund des Systems}}. Dateien wie `providers.yaml` enthalten nur Verweise darauf, und Schlüssel der Anbieter landen nie in der Umgebung eines Befehls.
 
+Die aus dem Nachrichtenfeld gesendeten Prompts werden zum Vervollständigen und Zurückholen aufbewahrt (Tastatur und Befehlspalette), im eigenen Speicher des App-Fensters statt in diesem Ordner: bis zu 500, ihm bekannte Geheimnisse vorher ersetzt. Ein Prompt verschwindet, wenn seine Sitzung gelöscht wird. Die Liste beginnt leer mit der Version, die sie eingeführt hat, und im Servermodus führt jeder Browser seine eigene.
+
 > Transkripte sind reiner Text, nur durch Dateiberechtigungen geschützt. Freeloop ersetzt ihm bekannte Geheimnisse, bevor es ein Transkript speichert. Nicht erkennen kann es ein in eine Nachricht getipptes Passwort, einen Schlüssel, den ein Befehl von anderswo ausgibt, oder ein Geheimnis mit weniger als acht Zeichen.
 
 ## Was an einen Anbieter geht

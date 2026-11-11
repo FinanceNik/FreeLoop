@@ -65,6 +65,7 @@ import { clearSelectionOnClick } from "./selection.ts";
 import Splitter from "./Splitter.tsx";
 import { clampSidebar, rememberSidebar, setPanelWidth, SIDEBAR_MIN, sidebarMax, storedPanel, storedSidebar } from "./sizes.ts";
 import { forgetDraft, pruneDrafts } from "./drafts.ts";
+import { pruneHistory } from "./history.ts";
 import SourceMark from "./SourceMark.tsx";
 import GitMark from "./GitMark.tsx";
 import { contextHigh, contextLabel, contextTitle } from "./contextMeter.ts";
@@ -635,7 +636,11 @@ export default function App() {
   }, [work]);
   useEffect(() => {
     if (sessionsLoaded) setWork((w) => ws.forget(w, (sid) => sessions.some((x) => x.id === sid)));
-    if (sessionsLoaded) pruneDrafts((sid) => sessions.some((x) => x.id === sid));
+    if (sessionsLoaded) {
+      pruneDrafts((sid) => sessions.some((x) => x.id === sid));
+      // What was typed in a deleted session goes with it (GUI-049).
+      pruneHistory((sid) => sessions.some((x) => x.id === sid));
+    }
   }, [sessions, sessionsLoaded]);
 
   // A pane chosen with the keyboard takes the keyboard: its composer.

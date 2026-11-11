@@ -1,11 +1,12 @@
 import { Browser, Clipboard } from "@wailsio/runtime";
-import { inFileManager, primaryKey, showInFiles } from "./platform.ts";
+import { inFileManager, isMac, primaryKey, showInFiles } from "./platform.ts";
 import { nameStart } from "./paths.ts";
 import { ask as askUser } from "./ask.ts";
 import { isDemo } from "./demo.ts";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { insertMention, mentionAt, rankFiles, type Mention } from "./mentions.ts";
-import { matchCommands, modeCommands, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent } from "react";
+import { insertMention, mentionAt, rankFiles, sessionFiles, type Mention } from "./mentions.ts";
+import { commandHint, matchCommands, modeCommands, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
+import { historyEntries, nextWord, onFirstLine, onLastLine, recallList, rememberPrompt, rightToLeft, searchPrompts, subscribeHistory, suggestion, type PastPrompt } from "./history.ts";
 import { stageCall, stageCommands, withoutStageSkills } from "./workflows.ts";
 import WorkflowStrip from "./WorkflowStrip.tsx";
 import {
@@ -117,6 +118,13 @@ const STOP_LABEL: Partial<Record<string, PlainKey>> = {
 function stopLabel(reason: string): string {
   const key = STOP_LABEL[reason];
   return key ? t(key) : reason;
+}
+
+// firstLine is a prompt's first line, marked when more follows.
+function firstLine(text: string, rest = false): string {
+  const at = text.indexOf("\n");
+  if (at < 0) return text;
+  return `${text.slice(0, at)}${rest && at === 0 ? "" : " "}…`;
 }
 
 // The right panel's open state is a per-viewer convenience; storage may be
@@ -340,7 +348,24 @@ export default function SessionView({ session, events, focus, prices, initialDra
     setMention(m);
     if (m) loadFiles();
   };
-  const matches = useMemo(() => (mention && files ? rankFiles(mention.query, files) : []), [mention, files]);
+  // The session's own files come first (GUI-049): those its tools and messages named,
+  // and git's changes, read when the box gets focus so the list does not reorder
+  // under the entry picked.
+  const workRoot = session.worktree || session.projectRoot;
+  const [changed, setChanged] = useState<{ path: string; status: string }[]>([]);
+  const changedAt = useRef(0);
+  const loadChanged = () => {
+    if (Date.now() - changedAt.current < 10_000) return;
+    changedAt.current = Date.now();
+    EngineService.Changes(session.id)
+      .then((c) => setChanged(c.blocked ? [] : (c.files ?? [])))
+      .catch(() => setChanged([]));
+  };
+  const matches = useMemo(() => {
+    if (!mention || !files) return [];
+    const own = sessionFiles(files, view.touched, workRoot, changed);
+    return rankFiles(mention.query, own.files, 8, own.boost);
+  }, [mention, files, view.touched, workRoot, changed]);
 
   // Slash commands (GUI-004): the app's mode commands and the ones the
   // session's harness advertises.
@@ -388,7 +413,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       ...modeCommands().filter((c) => modeAllowed(c.mode ?? "")),
       ...stageCommands(workflow),
       // The agent's own command for a stage's skill would duplicate the stage (WFL-008).
-      ...withoutStageSkills(view.commands, workflow).map((c) => ({ name: c.name, description: c.description })),
+      ...withoutStageSkills(view.commands, workflow).map((c) => ({ name: c.name, description: c.description, hint: c.input?.hint || undefined })),
       ...(mcp?.prompts ?? []).map((p) => ({
         name: p.command,
         description: p.description || p.title || t("session.promptFrom", { server: p.server }),
@@ -451,14 +476,72 @@ export default function SessionView({ session, events, focus, prices, initialDra
       .catch(onError);
   };
   const slashMatches = useMemo(() => (slash === null ? [] : matchCommands(slash, commands)), [slash, commands]);
+  // Earlier prompts (GUI-049): the grey rest of one the text starts, ↑ to recall them,
+  // and a search from the palette. Only this project's are suggested and recalled.
+  const pastPrompts = useSyncExternalStore(subscribeHistory, historyEntries);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyMatches = useMemo(() => (historyOpen ? searchPrompts(draft, pastPrompts, session.projectRoot) : []), [historyOpen, draft, pastPrompts, session.projectRoot]);
   // The focus stays in the message box while a picker is open, so the entry
   // that lights up is announced.
-  const pickerNames = slash !== null && slashMatches.length > 0 ? slashMatches.map((c) => c.name) : mention ? matches.map((f) => f.slice(nameStart(f))) : [];
+  const pickerNames = historyOpen
+    ? historyMatches.map((x) => firstLine(x.text))
+    : slash !== null && slashMatches.length > 0
+      ? slashMatches.map((c) => c.name)
+      : mention
+        ? matches.map((f) => f.slice(nameStart(f)))
+        : [];
   const pickerOptions = pickerNames.length;
   const pickedName = pickerNames[pick] ?? "";
   useEffect(() => {
     if (pickedName) setAnnouncement(pickLabel(pickedName, pick, pickerOptions));
   }, [pickedName, pick, pickerOptions]);
+  // The grey text follows one line, with the caret at its end, in the box being
+  // typed in, and gives way to any picker and to an input method composing.
+  const [typing, setTyping] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const [caretAtEnd, setCaretAtEnd] = useState(true);
+  const [oneLine, setOneLine] = useState(true);
+  // Escape hides a suggestion until the text changes.
+  const [hiddenFor, setHiddenFor] = useState<string | null>(null);
+  // What ↑ steps through, and what was in the box before.
+  const recall = useRef<{ list: string[]; index: number; before: string } | null>(null);
+  const recalling = !!recall.current && recall.current.list[recall.current.index] === draft;
+  const ghostRoom = typing && active && caretAtEnd && oneLine && !composing && !historyOpen && pickerOptions === 0 && !mention && !rightToLeft(draft);
+  const hint = ghostRoom ? commandHint(draft, commands) : "";
+  const rest = ghostRoom && !hint && !recalling && hiddenFor !== draft ? suggestion(draft, pastPrompts, session.projectRoot) : "";
+  // Said once as one appears, not again at every key that keeps it.
+  const ghostSaid = useRef(false);
+  useEffect(() => {
+    if (rest && !ghostSaid.current) setAnnouncement(t("composer.suggestion", { text: draft + rest }));
+    ghostSaid.current = !!rest;
+  }, [rest]);
+  const syncCaret = (el: HTMLTextAreaElement) => setCaretAtEnd(el.selectionStart === el.selectionEnd && el.selectionEnd === el.value.length);
+  // putText replaces the text and puts the caret at its end.
+  const putText = (text: string) => {
+    setDraft(text);
+    setCaretAtEnd(true);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(text.length, text.length);
+    });
+  };
+  const stepRecall = (index: number) => {
+    const r = recall.current;
+    if (!r) return;
+    r.index = index;
+    putText(r.list[index]);
+    setAnnouncement(t("composer.history.recalled", { n: index + 1, total: r.list.length }));
+  };
+  const openHistory = () => {
+    setHistoryOpen(true);
+    setPick(0);
+    requestAnimationFrame(() => input.current?.focus());
+  };
+  const chooseHistory = (x: PastPrompt) => {
+    setHistoryOpen(false);
+    recall.current = null;
+    putText(x.text);
+  };
   const syncSlash = (el: HTMLTextAreaElement) => {
     const q = el.selectionStart === el.selectionEnd ? slashQuery(el.value, el.selectionStart) : null;
     if (q === null) setSlashDismissed(false);
@@ -477,12 +560,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       else runPrompt(c, {});
       return;
     }
-    const text = `/${c.name} `;
-    setDraft(text);
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(text.length, text.length);
-    });
+    putText(`/${c.name} `);
   };
   const choose = (path: string) => {
     const el = input.current;
@@ -651,6 +729,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
       setMode(m);
       return;
     }
+    // What was typed, before it branches into a stage, a prompt or a message (GUI-049).
+    rememberPrompt({ text, sessionId: session.id, projectRoot: session.projectRoot }, EngineService.RedactText);
+    recall.current = null;
     // A workflow's stage goes to the engine, with what follows its command.
     const call = stageCall(text, workflow);
     // An AFK run starts from its dialog, which shows what it will do first.
@@ -702,6 +783,25 @@ export default function SessionView({ session, events, focus, prices, initialDra
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;
+    if (historyOpen) {
+      const n = historyMatches.length;
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n > 0) {
+        e.preventDefault();
+        setPick((p) => (p + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
+        return;
+      }
+      // Enter puts the prompt in the box, to read or change before it is sent.
+      if (e.key === "Enter" && !primaryKey(e) && !e.shiftKey) {
+        e.preventDefault();
+        if (n > 0) chooseHistory(historyMatches[Math.min(pick, n - 1)]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setHistoryOpen(false);
+        return;
+      }
+    }
     if (slash !== null && slashMatches.length > 0) {
       const n = slashMatches.length;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -739,6 +839,60 @@ export default function SessionView({ session, events, focus, prices, initialDra
       setDismissed(mention.start);
       setMention(null);
       return;
+    }
+    const plain = !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    // The grey rest of an earlier prompt: → or End takes it all, ⌥→ (Ctrl+→ outside
+    // a Mac) its next word, Escape hides it.
+    if (rest) {
+      if (plain && (e.key === "ArrowRight" || e.key === "End")) {
+        e.preventDefault();
+        putText(draft + rest);
+        return;
+      }
+      if (e.key === "ArrowRight" && !e.shiftKey && !e.metaKey && (isMac ? e.altKey && !e.ctrlKey : e.ctrlKey && !e.altKey)) {
+        e.preventDefault();
+        putText(draft + nextWord(rest));
+        return;
+      }
+      if (plain && e.key === "Escape") {
+        e.preventDefault();
+        setHiddenFor(draft);
+        return;
+      }
+    }
+    // ↑ in an empty box, or after one line of text, recalls this project's earlier
+    // prompts (those starting with the text); ↑ and ↓ move between a recalled prompt's
+    // lines before they move between prompts, and ↓ past the newest gives back what
+    // was there.
+    if (plain && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      const el = e.currentTarget;
+      const r = recall.current;
+      if (r && r.list[r.index] === draft) {
+        if (e.key === "ArrowUp" && onFirstLine(draft, el.selectionStart)) {
+          if (r.index + 1 < r.list.length) {
+            e.preventDefault();
+            stepRecall(r.index + 1);
+          }
+          return;
+        }
+        if (e.key === "ArrowDown" && onLastLine(draft, el.selectionEnd)) {
+          e.preventDefault();
+          if (r.index > 0) stepRecall(r.index - 1);
+          else {
+            recall.current = null;
+            putText(r.before);
+          }
+          return;
+        }
+      } else if (e.key === "ArrowUp" && el.selectionStart === el.selectionEnd && (draft === "" || (!draft.includes("\n") && el.selectionEnd === draft.length))) {
+        const list = recallList(pastPrompts, session.projectRoot, draft);
+        if (list.length > 0) {
+          e.preventDefault();
+          recall.current = { list, index: 0, before: draft };
+          stepRecall(0);
+          return;
+        }
+      }
     }
     // ⌘↩ (Ctrl+Enter outside a Mac) answers a waiting approval (see shortcuts.ts)
     // instead of sending.
@@ -809,6 +963,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
     if (!el) return;
     el.style.height = "auto";
     if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight}px`;
+    // Whether it is one line high, for the grey suggestion, which follows one line only.
+    const cs = getComputedStyle(el);
+    const line = parseFloat(cs.lineHeight) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    setOneLine(!draft.includes("\n") && (Number.isNaN(line) || el.scrollHeight <= line + 2));
   }, [draft, active, panelOpen]);
 
   // The folders a command's leading `cd` adds nothing for (quietCommand).
@@ -922,6 +1080,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       { keywords: "bug issue log crash", detail: t("session.palette.reportDetail") },
     ),
     act("panel", t(panelOpen ? "session.palette.hidePanel" : "session.palette.showPanel"), togglePanel, { keywords: "right sidebar" }),
+    act("history", t("composer.history.search"), openHistory, { keywords: "earlier previous prompts messages history recall" }),
     ...(onClosePane ? [act("close-pane", t("session.closePane"), onClosePane, { keywords: "workspace split" })] : []),
     act("approvals", t("session.palette.approvals"), () => showPanel("approvals"), { keywords: "panel decided" }),
     act("diff", t("session.palette.changes"), () => showPanel("diff"), { keywords: "diff git commit stage panel" }),
@@ -1450,7 +1609,28 @@ export default function SessionView({ session, events, focus, prices, initialDra
               ))}
             </ul>
           )}
-          {slash !== null && slashMatches.length > 0 && (
+          {historyOpen && (
+            <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label={t("composer.history.title")}>
+              {historyMatches.length === 0 && <li className="muted">{t("composer.history.none")}</li>}
+              {historyMatches.map((x, i) => (
+                <li
+                  key={`${x.projectRoot} ${x.text}`}
+                  id={`composer-option-${i}`}
+                  role="option"
+                  aria-selected={i === pick}
+                  className={i === pick ? "picked" : ""}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    chooseHistory(x);
+                  }}
+                  onMouseEnter={() => setPick(i)}
+                >
+                  <span>{firstLine(x.text)}</span> <span className="muted">{x.projectRoot.slice(nameStart(x.projectRoot))}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!historyOpen && slash !== null && slashMatches.length > 0 && (
             <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label={t("composer.commands")}>
               {slashMatches.map((c, i) => (
                 <li
@@ -1465,7 +1645,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
                   }}
                   onMouseEnter={() => setPick(i)}
                 >
-                  <span>/{c.name}</span>{" "}
+                  <span>/{c.name}</span>
+                  {c.hint && <span className="muted command-hint"> {c.hint}</span>}{" "}
                   <span className="muted">
                     {c.mode ? t("session.modeLabel", { mode: c.description }) : c.prompt ? t("composer.mcpPrompt", { description: c.description }) : c.description}
                   </span>
@@ -1473,7 +1654,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
               ))}
             </ul>
           )}
-          {mention && (
+          {!historyOpen && mention && (
             <ul className="mention-picker" id={`composer-options-${session.id}`} role="listbox" aria-label={t("composer.fileList")}>
               {files === null && <li className="muted">{t("composer.listing")}</li>}
               {files !== null && matches.length === 0 && <li className="muted">{t("composer.noFiles")}</li>}
@@ -1496,10 +1677,19 @@ export default function SessionView({ session, events, focus, prices, initialDra
             </ul>
           )}
           <div className="composer-box">
+            <div className="composer-input">
+            {/* Behind the text: the grey rest of an earlier prompt it starts, or what a
+                command expects (GUI-049). The text is drawn again, unseen, to place it. */}
+            {(rest || hint) && (
+              <div className="composer-ghost" aria-hidden="true">
+                <span className="composer-ghost-typed">{draft}</span>
+                <span className={hint ? "composer-ghost-hint" : undefined}>{hint || firstLine(rest, true)}</span>
+              </div>
+            )}
             <textarea
               ref={input}
               aria-label={t("composer.message")}
-              aria-autocomplete="list"
+              aria-autocomplete={rest ? "both" : "list"}
               aria-controls={pickerOptions > 0 ? `composer-options-${session.id}` : undefined}
               aria-activedescendant={pickerOptions > 0 ? `composer-option-${pick}` : undefined}
               onPaste={(e) => {
@@ -1513,6 +1703,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
               rows={1}
               onChange={(e) => {
                 setDraft(e.target.value);
+                recall.current = null;
+                syncCaret(e.target);
+                if (historyOpen) setPick(0);
                 if (dismissed !== null && !e.target.value.slice(dismissed).startsWith("@")) setDismissed(null);
                 syncMention(e.target);
                 syncSlash(e.target);
@@ -1520,13 +1713,24 @@ export default function SessionView({ session, events, focus, prices, initialDra
               onSelect={(e) => {
                 syncMention(e.currentTarget);
                 syncSlash(e.currentTarget);
+                syncCaret(e.currentTarget);
+              }}
+              onFocus={(e) => {
+                setTyping(true);
+                syncCaret(e.currentTarget);
+                loadChanged();
               }}
               onBlur={() => {
+                setTyping(false);
                 setMention(null);
                 setSlash(null);
+                setHistoryOpen(false);
               }}
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={() => setComposing(false)}
               onKeyDown={onKeyDown}
             />
+            </div>
             <div className="composer-actions">
               {/* Stop sits at the far end from Send, so a second click on Send
                   never stops the turn it started. */}

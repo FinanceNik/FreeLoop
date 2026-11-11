@@ -524,3 +524,26 @@ test("the app's own words in the conversation follow the language", () => {
   }
   assert.equal(HELD_BY.user, "You denied it");
 });
+
+// GUI-049: what the @ picker puts first, and what a command expects.
+test("the files a session touched, the most recent first", () => {
+  const e = (seq: number, type: string, data: unknown): TranscriptEvent => ({ v: 1, seq, ts: "2026-11-11T00:00:00Z", sid: "ses_1", type, data });
+  const view = buildView([
+    e(1, "user_message_chunk", { content: { type: "text", text: "look at @src/a.ts" } }),
+    e(2, "user_message_chunk", { content: { type: "resource_link", name: "src/a.ts", uri: "file:///p/src/a.ts" } }),
+    e(3, "tool_call", { toolCallId: "t1", tool: "read_file", locations: [{ path: "/p/src/b.ts" }] }),
+    e(4, "tool_call", { toolCallId: "t2", tool: "edit_file", locations: [] }),
+    e(5, "tool_call_update", { toolCallId: "t2", status: "completed", content: [{ type: "diff", path: "src/c.ts", newText: "x" }] }),
+    e(6, "tool_call_update", { toolCallId: "t1", locations: [{ path: "/p/src/a.ts" }] }),
+    e(7, "tool_call_update", { toolCallId: "unknown", locations: [{ path: "/p/ignored.ts" }] }),
+  ]);
+  assert.deepEqual(view.touched, ["/p/src/a.ts", "src/c.ts", "/p/src/b.ts", "src/a.ts"]);
+});
+
+test("a command keeps the hint its agent gives for its input", () => {
+  const view = buildView([
+    { v: 1, seq: 1, ts: "", sid: "ses_1", type: "available_commands_update", data: { availableCommands: [{ name: "review", description: "Review a PR", input: { hint: "pull request number" } }, { name: "plain", description: "" }] } },
+  ]);
+  assert.equal(view.commands[0].input?.hint, "pull request number");
+  assert.equal(view.commands[1].input, undefined);
+});

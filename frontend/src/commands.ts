@@ -15,6 +15,8 @@ export interface SlashCommand {
   prompt?: { server: string; name: string; arguments: PromptArgument[] };
   // Set for a stage of the session's workflow (WFL-002), which the engine runs.
   stage?: boolean;
+  // What the command expects after its name, as its agent describes it (GUI-049).
+  hint?: string;
 }
 
 export interface PromptArgument {
@@ -81,4 +83,12 @@ export function modeCommand(text: string): string | null {
   const typed = text.trim();
   if (!typed.startsWith("/") || /\s/.test(typed)) return null;
   return MODES.find((m) => m.command === typed.slice(1))?.id ?? null;
+}
+
+// commandHint is the hint of the command the text has just named, as `/name ` with
+// nothing after it yet, for the box to show where the input goes (GUI-049).
+export function commandHint(text: string, list: readonly SlashCommand[]): string {
+  const m = text.match(/^\/(\S+) $/);
+  if (!m) return "";
+  return list.find((c) => c.name === m[1])?.hint?.trim() ?? "";
 }

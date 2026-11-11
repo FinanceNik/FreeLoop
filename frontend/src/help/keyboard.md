@@ -69,3 +69,22 @@ The letters Y, A and N work only when no text field has focus. These work from a
 In Needs attention, J and K or the arrow keys choose which request the keys answer.
 
 > A new card ignores these keys for a moment after it appears, so a key you pressed for something else can't approve a call you haven't read.
+
+## Earlier prompts and completion in the message box
+
+The message box completes from what you typed before. Nothing is sent to a model for it.
+
+| Keys | Does |
+| --- | --- |
+| → or End | Take the grey rest of an earlier prompt that starts like your text |
+| {{⌥→|Ctrl+→}} | Take its next word |
+| Escape | Hide the grey text until you type on |
+| ↑ in an empty box | Bring back this project's earlier prompts, newest first |
+| ↑ after one line of text | Bring back only those that start with it |
+| ↓ | Go forward again; past the newest, what was in the box comes back |
+
+- The grey text shows only for a single line with the cursor at its end, and only from this project's prompts.
+- In a prompt of several lines, ↑ and ↓ first move between its lines.
+- **Search earlier prompts** in the palette lists the prompts holding every word in the box, this project's first. Enter puts one in the box without sending it.
+- After `@`, the files the session read, edited or mentioned come first, then those git reports changed.
+- After a command's name and a space, the box shows what the command expects, when its agent says.

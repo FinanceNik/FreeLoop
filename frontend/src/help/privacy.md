@@ -13,6 +13,8 @@ Freeloop keeps its data in one folder, {{`~/Library/Application Support/freeloop
 
 API keys, MCP sign-in tokens and environment secrets are in {{the macOS Keychain|Windows Credential Manager|the system keyring}}. Files such as `providers.yaml` hold only references to them, and provider keys are never placed in the environment of a command.
 
+The prompts you send from the message box are kept for completing and recalling them (Keyboard and the command palette), in the app window's own storage rather than in this folder: up to 500, with secrets Freeloop knows replaced first. A prompt goes when its session is deleted. The list starts empty with the version that added it, and in server mode each browser keeps its own.
+
 > Transcripts are plain text, protected only by file permissions. Freeloop replaces secrets it knows about before it saves a transcript. It cannot catch a password you type into a message, a key a command prints from somewhere else, or a secret shorter than eight characters.
 
 ## What goes to a provider

@@ -1463,8 +1463,47 @@ button.ghost[aria-pressed="true"] {
   border: 0;
   box-shadow: none;
   outline: none;
+}
+
+/* The text and the grey suggestion behind it (GUI-049) lie the same way, so the
+   suggestion starts where the text ends. */
+.composer textarea,
+.composer textarea:focus,
+.composer-ghost {
+  margin: 0;
   padding: 10px 14px 6px;
   line-height: 1.5;
+}
+
+.composer-input {
+  position: relative;
+}
+
+/* Over the suggestion, which shows through its transparent background. */
+.composer-input textarea {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.composer-ghost {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  color: var(--muted);
+}
+
+.composer-ghost-typed {
+  visibility: hidden;
+}
+
+.composer-ghost-hint,
+.command-hint {
+  font-style: italic;
 }
 
 .composer-actions {

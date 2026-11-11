@@ -191,6 +191,9 @@ export interface SessionView {
   running: boolean;
   // The slash commands the session's harness offers (GUI-004).
   commands: AvailableCommand[];
+  // The files the session's tools named and its messages mentioned, the most recent
+  // first, as written (GUI-049): absolute, or relative to the root.
+  touched: string[];
   // The latest model call's context and the model's window (HRN-013).
   context: { tokens: number; window: number } | null;
   // The worktree setup's latest status (SES-016), null when none ran.
@@ -251,6 +254,8 @@ export interface PlanEntry {
 export interface AvailableCommand {
   name: string;
   description: string;
+  // What the command expects after its name, as an ACP agent describes it (GUI-049).
+  input?: { hint?: string } | null;
 }
 
 type Data = Record<string, any>;
@@ -271,6 +276,17 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   let stuck: Stuck | null = null;
   let git: GitState | null = null;
   let commands: AvailableCommand[] = [];
+  // In the order last named; a Map keeps it.
+  const touched = new Map<string, true>();
+  const touch = (path: unknown) => {
+    if (typeof path !== "string" || !path) return;
+    touched.delete(path);
+    touched.set(path, true);
+  };
+  const touchTool = (d: Data) => {
+    if (Array.isArray(d.locations)) for (const l of d.locations) touch(l?.path);
+    if (Array.isArray(d.content)) for (const c of d.content) if (c?.type === "diff") touch(c.path);
+  };
   // The latest checkpoint not yet tied to a user message, and the ranges
   // of events a rewind undid.
   let checkpoint: number | null = null;
@@ -304,6 +320,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         const prev = last();
         if (d.content?.type === "resource_link") {
           if (prev?.kind === "user") items[items.length - 1] = { ...prev, rev, files: [...prev.files, d.content.name ?? d.content.uri] };
+          touch(d.content.name);
           break;
         }
         if (d.content?.type === "image") {
@@ -384,11 +401,13 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         };
         tools.set(d.toolCallId, item);
         items.push(item);
+        touchTool(d);
         break;
       }
       case "tool_call_update": {
         const item = tools.get(d.toolCallId);
         if (!item) break;
+        touchTool(d);
         // Agents send the command or path later, as a new title and input.
         const next = {
           ...item,
@@ -588,7 +607,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
     const tool = toolCallId ? tools.get(toolCallId) : undefined;
     return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || t("transcript.aRequest") };
   });
-  return { items, usage, calls, measured, modelContext, git, mode, status, running, commands, context, setup, plan, planThisTurn, settings, held, stuck };
+  return { items, usage, calls, measured, modelContext, git, mode, status, running, commands, touched: [...touched.keys()].reverse(), context, setup, plan, planThisTurn, settings, held, stuck };
 }
 
 function replaceTool(

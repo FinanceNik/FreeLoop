@@ -37,14 +37,14 @@ const step = async (name, fn) => {
 };
 // One turn of the demo, approving whatever it asks. Returns what the sidebar said while
 // a request waited.
-const turn = async (title, afterSend = () => {}) => {
+const turn = async (title, afterSend = () => {}, text = "go") => {
   const pane = activePane();
   // A turn's end, not the notices and mode or model changes shown the same way.
   const ended = () => all(".turn-stop", pane).length;
   const before = ended();
   const box = await until("the message box", () => pane.querySelector(".composer textarea"));
   box.focus();
-  type(box, "go");
+  type(box, text);
   await sleep(50);
   (await until("Send to be enabled", () => { const b = named(".composer-actions button.primary", "Send", pane); return b && !b.disabled && b; })).click();
   afterSend();

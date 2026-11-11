@@ -490,6 +490,60 @@ await step("a turn runs to its end, with approvals", async () => {
   check("a waiting session's row has a dot saying so", waitingDot === "Needs you", `it said "${waitingDot}"`);
 });
 
+// GUI-049: what was typed before comes back without a model: the grey rest of an
+// earlier prompt, ↑ in an empty box and a search from the palette; and @ puts the
+// file the session just wrote first.
+await step("earlier prompts come back, and @ puts the session's files first", async () => {
+  await turn("Check alpha", () => {}, "go and read the notes");
+  const pane = activePane();
+  const box = pane.querySelector(".composer textarea");
+  const key = (k, o = {}) => box.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...o }));
+  const kept = JSON.parse(localStorage.getItem("freeloop.history") ?? "[]");
+  check("a sent prompt is remembered", kept[0]?.text === "go and read the notes", JSON.stringify(kept[0]));
+  box.focus();
+  await sleep(50);
+  key("ArrowUp");
+  await sleep(150);
+  check("↑ in an empty box recalls it", box.value === "go and read the notes", `it reads "${box.value}"`);
+  key("ArrowDown");
+  await sleep(150);
+  check("↓ past the newest gives the empty box back", box.value === "", `it reads "${box.value}"`);
+  type(box, "go and");
+  const ghost = await until("the grey rest", () => pane.querySelector(".composer-ghost"), 3000);
+  check("the grey text is the rest of the earlier prompt", ghost.textContent === "go and read the notes", ghost.textContent);
+  check("it is hidden from screen readers, and the box says it completes inline", ghost.getAttribute("aria-hidden") === "true" && box.getAttribute("aria-autocomplete") === "both");
+  const typed = ghost.querySelector(".composer-ghost-typed").getBoundingClientRect();
+  const boxAt = box.getBoundingClientRect();
+  check("the grey text starts where the box's text does", Math.abs(typed.left - boxAt.left - parseFloat(getComputedStyle(box).paddingLeft)) < 1 && Math.abs(typed.top - boxAt.top - parseFloat(getComputedStyle(box).paddingTop)) < 3, `${typed.left - boxAt.left}, ${typed.top - boxAt.top}`);
+  key("Escape");
+  await sleep(100);
+  check("Escape hides it", !pane.querySelector(".composer-ghost") && box.value === "go and");
+  type(box, "go and ");
+  await until("the grey rest again", () => pane.querySelector(".composer-ghost"), 3000);
+  key("ArrowRight");
+  await sleep(150);
+  check("→ takes it", box.value === "go and read the notes", `it reads "${box.value}"`);
+  check("and the grey text goes", !pane.querySelector(".composer-ghost"));
+  type(box, "");
+  await sleep(100);
+  await openPalette("search earlier prompts");
+  (await until("the palette entry", () => withText(".palette-item", "Search earlier prompts"), 3000)).click();
+  const list = await until("the earlier prompts", () => pane.querySelector('.mention-picker[aria-label="Earlier prompts"]'), 3000);
+  check("the search lists it, with its project", !!withText("li", "go and read the notes", list) && list.querySelector("li .muted")?.textContent.length > 0);
+  check("the focus is in the box, for the arrows and Enter", document.activeElement === box);
+  key("Enter");
+  await sleep(150);
+  check("Enter puts it in the box, not sent", box.value === "go and read the notes" && !pane.querySelector('.mention-picker[aria-label="Earlier prompts"]'), `it reads "${box.value}"`);
+  type(box, "@");
+  box.setSelectionRange(1, 1);
+  box.dispatchEvent(new Event("select", { bubbles: true }));
+  const files = await until("the file list", () => { const l = pane.querySelector('.mention-picker[aria-label="Files"]'); return l?.querySelector("[role=option]") && l; }, 4000);
+  const first = files.querySelector("[role=option] .muted")?.textContent;
+  check("@ lists the file the session wrote first", first === "freeloop-demo.txt", first);
+  type(box, "");
+  await sleep(100);
+});
+
 await step("the view follows a running agent", async () => {
   // Enough to overflow, and cards collapse along the way.
   await turn("Check alpha");

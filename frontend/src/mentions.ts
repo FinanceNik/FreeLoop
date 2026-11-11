@@ -2,6 +2,8 @@
 // message mentions; this module finds the mention being typed and ranks the
 // project's files for the picker.
 
+import { relative } from "./paths.ts";
+
 export interface Mention {
   start: number; // index of the @
   query: string;
@@ -57,13 +59,46 @@ export function fuzzyScore(query: string, path: string): number | null {
   return score - path.length * 0.05;
 }
 
-// rankFiles returns the best limit matches for query.
-export function rankFiles(query: string, files: readonly string[], limit = 8): string[] {
+// rankFiles returns the best limit matches for query. A boost (GUI-049, from
+// sessionFiles) is added to a file's score, so the session's own files win a close
+// call but not a clearly better match; with less than two characters typed, the
+// boosted files come first, in the boost's order.
+export function rankFiles(query: string, files: readonly string[], limit = 8, boost?: ReadonlyMap<string, number>): string[] {
   const scored: { path: string; score: number }[] = [];
   for (const path of files) {
     const score = fuzzyScore(query, path);
-    if (score !== null) scored.push({ path, score });
+    if (score === null) continue;
+    const extra = boost?.get(path) ?? 0;
+    scored.push({ path, score: query.length < 2 && extra > 0 ? 1000 + extra : score + extra });
   }
   scored.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
   return scored.slice(0, limit).map((s) => s.path);
+}
+
+// The bonus for a file the session touched (the most recent a little more) and for
+// one git reports changed.
+export const TOUCHED_BOOST = 4;
+export const CHANGED_BOOST = 2;
+
+// sessionFiles is what the @ picker ranks (GUI-049): the project's files, plus files
+// git reports that the list does not have yet (one just created), and the boost for
+// the session's own. touched are paths the session's tools and messages named, the
+// most recent first, as written: absolute, or relative to the root. One counts only
+// if it is in the list or git's changes, which leaves out paths outside the project,
+// deleted files and other spellings.
+export function sessionFiles(
+  files: readonly string[],
+  touched: readonly string[],
+  root: string,
+  changed: readonly { path: string; status: string }[] = [],
+): { files: string[]; boost: Map<string, number> } {
+  const present = changed.filter((c) => c.status !== "deleted").map((c) => c.path);
+  const all = new Set(files);
+  const list = [...files, ...present.filter((p) => !all.has(p))];
+  present.forEach((p) => all.add(p));
+  const boost = new Map<string, number>();
+  for (const p of present) boost.set(p, CHANGED_BOOST);
+  const own = [...new Set(touched.map((p) => relative(p, root)).filter((p) => all.has(p)))];
+  own.forEach((p, i) => boost.set(p, TOUCHED_BOOST + (own.length - i) / (own.length + 1)));
+  return { files: list, boost };
 }

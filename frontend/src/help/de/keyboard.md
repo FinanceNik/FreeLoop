@@ -69,3 +69,22 @@ Die Buchstaben Y, A und N funktionieren nur, wenn kein Textfeld den Fokus hat. D
 In Braucht Aufmerksamkeit wählen J und K oder die Pfeiltasten, welche Anfrage die Tasten beantworten.
 
 > Eine neue Karte ignoriert diese Tasten kurz nach dem Erscheinen, sodass eine für etwas anderes gedrückte Taste keinen Aufruf freigeben kann, der noch nicht gelesen wurde.
+
+## Frühere Prompts und Vervollständigung im Nachrichtenfeld
+
+Das Nachrichtenfeld vervollständigt aus dem, was früher getippt wurde. Dafür geht nichts an ein Modell.
+
+| Tasten | Bewirkt |
+| --- | --- |
+| → oder Ende | Den grauen Rest eines früheren Prompts übernehmen, der so anfängt wie der Text |
+| {{⌥→|Ctrl+→}} | Sein nächstes Wort übernehmen |
+| Escape | Den grauen Text ausblenden, bis weitergetippt wird |
+| ↑ in einem leeren Feld | Die früheren Prompts dieses Projekts zurückholen, die neuesten zuerst |
+| ↑ nach einer Zeile Text | Nur die zurückholen, die mit ihr anfangen |
+| ↓ | Wieder vorwärts; nach dem neuesten kommt zurück, was im Feld stand |
+
+- Der graue Text erscheint nur bei einer einzelnen Zeile mit dem Cursor am Ende, und nur aus den Prompts dieses Projekts.
+- In einem Prompt mit mehreren Zeilen bewegen ↑ und ↓ zuerst zwischen dessen Zeilen.
+- **Frühere Prompts durchsuchen** in der Palette listet die Prompts, die jedes Wort im Feld enthalten, die dieses Projekts zuerst. Enter übernimmt einen ins Feld, ohne ihn zu senden.
+- Nach `@` stehen die Dateien zuerst, die die Sitzung gelesen, bearbeitet oder erwähnt hat, dann die, die git als geändert meldet.
+- Nach dem Namen eines Befehls und einem Leerzeichen zeigt das Feld, was der Befehl erwartet, wenn sein Agent es angibt.

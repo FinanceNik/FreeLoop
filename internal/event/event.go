@@ -369,6 +369,13 @@ type AvailableCommandsData struct {
 type AvailableCommand struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	// Input says what the command expects after its name, as in ACP (GUI-049).
+	Input *CommandInput `json:"input,omitempty"`
+}
+
+// CommandInput is a command's unstructured input: a hint shown where it goes.
+type CommandInput struct {
+	Hint string `json:"hint"`
 }
 
 // ErrorData is the payload of error.

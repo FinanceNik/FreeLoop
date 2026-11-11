@@ -627,6 +627,12 @@ export const en = {
   "composer.fileList": "Files",
   "composer.listing": "Listing files…",
   "composer.noFiles": "No matching files",
+  // Earlier prompts (GUI-049).
+  "composer.suggestion": "Suggestion: {text}. Right Arrow accepts it.",
+  "composer.history.recalled": "Earlier prompt {n} of {total}",
+  "composer.history.title": "Earlier prompts",
+  "composer.history.search": "Search earlier prompts",
+  "composer.history.none": "No earlier prompts found",
   // The workflow and token optimizer controls beside the mode; {name} is a workflow's or
   // an optimizer's, as given.
   "composer.workflow": "Workflow",
