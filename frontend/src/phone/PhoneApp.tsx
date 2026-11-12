@@ -321,6 +321,7 @@ function Settings({ onLanguage, onSignedOut }: { onLanguage: (l: Language) => vo
         </select>
       </label>
       <p className="phone-note">{t("phone.settings.about")}</p>
+      <p className="phone-note">{t("phone.settings.install")}</p>
       <button
         onClick={() =>
           api

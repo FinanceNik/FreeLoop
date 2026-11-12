@@ -90,7 +90,14 @@ func started(t *testing.T) (*engine.Engine, *Server, *phone) {
 	if _, err := e.SaveSettings(cfg); err != nil {
 		t.Fatal(err)
 	}
-	s := New(e, dir, fstest.MapFS{"index.html": {Data: []byte("<!doctype html><title>phone</title>")}})
+	s := New(e, dir, fstest.MapFS{
+		"index.html":           {Data: []byte("<!doctype html><title>phone</title>")},
+		"manifest.webmanifest": {Data: []byte("{}")},
+		"icon-192.png":         {Data: []byte("png")},
+		"icon-512.png":         {Data: []byte("png")},
+		"apple-touch-icon.png": {Data: []byte("png")},
+		"sw.js":                {Data: []byte("// worker")},
+	})
 	st := e.RemoteState()
 	if !st.On {
 		t.Fatalf("remote state: %+v", st)
@@ -372,5 +379,35 @@ func TestARemovedPhonesStreamEnds(t *testing.T) {
 	case <-ended:
 	case <-time.After(3 * time.Second):
 		t.Fatal("the removed phone's stream stayed open")
+	}
+}
+
+// GUI-052 (issue 026): the manifest, the icons and the worker come with their own
+// content types, the worker's scope is /phone/, and the policy lets it run.
+func TestPhoneAppInstallFilesAreServed(t *testing.T) {
+	_, _, p := started(t)
+	for path, want := range map[string]string{
+		"/phone/manifest.webmanifest": "application/manifest+json",
+		"/phone/icon-192.png":         "image/png",
+		"/phone/icon-512.png":         "image/png",
+		"/phone/apple-touch-icon.png": "image/png",
+		"/phone/sw.js":                "text/javascript",
+	} {
+		resp, _ := p.do("GET", path, nil, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("%s: %d", path, resp.StatusCode)
+			continue
+		}
+		if got := resp.Header.Get("Content-Type"); !strings.HasPrefix(got, want) {
+			t.Errorf("%s: content type %q, want %q", path, got, want)
+		}
+	}
+	resp, _ := p.do("GET", "/phone/sw.js", nil, nil)
+	if got := resp.Header.Get("Service-Worker-Allowed"); got != "/phone/" {
+		t.Errorf("worker scope header %q", got)
+	}
+	csp := resp.Header.Get("Content-Security-Policy")
+	if !strings.Contains(csp, "worker-src 'self'") || !strings.Contains(csp, "manifest-src 'self'") {
+		t.Errorf("policy does not allow the worker and manifest: %s", csp)
 	}
 }

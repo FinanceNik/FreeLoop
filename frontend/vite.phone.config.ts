@@ -7,7 +7,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   root: "phone",
   base: "/phone/",
-  publicDir: false,
+  // The manifest, the icons and the service worker (issue 026) are copied as they are.
+  publicDir: "public",
   plugins: [react()],
   build: {
     outDir: "../dist/phone",

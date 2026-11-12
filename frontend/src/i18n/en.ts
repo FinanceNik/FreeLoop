@@ -1577,6 +1577,7 @@ export const en = {
   "phone.composer.stop": "Stop",
   "phone.settings.language": "Language",
   "phone.settings.about": "This phone talks only to your computer, over your Tailscale network.",
+  "phone.settings.install": "To add it to the home screen: in Safari tap Share, then Add to Home Screen; in Chrome open the menu, then Install app. The app on the home screen has its own sign-in and is paired once from there: open it and enter a new code from the computer.",
   "phone.settings.signOut": "Sign out this phone",
   "usagePage.counting": "Still counting older sessions ({pending} left)…",
   "usagePage.loading": "Loading…",

@@ -1410,6 +1410,7 @@ export const nl = translationOf<typeof en>()({
   "phone.composer.stop": "Stoppen",
   "phone.settings.language": "Taal",
   "phone.settings.about": "Deze telefoon praat alleen met de eigen computer, via het eigen Tailscale-netwerk.",
+  "phone.settings.install": "Op het beginscherm komt ze zo: in Safari op Deel tikken, dan Zet op beginscherm; in Chrome het menu openen, dan App installeren. De app op het beginscherm heeft een eigen aanmelding en wordt daar één keer gekoppeld: openen en een nieuwe code invoeren.",
   "phone.settings.signOut": "Deze telefoon afmelden",
   "usagePage.counting": "Oudere sessies worden nog geteld (nog {pending})…",
   "usagePage.loading": "Laden…",

@@ -1,6 +1,6 @@
 ---
 title: The phone app installs on the home screen
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: sessions-from-the-phone
@@ -18,3 +18,6 @@ The phone app gets a web app manifest (`display: standalone`, name, colours, ico
 ## Notes
 - iOS delivers push only to a web app added to the home screen (iOS 16.4+).
 - Decision 10 of the PRD; GUI-052.
+
+## Done
+The worker only claims its pages (no fetch handler, no cache); push (issue 029) adds its push handlers. An iOS home-screen app has its own storage apart from Safari, so it pairs again with a new code; the Settings tab says so. Icons are `build/appicon.png` flattened on white (iOS fills transparency black). Not checked: adding it on a real iPhone or Android phone.

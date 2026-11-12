@@ -420,7 +420,20 @@ func (s *Server) allowedHost(r *http.Request) bool {
 // Handler serves the phone app and its API.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	phone := http.StripPrefix("/phone/", http.FileServer(http.FS(s.assets)))
+	files := http.StripPrefix("/phone/", http.FileServer(http.FS(s.assets)))
+	// The install files get their types here, not from the system's table, which may
+	// lack .webmanifest; the worker may control only /phone/.
+	phone := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/phone/manifest.webmanifest":
+			w.Header().Set("Content-Type", "application/manifest+json")
+		case "/phone/sw.js":
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			w.Header().Set("Service-Worker-Allowed", "/phone/")
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		files.ServeHTTP(w, r)
+	})
 	mux.Handle("GET /phone/", phone)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/phone/", http.StatusFound) })
 	mux.HandleFunc("POST /api/pair", s.pair)
@@ -435,7 +448,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/logout", s.authed(s.logout))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'")
+		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
 		switch {

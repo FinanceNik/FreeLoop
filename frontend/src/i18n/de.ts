@@ -1412,6 +1412,7 @@ export const de = translationOf<typeof en>()({
   "phone.composer.stop": "Anhalten",
   "phone.settings.language": "Sprache",
   "phone.settings.about": "Dieses Telefon spricht nur mit dem eigenen Computer, über das eigene Tailscale-Netz.",
+  "phone.settings.install": "Auf den Home-Bildschirm kommt sie so: in Safari auf Teilen tippen, dann Zum Home-Bildschirm; in Chrome das Menü öffnen, dann App installieren. Die App auf dem Home-Bildschirm hat eine eigene Anmeldung und wird dort einmal gekoppelt: öffnen und einen neuen Code eingeben.",
   "phone.settings.signOut": "Dieses Telefon abmelden",
   "usagePage.counting": "Ältere Sitzungen werden noch gezählt (noch {pending})…",
   "usagePage.loading": "Wird geladen…",
