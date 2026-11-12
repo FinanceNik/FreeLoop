@@ -65,6 +65,9 @@ type runtime struct {
 
 	mu   sync.Mutex
 	busy bool
+	// idleSince is when the last turn ended, or the runtime started; the idle
+	// stop counts from it (OQ-053).
+	idleSince time.Time
 	// stopped is set once stop began: nothing starts on this runtime
 	// again, and a caller that fetched it earlier fetches a new one.
 	stopped bool
@@ -261,7 +264,7 @@ func (e *Engine) runtimeFor(ctx context.Context, sid string) (*runtime, error) {
 		return nil, err
 	}
 	e.rules.restore(sid, events)
-	r := &runtime{env: env, host: host, closeEgress: closeEgress, base: ses.BaseCommit, sid: sid, harnessID: ses.HarnessID, projectID: ses.ProjectID, profileID: ses.ProfileID, handoff: pendingHandoff(events)}
+	r := &runtime{env: env, host: host, closeEgress: closeEgress, base: ses.BaseCommit, sid: sid, harnessID: ses.HarnessID, projectID: ses.ProjectID, profileID: ses.ProfileID, handoff: pendingHandoff(events), idleSince: time.Now()}
 	if preset.Watch != "" {
 		r.agentFiles = config.DirFingerprint(preset.Watch)
 	}
@@ -569,6 +572,7 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 			dropped := len(r.queue)
 			r.queue = nil
 			r.busy = false
+			r.idleSince = time.Now()
 			close(r.done)
 			r.mu.Unlock()
 			msg := "The agent stopped. Your next message starts it again."
@@ -586,6 +590,7 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 			n := len(r.queue)
 			r.queue = nil
 			r.busy = false
+			r.idleSince = time.Now()
 			close(r.done)
 			r.mu.Unlock()
 			e.emit(r.sid, event.Notice, event.NoticeData{Message: fmt.Sprintf("%d queued %s not sent; send %s again after signing in.", n, plural(n, "message was", "messages were"), plural(n, "it", "them"))})
@@ -593,6 +598,7 @@ func (e *Engine) run(r *runtime, q queued, ctx context.Context) {
 		}
 		if len(r.queue) == 0 {
 			r.busy = false
+			r.idleSince = time.Now()
 			close(r.done)
 			r.mu.Unlock()
 			return
@@ -629,6 +635,7 @@ func (e *Engine) release(r *runtime) {
 	if len(r.queue) == 0 || r.stopped {
 		r.queue = nil
 		r.busy = false
+		r.idleSince = time.Now()
 		close(r.done)
 		return
 	}

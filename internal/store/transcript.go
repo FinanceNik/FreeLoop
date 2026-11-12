@@ -23,8 +23,11 @@ type transcript struct {
 	f       *os.File
 	lastSeq int64
 	// size is how much of the file holds whole lines.
-	size   int64
-	dirty  bool
+	size  int64
+	dirty bool
+	// closed is set when Release closed the file; whoever holds the transcript
+	// from before opens it again.
+	closed bool
 	search indexer // guarded by mu
 }
 
@@ -200,6 +203,7 @@ func (t *transcript) syncIfDirty() {
 func (t *transcript) close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.closed = true
 	syncErr := t.f.Sync()
 	if err := t.f.Close(); err != nil {
 		return err

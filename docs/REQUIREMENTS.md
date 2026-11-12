@@ -247,7 +247,7 @@ A workflow is a method of work the app knows the steps of, after Matt Pocock's t
 - **NFR-PERF-001** · MVP · UI remains interactive (input latency under 100 ms) with ten sessions streaming concurrently on an M1 with 16 GB.
 - **NFR-PERF-002** · MVP · Opening a 5,000-event transcript renders in under 1 s; scrolling is virtualized.
 - **NFR-PERF-003** · MVP · Cold start to usable window under 2 s; restoring 50 archived and 10 active sessions under 3 s.
-- **NFR-PERF-004** · v1 · Idle memory under 300 MB for the app with ten idle sessions, excluding external harness processes.
+- **NFR-PERF-004** · v1 · Idle memory under 300 MB for the app with ten idle sessions, excluding external harness processes. An agent idle for 30 minutes (`sessions.idleStop` in config.yaml, in Settings; "never" is a choice) is stopped, with its process or container, its open transcript file and its stuck and context records, and starts again on the next message; a turn, a waiting approval, a queued message or an open terminal keeps it, and an AFK step's sessions are stopped when it ends (OQ-053).
 - **NFR-PERF-005** · MVP · Streaming tokens appear within 50 ms of arrival from the provider.
 
 ### Security (NFR-SEC)

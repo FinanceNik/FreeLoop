@@ -149,6 +149,28 @@ func (s *Store) Close() error {
 	return errors.Join(errs...)
 }
 
+// Release fsyncs and closes a session's open transcript file, which the next use
+// opens again, so a session that sits idle holds no file descriptor (OQ-053).
+func (s *Store) Release(sid string) {
+	s.mu.Lock()
+	t, ok := s.files[sid]
+	delete(s.files, sid)
+	s.mu.Unlock()
+	if ok {
+		if err := t.close(); err != nil {
+			log.Printf("store: release session %s: %v", sid, err)
+		}
+	}
+}
+
+// IsOpen says whether a session's transcript file is open.
+func (s *Store) IsOpen(sid string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.files[sid]
+	return ok
+}
+
 // CreateSession inserts a session record built from tmpl, which supplies
 // the title, harness, project root, provider, model and mode.
 func (s *Store) CreateSession(ctx context.Context, tmpl session.Session) (session.Session, error) {
@@ -259,6 +281,14 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 	}
 
 	t.mu.Lock()
+	for t.closed {
+		// Released between the lookup and the lock.
+		t.mu.Unlock()
+		if t, err = s.transcript(ctx, sid); err != nil {
+			return event.Event{}, err
+		}
+		t.mu.Lock()
+	}
 	defer t.mu.Unlock()
 	if ts.IsZero() {
 		ts = s.now()

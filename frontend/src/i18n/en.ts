@@ -119,6 +119,14 @@ export const en = {
   "settings.web.key": "Key",
   "settings.web.keyHint": "(kept in {store}; saved at once)",
   "settings.web.keyPlaceholder": "Leave empty to keep the current key",
+  "settings.idle.title": "Idle sessions",
+  "settings.idle.label": "Stop an idle agent after",
+  "settings.idle.minutes": "{n} minutes",
+  "settings.idle.hour": "1 hour",
+  "settings.idle.hours": "{n} hours",
+  "settings.idle.never": "Never",
+  "settings.idle.note":
+    "A session with no turn running, no approval waiting, no queued message and no open terminal gives up its agent's process or container after this time. Your next message starts it again with the conversation as it was. A file can set any time of a minute or more in sessions.idleStop.",
   "settings.updates.title": "Updates",
   "settings.updates.daily": "Check for a newer version once a day",
   "settings.updates.note":

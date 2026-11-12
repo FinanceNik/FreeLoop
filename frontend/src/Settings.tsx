@@ -138,7 +138,19 @@ function RestorePreview({ preview, onRestore, onCancel }: { preview: ConfigPrevi
 // The built-in agent's search tool, and an address it can query: names, the same in
 // every language.
 const WEB_SEARCH_TOOL = "web_search";
-const SEARCH_EXAMPLE = "http://localhost:8888/search?format=json&q={query}";
+// The times offered for stopping an idle agent (OQ-053); a file may hold others.
+const IDLE_STOPS = ["15m", "30m", "1h", "2h", "4h", "never"];
+
+function idleStopLabel(v: string): string {
+  if (v === "never") return t("settings.idle.never");
+  const m = /^(\d+)(m|h)$/.exec(v);
+  if (!m) return v;
+  const n = Number(m[1]);
+  if (m[2] === "m") return t("settings.idle.minutes", { n: String(n) });
+  return n === 1 ? t("settings.idle.hour") : t("settings.idle.hours", { n: String(n) });
+}
+
+const SEARCH_EXAMPLE ="http://localhost:8888/search?format=json&q={query}";
 
 // waitingDraft holds the edits that wait for Save (hooks, prices, budgets, web search)
 // while the user is on another page, so leaving the settings does not drop them.
@@ -612,6 +624,22 @@ export default function Settings({ page, config, providers, harnesses, environme
             />
           </label>
         )}
+
+        <h3>{t("settings.idle.title")}</h3>
+        <label>
+          {t("settings.idle.label")}
+          <select
+            value={form.sessions?.idleStop || "30m"}
+            onChange={(e) => setForm({ ...form, sessions: { ...form.sessions, idleStop: e.target.value } })}
+          >
+            {[...IDLE_STOPS, ...(form.sessions?.idleStop && !IDLE_STOPS.includes(form.sessions.idleStop) ? [form.sessions.idleStop] : [])].map((v) => (
+              <option key={v} value={v}>
+                {idleStopLabel(v)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted">{t("settings.idle.note")}</p>
 
         <h3>{t("settings.updates.title")}</h3>
         <label className="row">

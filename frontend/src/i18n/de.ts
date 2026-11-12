@@ -120,6 +120,14 @@ export const de = translationOf<typeof en>()({
   "settings.web.key": "Schlüssel",
   "settings.web.keyHint": "(aufbewahrt in {store}; wird sofort gespeichert)",
   "settings.web.keyPlaceholder": "Leer lassen, um den aktuellen Schlüssel zu behalten",
+  "settings.idle.title": "Ruhende Sitzungen",
+  "settings.idle.label": "Ruhenden Agenten beenden nach",
+  "settings.idle.minutes": "{n} Minuten",
+  "settings.idle.hour": "1 Stunde",
+  "settings.idle.hours": "{n} Stunden",
+  "settings.idle.never": "Nie",
+  "settings.idle.note":
+    "Eine Sitzung ohne laufenden Durchgang, ohne wartende Freigabe, ohne wartende Nachricht und ohne offenes Terminal gibt nach dieser Zeit den Prozess oder Container ihres Agenten frei. Die nächste Nachricht startet ihn wieder, mit dem Gespräch wie zuvor. Eine Datei kann in sessions.idleStop jede Zeit ab einer Minute setzen.",
   "settings.updates.title": "Aktualisierungen",
   "settings.updates.daily": "Einmal täglich nach einer neueren Version suchen",
   "settings.updates.note":

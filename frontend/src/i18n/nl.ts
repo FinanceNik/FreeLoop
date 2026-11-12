@@ -119,6 +119,14 @@ export const nl = translationOf<typeof en>()({
   "settings.web.key": "Sleutel",
   "settings.web.keyHint": "(bewaard in {store}; wordt meteen opgeslagen)",
   "settings.web.keyPlaceholder": "Leeg laten om de huidige sleutel te houden",
+  "settings.idle.title": "Rustende sessies",
+  "settings.idle.label": "Een rustende agent stoppen na",
+  "settings.idle.minutes": "{n} minuten",
+  "settings.idle.hour": "1 uur",
+  "settings.idle.hours": "{n} uur",
+  "settings.idle.never": "Nooit",
+  "settings.idle.note":
+    "Een sessie zonder lopende beurt, zonder wachtende goedkeuring, zonder wachtend bericht en zonder open terminal geeft na deze tijd het proces of de container van haar agent vrij. Het volgende bericht start hem weer, met het gesprek zoals het was. Een bestand kan in sessions.idleStop elke tijd vanaf een minuut instellen.",
   "settings.updates.title": "Nieuwe versies",
   "settings.updates.daily": "Eén keer per dag op een nieuwere versie controleren",
   "settings.updates.note":

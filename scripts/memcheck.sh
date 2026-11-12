@@ -4,7 +4,9 @@
 # creates ten sessions through the command line (EXT-004), runs one demo turn
 # in each, waits for the app to settle and measures the physical footprint
 # (what Activity Monitor shows as Memory) of the app's own process and of the
-# WebKit processes that appeared with it. Exits 1 above the budget.
+# WebKit processes that appeared with it, then counts the processes ten sessions
+# on the reference agent hold before and after the idle time (OQ-053). Exits 1
+# above the budget.
 #
 #   scripts/memcheck.sh [path to the app binary] [budget in MB]
 #
@@ -79,4 +81,12 @@ total=$((app_mb + helper_mb))
 echo "app process:        ${app_mb} MB"
 echo "WebKit processes:   ${helper_mb} MB ($(printf '%s\n' $helpers | grep -c . || true) started with the app)"
 echo "total, 10 idle sessions: ${total} MB (budget ${BUDGET_MB} MB)"
+
+# OQ-053: ten sessions on the reference agent hold ten processes until the idle time
+# passes (the shortest a setting allows, a minute), then none. Runs in the engine's
+# test binary, which serves the reference agent; set NO_IDLE_CHECK=1 to skip it.
+if [ -z "${NO_IDLE_CHECK:-}" ]; then
+  idle=$(FREELOOP_MEMCHECK=1 go test ./internal/engine -run '^TestMemcheckIdleStop$' -count=1 -v 2>&1) || { echo "$idle" >&2; echo "the idle stop check failed" >&2; exit 1; }
+  echo "$idle" | grep "reference agent processes"
+fi
 [ "$total" -le "$BUDGET_MB" ] || { echo "over the budget" >&2; exit 1; }

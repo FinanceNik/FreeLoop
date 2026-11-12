@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
@@ -76,7 +77,11 @@ func (e *Engine) stopRuntime(sid string) {
 
 // stopIfIdle stops a session's runtime unless a turn holds it, checking
 // and removing under the runtime's lock so a prompt cannot start between.
-func (e *Engine) stopIfIdle(sid string) bool {
+func (e *Engine) stopIfIdle(sid string) bool { return e.stopIdleRuntime(sid, time.Time{}) }
+
+// stopIdleRuntime is stopIfIdle for a runtime idle since before cutoff, when there
+// is one: a prompt that started or queued meanwhile finds it not idle.
+func (e *Engine) stopIdleRuntime(sid string, cutoff time.Time) bool {
 	e.mu.Lock()
 	r, ok := e.runtimes[sid]
 	if !ok {
@@ -84,7 +89,7 @@ func (e *Engine) stopIfIdle(sid string) bool {
 		return false
 	}
 	r.mu.Lock()
-	if r.busy {
+	if r.busy || len(r.queue) > 0 || (!cutoff.IsZero() && !r.idleSince.Before(cutoff)) {
 		r.mu.Unlock()
 		e.mu.Unlock()
 		return false
@@ -95,6 +100,7 @@ func (e *Engine) stopIfIdle(sid string) bool {
 	e.mu.Unlock()
 	r.stop()
 	r.jobs.Wait()
+	e.forgetRuntimeState(sid)
 	return true
 }
 

@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -98,6 +99,31 @@ type Config struct {
 	Voice Voice `yaml:"voice,omitempty" json:"voice"`
 	// Remote is the phone server (GUI-052).
 	Remote Remote `yaml:"remote,omitempty" json:"remote"`
+	// Sessions holds what is kept of a session that sits idle (OQ-053).
+	Sessions Sessions `yaml:"sessions,omitempty" json:"sessions"`
+}
+
+// DefaultIdleStop is how long a session may sit idle before its agent is stopped.
+const DefaultIdleStop = 30 * time.Minute
+
+// Sessions settings.
+type Sessions struct {
+	// IdleStop is how long a session with no turn, waiting approval, queued
+	// message or open terminal keeps its agent's process or container: a
+	// duration such as "30m" or "2h", or "never". Empty is 30 minutes.
+	IdleStop string `yaml:"idleStop,omitempty" json:"idleStop"`
+}
+
+// IdleStopAfter returns how long a session may sit idle before its agent is
+// stopped, and false for "never".
+func (s Sessions) IdleStopAfter() (time.Duration, bool) {
+	if s.IdleStop == "never" {
+		return 0, false
+	}
+	if d, err := time.ParseDuration(s.IdleStop); err == nil && d >= time.Minute {
+		return d, true
+	}
+	return DefaultIdleStop, true
 }
 
 // MCPSettings are settings for MCP as a whole; the servers are in mcp.yaml.
@@ -297,6 +323,12 @@ func (c *Config) Validate() []Issue {
 	if c.UI.Style != "" && !idPattern.MatchString(c.UI.Style) {
 		issues = append(issues, Issue{Field: "ui.style", Message: fmt.Sprintf("%q is not a style's ID", c.UI.Style)})
 		c.UI.Style = ""
+	}
+	if v := c.Sessions.IdleStop; v != "" && v != "never" {
+		if d, err := time.ParseDuration(v); err != nil || d < time.Minute {
+			issues = append(issues, Issue{Field: "sessions.idleStop", Message: fmt.Sprintf("%q is not \"never\" or a time of at least a minute such as 30m", v)})
+			c.Sessions.IdleStop = ""
+		}
 	}
 	var priceIssues, hookIssues []Issue
 	c.Prices, priceIssues = validatePrices(c.Prices)

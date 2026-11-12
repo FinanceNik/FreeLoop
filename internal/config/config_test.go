@@ -6,7 +6,36 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+// OQ-053: the time an idle session keeps its agent is a setting a file can set.
+func TestIdleStopSetting(t *testing.T) {
+	for _, c := range []struct {
+		file  string
+		after time.Duration
+		on    bool
+	}{
+		{"version: 1\n", 30 * time.Minute, true},
+		{"version: 1\nsessions:\n  idleStop: 2h\n", 2 * time.Hour, true},
+		{"version: 1\nsessions:\n  idleStop: never\n", 0, false},
+	} {
+		cfg, issues, err := Load(write(t, c.file))
+		if err != nil || len(issues) != 0 {
+			t.Fatalf("%q: issues = %v, err = %v", c.file, issues, err)
+		}
+		if d, on := cfg.Sessions.IdleStopAfter(); d != c.after || on != c.on {
+			t.Errorf("%q: IdleStopAfter = %v, %v", c.file, d, on)
+		}
+	}
+	cfg, issues, _ := Load(write(t, "version: 1\nsessions:\n  idleStop: soon\n"))
+	if len(issues) != 1 || issues[0].Field != "sessions.idleStop" {
+		t.Fatalf("issues = %v", issues)
+	}
+	if d, on := cfg.Sessions.IdleStopAfter(); d != DefaultIdleStop || !on {
+		t.Errorf("an invalid time gave %v, %v", d, on)
+	}
+}
 
 func write(t *testing.T, content string) string {
 	t.Helper()

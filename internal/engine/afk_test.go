@@ -121,6 +121,12 @@ func TestAFKRunDoesTheIssuesInOrder(t *testing.T) {
 		if s.State != config.StepQA || s.Commit == "" {
 			t.Errorf("step %+v", s)
 		}
+		// OQ-053: neither session keeps an agent once its step is over.
+		for _, sid := range []string{s.SessionID, s.ReviewID} {
+			if hasRuntime(e, sid) {
+				t.Errorf("%s: the session of a finished step still has its agent", s.Issue)
+			}
+		}
 		// Each was reviewed, read-only, in the run's worktree, before the next began.
 		rev, err := e.store.GetSession(ctx, s.ReviewID)
 		if err != nil || rev.Mode != "plan" || rev.ParentID != s.SessionID || !slices.Contains(rev.Tags, ReviewTag) {

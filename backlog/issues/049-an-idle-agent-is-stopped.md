@@ -1,6 +1,6 @@
 ---
 title: An idle agent is stopped, and what it held is let go
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -20,3 +20,6 @@ A session's runtime stops only on archive, delete, the agent's own exit, a prese
 
 ## Notes
 - `stopIfIdle` already checks and removes under the runtime's lock; this adds the clock.
+
+## Done
+The time is `sessions.idleStop` ("30m" by default, any time from a minute, or "never"). `make memcheck` runs `TestMemcheckIdleStop` (about a minute) after its memory check. A session shown in the attention view as stuck loses that mark when its agent is stopped, as after a restart of the app.

@@ -819,6 +819,7 @@ func (e *Engine) finishIssue(ctx context.Context, id, sid string, w config.Workf
 		return
 	}
 	commit, note := e.commitLeftovers(ctx, env, *s)
+	e.stopFinished(sid)
 	// Then a second agent reviews it, before the next issue changes the worktree it
 	// reads (WFL-006).
 	if !w.Review.Off {
@@ -978,6 +979,7 @@ func (e *Engine) followReview(ctx context.Context, r config.AFKRun, s config.AFK
 	default:
 		return
 	}
+	e.stopFinished(s.ReviewID)
 	e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) {
 		st.State, st.EndedAt = config.StepQA, time.Now().UTC()
 		st.Note = strings.TrimSpace(st.Note + " " + note)
