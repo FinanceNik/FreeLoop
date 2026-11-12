@@ -69,7 +69,7 @@ func TestSwitchProfile(t *testing.T) {
 	if p := last[len(last)-1].Parts; len(p) != 1 {
 		t.Errorf("the second prompt carried %d parts", len(p))
 	}
-	evs, _ := e.Events(ctx, src.ID, 0)
+	evs, _ := e.Events(ctx, src.ID, 0, 0)
 	if ev := evs[len(evs)-1]; ev.Type != event.Notice || !strings.Contains(string(ev.Data), "Reviewer") {
 		t.Errorf("the old session ends with %s %s", ev.Type, ev.Data)
 	}

@@ -49,7 +49,7 @@ func TestPromptWithAttachedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitIdle(t, ch, sid)
-	evs, _ := e.Events(ctx, sid, 0)
+	evs, _ := e.Events(ctx, sid, 0, 0)
 	named := false
 	for _, ev := range evs {
 		if ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), `"resource_link"`) && strings.Contains(string(ev.Data), "notes.md") {
@@ -114,7 +114,7 @@ func TestSessionRulesLastAcrossARestart(t *testing.T) {
 	if err := e.DeleteSessionRule(sid, two); err == nil {
 		t.Error("removed a rule twice")
 	}
-	evs, _ := e.Events(ctx, sid, 0)
+	evs, _ := e.Events(ctx, sid, 0, 0)
 	e.rules.forget(sid)
 	e.rules.restore(sid, evs)
 	var kept []permission.Rule
@@ -151,11 +151,11 @@ func TestEffortIsTheSessions(t *testing.T) {
 		t.Errorf("effort = %q", ses.Effort)
 	}
 	// Choosing what it already is records nothing.
-	before, _ := e.Events(ctx, sid, 0)
+	before, _ := e.Events(ctx, sid, 0, 0)
 	if err := e.SetSessionOption(ctx, sid, optionEffortID, "low"); err != nil {
 		t.Fatal(err)
 	}
-	if after, _ := e.Events(ctx, sid, 0); len(after) != len(before) {
+	if after, _ := e.Events(ctx, sid, 0, 0); len(after) != len(before) {
 		t.Errorf("%d events, then %d", len(before), len(after))
 	}
 	if err := e.SetSessionOption(ctx, sid, "something else", "x"); err == nil {

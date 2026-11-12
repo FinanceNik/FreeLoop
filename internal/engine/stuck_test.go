@@ -38,7 +38,7 @@ func waitEvent(t *testing.T, e *Engine, sid string, typ event.Type) *event.Event
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		evs, _ := e.Events(context.Background(), sid, 0)
+		evs, _ := e.Events(context.Background(), sid, 0, 0)
 		for i := range evs {
 			if evs[i].Type == typ {
 				return &evs[i]
@@ -167,7 +167,7 @@ func TestOnLimitContinuesByItself(t *testing.T) {
 	// The last request goes on in the new session, by itself.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		evs, _ := e.Events(ctx, next.ID, 0)
+		evs, _ := e.Events(ctx, next.ID, 0, 0)
 		if strings.Contains(eventsText(evs), "fix the login page") {
 			break
 		}
@@ -220,7 +220,7 @@ func TestHandOffByHand(t *testing.T) {
 	if waitEvent(t, e, ses.ID, event.HandedOff) == nil {
 		t.Error("the old session does not say where it continued")
 	}
-	evs, _ := e.Events(ctx, res.Session.ID, 0)
+	evs, _ := e.Events(ctx, res.Session.ID, 0, 0)
 	if strings.Contains(eventsText(evs), "user_message_chunk") && strings.Contains(eventsText(evs), "add a test for the parser") {
 		t.Error("by hand, the request was sent without the user")
 	}

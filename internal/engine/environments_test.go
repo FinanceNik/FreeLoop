@@ -100,7 +100,7 @@ func TestEnvironmentSecretsReachCommandsButNotTheTranscript(t *testing.T) {
 	e.Prompt(ctx, ses.ID, "run")
 	waitIdle(t, ch, ses.ID)
 
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var out string
 	for _, ev := range evs {
 		if ev.Type == event.ToolCallUpdate && strings.Contains(string(ev.Data), "stage=dev") {
@@ -172,7 +172,7 @@ func TestThreeSessionsThreeReposConcurrently(t *testing.T) {
 	waitIdle(t, ch, runs[0].sid, runs[1].sid, runs[2].sid)
 
 	for _, r := range runs {
-		evs, _ := e.Events(ctx, r.sid, 0)
+		evs, _ := e.Events(ctx, r.sid, 0, 0)
 		var out string
 		for _, ev := range evs {
 			if ev.Type == event.ToolCallUpdate && strings.Contains(string(ev.Data), "name=") {

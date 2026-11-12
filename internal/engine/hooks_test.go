@@ -21,7 +21,7 @@ import (
 
 func hookEvents(t *testing.T, e *Engine, sid string) []HookRanData {
 	t.Helper()
-	evs, _ := e.Events(context.Background(), sid, 0)
+	evs, _ := e.Events(context.Background(), sid, 0, 0)
 	var out []HookRanData
 	for _, ev := range evs {
 		if ev.Type == event.HookRan {
@@ -70,7 +70,7 @@ func TestHooks(t *testing.T) {
 	e.Prompt(ctx, ses.ID, "go")
 	waitIdle(t, ch, ses.ID)
 
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var shown bool
 	for _, ev := range evs {
 		if ev.Type == event.ToolCallUpdate && strings.Contains(string(ev.Data), `"failed"`) && strings.Contains(string(ev.Data), "no network from hooks test") {
@@ -144,7 +144,7 @@ func TestStopEndsPostToolUseHook(t *testing.T) {
 	e.Prompt(ctx, ses.ID, "go")
 	// Wait for the hook to start, then stop the turn.
 	for start := time.Now(); ; time.Sleep(20 * time.Millisecond) {
-		evs, _ := e.Events(ctx, ses.ID, 0)
+		evs, _ := e.Events(ctx, ses.ID, 0, 0)
 		if slices.ContainsFunc(evs, func(ev event.Event) bool {
 			return ev.Type == event.ToolCallUpdate && strings.Contains(string(ev.Data), `"completed"`)
 		}) {
@@ -265,7 +265,7 @@ func TestFailedGuardHookAsks(t *testing.T) {
 				}
 			}
 			waitIdle(t, ch, ses.ID)
-			evs, _ := e.Events(ctx, ses.ID, 0)
+			evs, _ := e.Events(ctx, ses.ID, 0, 0)
 			asked := slices.ContainsFunc(evs, func(ev event.Event) bool { return ev.Type == event.PermissionRequested })
 			if asked != (c.want != "") {
 				t.Errorf("asked = %v", asked)
@@ -336,7 +336,7 @@ func TestProjectHooksRunAsApproved(t *testing.T) {
 	if len(list) != 1 || !strings.Contains(list[0].Runs, "echo B") || !strings.Contains(list[0].Source, root) {
 		t.Fatalf("waiting = %+v", list)
 	}
-	evs, _ := e.Events(ctx, sid, 0)
+	evs, _ := e.Events(ctx, sid, 0, 0)
 	if !slices.ContainsFunc(evs, func(ev event.Event) bool {
 		return ev.Type == event.Notice && strings.Contains(string(ev.Data), "not the ones approved") && strings.Contains(string(ev.Data), "echo B")
 	}) {

@@ -43,7 +43,7 @@ func TestSchedules(t *testing.T) {
 	// The turn writes the prompt from its own goroutine.
 	var prompt, notice bool
 	for deadline := time.Now().Add(3 * time.Second); !prompt && time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-		evs, _ := e.Events(ctx, got[0], 0)
+		evs, _ := e.Events(ctx, got[0], 0, 0)
 		for _, ev := range evs {
 			prompt = prompt || ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), "check the build")
 			notice = notice || ev.Type == event.Notice && strings.Contains(string(ev.Data), `the schedule \"Nightly\"`)

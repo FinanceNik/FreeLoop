@@ -33,7 +33,7 @@ func importAgent(t *testing.T, e *Engine, dir, id string, extra ...string) {
 
 func eventsOf(t *testing.T, e *Engine, sid string) []event.Event {
 	t.Helper()
-	evs, err := e.Events(context.Background(), sid, 0)
+	evs, err := e.Events(context.Background(), sid, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

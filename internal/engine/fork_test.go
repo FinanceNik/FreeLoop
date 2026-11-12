@@ -36,7 +36,7 @@ func TestForkSession(t *testing.T) {
 	e.Prompt(ctx, src.ID, "second")
 	waitIdle(t, ch, src.ID)
 
-	evs, _ := e.Events(ctx, src.ID, 0)
+	evs, _ := e.Events(ctx, src.ID, 0, 0)
 	var at int64
 	for _, ev := range evs {
 		if ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), `"second"`) {
@@ -50,7 +50,7 @@ func TestForkSession(t *testing.T) {
 	if res.Text != "second" || res.Session.ID == src.ID || res.Session.Title != "Plan (fork)" {
 		t.Fatalf("fork = %+v", res)
 	}
-	fevs, _ := e.Events(ctx, res.Session.ID, 0)
+	fevs, _ := e.Events(ctx, res.Session.ID, 0, 0)
 	all, _ := json.Marshal(fevs)
 	if strings.Contains(string(all), `"second"`) || !strings.Contains(string(all), `"first"`) || !strings.Contains(string(all), "Forked from") {
 		t.Errorf("the fork's transcript:\n%s", all)
@@ -107,7 +107,7 @@ func TestForkWorktreeSession(t *testing.T) {
 	}
 	e.Prompt(ctx, src.ID, "more")
 	waitIdle(t, ch, src.ID)
-	evs, _ := e.Events(ctx, src.ID, 0)
+	evs, _ := e.Events(ctx, src.ID, 0, 0)
 	var at int64
 	for _, ev := range evs {
 		if ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), `"more"`) {
@@ -157,7 +157,7 @@ func TestForkResetsBypassAndKeepsItsTitle(t *testing.T) {
 	e.Prompt(ctx, src.ID, "second")
 	waitIdle(t, ch, src.ID)
 	titled, _ := e.store.GetSession(ctx, src.ID)
-	evs, _ := e.Events(ctx, src.ID, 0)
+	evs, _ := e.Events(ctx, src.ID, 0, 0)
 	var at int64
 	for _, ev := range evs {
 		if ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), `"second"`) {

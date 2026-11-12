@@ -46,7 +46,7 @@ func TestOptimizerNote(t *testing.T) {
 	if got := turn("third"); strings.Contains(got, "Note from Freeloop") {
 		t.Errorf("told twice: %q", got)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	for _, ev := range evs {
 		if ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), "Note from Freeloop") {
 			t.Errorf("the transcript shows it as the user's: %s", ev.Data)

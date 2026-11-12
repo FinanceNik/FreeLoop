@@ -61,7 +61,7 @@ func TestMCPResourcesAndPrompts(t *testing.T) {
 	if !strings.Contains(got, "When do we deploy?") || !strings.Contains(got, `<resource server="test" uri="notes://readme">`) || !strings.Contains(got, "Deploys go out on Tuesdays.") {
 		t.Errorf("user turn = %q", got)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var linked, skipped bool
 	for _, ev := range evs {
 		if ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), `"name":"test: readme"`) {

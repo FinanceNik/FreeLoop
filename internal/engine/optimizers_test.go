@@ -202,7 +202,7 @@ func scriptedSession(t *testing.T, e *Engine, root string, steps ...scripted.Ste
 // outputs returns what each finished shell call ran, with its output.
 func outputs(t *testing.T, e *Engine, sid string) []map[string]any {
 	t.Helper()
-	evs, err := e.Events(context.Background(), sid, 0)
+	evs, err := e.Events(context.Background(), sid, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestOptimizerRewritesApprovedCommands(t *testing.T) {
 	}
 
 	// The approval and the title keep the original; so does the record.
-	evs, _ := e.Events(ctx, sid, 0)
+	evs, _ := e.Events(ctx, sid, 0, 0)
 	asked := 0
 	for _, ev := range evs {
 		if ev.Type == event.ToolCall && strings.Contains(string(ev.Data), "fake-optimizer") {
@@ -409,7 +409,7 @@ func TestOptimizerFailureRunsTheOriginal(t *testing.T) {
 	if len(got) != 2 || got[0]["via"] != nil || !strings.Contains(got[0]["output"].(string), "slow") {
 		t.Fatalf("shell calls: %+v", got)
 	}
-	evs, _ := e.Events(ctx, sid, 0)
+	evs, _ := e.Events(ctx, sid, 0, 0)
 	notices := 0
 	for _, ev := range evs {
 		if ev.Type == event.Notice && strings.Contains(string(ev.Data), "without Fake") {
@@ -435,7 +435,7 @@ func TestOptimizerInheritance(t *testing.T) {
 	}
 	e.Prompt(ctx, sid, "one")
 	waitIdle(t, ch, sid)
-	evs, _ := e.Events(ctx, sid, 0)
+	evs, _ := e.Events(ctx, sid, 0, 0)
 	i := slices.IndexFunc(evs, func(ev event.Event) bool { return ev.Type == event.UserMessageChunk })
 	fork, err := e.ForkSession(ctx, sid, evs[i].Seq)
 	if err != nil {
@@ -635,7 +635,7 @@ func TestOptimizerFileNeedsApproval(t *testing.T) {
 	if _, err := os.Stat(logFile); err == nil {
 		t.Error("the program ran before it was approved")
 	}
-	evs, _ := e.Events(ctx, sid, 0)
+	evs, _ := e.Events(ctx, sid, 0, 0)
 	if !slices.ContainsFunc(evs, func(ev event.Event) bool {
 		return ev.Type == event.Notice && strings.Contains(string(ev.Data), "not been approved")
 	}) {

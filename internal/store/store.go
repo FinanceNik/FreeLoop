@@ -406,6 +406,13 @@ func chunk(t event.Type) bool {
 
 // Events returns a session's events with seq greater than afterSeq, in order.
 func (s *Store) Events(ctx context.Context, sid string, afterSeq int64) ([]event.Event, error) {
+	return s.EventsLimit(ctx, sid, afterSeq, 0)
+}
+
+// EventsLimit is Events with at most limit events, the first ones after afterSeq; a
+// limit of 0 or less means all of them. It starts reading near afterSeq and does not
+// hold up the session's appends.
+func (s *Store) EventsLimit(ctx context.Context, sid string, afterSeq int64, limit int) ([]event.Event, error) {
 	if _, err := s.GetSession(ctx, sid); err != nil {
 		return nil, err
 	}
@@ -413,9 +420,19 @@ func (s *Store) Events(ctx context.Context, sid string, afterSeq int64) ([]event
 	if err != nil {
 		return nil, err
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return readEvents(t.path, afterSeq)
+	return t.read(afterSeq, limit)
+}
+
+// TailEvents returns a session's last n events, in order.
+func (s *Store) TailEvents(ctx context.Context, sid string, n int) ([]event.Event, error) {
+	if _, err := s.GetSession(ctx, sid); err != nil {
+		return nil, err
+	}
+	t, err := s.transcript(ctx, sid)
+	if err != nil {
+		return nil, err
+	}
+	return t.tail(n)
 }
 
 // transcript returns the open transcript for sid, opening and recovering it

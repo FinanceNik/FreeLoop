@@ -56,7 +56,7 @@ func TestReviewBySecondAgent(t *testing.T) {
 	}
 
 	// The first session got nothing by itself.
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	if slices.ContainsFunc(evs, func(ev event.Event) bool { return ev.Type == event.UserMessageChunk }) {
 		t.Error("the findings reached the session without being asked for")
 	}

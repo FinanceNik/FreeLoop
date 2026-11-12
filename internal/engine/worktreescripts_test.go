@@ -69,7 +69,7 @@ func TestWorktreeScripts(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(a.Worktree, ".env")); string(got) != "SECRET=1\n" {
 		t.Errorf(".env = %q", got)
 	}
-	evs, _ := e.Events(ctx, a.ID, 0)
+	evs, _ := e.Events(ctx, a.ID, 0, 0)
 	var done string
 	for _, ev := range evs {
 		if strings.Contains(string(ev.Data), `"status":"done"`) && ev.Type == "worktree_setup" {

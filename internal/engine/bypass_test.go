@@ -71,7 +71,7 @@ func wantAsking(t *testing.T, e *Engine, sid string) {
 			t.Errorf("its harness is still in %s", m)
 		}
 	}
-	evs, _ := e.Events(ctx, sid, 0)
+	evs, _ := e.Events(ctx, sid, 0, 0)
 	for _, ev := range evs {
 		if ev.Type == event.Notice && strings.Contains(string(ev.Data), "this session now asks") {
 			return

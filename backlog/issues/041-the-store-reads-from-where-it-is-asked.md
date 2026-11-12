@@ -1,6 +1,6 @@
 ---
 title: The store reads a transcript from where it is asked
-status: open
+status: done
 type: afk
 blockedBy: [040-a-long-session-to-measure-with]
 prd: before-going-public
@@ -19,3 +19,8 @@ prd: before-going-public
 ## Notes
 - `internal/store/transcript.go:211`, `internal/store/store.go:378`, `internal/engine/engine.go:1058`.
 - Open transcripts are also never closed (`store.go:427`); issue 049 lets them go.
+
+## Done
+- `Store.EventsLimit` and `Store.TailEvents` are the two added reads; `Store.Events` is `EventsLimit` with no limit. The table has one entry per 256 events (`offsetStride`), built by `scanTranscript` on open (after any repair or truncation) and extended in `write`.
+- `Engine.Events` takes a limit (0 means all, for the engine's own callers, which issue 042 narrows). The Wails service, the phone's `/events` and stream catch-up and the RPC socket pass at most `engine.MaxEventsPage` (5000); the window's `catchUp` asks again when it got a full page.
+- The after-numbers are in the PRD.

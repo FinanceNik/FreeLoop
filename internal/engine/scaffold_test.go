@@ -54,7 +54,7 @@ func TestScaffoldHarness(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitIdle(t, ch, ses.ID)
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	all, _ := json.Marshal(evs)
 	if !strings.Contains(string(all), "You said: hello there") {
 		t.Fatalf("the agent did not answer:\n%s", all)
@@ -66,7 +66,7 @@ func TestScaffoldHarness(t *testing.T) {
 	e.mu.Lock()
 	_, running := e.runtimes[ses.ID]
 	e.mu.Unlock()
-	evs, _ = e.Events(ctx, ses.ID, 0)
+	evs, _ = e.Events(ctx, ses.ID, 0, 0)
 	if running || evs[len(evs)-1].Type != event.Notice {
 		t.Errorf("after a change: running %v, last event %s", running, evs[len(evs)-1].Type)
 	}

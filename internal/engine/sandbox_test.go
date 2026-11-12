@@ -119,7 +119,7 @@ func TestSandboxedSession(t *testing.T) {
 		t.Errorf("the approved command did not run outside: %v", err)
 	}
 
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var results []string
 	for _, ev := range evs {
 		if ev.Type == event.ToolCallUpdate {
@@ -266,7 +266,7 @@ func TestSandboxPlanModeAndWorktree(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, "made-in-plan.txt")); err == nil {
 		t.Error("plan mode wrote a file")
 	}
-	evs, _ := e.Events(ctx, plan.ID, 0)
+	evs, _ := e.Events(ctx, plan.ID, 0, 0)
 	text := ""
 	for _, ev := range evs {
 		if ev.Type == event.ToolCallUpdate {
@@ -346,7 +346,7 @@ func TestSandboxHostList(t *testing.T) {
 	if !strings.Contains(string(b), "127.0.0.1") {
 		t.Errorf("the proxy variable: %q", b)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	noticed := false
 	for _, ev := range evs {
 		var n event.NoticeData

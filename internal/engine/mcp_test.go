@@ -148,7 +148,7 @@ func TestMCPServersInSessions(t *testing.T) {
 	if !decided(t, e, ses.ID, permission.Allowed) {
 		t.Error("the rule did not allow the MCP tool")
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	for _, ev := range evs {
 		if strings.Contains(string(ev.Data), "tok-9f8e7d6c5b4a") {
 			t.Fatalf("the secret reached the transcript in %s", ev.Type)
@@ -254,7 +254,7 @@ func TestMCPInputRequests(t *testing.T) {
 	if got := lastToolResult(prov.Requests()[len(prov.Requests())-1]); got != "deploying to staging" {
 		t.Errorf("accepted: tool result = %q", got)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	for _, ev := range evs {
 		if ev.Type == event.PermissionRequested && strings.Contains(string(ev.Data), "staging") && !strings.Contains(string(ev.Data), "production") {
 			t.Errorf("the answer reached the transcript: %s", ev.Data)

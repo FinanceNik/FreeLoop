@@ -88,7 +88,7 @@ func TestCheckpointsAndRewind(t *testing.T) {
 	// A change the user makes in .claude/ after the checkpoint stays.
 	os.WriteFile(filepath.Join(root, ".claude", "settings.json"), []byte("{\"mine\": true}\n"), 0o644)
 
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var cps []event.Event
 	for _, ev := range evs {
 		if ev.Type == event.Checkpoint {
@@ -118,7 +118,7 @@ func TestCheckpointsAndRewind(t *testing.T) {
 	}
 
 	// The rewind event names the snapshot of the files it replaced.
-	evs, _ = e.Events(ctx, ses.ID, 0)
+	evs, _ = e.Events(ctx, ses.ID, 0, 0)
 	var rw event.RewindData
 	for _, ev := range evs {
 		if ev.Type == event.Rewind {
@@ -167,7 +167,7 @@ func TestRewindAfterHistoryResetKeepsContext(t *testing.T) {
 	h.TruncateHistory(1)
 	before := h.HistoryLen()
 
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var cps []event.Event
 	for _, ev := range evs {
 		if ev.Type == event.Checkpoint {
@@ -183,7 +183,7 @@ func TestRewindAfterHistoryResetKeepsContext(t *testing.T) {
 	if h.HistoryLen() != before {
 		t.Errorf("history %d after the rewind, %d before", h.HistoryLen(), before)
 	}
-	evs, _ = e.Events(ctx, ses.ID, 0)
+	evs, _ = e.Events(ctx, ses.ID, 0, 0)
 	if ev := evs[len(evs)-1]; ev.Type != event.Rewind || strings.Contains(string(ev.Data), `"context":true`) {
 		t.Errorf("last event = %s %s", ev.Type, ev.Data)
 	}

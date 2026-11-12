@@ -385,7 +385,7 @@ func approvePending(t *testing.T, e *Engine) {
 
 func noticesOf(t *testing.T, e *Engine, sid string) []string {
 	t.Helper()
-	evs, _ := e.Events(context.Background(), sid, 0)
+	evs, _ := e.Events(context.Background(), sid, 0, 0)
 	var out []string
 	for _, ev := range evs {
 		if ev.Type == event.Notice {

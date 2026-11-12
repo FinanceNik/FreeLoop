@@ -160,7 +160,10 @@ const STATUS_CHOICES: [status: string, label: PlainKey][] = [
 
 const PANE_SHORTCUT = { left: "paneLeft", right: "paneRight", up: "paneUp", down: "paneDown" };
 
-const COLLAPSED_KEY = "freeloop.collapsedProjects";
+// How many events the engine returns at most for one read (engine.MaxEventsPage).
+const EVENTS_PAGE = 5000;
+
+const COLLAPSED_KEY ="freeloop.collapsedProjects";
 const GROUP_BY_KEY = "freeloop.groupBy";
 
 type GroupBy = "project" | "date";
@@ -471,7 +474,8 @@ export default function App() {
         const again = fetching.current.get(sid);
         fetching.current.delete(sid);
         ingest(sid, events ?? []);
-        if (again) catchUp(sid);
+        // The engine gives a page at a time (engine.MaxEventsPage): a full one means more follow.
+        if (again || (events?.length ?? 0) >= EVENTS_PAGE) catchUp(sid);
       })
       .catch((err) => {
         fetching.current.delete(sid);

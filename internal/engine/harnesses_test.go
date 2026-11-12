@@ -72,7 +72,7 @@ func TestExternalHarnessSession(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(root, "notes.txt")); string(b) != "hello edited" {
 		t.Errorf("notes.txt = %q", b)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var said strings.Builder
 	for _, ev := range evs {
 		if ev.Type == event.AgentMessageChunk {
@@ -134,7 +134,7 @@ func TestExternalSessionLoad(t *testing.T) {
 		e.Prompt(ctx, ses.ID, "second")
 		waitIdle(t, ch, ses.ID)
 		cancel()
-		evs, _ := e.Events(ctx, ses.ID, 0)
+		evs, _ := e.Events(ctx, ses.ID, 0, 0)
 		var all strings.Builder
 		for _, ev := range evs {
 			all.WriteString(string(ev.Type) + " " + string(ev.Data) + "\n")
@@ -193,7 +193,7 @@ func TestExternalAgentNotSignedIn(t *testing.T) {
 	}
 	waitIdle(t, ch, ses.ID)
 	time.Sleep(200 * time.Millisecond)
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var errs, notices []string
 	turns := 0
 	for _, ev := range evs {
@@ -245,7 +245,7 @@ func TestExternalAgentImages(t *testing.T) {
 			t.Fatal(err)
 		}
 		waitIdle(t, ch, ses.ID)
-		evs, _ := e.Events(ctx, ses.ID, 0)
+		evs, _ := e.Events(ctx, ses.ID, 0, 0)
 		var text, errs string
 		for _, ev := range evs {
 			switch ev.Type {
@@ -289,7 +289,7 @@ func TestAnExternalAgentsPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	said := func() string {
-		evs, _ := e.Events(ctx, ses.ID, 0)
+		evs, _ := e.Events(ctx, ses.ID, 0, 0)
 		var b strings.Builder
 		for _, ev := range evs {
 			if ev.Type == event.AgentMessageChunk || ev.Type == event.ModeRefused || ev.Type == event.UserMessageChunk {
@@ -387,7 +387,7 @@ func TestAnExternalAgentAsks(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitIdle(t, ch, ses.ID)
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var said strings.Builder
 	for _, ev := range evs {
 		if ev.Type == event.AgentMessageChunk {
@@ -435,7 +435,7 @@ func TestAnAgentsProfileNamesItsModel(t *testing.T) {
 		e.Decide(DecideRequest{RequestID: r.ID, OptionID: "yes"})
 	}
 	waitIdle(t, ch, ses.ID)
-	evs, err := e.Events(ctx, ses.ID, 0)
+	evs, err := e.Events(ctx, ses.ID, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

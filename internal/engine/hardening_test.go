@@ -28,7 +28,7 @@ func TestSecretSplitAcrossChunksIsRedacted(t *testing.T) {
 	}
 	e.emit(ses.ID, event.TurnEnded, event.TurnEndedData{StopReason: "end_turn"})
 
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var text strings.Builder
 	for _, ev := range evs {
 		var mc event.MessageChunk

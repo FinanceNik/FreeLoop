@@ -38,7 +38,7 @@ func TestAPanicEndsOnlyItsTurn(t *testing.T) {
 	if err == nil {
 		t.Fatal("no error from a panic")
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	types := []event.Type{}
 	for _, ev := range evs {
 		types = append(types, ev.Type)
@@ -76,7 +76,7 @@ func TestAnExternalAgentIsStartedAgainAfterItExits(t *testing.T) {
 	}
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		evs, _ := e.Events(ctx, ses.ID, 0)
+		evs, _ := e.Events(ctx, ses.ID, 0, 0)
 		if slices.ContainsFunc(evs, func(ev event.Event) bool {
 			return ev.Type == event.Notice && strings.Contains(string(ev.Data), "starts it again")
 		}) {

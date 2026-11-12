@@ -50,6 +50,16 @@ Stages 1, 3 and 4 touch different packages (`internal/permission` and `internal/
 
    The last 100 events cost as much as the whole file: the first number to meet (under 5 ms) is missed by a factor of 10 to 40. The timings vary by about 30% between runs.
 
+   **After issue 041** (same machine and benchmark, `-benchtime 20x`): the store's read from the end starts at the nearest entry of a table of seq to offset (one per 256 events) and no longer holds the append lock.
+
+   | | text | tools |
+   |---|---|---|
+   | store read of the last 100 events | 0.15 to 0.23 ms, 0.18 MB allocated | 0.28 to 0.32 ms, 0.47 MB |
+   | store read from seq 0 (unchanged, now outside the append lock) | 70 ms, 58 MB | 144 ms, 247 MB |
+   | store, last error (still reads everything; issue 042) | 74 ms, 58 MB | 144 ms, 247 MB |
+
+   The first number is met by a factor of 20 or more, and the memory is the same on a 22 MB and a 105 MB file. A read from seq 0 allocates less than before because the slice is sized once.
+
 4. **Opening at the end (046) is built only if the last number is missed** once 041 to 045 are in. It is the largest change to the window in this plan, and the cheaper ones may be enough.
 5. **No large rework before going public.** `Engine` (567 methods), `App.tsx` and `SessionView.tsx` (48 and 46 pieces of state) stay as they are, since splitting them changes nothing a user sees and risks a lot. The same for the four usage folds, the built-in harness's 23 branches in the engine and the app check's fixed waits. They are listed under "Out of scope" so they are not forgotten.
 6. **Checks run here.** CI cannot run until the repository is public, so each issue ends with `make lint` and `make test`, and `make check-app` for a change to the window.

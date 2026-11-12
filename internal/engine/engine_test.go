@@ -94,7 +94,7 @@ func TestAppendedEventIsPersistedThenPublished(t *testing.T) {
 	// Replay after a restart returns the same events.
 	e = openTest(t, dir)
 	defer e.Close()
-	evs, err := e.Events(ctx, ses.ID, 0)
+	evs, err := e.Events(ctx, ses.ID, 0, 0)
 	if err != nil || len(evs) != 3 {
 		t.Fatalf("Events after reopen = %v, %v", evs, err)
 	}
@@ -251,7 +251,7 @@ func TestCancelAndRecovery(t *testing.T) {
 	if got.Status != session.StatusIdle {
 		t.Errorf("status after recovery = %s", got.Status)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var types []string
 	for _, ev := range evs[len(evs)-3:] {
 		types = append(types, string(ev.Type))
@@ -306,7 +306,7 @@ func TestQuitSaysWhyTheTurnStopped(t *testing.T) {
 
 func hasNotice(t *testing.T, e *Engine, sid, msg string) bool {
 	t.Helper()
-	evs, err := e.Events(context.Background(), sid, 0)
+	evs, err := e.Events(context.Background(), sid, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +452,7 @@ func TestAQueuedMessageGoesOutWhenTheTurnEnds(t *testing.T) {
 	approveAll(e, stop)
 	waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.TurnEnded })
 	waitFor(t, ch, func(ev event.Event) bool { return ev.Type == event.TurnEnded })
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var order []string
 	for _, ev := range evs {
 		switch ev.Type {

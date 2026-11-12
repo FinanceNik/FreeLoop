@@ -47,7 +47,7 @@ func TestImagesInPrompts(t *testing.T) {
 	if len(img) != 1 || !bytes.Equal(img[0].Data, tinyPNG) || img[0].MediaType != "image/png" {
 		t.Fatalf("the model got %+v", sent[len(sent)-1])
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var block event.ContentBlock
 	for _, ev := range evs {
 		if ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), `"image"`) {

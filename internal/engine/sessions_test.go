@@ -114,7 +114,7 @@ func TestSwitchModelMidSession(t *testing.T) {
 	if got.ProviderID != "b" || got.Model != "large" {
 		t.Errorf("session = %s %s", got.ProviderID, got.Model)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	if !slices.ContainsFunc(evs, func(ev event.Event) bool { return ev.Type == event.ModelChanged }) {
 		t.Error("no model_changed in the transcript")
 	}

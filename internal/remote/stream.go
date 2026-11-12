@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/engine"
 	"github.com/FinanceNik/Freeloop/internal/event"
 )
 
@@ -130,8 +131,15 @@ func (s *Server) sessionStream(w http.ResponseWriter, r *http.Request, _ config.
 	}
 	// catchUp reads what the stream has not sent, as when the bus dropped some.
 	catchUp := func() bool {
-		evs, err := s.eng.Events(r.Context(), id, last)
-		return err == nil && write(evs)
+		for {
+			evs, err := s.eng.Events(r.Context(), id, last, engine.MaxEventsPage)
+			if err != nil || !write(evs) {
+				return false
+			}
+			if len(evs) < engine.MaxEventsPage {
+				return true
+			}
+		}
 	}
 	if !catchUp() {
 		return

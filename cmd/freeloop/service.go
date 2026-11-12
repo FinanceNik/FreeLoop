@@ -190,8 +190,10 @@ func (s *EngineService) CreateSession(ctx context.Context, req engine.CreateSess
 	return s.eng.CreateSession(ctx, req)
 }
 
+// Events returns a page of a session's events after afterSeq: at most
+// engine.MaxEventsPage, so a caller that got a full page asks again from the last seq.
 func (s *EngineService) Events(ctx context.Context, sessionID string, afterSeq int64) ([]event.Event, error) {
-	return s.eng.Events(ctx, sessionID, afterSeq)
+	return s.eng.Events(ctx, sessionID, afterSeq, engine.MaxEventsPage)
 }
 
 func (s *EngineService) Prompt(ctx context.Context, sessionID, text string) (engine.PromptResult, error) {

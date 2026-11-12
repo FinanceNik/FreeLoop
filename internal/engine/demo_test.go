@@ -52,7 +52,7 @@ func runTour(t *testing.T, e *Engine) (sid string, decided map[string]permission
 		}
 	}
 
-	evs, err := e.Events(ctx, ses.ID, 0)
+	evs, err := e.Events(ctx, ses.ID, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

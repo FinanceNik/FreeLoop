@@ -57,7 +57,7 @@ func TestSessionTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, _ := e.Events(ctx, ses.ID, 0)
+	before, _ := e.Events(ctx, ses.ID, 0, 0)
 
 	out, cancel := e.SubscribeTerminals()
 	defer cancel()
@@ -107,7 +107,7 @@ func TestSessionTerminal(t *testing.T) {
 	}
 
 	// Nothing of it is in the transcript.
-	after, _ := e.Events(ctx, ses.ID, 0)
+	after, _ := e.Events(ctx, ses.ID, 0, 0)
 	for _, ev := range after[len(before):] {
 		if ev.Type != event.SessionStatus && ev.Type != event.GitState && ev.Type != event.EnvHealth {
 			t.Errorf("the terminal recorded %s: %s", ev.Type, ev.Data)

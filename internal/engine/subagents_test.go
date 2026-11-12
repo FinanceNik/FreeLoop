@@ -85,7 +85,7 @@ func TestSubagents(t *testing.T) {
 	if len(d.childSeen) != 1 || slices.ContainsFunc(d.childSeen[0].Tools, func(t provider.ToolSpec) bool { return t.Name == "task" }) {
 		t.Errorf("the subagent was offered the task tool, or ran %d times", len(d.childSeen))
 	}
-	evs, _ := e.Events(ctx, parent.ID, 0)
+	evs, _ := e.Events(ctx, parent.ID, 0, 0)
 	all, _ := json.Marshal(evs)
 	if !strings.Contains(string(all), "freeloop://session/"+child.ID) || !strings.Contains(string(all), "The subagent says: The project has 3 Go files.") {
 		t.Errorf("the parent's transcript:\n%s", all)

@@ -1058,11 +1058,17 @@ func (e *Engine) AppendEvent(ctx context.Context, req AppendEventRequest) (event
 	return ev, nil
 }
 
-// Events returns a session's events with seq greater than afterSeq. The GUI
-// uses it for the initial load and to fill a gap in the live stream.
-func (e *Engine) Events(ctx context.Context, sessionID string, afterSeq int64) ([]event.Event, error) {
+// MaxEventsPage is how many events a window or a phone is given at a time. A reader
+// that wants more asks again from the seq of the last one it was given.
+const MaxEventsPage = 5000
+
+// Events returns a session's events with seq greater than afterSeq, the first limit
+// of them when limit is above 0 (0 means all, for the engine's own callers; the
+// adapters pass a limit). The GUI uses it for the initial load and to fill a gap in
+// the live stream; it starts reading near afterSeq and never returns more than limit.
+func (e *Engine) Events(ctx context.Context, sessionID string, afterSeq int64, limit int) ([]event.Event, error) {
 	start := time.Now()
-	evs, err := e.store.Events(ctx, sessionID, afterSeq)
+	evs, err := e.store.EventsLimit(ctx, sessionID, afterSeq, limit)
 	// Opening a session once took over 30 s on CI and never here; a slow read says so
 	// in the log, and a stall without one is in the page or the connection.
 	if took := time.Since(start); took > time.Second {

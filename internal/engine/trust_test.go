@@ -60,7 +60,7 @@ func TestProjectTrustAndSettings(t *testing.T) {
 	if _, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "project:review"}); err == nil {
 		t.Error("a project profile was usable before trust")
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	for _, ev := range evs {
 		if ev.Type == event.GitState && !strings.Contains(string(ev.Data), `"dirty":-1`) {
 			t.Errorf("git status ran in an untrusted project: %s", ev.Data)
@@ -123,7 +123,7 @@ func TestProjectTrustAndSettings(t *testing.T) {
 // outcome.
 func decided(t *testing.T, e *Engine, sid string, outcome permission.Outcome) bool {
 	t.Helper()
-	evs, _ := e.Events(context.Background(), sid, 0)
+	evs, _ := e.Events(context.Background(), sid, 0, 0)
 	for i := len(evs) - 1; i >= 0; i-- {
 		if evs[i].Type == event.PermissionDecided {
 			var d permission.Decision

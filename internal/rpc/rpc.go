@@ -158,6 +158,8 @@ type (
 	eventsP    struct {
 		ID    string
 		After int64
+		// Limit is the most events to return; 0 or more than a page asks for a page.
+		Limit int
 	}
 	waitP struct {
 		ID        string
@@ -221,7 +223,10 @@ func (s *Server) call(ctx context.Context, method string, raw json.RawMessage) (
 		if err := decode(raw, &p); err != nil {
 			return nil, err
 		}
-		return e.Events(ctx, p.ID, p.After)
+		if p.Limit <= 0 || p.Limit > engine.MaxEventsPage {
+			p.Limit = engine.MaxEventsPage
+		}
+		return e.Events(ctx, p.ID, p.After, p.Limit)
 	case "sessions.wait":
 		var p waitP
 		if err := decode(raw, &p); err != nil {
@@ -310,7 +315,7 @@ func (s *Server) wait(ctx context.Context, p waitP) ([]event.Event, error) {
 	timeout = min(timeout, 5*time.Minute)
 	ch, cancel := s.e.Subscribe()
 	defer cancel()
-	evs, err := s.e.Events(ctx, p.ID, p.After)
+	evs, err := s.e.Events(ctx, p.ID, p.After, engine.MaxEventsPage)
 	if err != nil || len(evs) > 0 {
 		return evs, err
 	}
@@ -319,7 +324,7 @@ func (s *Server) wait(ctx context.Context, p waitP) ([]event.Event, error) {
 		select {
 		case ev := <-ch:
 			if ev.SID == p.ID && ev.Seq > p.After {
-				return s.e.Events(ctx, p.ID, p.After)
+				return s.e.Events(ctx, p.ID, p.After, engine.MaxEventsPage)
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()

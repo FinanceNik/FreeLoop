@@ -49,7 +49,7 @@ func TestExport(t *testing.T) {
 		Session struct{ ID string }
 		Events  []json.RawMessage
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	if json.Unmarshal([]byte(js), &doc) != nil || doc.Session.ID != ses.ID || len(doc.Events) != len(evs) {
 		t.Errorf("the JSON export has %d events for %d", len(doc.Events), len(evs))
 	}

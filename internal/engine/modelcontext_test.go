@@ -15,7 +15,7 @@ import (
 
 func modelContexts(t *testing.T, e *Engine, sid string) []event.ModelContextData {
 	t.Helper()
-	evs, err := e.Events(context.Background(), sid, 0)
+	evs, err := e.Events(context.Background(), sid, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

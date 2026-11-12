@@ -113,7 +113,7 @@ func TestPullRequests(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, "pwned")); err == nil {
 		t.Error("the body ran as a command")
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var recorded event.PullRequestData
 	for _, ev := range evs {
 		if ev.Type == event.PullRequest {

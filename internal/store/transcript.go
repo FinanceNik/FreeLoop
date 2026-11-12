@@ -23,13 +23,24 @@ type transcript struct {
 	f       *os.File
 	lastSeq int64
 	// size is how much of the file holds whole lines.
-	size  int64
-	dirty bool
+	size int64
+	// offsets is a sparse table of seq to byte offset: entry k is where the line of
+	// seq k*offsetStride+1 starts. It is built when the file is opened and kept as
+	// events are appended, so a read can start near the seq it is asked for.
+	offsets []int64
+	dirty   bool
 	// closed is set when Release closed the file; whoever holds the transcript
 	// from before opens it again.
 	closed bool
 	search indexer // guarded by mu
 }
+
+// offsetStride is how many events lie between two entries of a transcript's table.
+// A read parses at most this many events it does not return.
+const offsetStride = 256
+
+// readHook, set by a test, is called by a read once it has let go of the append lock.
+var readHook func()
 
 // ErrWrite marks an event that could not be written to its transcript, as on a
 // full disk, unlike one that is refused or for a session that is gone.
@@ -44,7 +55,7 @@ func openTranscript(path string) (*transcript, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: open transcript: %w", err)
 	}
-	lastSeq, validLen, err := scanTranscript(f)
+	lastSeq, validLen, offsets, err := scanTranscript(f)
 	var damaged *damage
 	if errors.As(err, &damaged) {
 		f.Close()
@@ -54,7 +65,7 @@ func openTranscript(path string) (*transcript, error) {
 		if f, err = os.OpenFile(path, os.O_RDWR|os.O_APPEND, 0o600); err != nil {
 			return nil, fmt.Errorf("store: open transcript: %w", err)
 		}
-		lastSeq, validLen, err = scanTranscript(f)
+		lastSeq, validLen, offsets, err = scanTranscript(f)
 	}
 	if err != nil {
 		f.Close()
@@ -68,30 +79,33 @@ func openTranscript(path string) (*transcript, error) {
 		f.Close()
 		return nil, err
 	}
-	return &transcript{path: path, f: f, lastSeq: lastSeq, size: validLen}, nil
+	return &transcript{path: path, f: f, lastSeq: lastSeq, size: validLen, offsets: offsets}, nil
 }
 
-// scanTranscript returns the last seq and the length of the file up to and
-// including its last complete line.
-func scanTranscript(r io.Reader) (lastSeq, validLen int64, err error) {
+// scanTranscript returns the last seq, the length of the file up to and
+// including its last complete line, and the table of seq to offset.
+func scanTranscript(r io.Reader) (lastSeq, validLen int64, offsets []int64, err error) {
 	br := bufio.NewReader(r)
 	var offset int64
 	for line := 1; ; line++ {
 		b, err := br.ReadBytes('\n')
 		if err == io.EOF {
-			return lastSeq, offset, nil // b, if any, is a torn tail
+			return lastSeq, offset, offsets, nil // b, if any, is a torn tail
 		}
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
 		}
 		var head struct {
 			Seq int64 `json:"seq"`
 		}
 		if err := json.Unmarshal(b, &head); err != nil {
-			return 0, 0, &damage{fmt.Sprintf("line %d: %v", line, err)}
+			return 0, 0, nil, &damage{fmt.Sprintf("line %d: %v", line, err)}
 		}
 		if head.Seq != lastSeq+1 {
-			return 0, 0, &damage{fmt.Sprintf("line %d: seq %d after %d", line, head.Seq, lastSeq)}
+			return 0, 0, nil, &damage{fmt.Sprintf("line %d: seq %d after %d", line, head.Seq, lastSeq)}
+		}
+		if (head.Seq-1)%offsetStride == 0 {
+			offsets = append(offsets, offset)
 		}
 		lastSeq = head.Seq
 		offset += int64(len(b))
@@ -184,6 +198,9 @@ func (t *transcript) write(ev event.Event) error {
 		}
 		return fmt.Errorf("store: append event: %w: %w", ErrWrite, err)
 	}
+	if (ev.Seq-1)%offsetStride == 0 && int64(len(t.offsets)) == (ev.Seq-1)/offsetStride {
+		t.offsets = append(t.offsets, t.size)
+	}
 	t.size += int64(n)
 	t.lastSeq = ev.Seq
 	t.dirty = true
@@ -218,8 +235,18 @@ func readEvents(path string, afterSeq int64) ([]event.Event, error) {
 		return nil, fmt.Errorf("store: %w", err)
 	}
 	defer f.Close()
-	out := []event.Event{}
-	br := bufio.NewReader(f)
+	return parseEvents(f, path, afterSeq, 0, 0)
+}
+
+// parseEvents parses lines from r, which starts at a line, and returns the events with
+// seq greater than afterSeq, at most limit of them when limit is above 0. hint is how
+// many it expects, for the size of the slice.
+func parseEvents(r io.Reader, path string, afterSeq int64, limit int, hint int64) ([]event.Event, error) {
+	if limit > 0 && (hint <= 0 || hint > int64(limit)) {
+		hint = int64(limit)
+	}
+	out := make([]event.Event, 0, min(max(hint, 0), 1<<16))
+	br := bufio.NewReaderSize(r, 64<<10)
 	for {
 		b, err := br.ReadBytes('\n')
 		if err == io.EOF {
@@ -237,6 +264,49 @@ func readEvents(path string, afterSeq int64) ([]event.Event, error) {
 		}
 		if ev.Seq > afterSeq {
 			out = append(out, ev)
+			if limit > 0 && len(out) >= limit {
+				return out, nil
+			}
 		}
 	}
+}
+
+// read returns the events with seq greater than afterSeq, at most limit of them when
+// limit is above 0. It starts at the nearest entry of the table and reads up to the
+// size the file had when it began, which an append-only file keeps whole, so it does
+// not hold the append lock while it parses.
+func (t *transcript) read(afterSeq int64, limit int) ([]event.Event, error) {
+	t.mu.Lock()
+	last, size := t.lastSeq, t.size
+	var from int64
+	if afterSeq > 0 && len(t.offsets) > 0 {
+		from = t.offsets[min(afterSeq/offsetStride, int64(len(t.offsets)-1))]
+	}
+	t.mu.Unlock()
+	if afterSeq >= last {
+		return []event.Event{}, nil
+	}
+	if readHook != nil {
+		readHook()
+	}
+	f, err := os.Open(t.path)
+	if err != nil {
+		return nil, fmt.Errorf("store: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.Seek(from, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("store: %w", err)
+	}
+	return parseEvents(io.LimitReader(f, size-from), t.path, afterSeq, limit, last-max(afterSeq, 0))
+}
+
+// tail returns the last n events.
+func (t *transcript) tail(n int) ([]event.Event, error) {
+	if n <= 0 {
+		return []event.Event{}, nil
+	}
+	t.mu.Lock()
+	after := t.lastSeq - int64(n)
+	t.mu.Unlock()
+	return t.read(after, 0)
 }

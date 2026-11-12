@@ -131,7 +131,7 @@ func TestProfileSlashCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	if last := evs[len(evs)-1]; last.Type != event.AvailableCommandsUpdate || !strings.Contains(string(last.Data), `"name":"review"`) {
 		t.Fatalf("last event = %s %s", last.Type, last.Data)
 	}
@@ -142,7 +142,7 @@ func TestProfileSlashCommands(t *testing.T) {
 	if got != "Review the uncommitted changes.\n\nfocus on auth" {
 		t.Errorf("model got %q", got)
 	}
-	evs, _ = e.Events(ctx, ses.ID, 0)
+	evs, _ = e.Events(ctx, ses.ID, 0, 0)
 	if !slices.ContainsFunc(evs, func(ev event.Event) bool {
 		return ev.Type == event.UserMessageChunk && strings.Contains(string(ev.Data), "/review  focus on auth")
 	}) {

@@ -22,7 +22,7 @@ func skillFile(name, desc string) []byte {
 // agentSaid is everything the agent of session sid said.
 func agentSaid(t *testing.T, e *Engine, sid string) string {
 	t.Helper()
-	evs, _ := e.Events(context.Background(), sid, 0)
+	evs, _ := e.Events(context.Background(), sid, 0, 0)
 	var said strings.Builder
 	for _, ev := range evs {
 		if ev.Type == event.AgentMessageChunk {

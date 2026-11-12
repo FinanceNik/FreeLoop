@@ -45,7 +45,7 @@ func TestRestoringSixtySessionsIsQuick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	evs, err := e2.Events(ctx, newest, 0)
+	evs, err := e2.Events(ctx, newest, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

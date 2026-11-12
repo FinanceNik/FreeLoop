@@ -135,7 +135,7 @@ func TestWebToolsThroughTheBroker(t *testing.T) {
 	if !slices.Contains(names, "web_fetch") || !slices.Contains(names, "todo_write") || slices.Contains(names, "web_search") {
 		t.Errorf("tools offered: %v", names)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var plan, rule string
 	for _, ev := range evs {
 		switch ev.Type {
@@ -166,7 +166,7 @@ func TestWebToolsThroughTheBroker(t *testing.T) {
 			t.Error("web_fetch offered in plan mode")
 		}
 	}
-	evs, _ = e.Events(ctx, planned.ID, 0)
+	evs, _ = e.Events(ctx, planned.ID, 0, 0)
 	for _, ev := range evs {
 		if ev.Type == event.PermissionRequested {
 			t.Error("plan mode asked instead of refusing")

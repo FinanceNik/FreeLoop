@@ -59,7 +59,7 @@ func TestDockerSession(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(root, "uname.txt")); string(b) != "Linux\nhi\n" {
 		t.Fatalf("uname.txt = %q", b)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	healthy := false
 	for _, ev := range evs {
 		healthy = healthy || (ev.Type == event.EnvHealth && strings.Contains(string(ev.Data), `"healthy"`))

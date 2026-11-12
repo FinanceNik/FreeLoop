@@ -623,7 +623,11 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request, _ config.Device)
 		return
 	}
 	after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
-	evs, err := s.eng.Events(r.Context(), id, after)
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > engine.MaxEventsPage {
+		limit = engine.MaxEventsPage
+	}
+	evs, err := s.eng.Events(r.Context(), id, after, limit)
 	if err != nil {
 		failed(w, http.StatusInternalServerError, err)
 		return

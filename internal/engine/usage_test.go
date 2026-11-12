@@ -38,7 +38,7 @@ func TestUsageCosts(t *testing.T) {
 	e.Prompt(ctx, ses.ID, "two")
 	waitIdle(t, ch, ses.ID)
 
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var calls int
 	for _, ev := range evs {
 		if ev.Type == event.UsageUpdate {
@@ -132,7 +132,7 @@ func TestAppCallsRecordUsage(t *testing.T) {
 	if _, err := e.SuggestCommitMessage(ctx, ses.ID); err != nil {
 		t.Fatal(err)
 	}
-	evs, _ := e.Events(ctx, ses.ID, 0)
+	evs, _ := e.Events(ctx, ses.ID, 0, 0)
 	var got []event.UsageData
 	for _, ev := range evs {
 		if ev.Type == event.UsageUpdate {

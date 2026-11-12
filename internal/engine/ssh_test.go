@@ -36,7 +36,7 @@ func sshProject(t *testing.T, s sshtest.Server, dir string) string {
 
 func sshSaid(t *testing.T, e *Engine, sid string) string {
 	t.Helper()
-	evs, err := e.Events(context.Background(), sid, 0)
+	evs, err := e.Events(context.Background(), sid, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
