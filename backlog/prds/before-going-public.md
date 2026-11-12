@@ -59,6 +59,7 @@ Stages 1, 3 and 4 touch different packages (`internal/permission` and `internal/
    | store, last error (still reads everything; issue 042) | 74 ms, 58 MB | 144 ms, 247 MB |
 
    The first number is met by a factor of 20 or more, and the memory is the same on a 22 MB and a 105 MB file. A read from seq 0 allocates less than before because the slice is sized once.
+   **After issue 043** (events in batches, one per frame; same machine): a burst of 1,000 chunk events is one batch, so one update of each piece of state where it was 1,000 updates of three (`eventBatch.test.ts`); in a demo turn of the app check the app renders at most once for every three events (`scenario.js`, "a turn's events redraw the app once per batch"). The lived-in "click to the end drawn" went from 6.6 s to 5.5 to 6.3 s over three runs, inside the noise: opening a long session is not helped by batching, and is for issues 044 to 046.
 
    **After issue 042** (same machine and benchmark, `-benchtime 20x`): the attention view's last error is one event read through a seq kept in the session's row (`last_error_seq`); a lookup of the last event of a kind, `Store.ScanBack`, reads the file back from its end and stops at the answer; the activity fold goes on from the turn it ended in; the live usage poll reads from the seq it keeps.
 

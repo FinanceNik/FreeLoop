@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { language, LANGUAGES, setLanguage, t, type Language } from "../i18n.ts";
 import { Markdown } from "../Markdown.tsx";
-import { apply, buildView, emptyTranscript, phoneName, type Item, type Transcript } from "../transcript.ts";
+import { createBatcher } from "../eventBatch.ts";
+import { apply, buildView, emptyTranscript, phoneName, type Item, type Transcript, type TranscriptEvent } from "../transcript.ts";
 import { api, followSession, followSummary, Unpaired, type PhoneRequest, type Summary } from "./api.ts";
 import { applicationServerKey, deviceName, onceOptions, pairCode, pushBody, sessionFromHash, pushSupported } from "./phone.ts";
 
@@ -243,12 +244,13 @@ function SessionScreen({ id, title, onBack }: { id: string; title: string; onBac
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setTr(emptyTranscript);
-    return followSession(
-      id,
-      0,
-      (ev) => setTr((cur) => apply(cur, [ev]).transcript),
-      () => {},
-    );
+    // One update per frame, however many events arrive (NFR-PERF-001).
+    const batcher = createBatcher<TranscriptEvent>((batch) => setTr((cur) => apply(cur, batch).transcript));
+    const stop = followSession(id, 0, (ev) => batcher.push(ev), () => {});
+    return () => {
+      stop();
+      batcher.cancel();
+    };
   }, [id]);
   const view = useMemo(() => buildView(tr.events), [tr]);
   useEffect(() => end.current?.scrollIntoView({ block: "end" }), [tr.lastSeq]);

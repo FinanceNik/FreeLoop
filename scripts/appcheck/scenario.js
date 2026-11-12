@@ -383,6 +383,20 @@ await step("a running turn stays at the end, frame by frame", async () => {
   check("a running turn stays at the end, frame by frame", toTheEnd(c) <= 60 && far <= seen.length * 0.05, `${far} of ${seen.length} frames over 60 px, worst ${Math.round(Math.max(...seen))}, at the end ${Math.round(toTheEnd(c))}`);
 });
 
+// Events reach the window in batches, one per frame (NFR-PERF-001): a turn's chunks
+// redraw the app far less often than there are events.
+await step("a turn's events redraw the app once per batch", async () => {
+  openSession("Check alpha");
+  await until("the conversation", () => document.querySelector(".conversation"));
+  window.__freeloopCount = { renders: 0, events: 0 };
+  await turn("Check alpha");
+  await sleep(200);
+  const { renders, events } = window.__freeloopCount;
+  delete window.__freeloopCount;
+  check("the turn made events", events >= 10, `${events} events`);
+  check("the app rendered less than once for every three events", renders * 3 <= events, `${renders} renders for ${events} events`);
+});
+
 await step("a session opens", async () => {
   openSession("Check alpha");
   await until("the conversation", () => document.querySelector(".conversation"));

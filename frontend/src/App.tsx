@@ -25,6 +25,7 @@ import {
   type SessionHits,
   type Style,
 } from "./api.ts";
+import { bySession, createBatcher, foldSessions } from "./eventBatch.ts";
 import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
 import { hitLabel, snippetParts } from "./search.ts";
 import { formatCost, type PriceEntry } from "./cost.ts";
@@ -124,10 +125,6 @@ const STATUS_LABEL: Record<string, PlainKey> = {
   archived: "status.archived",
 };
 
-// statusText is a status in words, or as the engine gave it when the app has none.
-// What an Events.On callback gets from the engine.
-type EngineEventData = Parameters<Parameters<typeof Events.On>[1]>[0]["data"];
-
 // useStableBy keeps the value it first saw for a key, so a list that is rebuilt at every event
 // does not rebuild what is computed from it unless the key changes.
 function useStableBy<T>(value: T, key: string): T {
@@ -214,9 +211,18 @@ function StatusDot({ status }: { status: string }) {
   return <span className={`status-dot status-${status}`} role="img" aria-label={label} title={label} />;
 }
 
+// The app check counts renders and events by setting this on the window; nothing sets it
+// otherwise.
+const probe = () => (window as unknown as { __freeloopCount?: { renders: number; events: number } }).__freeloopCount;
+
 export default function App() {
+  const counting = probe();
+  if (counting) counting.renders++;
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  // The list as last set, for code that must read it outside a state updater.
+  const sessionsRef = useRef<Session[]>(sessions);
+  sessionsRef.current = sessions;
   // The main window's panes (GUI-017).
   const [work, setWork] = useState<ws.WorkspaceState>(ws.SINGLE);
   const workLoaded = useRef(false);
@@ -448,20 +454,33 @@ export default function App() {
   // What each session is doing (GUI-030).
   const [activities, setActivities] = useState<Record<string, Activity>>({});
   const rootsOf = (s: Session) => [s.projectRoot, s.worktree].filter(Boolean) as string[];
-  const ingest = (sid: string, events: readonly TranscriptEvent[]) => {
+  // ingestMany applies events of several sessions in one update of each piece of
+  // state, however many events there are (NFR-PERF-001).
+  const ingestMany = (groups: ReadonlyMap<string, readonly TranscriptEvent[]>) => {
     setActivities((all) => {
-      const before = all[sid] ?? NO_ACTIVITY;
-      const after = events.reduce(foldActivity, before);
-      return after === before ? all : { ...all, [sid]: after };
+      let next = all;
+      for (const [sid, events] of groups) {
+        const before = next[sid] ?? NO_ACTIVITY;
+        const after = events.reduce(foldActivity, before);
+        if (after !== before) next = { ...next, [sid]: after };
+      }
+      return next;
     });
-    const current = transcriptsRef.current[sid] ?? emptyTranscript;
-    const { transcript, missingAfter } = apply(current, events);
-    if (transcript !== current) {
-      transcriptsRef.current = { ...transcriptsRef.current, [sid]: transcript };
-      setTranscripts(transcriptsRef.current);
+    let trs = transcriptsRef.current;
+    const gaps: string[] = [];
+    for (const [sid, events] of groups) {
+      const current = trs[sid] ?? emptyTranscript;
+      const { transcript, missingAfter } = apply(current, events);
+      if (transcript !== current) trs = { ...trs, [sid]: transcript };
+      if (missingAfter !== null) gaps.push(sid);
     }
-    if (missingAfter !== null) catchUp(sid);
+    if (trs !== transcriptsRef.current) {
+      transcriptsRef.current = trs;
+      setTranscripts(trs);
+    }
+    gaps.forEach(catchUp);
   };
+  const ingest = (sid: string, events: readonly TranscriptEvent[]) => ingestMany(new Map([[sid, events]]));
 
   const catchUp = (sid: string) => {
     if (fetching.current.has(sid)) {
@@ -596,37 +615,40 @@ export default function App() {
     refreshProfiles();
     if (STANDALONE) openSession(STANDALONE);
   });
-  const engineEvent = useEffectEvent((ev: EngineEventData) => {
-      ingest(ev.sid, [ev]);
-      if (ev.type === "turn_ended") refreshToday();
-      if (finishedTurn(ev)) setUnread((list) => markFinished(list, ev.sid, seenNow.current));
-      if (ev.type === "permission_requested" || ev.type === "permission_decided" || ev.type === "session_status") scheduleAttention();
-      setSessions((list) => {
-        const i = list.findIndex((s) => s.id === ev.sid);
-        if (i < 0) {
-          refreshSessions();
-          refreshProjects();
-          return list;
-        }
-        const d = ev.data as Record<string, string>;
-        const s = { ...list[i], lastSeq: Math.max(list[i].lastSeq, ev.seq), updatedAt: ev.ts };
-        if (ev.type === "session_status" && d.status) s.status = d.status as Session["status"];
-        if (ev.type === "current_mode_update" && d.currentModeId) s.mode = d.currentModeId;
-        if (ev.type === "git_state") s.branch = d.branch ?? "";
-        if (ev.type === "model_changed" && d.model) {
-          s.model = d.model;
-          s.providerId = d.providerId || s.providerId;
-        }
-        if (ev.type === "session_info_update" && d.title) s.title = d.title;
-        if (ev.type === "optimizer_changed") s.optimizer = d.optimizer ?? "";
-        if (ev.type === "workflow_changed") s.workflow = (ev.data as { workflow?: string }).workflow ?? "";
-        if (ev.type === "tags_changed") s.tags = (ev.data as { tags?: string[] }).tags ?? [];
-        return [s, ...list.slice(0, i), ...list.slice(i + 1)];
-      });
+  // One batch per frame (NFR-PERF-001): the engine's events are gathered and applied
+  // with one update per piece of state.
+  const engineBatch = useEffectEvent((batch: TranscriptEvent[]) => {
+    const counting = probe();
+    if (counting) counting.events += batch.length;
+    ingestMany(bySession(batch));
+    let turnEnded = false;
+    let attention = false;
+    const finished: string[] = [];
+    for (const ev of batch) {
+      if (ev.type === "turn_ended") turnEnded = true;
+      if (finishedTurn(ev)) finished.push(ev.sid);
+      if (ev.type === "permission_requested" || ev.type === "permission_decided" || ev.type === "session_status") attention = true;
+    }
+    if (turnEnded) refreshToday();
+    if (finished.length) setUnread((list) => finished.reduce((l, sid) => markFinished(l, sid, seenNow.current), list));
+    if (attention) scheduleAttention();
+    // The updater is pure and works on the list as it stands when it runs, so a session
+    // added by another update just before is kept; the ref only tells what to refresh.
+    const { unknown } = foldSessions(sessionsRef.current, batch);
+    setSessions((list) => foldSessions(list, batch).sessions);
+    if (unknown.length) {
+      refreshSessions();
+      refreshProjects();
+    }
   });
   useEffect(() => {
     boot();
-    return Events.On(EVENT_NAME, ({ data: ev }) => engineEvent(ev));
+    const batcher = createBatcher<TranscriptEvent>((batch) => engineBatch(batch));
+    const off = Events.On(EVENT_NAME, ({ data: ev }) => batcher.push(ev));
+    return () => {
+      off();
+      batcher.cancel();
+    };
   }, []);
 
   // A session opens in the active pane, or with where "new" in another one
