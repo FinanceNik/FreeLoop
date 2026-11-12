@@ -8,7 +8,7 @@
 #   make install OPEN=1                       open it afterwards
 #   SHIPPED=1 make install                    the build users get, which reads no development switch
 #
-# In order: quit Freeloop (never force it: it may be asking to confirm while agents
+# In order: make sure cmake is there (offering to install it), quit Freeloop (never force it: it may be asking to confirm while agents
 # work), put the old bundle in the Trash, build, check the new bundle is this commit's
 # and signed, place it, put every other Freeloop bundle in the Trash (found by its
 # bundle identifier through Spotlight, and in the two Applications folders), and tell
@@ -54,6 +54,13 @@ stamp() {
 	if [ -n "$(git -c safe.directory='*' status --porcelain 2>/dev/null)" ]; then c="$c+dirty"; fi
 	printf '%s' "$c"
 }
+
+# --- What the build needs, before anything is quit or moved ---------------------------
+# The speech program needs cmake, which this offers to install; asking now, and not in
+# the middle of the build, leaves the old app where it is until the answer is in.
+if [ "$INSTALL_BUILD" = "make package" ]; then
+	scripts/whisper-cli.sh --need || die "the build needs cmake (see above); nothing was changed."
+fi
 
 # --- Not from inside the app: quitting it would end this command ---------------------
 p=$$

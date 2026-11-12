@@ -41,7 +41,7 @@ Status: M0 to M2 and nearly all of v1 are built; real-provider runs and a first 
 
 ## Commands
 
-Prerequisites: Go (Homebrew), Node with npm, Xcode command line tools, cmake (`make package` builds voice input's `whisper-cli` with it), and `make tools` once to install the pinned `wails3` CLI into `$(go env GOPATH)/bin`.
+Prerequisites: Go (Homebrew), Node with npm, Xcode command line tools, cmake (`make package` builds voice input's `whisper-cli` with it; `make install` offers to `brew install` it if missing), and `make tools` once to install the pinned `wails3` CLI into `$(go env GOPATH)/bin`.
 
 - `make dev`: run the app with live reload. It sets `FREELOOP_DEV=1`, which adds a scripted demo provider so the whole loop can be tried without an API key. Set `FREELOOP_HOME=/some/dir` to keep dev data out of the real data folder (`~/Library/Application Support/freeloop` on a Mac, `%AppData%\freeloop` on Windows, `~/.config/freeloop` on Linux).
 - `make build` / `make package` / `make dmg`: production binary in `bin/` / ad-hoc signed `bin/Freeloop.app` / `bin/Freeloop.dmg` holding the app and a link to Applications. `make install`: quit Freeloop, rebuild it from this commit and leave that as the only copy (`INSTALL_DIR=`, `OPEN=1`; run it from a terminal, not from inside Freeloop). Every build is stamped with its commit (NFR-REL-006): Settings → Data, the problem report and the bundle's `FreeloopCommit` say it.

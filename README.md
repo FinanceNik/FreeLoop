@@ -45,7 +45,7 @@ Releases are not signed, so your system warns about a downloaded one the first t
 
 ### Build from source
 
-On a Mac with Apple Silicon and macOS 14 or later. You need Go, Node.js with npm, the Xcode command line tools, and cmake for voice input's speech program (`brew install cmake`).
+On a Mac with Apple Silicon and macOS 14 or later. You need Go, Node.js with npm, the Xcode command line tools, and cmake for voice input's speech program; `make install` and `make package` offer to run `brew install cmake` for you if it is missing (`FREELOOP_INSTALL_CMAKE=1` says yes without asking).
 
 ```sh
 make tools     # once: install the pinned wails3 CLI

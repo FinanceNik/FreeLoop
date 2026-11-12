@@ -4,9 +4,13 @@
 # Windows and Linux, which the app downloads when asked, but none for the Mac, so
 # the Mac build makes its own from the pinned source: Apple silicon, macOS 14, Metal
 # with its shaders inside the program, no library outside the system's, and the
-# same bytes from any folder (NFR-SEC-004). Needs cmake (brew install cmake).
+# same bytes from any folder (NFR-SEC-004). Needs cmake: with Homebrew, a terminal and the
+# user's yes it installs it first (see ensure_cmake); FREELOOP_INSTALL_CMAKE=1 says yes
+# beforehand, for a machine no one sits at, and 0 says no.
 #
-#   scripts/whisper-cli.sh
+#   scripts/whisper-cli.sh            build bin/whisper-cli
+#   scripts/whisper-cli.sh --need     only make sure it can be built (or is built), so
+#                                     `make install` asks before it touches the old app
 set -eu
 VERSION=1.9.5
 SHA256=ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720
@@ -17,7 +21,40 @@ OUT="$ROOT/bin/whisper-cli"
 if [ -x "$OUT" ] && [ "$(cat "$OUT.version" 2>/dev/null)" = "$VERSION" ]; then
 	exit 0
 fi
-command -v cmake >/dev/null 2>&1 || { echo "building whisper-cli needs cmake: brew install cmake" >&2; exit 1; }
+
+# cmake builds whisper.cpp. Installing software on the Mac is the user's to allow, so
+# this asks first and, with no terminal to ask at, installs only when told to.
+ensure_cmake() {
+	command -v cmake >/dev/null 2>&1 && return 0
+	if command -v brew >/dev/null 2>&1; then
+		answer=n
+		case "${FREELOOP_INSTALL_CMAKE:-}" in
+		1) answer=y ;;
+		0) ;;
+		*)
+			if [ -t 0 ] && [ -t 2 ]; then
+				printf "Voice input's speech program is built with cmake, which this Mac does not have.\nInstall it with Homebrew now (brew install cmake)? [Y/n] " >&2
+				read -r answer || answer=n
+				[ -n "$answer" ] || answer=y
+			fi
+			;;
+		esac
+		case "$answer" in
+		y | Y | yes | YES | Yes)
+			brew install cmake >&2 || { echo "brew could not install cmake" >&2; exit 1; }
+			command -v cmake >/dev/null 2>&1 && return 0
+			echo "cmake was installed but is not on the PATH; open a new terminal and run this again" >&2
+			exit 1
+			;;
+		esac
+		echo "building whisper-cli needs cmake: brew install cmake (then run this again), or set FREELOOP_INSTALL_CMAKE=1 to have it installed" >&2
+	else
+		echo "building whisper-cli needs cmake, and Homebrew (https://brew.sh) is not here to install it: install cmake some other way, or copy a built bin/whisper-cli, bin/whisper-cli.version, bin/whisper-cli.json and bin/whisper-cli.LICENSE from another Mac" >&2
+	fi
+	exit 1
+}
+ensure_cmake
+[ "${1:-}" != --need ] || exit 0
 
 WORK="$ROOT/bin/whisper-build"
 TARBALL="$WORK/whisper.cpp-$VERSION.tar.gz"
