@@ -1,6 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applicationServerKey, deviceName, pushBody, onceOptions, pairCode, parseSSE, pickLanguage, pushSupported, reconnectDelay } from "./phone.ts";
+import { applicationServerKey, sessionFromHash, deviceName, pushBody, onceOptions, pairCode, parseSSE, pickLanguage, pushSupported, reconnectDelay } from "./phone.ts";
+
+test("a tapped notification's link opens that session, and nothing else does", () => {
+  assert.equal(sessionFromHash("#session=ses_01-A"), "ses_01-A");
+  assert.equal(sessionFromHash("#pair=ABC&session=x1"), "x1");
+  assert.equal(sessionFromHash(""), "");
+  assert.equal(sessionFromHash("#session="), "");
+  assert.equal(sessionFromHash("#session=../../x"), "");
+  assert.equal(sessionFromHash("#session=<b>"), "");
+  assert.equal(sessionFromHash("#session=" + "a".repeat(65)), "");
+});
 
 test("the phone answers only once", () => {
   const options = [

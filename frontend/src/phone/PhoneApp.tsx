@@ -3,7 +3,7 @@ import { language, LANGUAGES, setLanguage, t, type Language } from "../i18n.ts";
 import { Markdown } from "../Markdown.tsx";
 import { apply, buildView, emptyTranscript, phoneName, type Item, type Transcript } from "../transcript.ts";
 import { api, followSession, followSummary, Unpaired, type PhoneRequest, type Summary } from "./api.ts";
-import { applicationServerKey, deviceName, onceOptions, pairCode, pushBody, pushSupported } from "./phone.ts";
+import { applicationServerKey, deviceName, onceOptions, pairCode, pushBody, sessionFromHash, pushSupported } from "./phone.ts";
 
 // The phone app (GUI-052): what needs the user, the sessions, one session live with
 // a message box, and settings. From here a plain request is allowed or denied once;
@@ -14,8 +14,21 @@ type Screen = { kind: "needs" } | { kind: "sessions" } | { kind: "session"; id: 
 export default function PhoneApp() {
   const [paired, setPaired] = useState<boolean | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [screen, setScreen] = useState<Screen>({ kind: "needs" });
+  // A tapped notification opens /phone/#session=<id> (issue 029), at start or while the app is open.
+  const [screen, setScreen] = useState<Screen>(() => {
+    const id = sessionFromHash(location.hash);
+    return id ? { kind: "session", id } : { kind: "needs" };
+  });
   const [, setLang] = useState<Language>(language());
+
+  useEffect(() => {
+    const open = () => {
+      const id = sessionFromHash(location.hash);
+      if (id) setScreen({ kind: "session", id });
+    };
+    window.addEventListener("hashchange", open);
+    return () => window.removeEventListener("hashchange", open);
+  }, []);
 
   // Paired once the summary answers; the stream keeps it fresh.
   useEffect(() => {
@@ -36,11 +49,19 @@ export default function PhoneApp() {
     return () => stop();
   }, [paired]);
 
+  // While the app is open its icon shows how many requests wait, from the summary the
+  // authenticated stream keeps fresh (never from a push).
+  const waiting = summary?.attention.reduce((n, a) => n + a.requests.length + (a.error ? 1 : 0), 0) ?? 0;
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    if (waiting > 0) nav.setAppBadge?.(waiting).catch(() => {});
+    else nav.clearAppBadge?.().catch(() => {});
+  }, [waiting]);
+
   if (paired === null) return <p className="phone-note">{t("phone.loading")}</p>;
   if (!paired) return <Pairing onPaired={() => setPaired(true)} />;
 
-  const waiting = summary?.attention.reduce((n, a) => n + a.requests.length + (a.error ? 1 : 0), 0) ?? 0;
-  const title = (sid: string) => summary?.sessions.find((s) => s.id === sid)?.title ?? sid;
+  const title =(sid: string) => summary?.sessions.find((s) => s.id === sid)?.title ?? sid;
   return (
     <div className="phone">
       {screen.kind === "session" ? (

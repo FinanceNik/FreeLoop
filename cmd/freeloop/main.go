@@ -275,6 +275,7 @@ func main() {
 	}()
 	go func() {
 		for n := range notices {
+			go ph.srv.Notify(n) // the phone hears of it too (GUI-052, issue 029)
 			desk.notice(n)
 		}
 	}()

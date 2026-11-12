@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -81,7 +82,14 @@ func started(t *testing.T) (*engine.Engine, *Server, *phone) {
 	t.Helper()
 	dir := t.TempDir()
 	keys := secrets.NewMemory()
-	e, err := engine.Open(engine.Options{DataDir: dir, Secrets: keys, Home: t.TempDir(), Dev: true, WatchInterval: -1, ScheduleInterval: -1})
+	// The notices reach the server as they do in the app (cmd/freeloop).
+	var srv atomic.Pointer[Server]
+	e, err := engine.Open(engine.Options{DataDir: dir, Secrets: keys, Home: t.TempDir(), Dev: true, WatchInterval: -1, ScheduleInterval: -1,
+		OnNotice: func(n engine.Notice) {
+			if sv := srv.Load(); sv != nil {
+				sv.Notify(n)
+			}
+		}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,6 +107,7 @@ func started(t *testing.T) (*engine.Engine, *Server, *phone) {
 		"apple-touch-icon.png": {Data: []byte("png")},
 		"sw.js":                {Data: []byte("// worker")},
 	})
+	srv.Store(s)
 	st := e.RemoteState()
 	if !st.On {
 		t.Fatalf("remote state: %+v", st)

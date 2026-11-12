@@ -6,9 +6,9 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
 const text = {
-  en: { approval: "A session needs your answer", done: "A session is done", failed: "A session failed", other: "Something happened in a session" },
-  de: { approval: "Eine Sitzung braucht deine Antwort", done: "Eine Sitzung ist fertig", failed: "Eine Sitzung ist fehlgeschlagen", other: "In einer Sitzung ist etwas passiert" },
-  nl: { approval: "Een sessie heeft je antwoord nodig", done: "Een sessie is klaar", failed: "Een sessie is mislukt", other: "Er is iets gebeurd in een sessie" },
+  en: { approval: "A session needs you", done: "A session finished", failed: "A session stopped with an error", budget: "A session reached its budget", other: "Something happened in a session" },
+  de: { approval: "Eine Sitzung braucht dich", done: "Eine Sitzung ist fertig", failed: "Eine Sitzung wurde mit einem Fehler beendet", budget: "Eine Sitzung hat ihr Budget erreicht", other: "In einer Sitzung ist etwas passiert" },
+  nl: { approval: "Een sessie heeft je nodig", done: "Een sessie is klaar", failed: "Een sessie is met een fout gestopt", budget: "Een sessie heeft haar budget bereikt", other: "Er is iets gebeurd in een sessie" },
 };
 
 // notification is what to show for a push's data: a title from its kind and a link

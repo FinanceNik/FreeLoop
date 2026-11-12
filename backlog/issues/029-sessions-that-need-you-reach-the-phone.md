@@ -1,6 +1,6 @@
 ---
 title: The phone is told when a session needs the user, finished or failed
-status: open
+status: done
 type: afk
 blockedBy: [028-encrypted-push-from-the-computer]
 prd: sessions-from-the-phone

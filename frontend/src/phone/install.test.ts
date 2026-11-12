@@ -71,7 +71,7 @@ test("the worker shows a notification from a push's kind and session, and nothin
   new Function("self", read("sw.js"))(self);
   const push = (json: () => unknown) => listeners.push({ data: { json }, waitUntil: () => {} });
   push(() => ({ kind: "approval", sessionId: "ses_1", secret: "leaks" }));
-  assert.equal(shown[0].options.body, "Eine Sitzung braucht deine Antwort");
+  assert.equal(shown[0].options.body, "Eine Sitzung braucht dich");
   assert.equal(shown[0].options.data.url, "/phone/#session=ses_1");
   assert.doesNotMatch(JSON.stringify(shown[0]), /leaks/);
   push(() => {
@@ -81,4 +81,28 @@ test("the worker shows a notification from a push's kind and session, and nothin
   push(() => ({ kind: "<b>x</b>", sessionId: "../../x" }));
   assert.equal(shown[2].options.data.url, "/phone/");
   assert.equal(shown[2].options.body, "In einer Sitzung ist etwas passiert");
+});
+
+test("the worker's text per kind and language", () => {
+  const words: Record<string, Record<string, string>> = {
+    en: { approval: "A session needs you", done: "A session finished", failed: "A session stopped with an error" },
+    de: { approval: "Eine Sitzung braucht dich", done: "Eine Sitzung ist fertig", failed: "Eine Sitzung wurde mit einem Fehler beendet" },
+    nl: { approval: "Een sessie heeft je nodig", done: "Een sessie is klaar", failed: "Een sessie is met een fout gestopt" },
+  };
+  for (const [lang, kinds] of Object.entries(words)) {
+    for (const [kind, body] of Object.entries(kinds)) {
+      const shown: { options: { body: string } }[] = [];
+      let handler: (e: unknown) => void = () => {};
+      const self = {
+        addEventListener: (type: string, fn: (e: unknown) => void) => type === "push" && (handler = fn),
+        skipWaiting: () => {},
+        clients: { claim: () => {} },
+        navigator: { language: lang },
+        registration: { showNotification: (_t: string, options: never) => (shown.push({ options }), Promise.resolve()) },
+      } as Record<string, unknown>;
+      new Function("self", read("sw.js"))(self);
+      handler({ data: { json: () => ({ kind, sessionId: "s1" }) }, waitUntil: () => {} });
+      assert.equal(shown[0].options.body, body, `${lang} ${kind}`);
+    }
+  }
 });

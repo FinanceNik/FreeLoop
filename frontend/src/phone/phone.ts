@@ -100,3 +100,10 @@ export function pushBody(sub: { toJSON(): { endpoint?: string; keys?: Record<str
 export function pushSupported(env: { serviceWorker?: unknown; PushManager?: unknown; Notification?: unknown }): boolean {
   return !!env.serviceWorker && !!env.PushManager && !!env.Notification;
 }
+
+// sessionFromHash reads the session a notification's link names after #session=. Only
+// what a session ID looks like is accepted, as in the worker that makes the link.
+export function sessionFromHash(hash: string): string {
+  const m = /(?:^#|&)session=([A-Za-z0-9_-]{1,64})(?:&|$)/.exec(hash);
+  return m ? m[1] : "";
+}
