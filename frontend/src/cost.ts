@@ -115,6 +115,36 @@ export function estimate(prices: readonly PriceEntry[], calls: readonly ModelCal
   return { cost, unpriced };
 }
 
+// A CostTally is the estimate of a list of calls, kept to go on from when the list grows.
+export interface CostTally {
+  cost: number;
+  unpriced: number;
+  // The calls that are not adjustments, and how many of the list it has counted.
+  counted: number;
+  upTo: number;
+  first: ModelCall | undefined;
+  prices: readonly PriceEntry[];
+  session: { providerId: string; model: string };
+}
+
+// tallyCalls estimates calls like estimate does, counting only the calls after the ones
+// prev counted when prev was made for the same prices and session and its calls are the
+// start of these: a session's calls only grow, so each call is priced once.
+export function tallyCalls(prev: CostTally | null, prices: readonly PriceEntry[], calls: readonly ModelCall[], session: { providerId: string; model: string }): CostTally {
+  const base = prev && prev.prices === prices && prev.session.providerId === session.providerId && prev.session.model === session.model && prev.upTo <= calls.length && prev.first === calls[0] ? prev : null;
+  const rest = base ? calls.slice(base.upTo) : calls;
+  const e = estimate(prices, rest, session);
+  return {
+    cost: (base?.cost ?? 0) + e.cost,
+    unpriced: (base?.unpriced ?? 0) + e.unpriced,
+    counted: (base?.counted ?? 0) + rest.filter((c) => !c.adjustment).length,
+    upTo: calls.length,
+    first: calls[0],
+    prices,
+    session: { providerId: session.providerId, model: session.model },
+  };
+}
+
 // formatCost writes an amount in US dollars, as provider prices are, in the locale's
 // style: $146.51, 146,51 $, $ 146,51 (GUI-048).
 export function formatCost(n: number): string {

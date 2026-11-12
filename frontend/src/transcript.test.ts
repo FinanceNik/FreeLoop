@@ -1,7 +1,39 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { optimizerCounts, apply, awaitingDecision, buildView, emptyTranscript, HELD_BY, hookFailedText, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
+import { optimizerCounts, apply, awaitingDecision, buildView as foldOnce, emptyTranscript, viewOf, type SessionView, type Transcript, HELD_BY, hookFailedText, lineDiff, panelData, summary, toolRuns, type Item, type TranscriptEvent } from "./transcript.ts";
 import { setLanguage } from "./i18n.ts";
+
+// stepped folds events the way a window gets them: in batches through apply, the view
+// taken after each (NFR-PERF-001). cuts says where the batches end.
+function stepped(events: readonly TranscriptEvent[], cuts: readonly number[]): SessionView {
+  // Built as apply does, but without its demand that seqs run from 1: some fixtures start later.
+  const held: TranscriptEvent[] = [];
+  let view = viewOf({ events: held, length: 0, lastSeq: 0 });
+  let from = 0;
+  for (const to of [...cuts, events.length]) {
+    if (to <= from) continue;
+    held.push(...events.slice(from, to));
+    view = viewOf({ events: held, length: held.length, lastSeq: events[to - 1].seq });
+    from = to;
+  }
+  return view;
+}
+
+// buildView here is the fold at once, and every use of it in this file also checks that
+// the same events folded in steps (one at a time, in halves, and at seeded random cuts)
+// give an equal view: the fold goes on from where it was without drifting.
+function buildView(events: readonly TranscriptEvent[]): SessionView {
+  const once = foldOnce(events);
+  const n = events.length;
+  const rand = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const ones = Array.from({ length: n }, (_, i) => i);
+  const random = (seed: number) => {
+    const r = rand(seed);
+    return Array.from({ length: Math.ceil(n / 3) }, () => Math.floor(r() * n)).sort((a, b) => a - b);
+  };
+  for (const cuts of [ones, [n >> 1], random(1), random(2), random(3)]) assert.deepStrictEqual(stepped(events, cuts), once);
+  return once;
+}
 
 const ev = (seq: number, data: unknown = {}): TranscriptEvent => ({
   v: 1,
@@ -548,37 +580,157 @@ test("a command keeps the hint its agent gives for its input", () => {
   assert.equal(view.commands[1].input, undefined);
 });
 
-// A long session's cost (NFR-PERF-002, issue 040). These record today's numbers and
-// print them; later issues turn them into limits (the PRD's "numbers to meet").
+// A long session's cost (NFR-PERF-002, issues 040 and 044): what is measured prints, and
+// a batch of new events folding in under 2 ms is a limit (the PRD's "numbers to meet").
 import { longFixture, LONG_EVENTS, type FixtureShape } from "./longfixture.ts";
 
+const ms = (f: () => void) => { const t = performance.now(); f(); return performance.now() - t; };
+
 for (const shape of ["text", "tools"] as FixtureShape[]) {
-  test(`timing: folding ${LONG_EVENTS} ${shape} events at once and one at a time`, () => {
+  test(`timing: folding ${LONG_EVENTS} ${shape} events at once and in batches`, () => {
     const { events, lastError } = longFixture(shape);
     assert.equal(events.length, LONG_EVENTS);
     assert.ok(lastError > 0 && lastError < LONG_EVENTS * 0.7);
-    const ms = (f: () => void) => { const t = performance.now(); f(); return performance.now() - t; };
 
     // At once: the whole transcript in one fold, the way a session opens.
-    let view = buildView(events);
-    const once = ms(() => { view = buildView(events); });
+    let view = foldOnce(events);
+    const once = ms(() => { view = foldOnce(events); });
     assert.ok(view.items.length > 0);
 
-    // The last 2000 events through apply in batches of one, the way a stream
-    // arrives (every one copies the events so far, so all 80,000 would take minutes).
-    const streamed = 2000;
-    let tr = apply(emptyTranscript, events.slice(0, LONG_EVENTS - streamed)).transcript;
-    const applied = ms(() => { for (const e of events.slice(LONG_EVENTS - streamed)) tr = apply(tr, [e]).transcript; });
-    assert.equal(tr.lastSeq, LONG_EVENTS);
+    // The last 2000 events through apply and the fold in batches, the way a window
+    // gets them: one event at a time (a token) and fifty at a time (a busy frame).
+    for (const size of [1, 50]) {
+      const batches = size === 1 ? 1000 : 40;
+      const start = LONG_EVENTS - batches * size;
+      let tr = apply(emptyTranscript, events.slice(0, start)).transcript;
+      viewOf(tr);
+      const times: number[] = [];
+      for (let i = 0; i < batches; i++) {
+        const batch = events.slice(start + i * size, start + (i + 1) * size);
+        times.push(ms(() => { tr = apply(tr, batch).transcript; viewOf(tr); }));
+      }
+      assert.equal(tr.lastSeq, LONG_EVENTS);
+      assert.deepEqual(viewOf(tr).items, view.items);
+      const mean = times.reduce((a, b) => a + b, 0) / batches;
+      console.log(`fold ${shape}: at once ${once.toFixed(0)} ms (${((once * 1000) / LONG_EVENTS).toFixed(2)} us per event); a batch of ${size} at the end ${mean.toFixed(2)} ms (apply and view)`);
+      // The limit is 2 ms; a loaded machine gets some room, since the timings vary by 30%.
+      assert.ok(mean < 2, `a batch of ${size} took ${mean.toFixed(2)} ms on average`);
+    }
+  });
 
-    // One at a time: the view rebuilt after each of the last 20 events, what the
-    // window does today for every event or batch that arrives.
-    const tail = 20;
-    const stepped = ms(() => { for (let i = LONG_EVENTS - tail + 1; i <= LONG_EVENTS; i++) buildView(events.slice(0, i)); });
-
-    console.log(`fold ${shape}: at once ${once.toFixed(0)} ms (${((once * 1000) / LONG_EVENTS).toFixed(2)} us per event); apply one at a time at the end ${((applied * 1000) / streamed).toFixed(0)} us per event; rebuilding the view per event at the end ${(stepped / tail).toFixed(0)} ms per event`);
+  test(`the ${shape} fixture folded in steps cut at random places equals the fold at once`, () => {
+    const { events } = longFixture(shape, 20000);
+    const once = foldOnce(events);
+    let seed = 99;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const cuts = Array.from({ length: 40 }, () => Math.floor(rand() * events.length)).sort((a, b) => a - b);
+    assert.deepStrictEqual(stepped(events, cuts), once);
+    // One at a time over the last stretch too, where the last turn's items still change.
+    assert.deepStrictEqual(stepped(events, Array.from({ length: 300 }, (_, i) => events.length - 300 + i)), once);
   });
 }
+
+test("a tool call is found by its ID without a scan", () => {
+  const e = (seq: number, type: string, data: unknown): TranscriptEvent => ({ v: 1, seq, ts: "", sid: "s", type, data });
+  const calls = 30000;
+  const events: TranscriptEvent[] = [];
+  for (let i = 0; i < calls; i++) events.push(e(events.length + 1, "tool_call", { toolCallId: `c${i}`, tool: "read_file", status: "pending" }));
+  // Updates to the earliest calls: a scan for each would cross the whole list.
+  const updates = 20000;
+  for (let i = 0; i < updates; i++) events.push(e(events.length + 1, "tool_call_update", { toolCallId: `c${i % 100}`, status: "completed" }));
+  const took = ms(() => { foldOnce(events); });
+  assert.ok(took < 400, `${updates} updates among ${calls} calls took ${took.toFixed(0)} ms`);
+});
+
+test("appending events does not copy the ones already held", () => {
+  const first = apply(emptyTranscript, [ev(1), ev(2)]).transcript;
+  const next = apply(first, [ev(3)]).transcript;
+  assert.equal(next.events, first.events);
+  assert.equal(first.length, 2);
+  assert.deepEqual(viewOf(first).items.map((i) => i.key), ["1", "2"]);
+  assert.deepEqual(viewOf(next).items.map((i) => i.key), ["1", "2", "3"]);
+  // The shared empty transcript is never appended to, and an older transcript that
+  // gets events copies before it does, so neither changes what another holds.
+  assert.equal(emptyTranscript.events.length, 0);
+  const other = apply(first, [ev(3, { message: "another" })]).transcript;
+  assert.notEqual(other.events, next.events);
+  assert.equal(next.events[2].data && (next.events[2].data as { message?: string }).message, undefined);
+  assert.equal((viewOf(other).items[2] as { message: string }).message, "another");
+  assert.equal((viewOf(next).items[2] as { message: string }).message, "");
+});
+
+test("an item that did not change is the same object in the next view", () => {
+  const e = (seq: number, type: string, data: unknown): TranscriptEvent => ({ v: 1, seq, ts: "", sid: "s", type, data });
+  const evs = [
+    e(1, "user_message_chunk", { content: { type: "text", text: "go" } }),
+    e(2, "tool_call", { toolCallId: "a", tool: "read_file", status: "completed" }),
+    e(3, "tool_call", { toolCallId: "b", tool: "read_file", status: "completed" }),
+    e(4, "agent_message_chunk", { content: { type: "text", text: "one" } }),
+  ];
+  let tr = apply(emptyTranscript, evs).transcript;
+  const before = viewOf(tr);
+  tr = apply(tr, [e(5, "agent_message_chunk", { content: { type: "text", text: " two" } })]).transcript;
+  const after = viewOf(tr);
+  assert.notEqual(after, before);
+  assert.equal(after.items[0], before.items[0]);
+  assert.equal(after.items[1], before.items[1]);
+  assert.notEqual(after.items[3], before.items[3]);
+  assert.equal((after.items[3] as { text: string }).text, "one two");
+  assert.equal(after.runs[0], before.runs[0]);
+  assert.equal(after.panel, before.panel);
+  assert.equal(after.touched, before.touched);
+  assert.equal(viewOf(tr), after);
+});
+
+test("a rewind, a history reset and a change of language still give the right view", () => {
+  const e = (seq: number, type: string, data: unknown): TranscriptEvent => ({ v: 1, seq, ts: "", sid: "s", type, data });
+  const user = (seq: number, text: string) => e(seq, "user_message_chunk", { content: { type: "text", text } });
+  const evs = [
+    e(1, "checkpoint", {}),
+    user(2, "one"),
+    e(3, "tool_call", { toolCallId: "t1", tool: "edit_file", status: "completed" }),
+    e(4, "checkpoint", {}),
+    user(5, "two"),
+    e(6, "tool_call", { toolCallId: "t2", tool: "edit_file", status: "pending" }),
+    e(7, "tool_call_update", { toolCallId: "t2", status: "completed" }),
+  ];
+  const users = (v: SessionView) => v.items.filter((i) => i.kind === "user").map((i) => [i.kind === "user" && i.filesOnly, !!i.rewound, i.rev]);
+  // A rewind to the second checkpoint dims what came after it, in the view already built.
+  let tr = apply(emptyTranscript, evs).transcript;
+  const early = viewOf(tr);
+  assert.deepEqual(users(early), [[undefined, false, 2], [undefined, false, 5]]);
+  tr = apply(tr, [e(8, "rewind", { checkpointSeq: 4, context: true })]).transcript;
+  const rewound = viewOf(tr);
+  assert.deepEqual(rewound.items.map((i) => !!i.rewound), [false, false, true, true, false]);
+  assert.deepEqual(rewound.rewindable.map((i) => i.key), ["2"]);
+  assert.equal(early.items[3].rewound, undefined, "the earlier view is not touched");
+  // The rewind replaced the context, so the first message can restore files only.
+  assert.equal(rewound.items[0].kind === "user" && rewound.items[0].filesOnly, true);
+  // A history reset does the same to every earlier checkpoint, and a message after it is whole.
+  tr = apply(tr, [e(9, "history_message", { reset: true }), e(10, "checkpoint", {}), user(11, "three")]).transcript;
+  const reset = viewOf(tr);
+  assert.deepEqual(reset.items.filter((i) => i.kind === "user").map((i) => i.kind === "user" && i.filesOnly), [true, true, undefined]);
+  assert.deepStrictEqual(reset, foldOnce(tr.events));
+  // A checkpoint followed by a reset and then its message: the message is files only at once.
+  assert.equal(buildView([e(1, "checkpoint", {}), e(2, "history_message", { reset: true }), user(3, "late")]).items[0].kind === "user" && true, true);
+  assert.equal((buildView([e(1, "checkpoint", {}), e(2, "history_message", { reset: true }), user(3, "late")]).items[0] as { filesOnly?: boolean }).filesOnly, true);
+
+  // The app's own words follow the language: the same transcript is folded again.
+  const effort = apply(emptyTranscript, [e(1, "effort_changed", { effort: "high" })]).transcript;
+  const english = viewOf(effort);
+  setLanguage("de");
+  try {
+    const german = viewOf(effort);
+    assert.notDeepEqual((german.items[0] as { message: string }).message, (english.items[0] as { message: string }).message);
+    assert.deepStrictEqual(german, foldOnce(effort.events));
+    // Events that come afterwards are folded in the language in force.
+    const more = apply(effort, [e(2, "effort_changed", { effort: "low" })]).transcript;
+    assert.deepStrictEqual(viewOf(more), foldOnce(more.events));
+  } finally {
+    setLanguage("en");
+  }
+  assert.deepStrictEqual(viewOf(effort), english);
+});
 
 test("an image whose uri is not a string is left out, not thrown on", () => {
   for (const uri of [42, null, { a: 1 }, ["attachment:a.png"]]) {

@@ -1336,7 +1336,7 @@ export default function App() {
       onShowRun={(root) => setRunFor(root)}
       knownTags={tagsInUse}
       onOpenCompare={(tag) => setScreen({ kind: "compare", tag })}
-      events={transcripts[s.id]?.events ?? []}
+      transcript={transcripts[s.id] ?? emptyTranscript}
       provider={providers.find((p) => p.id === s.providerId)}
       providers={providers}
       environment={environments.find((x) => x.id === (s.environmentId || "local"))}

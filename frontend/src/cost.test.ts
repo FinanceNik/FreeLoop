@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { costText, estimate, findPrice, formatCost, globMatch, type ModelCall, type PriceEntry } from "./cost.ts";
+import { costText, estimate, findPrice, formatCost, globMatch, tallyCalls, type ModelCall, type PriceEntry } from "./cost.ts";
 import { setLanguage } from "./i18n.ts";
 
 test("globMatch follows path.Match", () => {

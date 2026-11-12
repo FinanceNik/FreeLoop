@@ -1,6 +1,6 @@
 ---
 title: The fold goes on from where it was
-status: open
+status: done
 type: afk
 blockedBy: [043-events-reach-the-window-in-batches]
 prd: before-going-public
@@ -21,3 +21,6 @@ prd: before-going-public
 
 ## Notes
 - `buildView` is the public face and stays; a second function carries the state.
+
+## Done
+`newFold` carries the state and `viewOf(transcript)` goes on from it; `buildView` stays and folds at once. A rewind and a history reset are applied to the items already folded (a test covers each, with the language change), so the fold starts over only for a change of language and for a transcript older than the one it last folded. The per-render passes over all items are in the view now: `runs`, `waiting`, `rewindable`, `models`, `panel` (what `panelData` returns), with a session's cost tallied from the calls it counted before (`tallyCalls`) and a turn's cost kept with its item. `optimizerCounts` and `planVersions` in the panel still scan the items once per render of the panel. `ItemView` compares every prop; the three functions it calls are now the same ones from render to render. App.tsx: one line, `transcript={transcripts[s.id] ?? emptyTranscript}` in place of `events={transcripts[s.id]?.events ?? []}`.

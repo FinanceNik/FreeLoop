@@ -71,6 +71,17 @@ Stages 1, 3 and 4 touch different packages (`internal/permission` and `internal/
 
    None of attention, activity, live usage, the queue or the AFK tick reads a whole long transcript now; a test fails if one does. A `ScanBack` costs in proportion to how far back its answer is, and only a session without the answer is read whole.
 
+   **After issue 044** (same machine; `node --test --test-name-pattern=timing frontend/src/transcript.test.ts`, three runs): the fold keeps its state (`newFold` in `transcript.ts`) and takes only the new events; `viewOf(transcript)` goes on from the events it last folded, `apply` appends to one shared array, a tool call is found through a map of ID to place, and the view keeps what did not change (items, runs of tool calls, the panel's lists, the approvals waiting, the held list, the files touched).
+
+   | | text | tools |
+   |---|---|---|
+   | window folds all events at once (unchanged: a first open) | 8 to 10 ms | 10 to 11 ms |
+   | `apply` and view of one event at the end (was 204 us and 5 ms / 483 us and 35 ms) | 0.01 ms | 0.10 to 0.11 ms |
+   | `apply` and view of a batch of 50 at the end (a limit of 2 ms, checked by a test) | 0.01 ms | 0.17 to 0.20 ms |
+   | lived-in app check, click to the end drawn (was 6.6 s, 5.5 to 6.3 s after 043; one run) | 4.4 s | |
+
+   The second number to meet is met by a factor of 10 or more. Opening a long session still draws every item it holds, so the last number is for issues 045 and 046; the fold no longer costs more as a session grows.
+
 4. **Opening at the end (046) is built only if the last number is missed** once 041 to 045 are in. It is the largest change to the window in this plan, and the cheaper ones may be enough.
 5. **No large rework before going public.** `Engine` (567 methods), `App.tsx` and `SessionView.tsx` (48 and 46 pieces of state) stay as they are, since splitting them changes nothing a user sees and risks a lot. The same for the four usage folds, the built-in harness's 23 branches in the engine and the app check's fixed waits. They are listed under "Out of scope" so they are not forgotten.
 6. **Checks run here.** CI cannot run until the repository is public, so each issue ends with `make lint` and `make test`, and `make check-app` for a change to the window.

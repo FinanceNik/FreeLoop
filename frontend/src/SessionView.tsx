@@ -26,11 +26,9 @@ import {
   type SessionMCPContext,
 } from "./api.ts";
 import {
-  awaitingDecision,
-  buildView,
-  toolRuns,
+  viewOf,
   type Item,
-  type TranscriptEvent,
+  type Transcript,
   phoneName,
 } from "./transcript.ts";
 import { pickLabel } from "./a11y.ts";
@@ -58,14 +56,14 @@ import { insertDictation } from "./voice.ts";
 import type { PaletteItem } from "./palette.ts";
 import { itemForSeq } from "./search.ts";
 import { drawOnce, HOLD_PLACE, holdsPlace, READER_PAUSE, readerScrolling, scrollsByKey, scrollsUpByKey, settledPlace } from "./scrollPlace.ts";
-import { costText, estimate, formatCost, type PriceEntry } from "./cost.ts";
+import { costText, estimate, formatCost, tallyCalls, type CostTally, type PriceEntry } from "./cost.ts";
 import { trustLines, trustStep } from "./trust.ts";
 import { locale, t, type PlainKey } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 
 interface Props {
   session: Session;
-  events: TranscriptEvent[];
+  transcript: Transcript;
   // A search hit to scroll to (SES-007); n tells repeated jumps apart.
   focus?: { seq: number; n: number };
   // The price table for cost estimates (PRV-008).
@@ -147,7 +145,7 @@ function panelOpenInitially(): boolean {
   return stored === null ? window.innerWidth > 1000 : stored === "1";
 }
 
-export default function SessionView({ session, events, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source, onRunAFK, onOpenModelSets, onShowRun }: Props) {
+export default function SessionView({ session, transcript, focus, prices, initialDraft, onForked, profiles, provider, providers, environment, harness, project, onProjectsChanged, allowBypass, configVersion, onError, onDeleted, onOpenWindow, knownTags = [], onOpenCompare, active = true, onClosePane, onPaneDrag, source, onRunAFK, onOpenModelSets, onShowRun }: Props) {
   // Beside other panes the panel starts closed and only the active pane shows
   // it; the remembered choice is for a session alone in the window.
   const split = !!onClosePane;
@@ -278,23 +276,32 @@ export default function SessionView({ session, events, focus, prices, initialDra
   // language in force, so both follow a change of it (GUI-048).
   const loc = locale();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
-  const view = useMemo(() => buildView(events), [events, loc]);
-  // Estimated cost of the session and of each turn, by turn_end key.
-  const costs = useMemo(() => {
-    const own = { providerId: session.providerId, model: session.model };
-    const turns = new Map<string, string>();
-    for (const it of view.items) {
-      if (it.kind !== "turn_end" || it.calls.length === 0) continue;
+  const view = useMemo(() => viewOf(transcript), [transcript, loc]);
+  // Estimated cost of the session and of each turn. A turn's cost is kept with its item,
+  // which stays the same object until it changes, and the session's goes on from the calls
+  // it counted last time (the calls only grow), so a batch costs what it holds.
+  const own = useMemo(() => ({ providerId: session.providerId, model: session.model }), [session.providerId, session.model]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
+  const turnCosts = useMemo(() => new WeakMap<Item, string | null>(), [prices, own, loc]);
+  const turnCost = (it: Item): string | undefined => {
+    if (it.kind !== "turn_end" || it.calls.length === 0) return undefined;
+    let text = turnCosts.get(it);
+    if (text === undefined) {
       const e = estimate(prices, it.calls, own);
-      if (e.unpriced < it.calls.length) turns.set(it.key, e.unpriced ? t("session.turnCost.unpriced", { cost: formatCost(e.cost) }) : `≈ ${formatCost(e.cost)}`);
+      text = e.unpriced >= it.calls.length ? null : e.unpriced ? t("session.turnCost.unpriced", { cost: formatCost(e.cost) }) : `≈ ${formatCost(e.cost)}`;
+      turnCosts.set(it, text);
     }
-    return { session: estimate(prices, view.calls, own), calls: view.calls.filter((c) => !c.adjustment).length, turns };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
-  }, [view, prices, session.providerId, session.model, loc]);
+    return text ?? undefined;
+  };
+  const tally = useRef<CostTally | null>(null);
+  const costs = useMemo(() => {
+    tally.current = tallyCalls(tally.current, prices, view.calls, own);
+    return { session: { cost: tally.current.cost, unpriced: tally.current.unpriced }, calls: tally.current.counted };
+  }, [view.calls, prices, own]);
 
   // Screen readers hear approvals and turn ends, not every streamed word
   // (NFR-A11Y-002).
-  const waitingTools = view.items.filter((i) => i.kind === "tool" && awaitingDecision(i));
+  const waitingTools = view.waiting;
   const [announcement, setAnnouncement] = useState("");
   const heard = useRef({ waiting: waitingTools.length, running: view.running });
   const announceChange = useEffectEvent(() => {
@@ -326,7 +333,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   useEffect(() => () => void storeDraft(session.id, typed.current, EngineService.RedactText), [session.id]);
   const [queued, setQueued] = useState(0);
   const mode = view.mode ?? session.mode;
-  const approvalWaiting = view.items.some((i) => i.kind === "tool" && awaitingDecision(i));
+  const approvalWaiting = view.waiting.length > 0;
 
   // @ mentions (GUI-004): the project's files load when the picker opens and
   // reload when the list is older than ten seconds.
@@ -989,6 +996,20 @@ export default function SessionView({ session, events, focus, prices, initialDra
         input.current?.focus();
       })
       .catch(onError);
+  // What an item calls is the same functions from one render to the next, each going to
+  // the latest, so ItemView can compare them and still skip an item that did not change.
+  const latestActions = useRef({ onError, rewind, fork });
+  useLayoutEffect(() => {
+    latestActions.current = { onError, rewind, fork };
+  });
+  const itemActions = useMemo(
+    () => ({
+      onError: (err: unknown) => latestActions.current.onError(err),
+      onRewind: (seq: number, text: string) => void latestActions.current.rewind(seq, text),
+      onFork: (seq: number) => void latestActions.current.fork(seq),
+    }),
+    [],
+  );
   // The box is one line until there is more to show; a hidden pane has no height to read.
   useLayoutEffect(() => {
     const el = input.current;
@@ -1041,7 +1062,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
         showPanel("terminal");
       })
       .catch(onError);
-  const rewindable = view.items.filter((i): i is Extract<Item, { kind: "user" }> => i.kind === "user" && !!i.checkpointSeq && !i.rewound).reverse();
+  const rewindable = view.rewindable;
   const act = (id: string, title: string, run: () => void, extra: Partial<PaletteItem> = {}): PaletteItem => ({
     id: `session:${session.id}:${id}`,
     title,
@@ -1467,9 +1488,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
           }}
         >
           {view.items.length === 0 && <p className="muted empty">{t("session.empty")}</p>}
-          {toolRuns(view.items).map((run) => {
+          {view.runs.map((run) => {
             const one = (item: Item) => (
-              <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={costs.turns.get(item.key)} locale={loc} roots={roots} onError={onError} onRewind={rewind} onFork={fork} />
+              <ItemView key={item.key} sid={session.id} item={item} focused={item.key === focused} cost={turnCost(item)} locale={loc} roots={roots} onError={itemActions.onError} onRewind={itemActions.onRewind} onFork={itemActions.onFork} />
             );
             if (run.items.length === 1) return one(run.items[0]);
             return (
@@ -1811,7 +1832,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
                 offersAuto={offersAuto}
                 canAuto={canAuto}
                 bypassOn={allowBypass}
-                version={view.items.filter((i) => i.kind === "model").length + view.settings}
+                version={view.models + view.settings}
                 onMode={setMode}
                 onOtherModel={() => setSwitching({ providerId: session.providerId, model: session.model })}
                 onRules={showRules}
@@ -1895,8 +1916,10 @@ export default function SessionView({ session, events, focus, prices, initialDra
   );
 }
 
-// ItemView re-renders only when its item changed (see Item.rev), or the locale its times
-// and counts are written in (GUI-048).
+// ItemView re-renders only when its item changed (see Item.rev), or something else it
+// draws from did: whether it is the one found, its cost, the locale its times and counts
+// are written in (GUI-048), the session and roots its files are read from, and what it
+// calls (the same functions unless the window gives it others).
 const ItemView = memo(
   function ItemView({
     sid,
@@ -1926,7 +1949,17 @@ const ItemView = memo(
       </div>
     );
   },
-  (a, b) => a.item.key === b.item.key && a.item.rev === b.item.rev && a.focused === b.focused && a.cost === b.cost && a.locale === b.locale,
+  (a, b) =>
+    a.item.key === b.item.key &&
+    a.item.rev === b.item.rev &&
+    a.focused === b.focused &&
+    a.cost === b.cost &&
+    a.locale === b.locale &&
+    a.sid === b.sid &&
+    a.roots === b.roots &&
+    a.onError === b.onError &&
+    a.onRewind === b.onRewind &&
+    a.onFork === b.onFork,
 );
 
 function ItemBody({

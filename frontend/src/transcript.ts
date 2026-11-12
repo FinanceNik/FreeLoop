@@ -1,7 +1,7 @@
 import { contextResent } from "./contextMeter.ts";
 import type { ModelCall } from "./cost.ts";
 import type { ModelContext } from "./modelContext.ts";
-import { t, type PlainKey } from "./i18n.ts";
+import { locale, t, type PlainKey } from "./i18n.ts";
 
 // A session's transcript in the UI is a pure function of its events. Replay
 // from disk and the live stream both go through apply, so they cannot drift.
@@ -18,12 +18,17 @@ export interface TranscriptEvent {
   data: unknown;
 }
 
+// A transcript holds its events in one array that only grows: apply appends to it where
+// it stands, so a batch costs its own size and not the transcript's (NFR-PERF-001).
+// A transcript is the first `length` events of that array; one older than the latest
+// copies what it needs before it appends, so no one sees events it did not have.
 export interface Transcript {
   events: TranscriptEvent[];
+  length: number;
   lastSeq: number;
 }
 
-export const emptyTranscript: Transcript = { events: [], lastSeq: 0 };
+export const emptyTranscript: Transcript = { events: [], length: 0, lastSeq: 0 };
 
 export interface ApplyResult {
   transcript: Transcript;
@@ -50,7 +55,12 @@ export function apply(tr: Transcript, incoming: readonly TranscriptEvent[]): App
 }
 
 function extend(tr: Transcript, added: TranscriptEvent[], lastSeq: number): Transcript {
-  return added.length === 0 ? tr : { events: [...tr.events, ...added], lastSeq };
+  if (added.length === 0) return tr;
+  // The shared array is appended to only by the newest transcript, and never when empty
+  // (emptyTranscript is shared by everyone).
+  const events = tr.length > 0 && tr.events.length === tr.length ? tr.events : tr.events.slice(0, tr.length);
+  for (const ev of added) events.push(ev);
+  return { events, length: events.length, lastSeq };
 }
 
 // summary renders an event's payload as one line of text for the M0 view.
@@ -179,6 +189,8 @@ export interface GitState {
 
 export interface SessionView {
   items: Item[];
+  // The items in runs (toolRuns), kept from one view to the next as far as they did not change.
+  runs: ItemRun[];
   usage: Usage;
   // Every model call, for cost estimates (PRV-008).
   calls: ModelCall[];
@@ -213,6 +225,14 @@ export interface SessionView {
   // Why the session is not getting on, and where it could continue (HRN-020); null once
   // a turn starts again or it continued elsewhere.
   stuck: Stuck | null;
+  // The tool calls waiting for a decision, and the user messages a rewind can go back to
+  // (the latest first); both are the same arrays until one changes.
+  waiting: ToolItem[];
+  // How many times the session's model was named (model items).
+  models: number;
+  rewindable: Extract<Item, { kind: "user" }>[];
+  // What the right panel shows (panelData).
+  panel: PanelData;
 }
 
 export interface Stuck {
@@ -265,13 +285,33 @@ export interface AvailableCommand {
 
 type Data = Record<string, any>;
 
-// buildView folds a session's events into what the conversation shows.
-export function buildView(events: readonly TranscriptEvent[]): SessionView {
+// A run of tool calls that read as one line (see toolRuns).
+export interface ItemRun {
+  items: Item[];
+}
+
+type ToolEntry = { item: ToolItem; i: number };
+
+// A Fold is a session's view being built from its events, which it takes in order and
+// keeps the state of, so new events cost what they are and not what came before them
+// (NFR-PERF-001). view() gives what the conversation shows as of the events so far; what
+// did not change since the last view is the same object, an item the same Item.
+interface Fold {
+  // How many events it has taken, and the language its words are in.
+  count: number;
+  loc: string;
+  add(ev: TranscriptEvent): void;
+  view(): SessionView;
+}
+
+function newFold(): Fold {
   const items: Item[] = [];
-  const tools = new Map<string, Extract<Item, { kind: "tool" }>>();
+  // Tool calls by ID, with where their item stands in items: found without a scan.
+  const tools = new Map<string, ToolEntry>();
   // What was held, named from its tool call once that has its final title. A form is
   // the user answering an MCP server, which holds nothing back.
   const denied: (Held & { toolCallId?: string })[] = [];
+  const deniedCalls = new Set<string>();
   const forms = new Set<string>();
   const usage: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
   let mode: string | null = null;
@@ -283,21 +323,26 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   let commands: AvailableCommand[] = [];
   // In the order last named; a Map keeps it.
   const touched = new Map<string, true>();
+  let touchedList: string[] = [];
+  let touchedDirty = false;
   const touch = (path: unknown) => {
     if (typeof path !== "string" || !path) return;
     touched.delete(path);
     touched.set(path, true);
+    touchedDirty = true;
   };
   const touchTool = (d: Data) => {
     if (Array.isArray(d.locations)) for (const l of d.locations) touch(l?.path);
     if (Array.isArray(d.content)) for (const c of d.content) if (c?.type === "diff") touch(c.path);
   };
-  // The latest checkpoint not yet tied to a user message, and the ranges
-  // of events a rewind undid.
+  // The latest checkpoint not yet tied to a user message, and the seq of the latest
+  // event that replaced the harness's context (a history reset or a rewind).
   let checkpoint: number | null = null;
-  const rewound: { from: number; to: number }[] = [];
-  // Seqs where the harness's context was replaced (history reset).
-  const resets: number[] = [];
+  let lastReset = 0;
+  // Where the user items with a checkpoint stand, and those a rewind has not undone.
+  const checkpointed: number[] = [];
+  let rewindable: Extract<Item, { kind: "user" }>[] = [];
+  let rewindableDirty = false;
   let contextTokens = 0;
   let contextWindow = 0;
   // The context the latest model call sent, to see one sending it all again (GUI-036).
@@ -306,16 +351,115 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
   // that does not name its own was made with ("" until a switch: the
   // session's).
   const calls: ModelCall[] = [];
+  let callsList: ModelCall[] = [];
+  let callsDirty = false;
   const measured = { turns: 0, unreported: 0 };
   const modelContext: ModelContext[] = [];
+  let modelContextList: ModelContext[] = [];
+  let modelContextDirty = false;
   let turnCalls: ModelCall[] = [];
   let setup: string | null = null;
   let plan: PlanEntry[] = [];
   let planThisTurn = false;
   let current = { providerId: "", model: "" };
 
+  // Where the items that changed since the last view begin: the runs of tool calls and
+  // the copy of items a view holds are made again from there.
+  let changedFrom = Infinity;
+  let itemsList: Item[] = [];
+  const changed = (i: number) => {
+    if (i < changedFrom) changedFrom = i;
+  };
+  const push = (item: Item) => {
+    changed(items.length);
+    items.push(item);
+  };
+  const put = (i: number, item: Item) => {
+    changed(i);
+    items[i] = item;
+  };
   const last = () => items[items.length - 1];
-  for (const ev of events) {
+
+  // The right panel's lists and the approvals waiting, kept by where their items stand
+  // and made again only when one of those items changed (panelData).
+  const waitingAt = new Set<number>();
+  const decidedAt = new Set<number>();
+  const editedAt = new Set<number>();
+  let turnEnds = 0;
+  let models = 0;
+  let waiting: ToolItem[] = [];
+  let waitingDirty = false;
+  let panel: PanelData = { pending: [], decided: [], changes: [], turns: 0 };
+  let panelDirty = false;
+  let held: Held[] = [];
+  let heldDirty = false;
+  const edits = (item: ToolItem) => item.status === "completed" && item.content.some((c) => c.type === "diff" && !!c.path);
+  const decidedHere = (item: ToolItem) => {
+    const d = item.permission?.decided;
+    return !!d && !(d.actor === "mode" && d.outcome === "allowed") && d.actor !== "sandbox";
+  };
+  // trackTool notes what the tool item at i now is for the lists above.
+  const trackTool = (i: number) => {
+    const item = items[i] as ToolItem;
+    const was = [waitingAt.has(i), decidedAt.has(i), editedAt.has(i)];
+    const is = [awaitingDecision(item), decidedHere(item), edits(item)];
+    [waitingAt, decidedAt, editedAt].forEach((set, k) => {
+      if (is[k]) set.add(i);
+      else set.delete(i);
+    });
+    if (was[0] || is[0]) waitingDirty = true;
+    if (was.some(Boolean) || is.some(Boolean)) panelDirty = true;
+    if (deniedCalls.has(item.toolCallId)) heldDirty = true;
+  };
+  const deny = (h: Held & { toolCallId?: string }) => {
+    denied.push(h);
+    if (h.toolCallId) deniedCalls.add(h.toolCallId);
+    heldDirty = true;
+  };
+
+  const replaceTool = (next: ToolItem) => {
+    const entry = tools.get(next.toolCallId);
+    if (!entry) return;
+    put(entry.i, next);
+    entry.item = next;
+    trackTool(entry.i);
+  };
+
+  const pushUser = (item: Extract<Item, { kind: "user" }>) => {
+    const ck = item.checkpointSeq;
+    if (ck) {
+      checkpointed.push(items.length);
+      rewindableDirty = true;
+      if (lastReset > ck) item = { ...item, filesOnly: true, rev: Math.max(item.rev, lastReset) };
+    }
+    push(item);
+  };
+  // reset: the context was replaced at seq, so a message with an earlier checkpoint
+  // can restore the files only (SES-014).
+  const reset = (seq: number) => {
+    lastReset = seq;
+    for (const i of checkpointed) {
+      const it = items[i];
+      if (it.kind === "user" && it.checkpointSeq! < seq) put(i, { ...it, filesOnly: true, rev: Math.max(it.rev, seq) });
+    }
+  };
+  // markRewound: a rewind at `to` undid what came after the checkpoint `from`.
+  const markRewound = (from: number, to: number) => {
+    rewindableDirty = true;
+    // Keys are the seqs the items began at, so they ascend.
+    let lo = 0;
+    let hi = items.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Number(items[mid].key) > from) hi = mid;
+      else lo = mid + 1;
+    }
+    for (let i = lo; i < items.length && Number(items[i].key) < to; i++) {
+      if (!items[i].rewound) put(i, { ...items[i], rewound: true, rev: to });
+    }
+  };
+
+  const add = (ev: TranscriptEvent) => {
     const d = (ev.data ?? {}) as Data;
     const key = String(ev.seq);
     const rev = ev.seq;
@@ -324,7 +468,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         // A resource_link is a file the message mentions (GUI-004).
         const prev = last();
         if (d.content?.type === "resource_link") {
-          if (prev?.kind === "user") items[items.length - 1] = { ...prev, rev, files: [...prev.files, d.content.name ?? d.content.uri] };
+          if (prev?.kind === "user") put(items.length - 1, { ...prev, rev, files: [...prev.files, d.content.name ?? d.content.uri] });
           touch(d.content.name);
           break;
         }
@@ -332,13 +476,13 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           const uri = typeof d.content.uri === "string" ? d.content.uri : "";
           const image = { name: uri.slice("attachment:".length), mimeType: d.content.mimeType ?? "" };
           if (uri.startsWith("attachment:")) {
-            if (prev?.kind === "user") items[items.length - 1] = { ...prev, rev, images: [...(prev.images ?? []), image] };
+            if (prev?.kind === "user") put(items.length - 1, { ...prev, rev, images: [...(prev.images ?? []), image] });
             // An imported message may start with its picture (SES-020).
-            else items.push({ kind: "user", key, rev, text: "", ts: ev.ts, files: [], images: [image], checkpointSeq: checkpoint ?? undefined });
+            else pushUser({ kind: "user", key, rev, text: "", ts: ev.ts, files: [], images: [image], checkpointSeq: checkpoint ?? undefined });
           }
           break;
         }
-        items.push({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [], checkpointSeq: checkpoint ?? undefined, ...(d.via ? { via: d.via } : {}) });
+        pushUser({ kind: "user", key, rev, text: d.content?.text ?? "", ts: ev.ts, files: [], checkpointSeq: checkpoint ?? undefined, ...(d.via ? { via: d.via } : {}) });
         checkpoint = null;
         break;
       }
@@ -348,14 +492,14 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         const prev = last();
         const text = d.content?.text ?? "";
         if (prev && prev.kind === kind) {
-          items[items.length - 1] = { ...prev, rev, text: prev.text + text };
+          put(items.length - 1, { ...prev, rev, text: prev.text + text });
         } else {
-          items.push({ kind, key, rev, text });
+          push({ kind, key, rev, text });
         }
         break;
       }
       case "pull_request":
-        items.push({ kind: "pull_request", key, rev, url: d.url ?? "", title: d.title ?? "", base: d.base ?? "", head: d.head ?? "", draft: !!d.draft });
+        push({ kind: "pull_request", key, rev, url: d.url ?? "", title: d.title ?? "", base: d.base ?? "", head: d.head ?? "", draft: !!d.draft });
         break;
       case "plan":
         planThisTurn = true;
@@ -378,15 +522,15 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           output: d.output ?? "",
           error: d.error ?? "",
         };
-        if (prev && prev.kind === "setup" && (prev.status === "running" || (d.status === "skipped" && prev.status === "failed"))) items[at] = item;
-        else items.push(item);
+        if (prev && prev.kind === "setup" && (prev.status === "running" || (d.status === "skipped" && prev.status === "failed"))) put(at, item);
+        else push(item);
         break;
       }
       case "handoff":
-        items.push({ kind: "handoff", key, rev, fromTitle: d.fromTitle ?? "", summary: d.summary ?? "", generated: !!d.generated });
+        push({ kind: "handoff", key, rev, fromTitle: d.fromTitle ?? "", summary: d.summary ?? "", generated: !!d.generated });
         break;
       case "history_message":
-        if (d.reset) resets.push(ev.seq);
+        if (d.reset) reset(ev.seq);
         break;
       case "available_commands_update":
         commands = Array.isArray(d.availableCommands) ? d.availableCommands : [];
@@ -404,13 +548,14 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           input: d.rawInput,
           content: [] as ToolContent[],
         };
-        tools.set(d.toolCallId, item);
-        items.push(item);
+        tools.set(d.toolCallId, { item, i: items.length });
+        push(item);
+        trackTool(items.length - 1);
         touchTool(d);
         break;
       }
       case "tool_call_update": {
-        const item = tools.get(d.toolCallId);
+        const item = tools.get(d.toolCallId)?.item;
         if (!item) break;
         touchTool(d);
         // Agents send the command or path later, as a new title and input.
@@ -423,12 +568,12 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           input: d.rawInput && Object.keys(d.rawInput).length > 0 ? d.rawInput : item.input,
           via: d.via ?? item.via,
         };
-        replaceTool(items, tools, next);
+        replaceTool(next);
         break;
       }
       case "permission_requested": {
         if (d.form) forms.add(d.requestId);
-        const item = tools.get(d.toolCallId);
+        const item = tools.get(d.toolCallId)?.item;
         const permission: PermissionState = {
           requestId: d.requestId,
           options: d.options ?? [],
@@ -437,31 +582,31 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           hookFailed: d.hookFailed || undefined,
           form: d.form ?? undefined,
         };
-        if (item) replaceTool(items, tools, { ...item, rev, permission });
+        if (item) replaceTool({ ...item, rev, permission });
         break;
       }
       case "permission_decided": {
-        const item = tools.get(d.toolCallId);
+        const item = tools.get(d.toolCallId)?.item;
         if (d.outcome === "denied" && !forms.has(d.requestId)) {
-          denied.push({ seq: item ? Number(item.key) : ev.seq, kind: d.actor ?? "", what: "", reason: d.reason ?? "", toolCallId: d.toolCallId });
+          deny({ seq: item ? Number(item.key) : ev.seq, kind: d.actor ?? "", what: "", reason: d.reason ?? "", toolCallId: d.toolCallId });
         }
         if (!item) break;
         const decided = { outcome: d.outcome, actor: d.actor, optionId: d.optionId, reason: d.reason, persisted: d.persisted, ...(d.via ? { via: d.via } : {}) };
         const permission: PermissionState = item.permission
           ? { ...item.permission, decided }
           : { requestId: d.requestId, options: [], decided };
-        replaceTool(items, tools, { ...item, rev, permission });
+        replaceTool({ ...item, rev, permission });
         break;
       }
       case "mode_refused":
         // The user chose the mode approving a plan, and the app does not allow it here.
         if (d.chosen) {
           const message = d.reason ? t("transcript.modeRefused.chosen", { mode: String(d.to), reason: String(d.reason) }) : t("transcript.modeRefused.chosenUnavailable", { mode: String(d.to) });
-          items.push({ kind: "notice", key, rev, message, warn: true });
+          push({ kind: "notice", key, rev, message, warn: true });
           break;
         }
-        items.push({ kind: "notice", key, rev, message: t("transcript.modeRefused.agent", { from: String(d.from), to: String(d.to) }), warn: false });
-        denied.push({ seq: ev.seq, kind: "mode_change", what: t("transcript.held.modeChangeWhat", { from: String(d.from), to: String(d.to) }), reason: "" });
+        push({ kind: "notice", key, rev, message: t("transcript.modeRefused.agent", { from: String(d.from), to: String(d.to) }), warn: false });
+        deny({ seq: ev.seq, kind: "mode_change", what: t("transcript.held.modeChangeWhat", { from: String(d.from), to: String(d.to) }), reason: "" });
         break;
       case "turn_started":
         running = true;
@@ -470,14 +615,14 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "stuck":
         stuck = { reason: d.reason ?? "", detail: d.detail ?? "", profileId: d.profileId, profileName: d.profileName, auto: !!d.auto };
-        items.push({ kind: "notice", key, rev, message: t("transcript.stuck", { detail: String(d.detail ?? d.reason) }), warn: true });
+        push({ kind: "notice", key, rev, message: t("transcript.stuck", { detail: String(d.detail ?? d.reason) }), warn: true });
         break;
       case "workflow_stage":
-        items.push({ kind: "stage", key, rev, command: d.command ?? "", title: d.title || `/${d.command ?? ""}` });
+        push({ kind: "stage", key, rev, command: d.command ?? "", title: d.title || `/${d.command ?? ""}` });
         break;
       case "handed_off":
         stuck = null;
-        items.push({
+        push({
           kind: "notice",
           key,
           rev,
@@ -487,11 +632,13 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         break;
       case "turn_ended":
         running = false;
-        items.push({ kind: "turn_end", key, rev, stopReason: d.stopReason ?? "", ts: ev.ts, calls: turnCalls });
+        turnEnds++;
+        push({ kind: "turn_end", key, rev, stopReason: d.stopReason ?? "", ts: ev.ts, calls: turnCalls });
         turnCalls = [];
         break;
       case "model_context":
         modelContext.push(d as ModelContext);
+        modelContextDirty = true;
         break;
       case "usage_update": {
         if (d.measured === "turn") measured.turns++;
@@ -511,6 +658,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         const spent = c.inputTokens + c.outputTokens + c.cacheReadTokens + c.cacheWriteTokens > 0;
         if (spent) {
           calls.push(c);
+          callsDirty = true;
           turnCalls.push(c);
           usage.inputTokens += c.inputTokens;
           usage.outputTokens += c.outputTokens;
@@ -519,7 +667,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         }
         if (d.contextTokens) {
           if (spent) {
-            if (contextResent(lastCallContext, d.contextTokens, c.cacheWriteTokens)) items.push({ kind: "cache_resend", key, rev, tokens: c.cacheWriteTokens });
+            if (contextResent(lastCallContext, d.contextTokens, c.cacheWriteTokens)) push({ kind: "cache_resend", key, rev, tokens: c.cacheWriteTokens });
             lastCallContext = d.contextTokens;
           }
           contextTokens = d.contextTokens;
@@ -530,15 +678,15 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
       }
       case "current_mode_update":
         mode = d.currentModeId ?? mode;
-        items.push({ kind: "mode", key, rev, mode: d.currentModeId });
+        push({ kind: "mode", key, rev, mode: d.currentModeId });
         break;
       case "checkpoint":
         checkpoint = ev.seq;
         break;
       case "rewind":
-        rewound.push({ from: d.checkpointSeq ?? 0, to: ev.seq });
-        resets.push(ev.seq);
-        items.push({
+        markRewound(d.checkpointSeq ?? 0, ev.seq);
+        reset(ev.seq);
+        push({
           kind: "notice",
           key,
           rev,
@@ -550,33 +698,34 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         const healthy = d.status === "healthy";
         const detail = String(d.detail ?? "");
         const message = !healthy ? t("transcript.env.unhealthy", { detail }) : detail ? t("transcript.env.readyDetail", { detail }) : t("transcript.env.ready");
-        items.push({ kind: "notice", key, rev, message, warn: !healthy });
+        push({ kind: "notice", key, rev, message, warn: !healthy });
         break;
       }
       case "compaction_update":
         if (d.status === "completed") {
-          items.push({ kind: "compaction", key, rev, reason: d.reason ?? "", before: d.contextTokens ?? 0, after: d.afterTokens ?? 0, summary: d.summary ?? "" });
+          push({ kind: "compaction", key, rev, reason: d.reason ?? "", before: d.contextTokens ?? 0, after: d.afterTokens ?? 0, summary: d.summary ?? "" });
           if (contextTokens > 0) contextTokens = d.afterTokens ?? 0;
           lastCallContext = 0;
         }
         break;
       case "notice":
-        items.push({ kind: "notice", key, rev, message: d.message ?? "", warn: true });
+        push({ kind: "notice", key, rev, message: d.message ?? "", warn: true });
         break;
       case "hook_ran": {
         // Hooks that pass stay quiet; one that blocked or failed says so
         // (EXT-005).
         const message = hookMessage(d);
-        if (message) items.push({ kind: "notice", key, rev, message, warn: true });
+        if (message) push({ kind: "notice", key, rev, message, warn: true });
         break;
       }
       case "model_changed":
         if (d.model) current = { providerId: d.providerId ?? current.providerId, model: d.model };
-        items.push({ kind: "model", key, rev, model: d.model ?? "", providerId: d.providerId ?? "" });
+        models++;
+        push({ kind: "model", key, rev, model: d.model ?? "", providerId: d.providerId ?? "" });
         break;
       case "effort_changed":
         settings++;
-        items.push({ kind: "notice", key, rev, message: t("transcript.effort", { effort: String(d.effort) }), warn: false });
+        push({ kind: "notice", key, rev, message: t("transcript.effort", { effort: String(d.effort) }), warn: false });
         break;
       case "config_option_update":
         settings++;
@@ -585,7 +734,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         settings++;
         break;
       case "optimizer_changed":
-        items.push({ kind: "notice", key, rev, optimizer: d.optimizer ?? "", message: d.name ? t("transcript.optimizer.set", { name: String(d.name) }) : t("transcript.optimizer.off"), warn: false });
+        push({ kind: "notice", key, rev, optimizer: d.optimizer ?? "", message: d.name ? t("transcript.optimizer.set", { name: String(d.name) }) : t("transcript.optimizer.off"), warn: false });
         break;
       case "session_status":
         status = d.status ?? status;
@@ -594,36 +743,181 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
         git = { repo: !!d.repo, branch: d.branch ?? "", head: d.head ?? "", dirty: d.dirty ?? 0, baseCommit: d.baseCommit ?? "" };
         break;
       case "error":
-        items.push({ kind: "error", key, rev, message: d.message ?? t("transcript.unknownError") });
+        push({ kind: "error", key, rev, message: d.message ?? t("transcript.unknownError") });
         break;
     }
-  }
-  const context = contextTokens > 0 ? { tokens: contextTokens, window: contextWindow } : null;
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    if (it.kind === "user" && it.checkpointSeq && resets.some((s) => s > it.checkpointSeq!)) items[i] = { ...it, filesOnly: true, rev: Math.max(it.rev, resets[resets.length - 1]) };
-  }
-  for (const r of rewound) {
-    for (let i = 0; i < items.length; i++) {
-      const seq = Number(items[i].key);
-      if (seq > r.from && seq < r.to && !items[i].rewound) items[i] = { ...items[i], rewound: true, rev: r.to };
-    }
-  }
-  const held = denied.map(({ toolCallId, ...h }) => {
-    const tool = toolCallId ? tools.get(toolCallId) : undefined;
-    return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || t("transcript.aRequest") };
-  });
-  return { items, usage, calls, measured, modelContext, git, mode, status, running, commands, touched: [...touched.keys()].reverse(), context, setup, plan, planThisTurn, settings, held, stuck };
+  };
+
+  // Runs of tool calls: the runs before the one the first change falls in (and the one
+  // before that, which it may join) are kept.
+  let runs: ItemRun[] = [];
+  let runStarts: number[] = [];
+  const makeRuns = () => {
+    const r = Math.max(0, upperBound(runStarts, Math.min(changedFrom, items.length)) - 2);
+    const keep = Math.min(r, runs.length);
+    const start = runStarts[keep] ?? 0;
+    runs = runs.slice(0, keep);
+    runStarts = runStarts.slice(0, keep);
+    extendRuns(runs, runStarts, items, start);
+  };
+
+  let snapshot: SessionView | null = null;
+  let snapshotCount = -1;
+  const fold: Fold = {
+    count: 0,
+    loc: locale(),
+    add(ev) {
+      add(ev);
+      fold.count++;
+    },
+    view() {
+      if (snapshot && snapshotCount === fold.count) return snapshot;
+      if (changedFrom !== Infinity) {
+        makeRuns();
+        itemsList = items.slice();
+        changedFrom = Infinity;
+      }
+      if (touchedDirty) {
+        touchedList = [...touched.keys()].reverse();
+        touchedDirty = false;
+      }
+      if (callsDirty) {
+        callsList = calls.slice();
+        callsDirty = false;
+      }
+      if (modelContextDirty) {
+        modelContextList = modelContext.slice();
+        modelContextDirty = false;
+      }
+      if (rewindableDirty) {
+        rewindable = checkpointed
+          .flatMap((i) => {
+            const it = items[i];
+            return it.kind === "user" && !it.rewound ? [it] : [];
+          })
+          .reverse();
+        rewindableDirty = false;
+      }
+      if (heldDirty) {
+        held = denied.map(({ toolCallId, ...h }) => {
+          const tool = toolCallId ? tools.get(toolCallId)?.item : undefined;
+          return { ...h, what: h.what || tool?.permission?.command || tool?.title || h.reason || t("transcript.aRequest") };
+        });
+        heldDirty = false;
+      }
+      if (waitingDirty) {
+        waiting = [...waitingAt].sort((a, b) => a - b).map((i) => items[i] as ToolItem);
+        waitingDirty = false;
+        panelDirty = true;
+      }
+      if (panelDirty || panel.turns !== turnEnds) {
+        const changes = new Map<string, FileChange>();
+        for (const i of [...editedAt].sort((a, b) => a - b)) {
+          const item = items[i] as ToolItem;
+          for (const c of item.content) {
+            if (c.type !== "diff" || !c.path) continue;
+            const prev = changes.get(c.path);
+            changes.set(c.path, { path: c.path, edits: (prev?.edits ?? 0) + 1, lastToolCallId: item.toolCallId });
+          }
+        }
+        panel = {
+          pending: waiting,
+          decided: [...decidedAt].sort((a, b) => b - a).map((i) => items[i] as ToolItem),
+          changes: [...changes.values()].sort((a, b) => a.path.localeCompare(b.path)),
+          turns: turnEnds,
+        };
+        panelDirty = false;
+      }
+      snapshotCount = fold.count;
+      snapshot = {
+        items: itemsList,
+        runs,
+        usage: { ...usage },
+        calls: callsList,
+        measured: { ...measured },
+        modelContext: modelContextList,
+        git,
+        mode,
+        status,
+        running,
+        commands,
+        touched: touchedList,
+        context: contextTokens > 0 ? { tokens: contextTokens, window: contextWindow } : null,
+        setup,
+        plan,
+        planThisTurn,
+        settings,
+        held,
+        stuck,
+        waiting,
+        models,
+        rewindable,
+        panel,
+      };
+      return snapshot;
+    },
+  };
+  return fold;
 }
 
-function replaceTool(
-  items: Item[],
-  tools: Map<string, Extract<Item, { kind: "tool" }>>,
-  next: Extract<Item, { kind: "tool" }>,
-) {
-  const i = items.indexOf(tools.get(next.toolCallId)!);
-  if (i >= 0) items[i] = next;
-  tools.set(next.toolCallId, next);
+// upperBound is the index of the first element above x in a sorted list.
+function upperBound(sorted: readonly number[], x: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid] > x) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+// quiet says a tool call is finished and unremarkable.
+function quiet(i: Item): boolean {
+  return i.kind === "tool" && i.status === "completed" && i.tool !== "present_plan" && !awaitingDecision(i) && (!i.permission?.decided || i.permission.decided.outcome === "allowed");
+}
+
+// extendRuns groups items from index `from` on into runs after the ones already in
+// `runs`, noting where each begins. A run it did not make is copied before it takes
+// another item, since an earlier view holds it.
+function extendRuns(runs: ItemRun[], starts: number[], items: readonly Item[], from: number) {
+  const fresh = runs.length;
+  for (let i = from; i < items.length; i++) {
+    const item = items[i];
+    const end = runs.length - 1;
+    if (end >= 0 && quiet(item) && quiet(runs[end].items[0])) {
+      if (end < fresh) runs[end] = { items: [...runs[end].items] };
+      runs[end].items.push(item);
+    } else {
+      runs.push({ items: [item] });
+      starts.push(i);
+    }
+  }
+}
+
+// buildView folds a session's events into what the conversation shows.
+export function buildView(events: readonly TranscriptEvent[]): SessionView {
+  const fold = newFold();
+  for (const ev of events) fold.add(ev);
+  return fold.view();
+}
+
+// The folds of the transcripts the window holds, each keyed by the events array its
+// transcripts share.
+const folds = new WeakMap<TranscriptEvent[], Fold>();
+
+// viewOf is buildView(tr.events.slice(0, tr.length)) for a transcript, going on from where
+// the last call for its events left off. It starts over when it must: for a transcript
+// older than the one last folded, and when the language changed, which the app's own
+// words follow (GUI-048).
+export function viewOf(tr: Transcript): SessionView {
+  let fold = folds.get(tr.events);
+  if (!fold || fold.count > tr.length || fold.loc !== locale()) {
+    fold = newFold();
+    folds.set(tr.events, fold);
+  }
+  for (let i = fold.count; i < tr.length; i++) fold.add(tr.events[i]);
+  return fold.view();
 }
 
 // hookFailedText says why a request reached the user although the mode or a rule
@@ -640,15 +934,9 @@ export function awaitingDecision(item: Item): boolean {
 // toolRuns groups finished tool calls that follow each other, so a long stretch
 // of them reads as one line. A call still running, failed, refused or waiting
 // stands alone, as does a plan: they are what the user has to see.
-export function toolRuns(items: Item[]): { items: Item[] }[] {
-  const quiet = (i: Item) =>
-    i.kind === "tool" && i.status === "completed" && i.tool !== "present_plan" && !awaitingDecision(i) && (!i.permission?.decided || i.permission.decided.outcome === "allowed");
-  const runs: { items: Item[] }[] = [];
-  for (const item of items) {
-    const last = runs[runs.length - 1];
-    if (quiet(item) && last && quiet(last.items[0])) last.items.push(item);
-    else runs.push({ items: [item] });
-  }
+export function toolRuns(items: readonly Item[]): ItemRun[] {
+  const runs: ItemRun[] = [];
+  extendRuns(runs, [], items, 0);
   return runs;
 }
 
@@ -701,24 +989,7 @@ export interface PanelData {
 // decided (mode and sandbox approvals left out as noise), and the files the agent's
 // finished edits touched, from the diffs in the transcript.
 export function panelData(view: SessionView): PanelData {
-  const pending: ToolItem[] = [];
-  const decided: ToolItem[] = [];
-  const changes = new Map<string, FileChange>();
-  let turns = 0;
-  for (const item of view.items) {
-    if (item.kind === "turn_end") turns++;
-    if (item.kind !== "tool") continue;
-    if (awaitingDecision(item)) pending.push(item);
-    const d = item.permission?.decided;
-    if (d && !(d.actor === "mode" && d.outcome === "allowed") && d.actor !== "sandbox") decided.push(item);
-    if (item.status !== "completed") continue;
-    for (const c of item.content) {
-      if (c.type !== "diff" || !c.path) continue;
-      const prev = changes.get(c.path);
-      changes.set(c.path, { path: c.path, edits: (prev?.edits ?? 0) + 1, lastToolCallId: item.toolCallId });
-    }
-  }
-  return { pending, decided: decided.reverse(), changes: [...changes.values()].sort((a, b) => a.path.localeCompare(b.path)), turns };
+  return view.panel;
 }
 
 // optimizerCounts says how many shell commands ran while an optimizer was on and how
