@@ -82,6 +82,8 @@ Stages 1, 3 and 4 touch different packages (`internal/permission` and `internal/
 
    The second number to meet is met by a factor of 10 or more. Opening a long session still draws every item it holds, so the last number is for issues 045 and 046; the fold no longer costs more as a session grows.
 
+   **After issue 045**: a session in no pane holds no events (`heldTranscripts.ts`): with ten demo sessions that ran a turn and one on screen the window holds one transcript where it held ten (app check, `held`). The memory in MB is not measured: `scripts/memcheck.sh` blocks on its first `prompt` call on this machine, with the Keychain dialog and with `FREELOOP_DEV_SECRETS=memory`; to be measured on a Mac where it runs.
+
 4. **Opening at the end (046) is built only if the last number is missed** once 041 to 045 are in. It is the largest change to the window in this plan, and the cheaper ones may be enough.
 5. **No large rework before going public.** `Engine` (567 methods), `App.tsx` and `SessionView.tsx` (48 and 46 pieces of state) stay as they are, since splitting them changes nothing a user sees and risks a lot. The same for the four usage folds, the built-in harness's 23 branches in the engine and the app check's fixed waits. They are listed under "Out of scope" so they are not forgotten.
 6. **Checks run here.** CI cannot run until the repository is public, so each issue ends with `make lint` and `make test`, and `make check-app` for a change to the window.

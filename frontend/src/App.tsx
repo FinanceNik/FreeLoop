@@ -26,7 +26,8 @@ import {
   type Style,
 } from "./api.ts";
 import { bySession, createBatcher, foldSessions } from "./eventBatch.ts";
-import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
+import { heldSessions, ingestHeld, letGo, LET_GO_MS } from "./heldTranscripts.ts";
+import { emptyTranscript, type Transcript, type TranscriptEvent } from "./transcript.ts";
 import { hitLabel, snippetParts } from "./search.ts";
 import { formatCost, type PriceEntry } from "./cost.ts";
 import { windowSession } from "./windows.ts";
@@ -211,9 +212,16 @@ function StatusDot({ status }: { status: string }) {
   return <span className={`status-dot status-${status}`} role="img" aria-label={label} title={label} />;
 }
 
-// The app check counts renders and events by setting this on the window; nothing sets it
-// otherwise.
-const probe = () => (window as unknown as { __freeloopCount?: { renders: number; events: number } }).__freeloopCount;
+// The app check counts renders and events, shortens the time a session off screen keeps
+// its events and reads how many sessions hold some, by setting this on the window;
+// nothing sets it otherwise.
+interface Probe {
+  renders: number;
+  events: number;
+  letGoMs?: number;
+  held?: number;
+}
+const probe = () => (window as unknown as { __freeloopCount?: Probe }).__freeloopCount;
 
 export default function App() {
   const counting = probe();
@@ -264,6 +272,7 @@ export default function App() {
     screenChanged();
   }, [screen.kind, screenId]);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
+  if (counting) counting.held = Object.values(transcripts).filter((t) => t.events.length > 0).length;
   const [issues, setIssues] = useState<Issue[]>([]);
   // What waits for approval is not a problem, and may be long: Settings lists it.
   const problems = issues.filter((i) => !i.approval);
@@ -392,6 +401,8 @@ export default function App() {
   // Per session: a catch-up fetch is in flight, and whether another gap was
   // seen meanwhile and needs one more fetch.
   const fetching = useRef<Map<string, boolean>>(new Map());
+  // The sessions whose transcripts the window keeps (heldTranscripts.ts), set on render.
+  const heldRef = useRef<ReadonlySet<string>>(new Set());
 
   const report = (err: unknown, sessionTitle?: string) => setErrors((list) => addError(list, { detail: errorText(err), session: sessionTitle }));
 
@@ -466,14 +477,8 @@ export default function App() {
       }
       return next;
     });
-    let trs = transcriptsRef.current;
-    const gaps: string[] = [];
-    for (const [sid, events] of groups) {
-      const current = trs[sid] ?? emptyTranscript;
-      const { transcript, missingAfter } = apply(current, events);
-      if (transcript !== current) trs = { ...trs, [sid]: transcript };
-      if (missingAfter !== null) gaps.push(sid);
-    }
+    // Only a session a pane or the screen shows keeps events (heldTranscripts.ts).
+    const { transcripts: trs, gaps } = ingestHeld(transcriptsRef.current, heldRef.current, groups);
     if (trs !== transcriptsRef.current) {
       transcriptsRef.current = trs;
       setTranscripts(trs);
@@ -483,6 +488,7 @@ export default function App() {
   const ingest = (sid: string, events: readonly TranscriptEvent[]) => ingestMany(new Map([[sid, events]]));
 
   const catchUp = (sid: string) => {
+    if (!heldRef.current.has(sid)) return;
     if (fetching.current.has(sid)) {
       fetching.current.set(sid, true);
       return;
@@ -657,7 +663,6 @@ export default function App() {
     setWork((w) => ws.openIn(w, sid, where));
     setScreen({ kind: "session", id: sid, focus: seq ? { seq, n: Date.now() } : undefined });
     setLastSessionId(sid);
-    if (!transcriptsRef.current[sid]) catchUp(sid);
   };
   // showWork shows the workspace as next, its active pane's session first.
   const showWork = (next: ws.WorkspaceState) => {
@@ -667,13 +672,36 @@ export default function App() {
     setScreen({ kind: "session", id: sid ?? "" });
     if (sid) {
       setLastSessionId(sid);
-      if (!transcriptsRef.current[sid]) catchUp(sid);
     }
   };
   // Panes whose view failed to draw: not saved, so a reload does not open on them.
   const [failedPanes, setFailedPanes] = useState<ReadonlySet<string>>(new Set());
   const workRef = useRef(work);
   workRef.current = work;
+  // A session in a pane or on the screen holds its transcript; the others let it go after
+  // a while, and fetch it again when shown (NFR-PERF-004).
+  heldRef.current = heldSessions({ panes: work.panes, screenSession: screen.kind === "session" ? screen.id : "", standalone: STANDALONE ?? undefined });
+  const heldKey = [...heldRef.current].sort().join(" ");
+  const unheldSince = useRef(new Map<string, number>());
+  const unheldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdTranscripts = useEffectEvent(() => {
+    for (const sid of heldRef.current) if (!transcriptsRef.current[sid]) catchUp(sid);
+    if (unheldTimer.current) clearTimeout(unheldTimer.current);
+    unheldTimer.current = null;
+    const out = letGo(transcriptsRef.current, heldRef.current, unheldSince.current, Date.now(), probe()?.letGoMs ?? LET_GO_MS);
+    unheldSince.current = out.since;
+    if (out.transcripts !== transcriptsRef.current) {
+      transcriptsRef.current = out.transcripts;
+      setTranscripts(out.transcripts);
+    }
+    if (out.wait !== null) unheldTimer.current = setTimeout(holdTranscripts, out.wait);
+  });
+  useEffect(() => {
+    holdTranscripts();
+    return () => {
+      if (unheldTimer.current) clearTimeout(unheldTimer.current);
+    };
+  }, [heldKey]);
   const activatePane = (i: number) => {
     if (i !== workRef.current.active) showWork(ws.focusPane(workRef.current, i));
   };
@@ -690,7 +718,6 @@ export default function App() {
         const exists = (sid: string) => sessions.some((x) => x.id === sid);
         const w = ws.forget(ws.restore({ ...saved, panes: (saved.panes ?? []).map((x) => x || null) }), exists);
         setWork(w);
-        for (const sid of w.panes) if (ws.isSession(sid) && !transcriptsRef.current[sid]) catchUp(sid);
         const active = w.panes[w.active];
         const sid = ws.isSession(active) ? active : null;
         if (active || (w.layout > 1 && sessions.length > 0)) setScreen((sc) => (sc.kind === "none" ? { kind: "session", id: sid ?? "" } : sc));

@@ -397,6 +397,38 @@ await step("a turn's events redraw the app once per batch", async () => {
   check("the app rendered less than once for every three events", renders * 3 <= events, `${renders} renders for ${events} events`);
 });
 
+// A session in no pane holds no events (NFR-PERF-004): a turn running in one that was
+// left shows in its row, and opening it again shows the turn as it stands.
+await step("a session left in every pane gives up its events, and opening it shows them again", async () => {
+  window.__freeloopCount = { renders: 0, events: 0, letGoMs: 1000 };
+  try {
+    openSession("Check alpha");
+    await until("the conversation", () => document.querySelector(".conversation"));
+    const box = await until("the message box", () => activePane().querySelector(".composer textarea"));
+    type(box, "go");
+    await sleep(50);
+    (await until("Send to be enabled", () => { const b = named(".composer-actions button.primary", "Send", activePane()); return b && !b.disabled && b; })).click();
+    openSession("Check beta");
+    await until("the row to say what alpha waits for", () => withText(".session-row", "Check alpha")?.title);
+    check("the sidebar knows what a session left on screen waits for", true, withText(".session-row", "Check alpha").title);
+    await sleep(2000);
+    const { events, held } = window.__freeloopCount;
+    check("only the session on screen holds events", held <= 1, `${held} sessions hold events, ${events} events arrived`);
+    openSession("Check alpha");
+    await until("the approval in the reopened session", () => activePane().querySelector(".approval-buttons button.primary"), 30000);
+    check("the reopened session shows its running turn", true);
+    const ended = () => all(".turn-stop", activePane()).length;
+    const turns = ended();
+    await until("the turn to end", () => {
+      activePane().querySelector(".approval-buttons button.primary")?.click();
+      return ended() > turns;
+    }, 30000);
+    check("the reopened session's turn ends as it would have", true);
+  } finally {
+    delete window.__freeloopCount;
+  }
+});
+
 await step("a session opens", async () => {
   openSession("Check alpha");
   await until("the conversation", () => document.querySelector(".conversation"));
