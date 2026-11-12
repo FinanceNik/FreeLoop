@@ -100,3 +100,58 @@ func TestACommandBuiltAtRunTimeIsNotAllowedUnseenWhileADenyRuleExists(t *testing
 		}
 	}
 }
+
+// A deny rule on one of the two ways to write a file holds for the other, and for an
+// external agent's write, which is judged as an edit: the model chooses the tool, the
+// user's rule is about the path. Reproduced on 2026-11-11: `deny write_file(secrets/**)`
+// did not stop edit_file (SEC-003). An allow rule stays as narrow as it was written.
+func TestAPathDenyRuleOnAWriteToolCoversTheOther(t *testing.T) {
+	root := "/p"
+	req := func(tool string) Request {
+		return Request{Tool: tool, Kind: KindEdit, Paths: []string{"/p/secrets/key.txt"}}
+	}
+	for _, c := range []struct{ rule, tool string }{
+		{"write_file", "edit_file"}, {"edit_file", "write_file"}, {"write_file", "write_file"}, {"edit_file", "edit_file"},
+		{"write_*", "edit_file"}, {"*", "edit_file"},
+	} {
+		r := Rule{Effect: Deny, Tool: c.rule, Path: "secrets/**"}
+		if !r.Matches(req(c.tool), root) {
+			t.Errorf("deny %s(secrets/**) does not hold for %s", c.rule, c.tool)
+		}
+	}
+	for _, c := range []struct{ rule, tool string }{
+		{"read_file", "edit_file"}, {"grep", "write_file"}, {"shell", "edit_file"}, {"write_file", "read_file"}, {"write_file", "grep"},
+	} {
+		r := Rule{Effect: Deny, Tool: c.rule, Path: "secrets/**"}
+		if r.Matches(Request{Tool: c.tool, Kind: KindEdit, Paths: []string{"/p/secrets/key.txt"}}, root) {
+			t.Errorf("deny %s(secrets/**) holds for %s", c.rule, c.tool)
+		}
+	}
+	// An allow rule is only for the tool it names.
+	allow := Rule{Effect: Allow, Tool: "write_file", Path: "src/**"}
+	if allow.Matches(Request{Tool: "edit_file", Kind: KindEdit, Paths: []string{"/p/src/a.go"}}, root) {
+		t.Error("allow write_file(src/**) allows edit_file")
+	}
+	// And a deny rule with a command is unchanged.
+	if (Rule{Effect: Deny, Tool: "write_file", Command: "x"}).Matches(Request{Tool: "edit_file", Command: "x"}, root) {
+		t.Error("a command rule on write_file matched edit_file")
+	}
+}
+
+// Through the broker: a deny rule on write_file stops an external agent's edit, even in
+// bypass mode, and `freeloop check` says so.
+func TestAWriteDenyRuleStopsAnExternalAgentsEdit(t *testing.T) {
+	home := environment.Canonical(t.TempDir())
+	b := NewBroker(NewPolicy(home, filepath.Join(home, "data")), nil)
+	root := filepath.Join(home, "repo")
+	b.SetRules(fixedRules{{Effect: Deny, Tool: "write_file", Path: "secrets/**", Scope: ScopeGlobal}}, nil)
+	for _, mode := range []Mode{ModeAsk, ModeAcceptEdits, ModeBypass} {
+		d, decided := b.evaluate(Context{Mode: mode, Root: root}, Request{Tool: "edit_file", Kind: KindEdit, Paths: []string{filepath.Join(root, "secrets", "k.txt")}})
+		if !decided || d.Outcome != Denied || d.Actor != ActorRule {
+			t.Errorf("%s: %+v, %v", mode, d, decided)
+		}
+	}
+	if d, decided := b.evaluate(Context{Mode: ModeBypass, Root: root}, Request{Tool: "edit_file", Kind: KindEdit, Paths: []string{filepath.Join(root, "src", "a.go")}}); !decided || d.Outcome != Allowed {
+		t.Errorf("an edit elsewhere: %+v, %v", d, decided)
+	}
+}

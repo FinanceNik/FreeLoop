@@ -502,11 +502,29 @@ func absSpellings(pattern string) []string {
 	return append(out, pattern)
 }
 
+// writeTools are the two ways to write a file, which the model chooses between and an
+// external agent's writes are judged as the second of.
+var writeTools = map[string]string{"write_file": "edit_file", "edit_file": "write_file"}
+
+// toolMatches reports whether r's tool names tool. A deny rule on a path that names one
+// way to write a file holds for the other too: the rule is about the path, and which tool
+// the model picks must not decide it. An allow rule stays as narrow as it was written.
+func (r Rule) toolMatches(tool string) bool {
+	if ok, _ := path.Match(r.Tool, tool); ok {
+		return true
+	}
+	if other, both := writeTools[tool]; both && r.Effect == Deny && r.Path != "" {
+		ok, _ := path.Match(r.Tool, other)
+		return ok
+	}
+	return false
+}
+
 // Matches reports whether r applies to req in a session rooted at root. An
 // allow rule with a path must cover every path the call touches; a deny rule
 // with a path matches if any path does.
 func (r Rule) Matches(req Request, root string) bool {
-	if ok, _ := path.Match(r.Tool, req.Tool); !ok {
+	if !r.toolMatches(req.Tool) {
 		return false
 	}
 	switch {

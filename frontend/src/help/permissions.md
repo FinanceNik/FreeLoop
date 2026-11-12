@@ -30,6 +30,7 @@ A rule names a tool and, optionally, a command or path, and allows or denies it.
 
 - A deny rule wins at every scope and in every mode, bypass included.
 - An allow rule never lifts plan mode or protected paths.
+- A deny rule on a path that names `write_file` or `edit_file` holds for both, and for an external agent's edits, which are judged as `edit_file`. An allow rule covers only the tool it names.
 - A shell rule ending in `*` matches a prefix, and only approves a single plain command, never a chain, pipe or redirection.
 - A shell deny rule matches the words the shell will run, so `git "push"`, `git p\ush`, `noglob git push`, `eval "git push"` and `sh -c 'git push'` are all `git push`, and flag letters are read as a set: a rule on `rm -rf *` also stops `rm -fr`, `rm -r -f`, `rm -rfv` and `rm --recursive --force`.
 - A command that builds its program or its subcommand when it runs, such as `$a push` or `git "$sub"`, cannot be compared with a deny rule. While a shell deny rule could apply to it, no allow rule approves it (it asks) and bypass mode refuses it.

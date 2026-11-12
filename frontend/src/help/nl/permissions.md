@@ -30,6 +30,7 @@ Een regel noemt een hulpprogramma en optioneel een opdracht of pad, en staat het
 
 - Een weigerregel gaat voor op elk niveau en in elke modus, omzeilen inbegrepen.
 - Een toestaanregel heft nooit de planmodus of beschermde paden op.
+- Een weigerregel op een pad die `write_file` of `edit_file` noemt, geldt voor beide en voor de wijzigingen van een externe agent, die als `edit_file` worden beoordeeld. Een toestaanregel geldt alleen voor het hulpprogramma dat ze noemt.
 - Een shell-regel die eindigt op `*` past op een voorvoegsel en keurt alleen één eenvoudige opdracht goed, nooit een keten, pipe of omleiding.
 - Een shell-weigerregel past op de woorden die de shell uitvoert: `git "push"`, `git p\ush`, `noglob git push`, `eval "git push"` en `sh -c 'git push'` zijn allemaal `git push`, en vlagletters gelden als verzameling: een regel op `rm -rf *` stopt ook `rm -fr`, `rm -r -f`, `rm -rfv` en `rm --recursive --force`.
 - Een opdracht die zijn programma of subopdracht pas bij het uitvoeren samenstelt, zoals `$a push` of `git "$sub"`, is niet met een weigerregel te vergelijken. Zolang een shell-weigerregel van toepassing kan zijn, keurt geen toestaanregel hem goed (er wordt gevraagd) en weigert de omzeilmodus hem.
