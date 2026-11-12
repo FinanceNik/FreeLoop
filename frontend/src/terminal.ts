@@ -1,5 +1,15 @@
 // Helpers for the integrated terminal (GUI-012), kept apart from the view so
 // they can be tested without a DOM.
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+
+// countWide makes a terminal count character widths by Unicode 11, as shells
+// and prompts such as Starship do (GUI-054). xterm's own table is Unicode 6,
+// where an emoji is one cell wide: the cursor then sits a cell off after
+// each. The terminal must allow proposed API.
+export function countWide(term: { loadAddon(addon: Unicode11Addon): void; unicode: { activeVersion: string } }) {
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = "11";
+}
 
 // bytesOf decodes a terminal chunk, which arrives base64-encoded because
 // screen output is bytes, not always whole UTF-8 characters.

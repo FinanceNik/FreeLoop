@@ -200,6 +200,22 @@ The templates live in `internal/harness/templates` as `.tmpl` files; their tests
 
 `config.Environment.Sandbox` turns it on (ENV-009). `internal/engine/sandbox.go` decides what a session's commands reach, `environment.Local` wraps `Exec` with a `Confiner`, and `internal/platform/darwin/seatbelt.go` is the only macOS-specific part. Only `Exec` is confined; `Spawn` is not, so agents and MCP servers stay outside. A caller that runs a command itself sets `permission.Request.Contained`, which is what lets the broker skip the approval. Never set it for a request an agent will carry out on its own. If a tool fails in the sandbox, first look for what it writes under home: most fixes are a variable in `SandboxCaches` or a folder in `sandboxTools`. Add anything that closes a way out to `TestSeatbeltRefuses`, with a control if the refusal could have another cause. A host list (ENV-010) adds `netguard.Egress`: its variables are in `environment.ProxyEnv`, and `FREELOOP_SANDBOX_NET=1 go test ./internal/platform/darwin` tries real tools against the real internet.
 
+## A prompt in the terminal (GUI-054)
+
+The Terminal tab runs the user's own login shell, interactive, so it reads their shell configuration and shows their prompt; the app sets nothing up. For Starship on a Mac: `brew install starship`, then `eval "$(starship init zsh)"` in `~/.zshrc`, and a new terminal tab. Its icons need a Nerd Font: install one and choose it as the code font in Settings → Appearance (the menu lists the common ones when present; any family name can be typed), or use `starship preset plain-text-symbols -o ~/.config/starship.toml`, which needs none.
+
+Every terminal has `TERM_PROGRAM=Freeloop` and `TERM_PROGRAM_VERSION`, so a shell configuration can do something else in the app's narrow panel than in a terminal window:
+
+```sh
+# ~/.zshrc
+if [ "$TERM_PROGRAM" = Freeloop ]; then
+  export STARSHIP_CONFIG=~/.config/starship-freeloop.toml   # a shorter prompt
+fi
+eval "$(starship init zsh)"
+```
+
+An agent's commands run through a shell that is not interactive, which does not read `~/.zshrc`, and do not get these variables: a prompt never reaches a model. A Docker session's terminal is the container's shell, with the container's configuration. The variables are `terminalVars` in `internal/environment/terminal.go`; widths are counted by Unicode 11 (`countWide` in `frontend/src/terminal.ts`), without which an emoji in a prompt leaves the cursor a cell off.
+
 ## Updating prices
 
 `listPrices` in `internal/config/builtinprices.go` holds the vendors' list prices, with the pages they come from; set `PricesAsOf` when you change them. Add a model's name only: dated names get a row of their own. A model that charges more above a prompt size has `longOver` and a row named with `LongPromptSuffix`, ahead of it. Its calls are counted under that name, so that the sums per model can be priced. A price that changes on a known day gets a row with `from: "YYYY-MM-DD"` above the row it replaces: `config.FindPriceOn` prices a day by the first row that has begun by then, so history keeps the prices it was spent at (the Usage page, budgets, the run comparison and recent usage use it; a session's own live cost in the window, a run's cost and what a commit cost still use the price of today). A row of the user's in `config.yaml` may have `from` too.

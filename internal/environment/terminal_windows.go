@@ -54,7 +54,7 @@ func (l *Local) OpenTerminal(ctx context.Context, spec TerminalSpec) (Terminal, 
 	if spec.Cwd != "" {
 		dir = l.Resolve(spec.Cwd)
 	}
-	env := append(l.baseEnv(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	env := append(l.baseEnv(), terminalEnv()...)
 	for k, v := range l.env {
 		env = append(env, k+"="+v)
 	}

@@ -71,8 +71,8 @@ func TestSessionTerminal(t *testing.T) {
 	if list := e.SessionTerminals(ses.ID); len(list) != 1 || list[0].ID != info.ID {
 		t.Errorf("terminals = %+v", list)
 	}
-	e.WriteTerminal(info.ID, []byte("echo \"[$(pwd)] $GREETING $(stty size)\"\n"))
-	got, _ := screenFor(t, out, info.ID, "hi-from-env 20 90")
+	e.WriteTerminal(info.ID, []byte("echo \"[$(pwd)] $GREETING $(stty size) $TERM_PROGRAM/$TERM_PROGRAM_VERSION\"\n"))
+	got, _ := screenFor(t, out, info.ID, "hi-from-env 20 90 Freeloop/"+AppVersion)
 	if real, _ := filepath.EvalSymlinks(project); !strings.Contains(got, "["+real+"]") {
 		t.Errorf("not in the project:\n%s", got)
 	}

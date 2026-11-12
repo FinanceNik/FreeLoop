@@ -3,6 +3,8 @@ package environment
 import (
 	"context"
 	"io"
+	"maps"
+	"slices"
 )
 
 // The integrated terminal (GUI-012): an interactive shell on a
@@ -30,6 +32,26 @@ type Terminal interface {
 	Wait() (int, error)
 }
 
+// terminalVars are set in every terminal, on this computer and in a
+// container, before the environment's own variables, which may override
+// them. TERM_PROGRAM lets a shell's configuration, a prompt such as Starship
+// for one, tell that it runs in Freeloop; the engine adds
+// TERM_PROGRAM_VERSION.
+var terminalVars = map[string]string{
+	"TERM":         "xterm-256color",
+	"COLORTERM":    "truecolor",
+	"TERM_PROGRAM": "Freeloop",
+}
+
+// terminalEnv is terminalVars as KEY=value pairs, in a fixed order.
+func terminalEnv() []string {
+	env := make([]string, 0, len(terminalVars))
+	for _, k := range slices.Sorted(maps.Keys(terminalVars)) {
+		env = append(env, k+"="+terminalVars[k])
+	}
+	return env
+}
+
 // Terminals is an environment that can open terminals.
 type Terminals interface {
 	OpenTerminal(ctx context.Context, spec TerminalSpec) (Terminal, error)
@@ -39,7 +61,7 @@ type Terminals interface {
 // `docker exec -it`, on a pseudo-terminal on the host.
 func (d *Docker) OpenTerminal(ctx context.Context, spec TerminalSpec) (Terminal, error) {
 	id := newExecID()
-	env := map[string]string{"TERM": "xterm-256color"}
+	env := maps.Clone(terminalVars)
 	for k, v := range spec.Env {
 		env[k] = v
 	}

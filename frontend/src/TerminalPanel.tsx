@@ -3,7 +3,7 @@ import { Events } from "@wailsio/runtime";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { EngineService, TERMINAL_EVENT_NAME, type Session, type TerminalInfo, type TerminalOutput } from "./api.ts";
-import { after, bytesOf, fitSize } from "./terminal.ts";
+import { after, bytesOf, countWide, fitSize } from "./terminal.ts";
 import { terminalClipboard } from "./platform.ts";
 import { t } from "./i18n.ts";
 
@@ -125,7 +125,12 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
       screenReaderMode: true,
       scrollback: 5000,
       theme: themeColors(),
+      // The Unicode add-on needs it, and nothing else here uses it.
+      allowProposedApi: true,
     });
+    countWide(term);
+    // For the app check, which cannot reach the terminal object.
+    box.current!.dataset.unicode = term.unicode.activeVersion;
     term.open(box.current!);
     // A shell takes Tab, so the keyboard needs another way out (NFR-A11Y-001).
     term.attachCustomKeyEventHandler((e) => {

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { pairCode } from "./phone.ts";
 import { workerPath, workerScope } from "./register.ts";
 
@@ -48,7 +49,8 @@ test("the worker is registered at /phone/ by the phone app only", () => {
       if (statSync(p).isDirectory()) return n === "phone" ? [] : walk(p);
       return /\.(tsx?|html)$/.test(n) && !n.endsWith(".test.ts") ? [p] : [];
     });
-  const src = new URL("../", import.meta.url).pathname;
+  // Not .pathname, which keeps a space in the folder's name as %20.
+  const src = fileURLToPath(new URL("../", import.meta.url));
   for (const f of walk(src)) assert.doesNotMatch(readFileSync(f, "utf8"), /serviceWorker/, `${f} registers a worker`);
   assert.doesNotMatch(readFileSync(new URL("../../index.html", import.meta.url), "utf8"), /serviceWorker/);
 });

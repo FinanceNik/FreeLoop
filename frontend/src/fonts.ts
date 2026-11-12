@@ -56,6 +56,16 @@ export const CODE_FONTS = [
   "Source Code Pro",
   "Ubuntu Mono",
   "Victor Mono",
+  // Nerd Fonts, for a prompt's icons in the terminal (GUI-054): the names
+  // their installers give the commonest ones.
+  "JetBrainsMono Nerd Font",
+  "FiraCode Nerd Font",
+  "Hack Nerd Font",
+  "MesloLGS NF",
+  "MesloLGS Nerd Font",
+  "CaskaydiaCove Nerd Font",
+  "SauceCodePro Nerd Font",
+  "Iosevka Nerd Font",
 ];
 
 // The same check as config.ValidFontName. A name only reaches the page after

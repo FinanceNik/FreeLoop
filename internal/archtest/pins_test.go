@@ -46,8 +46,9 @@ func TestDependenciesArePinned(t *testing.T) {
 		}
 	}
 	// S-08's budget: each one is code in the page that can call the engine.
-	if len(pkg.Dependencies) > 4 {
-		t.Errorf("%d npm packages ship with the app; the budget is 4, so ask before adding one", len(pkg.Dependencies))
+	// Five since 2026-11-12, when the user agreed to xterm's Unicode add-on (GUI-054).
+	if len(pkg.Dependencies) > 5 {
+		t.Errorf("%d npm packages ship with the app; the budget is 5, so ask before adding one", len(pkg.Dependencies))
 	}
 
 	var lock struct {

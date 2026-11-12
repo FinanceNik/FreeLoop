@@ -63,8 +63,9 @@ func TestLocalTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := watch(term)
-	io.WriteString(term, "echo \"[$(pwd)] $FREELOOP_TERM_TEST $(stty size) $TERM\"\n")
-	out.waitFor(t, "] from-the-env 30 100 xterm-256color")
+	io.WriteString(term, "echo \"[$(pwd)] $FREELOOP_TERM_TEST $(stty size) $TERM $TERM_PROGRAM $COLORTERM\"\n")
+	// GUI-054: a prompt can tell it runs in this app, and that it has colours.
+	out.waitFor(t, "] from-the-env 30 100 xterm-256color Freeloop truecolor")
 	if !strings.Contains(out.String(), "["+l.Root()+"]") {
 		t.Errorf("not in the folder:\n%s", out.String())
 	}

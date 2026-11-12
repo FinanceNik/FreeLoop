@@ -125,6 +125,12 @@ func (e *Engine) openTerminalSized(ctx context.Context, sid, command string, col
 			}
 		}
 	}
+	// With TERM_PROGRAM, which every terminal gets, a shell's configuration
+	// can tell it runs in this app and which version (GUI-054).
+	if spec.Env == nil {
+		spec.Env = map[string]string{}
+	}
+	spec.Env["TERM_PROGRAM_VERSION"] = AppVersion
 	t, err := opener.OpenTerminal(context.WithoutCancel(ctx), spec)
 	if err != nil {
 		return TerminalInfo{}, err

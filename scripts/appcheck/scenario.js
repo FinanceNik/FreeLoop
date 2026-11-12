@@ -553,6 +553,22 @@ await step("the file viewer shows Markdown formatted", async () => {
   await sleep(100);
 });
 
+// GUI-054: a prompt such as Starship can tell it runs in this app, and an emoji in it
+// takes the two cells the shell counts.
+await step("the terminal says what it is and counts wide characters", async () => {
+  (await until("the Terminal tab", () => withText(".panel-tabs [role=tab]", "Terminal"))).click();
+  const box = await until("a terminal", () => { const b = document.querySelector(".terminal-box"); return b?.querySelector(".xterm-helper-textarea") && b; });
+  check("the terminal counts widths by Unicode 11", box.dataset.unicode === "11", box.dataset.unicode);
+  await sleep(1500);
+  // As typed: xterm takes inserted text from its hidden text box.
+  box.querySelector(".xterm-helper-textarea").dispatchEvent(new InputEvent("input", { data: "echo in=$TERM_PROGRAM/$COLORTERM\r", inputType: "insertText" }));
+  await until("the shell's answer", () => box.textContent.includes("in=Freeloop/truecolor"), 10000);
+  check("a shell in the terminal knows it runs in Freeloop", true);
+  named(".terminal-tabs button", "Close shell 1")?.click();
+  withText(".panel-tabs [role=tab]", "Approvals").click();
+  await sleep(100);
+});
+
 await step("a turn runs to its end, with approvals", async () => {
   const line = await turn("Check alpha");
   check("a turn runs to its end, with approvals", true);
