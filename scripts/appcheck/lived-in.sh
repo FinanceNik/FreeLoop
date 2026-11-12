@@ -76,7 +76,8 @@ lived_in_sessions() {
 
 # lived_in_long_session makes the made-up long session (80,000 events, issue 040) in
 # the project "api" under $3, with the app $1 and the data folder's home $2: the
-# session is made by the app, then its transcript is replaced by the generated one.
+# session is made by the app, then its transcript is replaced by the generated one (the
+# caller restarts the app after: it holds the old file's seqs and offsets until it does).
 # The generator is frontend/src/longfixture.ts.
 lived_in_long_session() {
   app=$1

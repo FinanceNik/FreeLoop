@@ -84,6 +84,15 @@ start_app() {
     sleep 0.2
   done
 }
+# restart_app stops the app and starts it again on the same data, logging to $1. A
+# transcript the app has open is its own (its last seq and offsets are kept in memory), so
+# one written to behind its back is seen only by an app that opens it afterwards.
+restart_app() {
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  pid=
+  start_app "$1"
+}
 start_app "$DATA/app.log"
 
 # A session whose transcript holds a tool call that cannot be drawn (its tool is a number,
@@ -93,6 +102,7 @@ git -C "$DATA/projects/boom" init -q
 boom=$("$APP" new "$DATA/projects/boom" -title "Check boom" -provider demo -model scripted)
 seq=$(($(wc -l < "$FREELOOP_HOME/sessions/$boom/events.jsonl") + 1))
 printf '{"v":1,"seq":'$seq',"ts":"2026-01-01T00:00:00Z","sid":"%s","type":"tool_call","data":{"toolCallId":"boom","tool":42,"title":"boom","kind":"other","status":"completed"}}\n' "$boom" >> "$FREELOOP_HOME/sessions/$boom/events.jsonl"
+restart_app "$DATA/app-boom.log"
 
 # A project with seven finished issues, for the Board's Done column, its cap and the
 # filter between projects (GUI-016); the check trusts it from its session.
@@ -179,10 +189,17 @@ kill "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
 pid=
 export FREELOOP_HOME="$DATA/lived-in/home"
-lived_in_files "$FREELOOP_HOME"
-start_app "$DATA/lived-in.log"
+# The sessions are made on an empty folder, and the long transcript written into one the app
+# has open would not be seen by it, so the app is stopped before the settings go in (they
+# wait for the approval key, which this app keeps in memory) and starts again on all of it.
+start_app "$DATA/lived-in-setup.log"
 lived_in_sessions "$APP" "$DATA/lived-in"
 lived_in_long_session "$APP" "$FREELOOP_HOME" "$DATA/lived-in"
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+pid=
+lived_in_files "$FREELOOP_HOME"
+start_app "$DATA/lived-in.log"
 echo "-- lived-in"
 cat "$HERE/appcheck/lib.js" "$HERE/appcheck/lived-in.js" > "$DATA/lived-in.js"
 "$DATA/drive" "http://localhost:$PORT/" "$DATA/lived-in.js" > "$OUT/results-lived-in.txt" || status=1
