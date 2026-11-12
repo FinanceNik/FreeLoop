@@ -12,6 +12,7 @@ const EXEMPT: Record<string, string> = {
   "fonts.ts": "fonts' names",
   "i18n.ts": "each language's name in that language",
   "icons.tsx": "SVG paths",
+  "longfixture.ts": "the made-up long session the timings run on (issue 040), words for filler",
   "markdown.ts": "the Markdown parser",
   "pdfview.ts": "the PDF frame's page, whose one word is PDF",
   "platform.ts": "systems' names and their file managers'",

@@ -1,6 +1,6 @@
 ---
 title: A long session to measure with
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -18,3 +18,8 @@ Nothing measures a long session today: the performance fixture has 5,000 events 
 
 ## Notes
 - `internal/store/transcript.go`, `frontend/src/transcript.test.ts`, `scripts/appcheck/lived-in.sh` and `lived-in.js`.
+
+## Done
+- The fixture is made twice with the same shape and seed: `internal/store/longfixture_test.go` (`newLongFixture`, `BenchmarkLong`) and `frontend/src/longfixture.ts` (`longFixture`, `jsonl`). Issues 041 and 043 reuse them; the app check writes the second as JSONL with `scripts/appcheck/longsession.ts`.
+- The lived-in check's step for the long session sits before the palette step: with the long session open first, "a global rule allows any shell command" could not find its button.
+- `make check-app` uses port 34391; `APPCHECK_PORT=` picks another when a second checkout runs it.

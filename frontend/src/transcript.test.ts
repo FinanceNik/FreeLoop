@@ -547,3 +547,35 @@ test("a command keeps the hint its agent gives for its input", () => {
   assert.equal(view.commands[0].input?.hint, "pull request number");
   assert.equal(view.commands[1].input, undefined);
 });
+
+// A long session's cost (NFR-PERF-002, issue 040). These record today's numbers and
+// print them; later issues turn them into limits (the PRD's "numbers to meet").
+import { longFixture, LONG_EVENTS, type FixtureShape } from "./longfixture.ts";
+
+for (const shape of ["text", "tools"] as FixtureShape[]) {
+  test(`timing: folding ${LONG_EVENTS} ${shape} events at once and one at a time`, () => {
+    const { events, lastError } = longFixture(shape);
+    assert.equal(events.length, LONG_EVENTS);
+    assert.ok(lastError > 0 && lastError < LONG_EVENTS * 0.7);
+    const ms = (f: () => void) => { const t = performance.now(); f(); return performance.now() - t; };
+
+    // At once: the whole transcript in one fold, the way a session opens.
+    let view = buildView(events);
+    const once = ms(() => { view = buildView(events); });
+    assert.ok(view.items.length > 0);
+
+    // The last 2000 events through apply in batches of one, the way a stream
+    // arrives (every one copies the events so far, so all 80,000 would take minutes).
+    const streamed = 2000;
+    let tr = apply(emptyTranscript, events.slice(0, LONG_EVENTS - streamed)).transcript;
+    const applied = ms(() => { for (const e of events.slice(LONG_EVENTS - streamed)) tr = apply(tr, [e]).transcript; });
+    assert.equal(tr.lastSeq, LONG_EVENTS);
+
+    // One at a time: the view rebuilt after each of the last 20 events, what the
+    // window does today for every event or batch that arrives.
+    const tail = 20;
+    const stepped = ms(() => { for (let i = LONG_EVENTS - tail + 1; i <= LONG_EVENTS; i++) buildView(events.slice(0, i)); });
+
+    console.log(`fold ${shape}: at once ${once.toFixed(0)} ms (${((once * 1000) / LONG_EVENTS).toFixed(2)} us per event); apply one at a time at the end ${((applied * 1000) / streamed).toFixed(0)} us per event; rebuilding the view per event at the end ${(stepped / tail).toFixed(0)} ms per event`);
+  });
+}

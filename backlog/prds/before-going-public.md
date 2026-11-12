@@ -35,6 +35,21 @@ Stages 1, 3 and 4 touch different packages (`internal/permission` and `internal/
    - a batch of new events folds in under 2 ms, and a streamed token redraws only the item it belongs to;
    - a session that is not open holds no events in the window;
    - opening the long session shows its end in under a second.
+   
+   **Measured before any fix** (issue 040, Apple M4 Pro, 80,000 events; `go test ./internal/store/ -run xxx -bench Long`, `node --test --test-name-pattern=timing frontend/src/transcript.test.ts`, `make check-app`; the fixture is `internal/store/longfixture_test.go` and `frontend/src/longfixture.ts`). The text shape is 22 MB, the tool shape 105 MB (the user's longest: 92 MB):
+
+   | | text | tools |
+   |---|---|---|
+   | store read from seq 0 | 70 to 85 ms, 85 MB allocated | 150 to 190 ms, 327 MB |
+   | store read of the last 100 events | 55 to 80 ms, 45 MB | 150 to 195 ms, 287 MB |
+   | store, last error | 60 to 70 ms, 85 MB | 140 to 180 ms, 327 MB |
+   | window folds all events at once | 9 ms | 37 ms |
+   | `apply` of one event, at the end | 204 us | 483 us |
+   | view rebuilt for each new event, at the end | 5 ms | 35 ms |
+   | lived-in app check, click to the end drawn | not run | 6.6 s (197 turns) |
+
+   The last 100 events cost as much as the whole file: the first number to meet (under 5 ms) is missed by a factor of 10 to 40. The timings vary by about 30% between runs.
+
 4. **Opening at the end (046) is built only if the last number is missed** once 041 to 045 are in. It is the largest change to the window in this plan, and the cheaper ones may be enough.
 5. **No large rework before going public.** `Engine` (567 methods), `App.tsx` and `SessionView.tsx` (48 and 46 pieces of state) stay as they are, since splitting them changes nothing a user sees and risks a lot. The same for the four usage folds, the built-in harness's 23 branches in the engine and the app check's fixed waits. They are listed under "Out of scope" so they are not forgotten.
 6. **Checks run here.** CI cannot run until the repository is public, so each issue ends with `make lint` and `make test`, and `make check-app` for a change to the window.

@@ -34,6 +34,23 @@ await step("a global rule allows any shell command", async () => {
   check("the global rule is in place", true);
 });
 
+// The made-up long session (80,000 events, issue 040): the time from a click on it to
+// its end being drawn is printed, so the window's cost of a long session is seen. It
+// is a number to record, not yet a limit (backlog/prds/before-going-public.md).
+await step("the long session opens, and the time to its end is printed", async () => {
+  const t0 = performance.now();
+  openSession("Long session");
+  const pane = await until("the long session", () => activePane().querySelector(".session-titleline h2")?.textContent === "Long session" && activePane(), 8000);
+  // The end is drawn when the last turn's stop line is there and the view sits at the bottom.
+  const scroller = () => pane.querySelector(".conversation");
+  await until("the end of the long session", () => {
+    const c = scroller();
+    return c && all(".turn-stop", pane).length > 100 && toTheEnd(c) < 40;
+  }, 120000);
+  const ms = Math.round(performance.now() - t0);
+  check(`the long session's end is drawn after ${ms} ms, ${all(".turn-stop", pane).length} turns`, true);
+});
+
 await step("the palette stays short with many skills and sessions", async () => {
   openSession("Work 30");
   await until("a session", () => activePane().querySelector(".session-titleline h2")?.textContent === "Work 30", 8000);

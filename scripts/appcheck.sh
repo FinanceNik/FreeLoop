@@ -170,6 +170,7 @@ export FREELOOP_HOME="$DATA/lived-in/home"
 lived_in_files "$FREELOOP_HOME"
 start_app "$DATA/lived-in.log"
 lived_in_sessions "$APP" "$DATA/lived-in"
+lived_in_long_session "$APP" "$FREELOOP_HOME" "$DATA/lived-in"
 echo "-- lived-in"
 cat "$HERE/appcheck/lib.js" "$HERE/appcheck/lived-in.js" > "$DATA/lived-in.js"
 "$DATA/drive" "http://localhost:$PORT/" "$DATA/lived-in.js" > "$OUT/results-lived-in.txt" || status=1

@@ -73,3 +73,14 @@ lived_in_sessions() {
     done
   done
 }
+
+# lived_in_long_session makes the made-up long session (80,000 events, issue 040) in
+# the project "api" under $3, with the app $1 and the data folder's home $2: the
+# session is made by the app, then its transcript is replaced by the generated one.
+# The generator is frontend/src/longfixture.ts.
+lived_in_long_session() {
+  app=$1
+  home=$2
+  sid=$("$app" new "$3/projects/api" -title "Long session" -profile default -provider demo -model scripted)
+  node "$ROOT/scripts/appcheck/longsession.ts" "${LONG_SHAPE:-tools}" "$sid" "$home/sessions/$sid/events.jsonl"
+}
