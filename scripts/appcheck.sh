@@ -86,6 +86,14 @@ start_app() {
 }
 start_app "$DATA/app.log"
 
+# A session whose transcript holds a tool call that cannot be drawn (its tool is a number,
+# which a model or a hand-edited file could put there): its pane must fail alone (GUI-017).
+mkdir -p "$DATA/projects/boom"
+git -C "$DATA/projects/boom" init -q
+boom=$("$APP" new "$DATA/projects/boom" -title "Check boom" -provider demo -model scripted)
+seq=$(($(wc -l < "$FREELOOP_HOME/sessions/$boom/events.jsonl") + 1))
+printf '{"v":1,"seq":'$seq',"ts":"2026-01-01T00:00:00Z","sid":"%s","type":"tool_call","data":{"toolCallId":"boom","tool":42,"title":"boom","kind":"other","status":"completed"}}\n' "$boom" >> "$FREELOOP_HOME/sessions/$boom/events.jsonl"
+
 # A project with seven finished issues, for the Board's Done column, its cap and the
 # filter between projects (GUI-016); the check trusts it from its session.
 mkdir -p "$DATA/projects/pile/backlog/issues"

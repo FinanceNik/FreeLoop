@@ -1,6 +1,6 @@
 ---
 title: A pane that fails leaves the rest of the window working
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -18,5 +18,5 @@ The only error boundary is around the whole window (`main.tsx:20`): one item tha
 ## Notes
 - The phone's policy is in `internal/remote`; the desktop's assets come from `frontend/embed.go` through Wails.
 
-## Progress
-Done: a boundary per pane and per page (`PaneBoundary.tsx`) with "Copy a report" and a way to close, a failed pane left out of the saved workspace (`withoutFailed`), and the non-string image `uri` fix, each with unit tests. Left open: the desktop page's Content Security Policy, and an app check step that makes a session throw while drawing (it needs a way to feed the window an event it cannot draw).
+## Done
+The boundary per pane and page is `PaneBoundary.tsx`. The desktop policy was already in `frontend/vite.config.ts` (built pages only, since `make dev` needs an inline script); the app check now reads it and runs under it. The app check's failing session is "Check boom", whose transcript `scripts/appcheck.sh` gives a tool call with a numeric `tool`, which throws when drawn; no seam in the app. The check's "sidebar's empty space" click now skips when the list leaves no room.

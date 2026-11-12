@@ -717,7 +717,10 @@ await step("a click clears a selection", async () => {
   await clicked("the conversation's margin", conversation(), 0.01, 0.5);
   await clicked("the header's title", document.querySelector(".session-header h2"));
   const nav = document.querySelector(".sidebar nav");
-  await clicked("the sidebar's empty space", nav, 0.5, 0.98);
+  // Empty space below the last row, when the list leaves any: a click on a row opens it.
+  const rows = [...nav.querySelectorAll(".session-row")];
+  const free = nav.getBoundingClientRect().bottom - (rows.at(-1)?.getBoundingClientRect().bottom ?? 0);
+  if (free >= 8) await clicked("the sidebar's empty space", nav, 0.5, 1 - 3 / nav.getBoundingClientRect().height);
   // The gap between the icons at the left and Help at the right end.
   const links = document.querySelector(".footer-links");
   const lr = links.getBoundingClientRect();
@@ -2373,6 +2376,58 @@ await step("the bypass setting", async () => {
   await until("the setting", box);
   check("the setting survives leaving the page", box().checked);
   window.fetch = real;
+});
+
+// A pane that fails to draw leaves the rest of the window working (GUI-017): the session
+// "Check boom" holds a tool call that throws when drawn (scripts/appcheck.sh).
+await step("a pane that fails leaves the window working", async () => {
+  openSession("Check alpha");
+  await until("the conversation", () => document.querySelector(".conversation"));
+  document.querySelector('.layout-switch button[aria-label="2 panes"]').click();
+  await until("two panes", () => all(".pane").length === 2);
+  // A request waits in the first pane, then the second pane shows the broken session.
+  const first = document.querySelector('.pane[data-position="0"]');
+  const box = await until("the message box", () => first.querySelector(".composer textarea"));
+  type(box, "go");
+  await sleep(50);
+  (await until("Send", () => { const b = named(".composer-actions button.primary", "Send", first); return b && !b.disabled && b; })).click();
+  const endsBefore = all(".turn-stop", first).length;
+  await until("a request", () => first.querySelector(".approval-buttons button.primary"), 30000);
+  // The session is the oldest, so no pane offers it: a click in the second pane makes it
+  // the active one, and the sidebar's row opens the session there.
+  document.querySelector('.pane[data-position="1"]').dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  await sleep(100);
+  openSession("Check boom");
+  const failed = await until("the failure in its pane", () => document.querySelector('.pane[data-position="1"] .pane-failed')).catch((e) => {
+    throw new Error(`${e.message}: ${all(".pane").map((p) => p.innerHTML.length + " tools=" + p.querySelectorAll("[data-tool-call]").length + " " + p.textContent.slice(0, 40)).join(" | ")}`);
+  });
+  check("the failing pane says so, with a report and a way to close", failed.getAttribute("role") === "alert" && withText("button", "Copy a report", failed) && withText("button", "Close", failed), failed.textContent);
+  check("the window's own error screen is not shown", !document.querySelector("#root > .empty"));
+  check("the other pane and the waiting approval go on", !!first.querySelector(".approval-buttons button.primary") && !first.querySelector(".pane-failed"));
+  check("the sidebar goes on", all(".session-row").length > 3 && !!withText(".session-row", "Check alpha"));
+  // Allowing it, and whatever the demo asks next, works from the pane beside the failed one.
+  await until("the turn to end", () => {
+    first.querySelector(".approval-buttons button.primary")?.click();
+    return all(".turn-stop", first).length > endsBefore;
+  }, 30000);
+  withText("button", "Close", failed).click();
+  await until("one pane", () => all(".pane").length === 1);
+  check("closing the failed pane leaves the other one", !!document.querySelector(".pane .session-header"));
+  document.querySelector('.layout-switch button[aria-label="One pane"]').click();
+  await sleep(200);
+});
+
+// The built page carries a policy that allows no inline script and no source but the app's
+// own (and the preview's localhost frames), and nothing inline has run under it (GUI-017).
+await step("the page carries its Content Security Policy", async () => {
+  const policy = document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content ?? "";
+  const directive = (name) => policy.split(";").map((d) => d.trim()).find((d) => d.startsWith(`${name} `)) ?? "";
+  check("scripts come from the app alone", directive("script-src") === "script-src 'self'", directive("script-src"));
+  check("nothing else is the default", directive("default-src") === "default-src 'self'", directive("default-src"));
+  check("frames are the preview's localhost and the PDF viewer's blob", /^frame-src blob: (https?:\/\/(localhost|127\.0\.0\.1|\[::1\]):\* ?)+/.test(directive("frame-src")) && !directive("frame-src").includes("*.") && !/\s\*(\s|$)/.test(directive("frame-src")), directive("frame-src"));
+  check("no plug-ins, no base, no forms", ["object-src 'none'", "base-uri 'none'", "form-action 'none'"].every((d) => policy.includes(d)));
+  check("no inline script is allowed", !policy.includes("'unsafe-inline'") || !directive("script-src").includes("'unsafe-inline'"));
+  check("the page has no inline script", all("script").every((s) => s.src));
 });
 
 return results;
