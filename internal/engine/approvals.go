@@ -656,6 +656,13 @@ func (e *Engine) addressesAdoptedRef() secrets.Ref {
 // working. It applied before that too, so this trusts nothing new; a backup
 // restored from then on finds the item there.
 func (e *Engine) adoptExistingCommands() {
+	if e.approvalKeyLost() {
+		return
+	}
+	// The key exists from the first start on, so its absence later means it was lost.
+	if _, err := e.approvalKey(); err != nil {
+		log.Printf("engine: approval key: %v", err)
+	}
 	e.adopt(e.commandsAdoptedRef(), pendingHook, pendingAgent)
 	e.adopt(e.settingsAdoptedRef(), pendingRule, pendingEnvironment, pendingSetting)
 	e.adopt(e.addressesAdoptedRef(), pendingAddress)
@@ -687,4 +694,58 @@ func (e *Engine) adopt(ref secrets.Ref, kinds ...string) {
 	if err := e.addApprovals(marks); err != nil {
 		log.Printf("engine: adopt what the files hold: %v", err)
 	}
+}
+
+// approvalKeyGone reports, before anything of this start can make a new key,
+// that the Keychain item that signs approval marks is gone while this data folder
+// had used it: a reset Keychain, or a new computer with the folder restored. The
+// adopted items are in the same Keychain and go with it, so the evidence is what
+// the files hold: marks only a key could have made.
+func (e *Engine) approvalKeyGone() bool {
+	if _, err := e.secrets.Get(approvalKeyRef); !errors.Is(err, secrets.ErrNotFound) {
+		return false
+	}
+	for _, r := range e.adoptedRefs() {
+		if _, err := e.secrets.Get(r); err == nil {
+			return true
+		}
+	}
+	c := e.cfg
+	if len(c.CommandApprovals) > 0 || len(c.OptimizerApprovals) > 0 || len(c.WorkflowApprovals) > 0 {
+		return true
+	}
+	servers, _, _ := config.LoadMCP(e.dataDir)
+	for _, s := range servers {
+		if s.Approved != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *Engine) adoptedRefs() []secrets.Ref {
+	return []secrets.Ref{e.commandsAdoptedRef(), e.settingsAdoptedRef(), e.addressesAdoptedRef(), e.projectHooksAdoptedRef()}
+}
+
+// approvalKeyLost adopts nothing after a lost key: adopting would approve whatever
+// the files ask for. Every mark in the files fails under the new key and the user
+// is asked again; the adopted items are set so a later start does not take the
+// chance either (SEC-018).
+func (e *Engine) approvalKeyLost() bool {
+	if !e.keyLost {
+		return false
+	}
+	if _, err := e.approvalKey(); err != nil {
+		log.Printf("engine: approval key: %v", err)
+		return true
+	}
+	for _, r := range e.adoptedRefs() {
+		if err := e.secrets.Set(r, "1"); err != nil {
+			log.Printf("engine: approval key: %v", err)
+		}
+	}
+	e.mu.Lock()
+	e.issues[issueApprovals] = []config.Issue{{File: config.FileName, Message: "The approval key in the Keychain was missing, so a new one was made and nothing in the files is adopted: hooks, allow rules, environments, settings and addresses wait for your approval again."}}
+	e.mu.Unlock()
+	return true
 }

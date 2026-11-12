@@ -1,6 +1,6 @@
 ---
 title: A lost approval key approves nothing, and the socket has no guessable name
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public

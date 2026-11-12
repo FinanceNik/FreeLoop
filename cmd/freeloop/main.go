@@ -159,7 +159,10 @@ func main() {
 	defer shutdown()
 	// The headless API (EXT-004); the app runs without it when the socket
 	// cannot be served, as when another copy has the data folder.
-	if srv, err := rpc.Listen(eng, config.SocketPath(dataDir)); err != nil {
+	socket, err := config.PrepareSocketPath(dataDir)
+	if err != nil {
+		log.Printf("freeloop: headless API: %v", err)
+	} else if srv, err := rpc.Listen(eng, socket); err != nil {
 		log.Printf("freeloop: headless API: %v", err)
 	} else {
 		go srv.Serve()

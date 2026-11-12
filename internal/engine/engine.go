@@ -162,6 +162,7 @@ type Engine struct {
 	// keyAddresses holds, by provider, the address its key is for.
 	keyAddresses map[string]string
 	// approvalSecret signs MCP approvals; read from the Keychain when first needed.
+	keyLost        bool // the approval key was gone at start while this folder had adopted (SEC-018)
 	approvalOnce   sync.Mutex
 	approvalSecret []byte
 	// issues are the current problems per source file group, so a reload
@@ -280,6 +281,7 @@ func Open(opts Options) (*Engine, error) {
 			e.gh = opts.GH
 		}
 	}
+	e.keyLost = e.approvalKeyGone()
 	e.store, err = store.Open(store.Options{Dir: opts.DataDir, OnAppend: func(ev event.Event) { e.bus.publish(ev); e.observe(ev) }, Redact: e.redact})
 	if err != nil {
 		return nil, err
@@ -497,9 +499,10 @@ const (
 	issueColors       = "colors"
 	issueStyles       = "styles"
 	issueAddresses    = "addresses"
+	issueApprovals    = "approvals"
 )
 
-var issueOrder = []string{issueStorage, issueRebuilt, issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueWorkflows, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueStyles, issueAddresses}
+var issueOrder = []string{issueStorage, issueRebuilt, issueConfig, issueProviders, issueEnvironments, issuePresets, issueOptimizers, issueWorkflows, issueProfiles, issueMCP, issueRules, issueCapabilities, issueColors, issueStyles, issueAddresses, issueApprovals}
 
 func (e *Engine) setIssues(group string, issues []config.Issue) {
 	e.mu.Lock()

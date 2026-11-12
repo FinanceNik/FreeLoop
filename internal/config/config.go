@@ -6,8 +6,6 @@ package config
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -429,17 +427,75 @@ func parse(b []byte) (Config, []Issue) {
 // (EXT-004); the folder is the user's alone (0700), so only they reach it.
 const SocketFileName = "freeloop.sock"
 
-// SocketPath is the headless API's socket. A Unix socket's path must be
-// short (104 bytes on macOS); for a data folder too deep for that, the
-// socket goes in the user's own temporary folder ($TMPDIR, which only they
-// can enter), named after the data folder.
+// socketPointerName records, in the data folder, where a start put a socket
+// that did not fit there, so the command line and the hook find it.
+const socketPointerName = "socket-path"
+
+// SocketPath is the headless API's socket. A Unix socket's path must be short
+// (104 bytes on macOS); for a data folder too deep for that, the socket is in a
+// folder PrepareSocketPath made, which the data folder points to.
 func SocketPath(dir string) string {
 	p := filepath.Join(dir, SocketFileName)
 	if len(p) < 100 {
 		return p
 	}
-	sum := sha256.Sum256([]byte(dir))
-	return filepath.Join(os.TempDir(), "freeloop-"+hex.EncodeToString(sum[:6])+".sock")
+	if b, err := os.ReadFile(filepath.Join(dir, socketPointerName)); err == nil {
+		if q := strings.TrimSpace(string(b)); filepath.IsAbs(q) {
+			return q
+		}
+	}
+	return p
+}
+
+// PrepareSocketPath returns the socket path for this start. For a data folder
+// too deep for one, it makes a folder only this user can enter (mode 0700, a
+// random name, in $XDG_RUNTIME_DIR where there is one, else the temporary
+// folder), removes the folder of the last start and records the new path in the
+// data folder. A name derived from the data folder in a shared folder could be
+// guessed and taken by another user before the app listens (SEC-018).
+func PrepareSocketPath(dir string) (string, error) {
+	p := filepath.Join(dir, SocketFileName)
+	if len(p) < 100 {
+		return p, nil
+	}
+	pointer := filepath.Join(dir, socketPointerName)
+	if b, err := os.ReadFile(pointer); err == nil {
+		// Only a folder this function makes: named fl-*, holding the socket.
+		old := filepath.Dir(strings.TrimSpace(string(b)))
+		if strings.HasPrefix(filepath.Base(old), "fl-") && filepath.Base(strings.TrimSpace(string(b))) == SocketFileName {
+			_ = os.Remove(strings.TrimSpace(string(b)))
+			_ = os.Remove(old)
+		}
+	}
+	// The first folder that holds a short enough path: the runtime folder, the
+	// temporary folder, then /tmp, where a random 0700 folder is as private.
+	var folder string
+	var err error
+	for _, base := range []string{os.Getenv("XDG_RUNTIME_DIR"), os.TempDir(), "/tmp"} {
+		if fi, serr := os.Stat(base); base == "" || serr != nil || !fi.IsDir() {
+			continue
+		}
+		if folder, err = os.MkdirTemp(base, "fl-"); err != nil {
+			continue
+		}
+		if err = os.Chmod(folder, 0o700); err == nil && len(filepath.Join(folder, SocketFileName)) < 100 {
+			break
+		}
+		os.Remove(folder)
+		folder = ""
+	}
+	if folder == "" {
+		if err == nil {
+			err = errors.New("no folder short enough for the socket")
+		}
+		return "", err
+	}
+	q := filepath.Join(folder, SocketFileName)
+	if err := os.WriteFile(pointer, []byte(q+"\n"), 0o600); err != nil {
+		os.Remove(folder)
+		return "", err
+	}
+	return q, nil
 }
 
 // ClearSocket removes a socket file a previous run left behind; anything

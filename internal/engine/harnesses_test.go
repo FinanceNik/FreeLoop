@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/FinanceNik/Freeloop/internal/secrets"
 	"os"
 	"path/filepath"
 	"slices"
@@ -106,7 +107,15 @@ func TestExternalSessionLoad(t *testing.T) {
 		root := t.TempDir()
 		os.WriteFile(filepath.Join(root, "notes.txt"), []byte("hello"), 0o644)
 
-		e := openTest(t, dir)
+		keychain := secrets.NewMemory() // a restart keeps its Keychain; a lost one approves nothing (SEC-018)
+		reopen := func() *Engine {
+			e, err := Open(Options{DataDir: dir, Secrets: keychain, Home: t.TempDir(), Dev: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return e
+		}
+		e := reopen()
 		ch, cancel := e.Subscribe()
 		ses, err := e.CreateSession(ctx, CreateSessionRequest{ProjectRoot: root, ProfileID: "ref", Mode: "accept_edits"})
 		if err != nil {
@@ -120,7 +129,7 @@ func TestExternalSessionLoad(t *testing.T) {
 		}
 		e.Close()
 
-		e = openTest(t, dir)
+		e = reopen()
 		ch, cancel = e.Subscribe()
 		e.Prompt(ctx, ses.ID, "second")
 		waitIdle(t, ch, ses.ID)
