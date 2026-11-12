@@ -1,6 +1,6 @@
 ---
 title: An AFK run saves a step before it acts on it
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -17,3 +17,8 @@ prd: before-going-public
 
 ## Notes
 - `internal/engine/afk.go:746`, `:931`.
+
+## Done
+- `AFKStep.Starting` (`internal/config/afkruns.go`): `nextIssue` saves the step as starting before it queues the task, `finishIssue` saves the step as reviewing and starting before it makes the review; a save that fails stops the run with the reason and makes nothing. A tick that finds `Starting` takes the run's task (`recoverStarting`) or the issue session's review (`startReview`) if one exists, else makes exactly one; `StopAFK` waits for the pass in progress and removes a task whose record was lost.
+- Every `changeRun` and `setStep` error in `afk.go` is handled: the two saves above stop the run, the others are logged and the next tick looks again (`afkWarn`, `trySetStep`, `endRunNow`).
+- `Engine.afkSave` is the test's way to fail a save. `internal/engine/afk_starting_test.go`: both stops on a failed save, and a run reloaded before and after the task, and before and after the review, was made, each ending with one session and one review per step.

@@ -41,6 +41,14 @@ func (e *Engine) runs() (config.AFKRuns, error) {
 	return config.LoadAFKRuns(e.dataDir)
 }
 
+// saveRuns writes the runs; the caller holds afkMu.
+func (e *Engine) saveRuns(all config.AFKRuns) error {
+	if e.afkSave != nil {
+		return e.afkSave(e.dataDir, all)
+	}
+	return config.SaveAFKRuns(e.dataDir, all)
+}
+
 // changeRun loads the runs, lets fn change the one with id and saves them.
 func (e *Engine) changeRun(id string, fn func(r *config.AFKRun) error) (config.AFKRun, error) {
 	e.afkMu.Lock()
@@ -56,7 +64,7 @@ func (e *Engine) changeRun(id string, fn func(r *config.AFKRun) error) (config.A
 	if err := fn(&all.Runs[i]); err != nil {
 		return all.Runs[i], err
 	}
-	if err := config.SaveAFKRuns(e.dataDir, all); err != nil {
+	if err := e.saveRuns(all); err != nil {
 		return all.Runs[i], err
 	}
 	if e.onQueue != nil {
@@ -479,7 +487,7 @@ func (e *Engine) StartAFK(ctx context.Context, req AFKStart) (config.AFKRun, err
 			err = errors.New("a run is going on in this project")
 		} else {
 			all.Runs = append(all.Runs, run)
-			err = config.SaveAFKRuns(e.dataDir, all)
+			err = e.saveRuns(all)
 		}
 	}
 	e.afkMu.Unlock()
@@ -512,20 +520,37 @@ func (e *Engine) PauseAFK(ctx context.Context, id string, paused bool) (config.A
 // StopAFK ends a run: a queued issue that has not started is taken off the queue,
 // and a session already working goes on until its turn ends, unfollowed.
 func (e *Engine) StopAFK(ctx context.Context, id string) (config.AFKRun, error) {
-	var task string
+	// Not between a tick's two saves of a step: a task made after this would stay.
+	e.afkStep.Lock()
+	defer e.afkStep.Unlock()
+	var task, starting string
 	r, err := e.changeRun(id, func(r *config.AFKRun) error {
 		if !r.Active() {
 			return errors.New("the run has ended")
 		}
 		if s := r.Current(); s != nil && s.SessionID == "" {
 			task = s.TaskID
+			if s.Starting {
+				starting = "AFK " + s.Issue + ": "
+			}
 			s.State, s.Note, s.EndedAt = config.StepFailed, "the run was stopped before it started", time.Now().UTC()
 		}
 		endRun(r, config.RunStopped, "You stopped it.")
 		return nil
 	})
+	if err == nil && task == "" && starting != "" {
+		// Saved as starting: its task may have been made before the save of it.
+		if q, qerr := e.Queue(); qerr == nil {
+			for _, t := range q.Tasks {
+				if t.RunID == id && strings.HasPrefix(t.Title, starting) {
+					task = t.ID
+				}
+			}
+		}
+	}
 	if err == nil && task != "" {
-		e.RemoveTask(task)
+		_, rerr := e.RemoveTask(task)
+		afkWarn(rerr)
 	}
 	return r, err
 }
@@ -588,7 +613,7 @@ func (e *Engine) stepRun(ctx context.Context, id string, now time.Time) {
 	r := all.Runs[i]
 	w, werr := e.usableWorkflow(r.WorkflowID)
 	if werr != nil {
-		e.changeRun(id, func(r *config.AFKRun) error { endRun(r, config.RunStopped, werr.Error()); return nil })
+		e.endRunNow(id, config.RunStopped, werr.Error())
 		return
 	}
 	cur := r.Current()
@@ -596,26 +621,80 @@ func (e *Engine) stepRun(ctx context.Context, id string, now time.Time) {
 	case cur != nil && cur.State == config.StepWorking:
 		e.followIssue(ctx, r, *cur, w, now)
 	case cur != nil && cur.State == config.StepReviewing:
-		e.followReview(ctx, r, *cur)
+		e.followReview(ctx, r, *cur, w)
 	case r.State == config.RunRunning:
 		e.nextIssue(ctx, r, w, now)
 	}
 }
 
-// setStep changes the run's current step.
-func (e *Engine) setStep(id string, fn func(r *config.AFKRun, s *config.AFKStep)) {
-	e.changeRun(id, func(r *config.AFKRun) error {
+// afkWarn logs a save that failed where the next tick looks again and tries again.
+func afkWarn(err error) {
+	if err != nil {
+		log.Printf("engine: afk runs: %v", err)
+	}
+}
+
+// endRunNow ends the run with a reason; a save that fails is logged, and the run
+// goes on, so the next tick ends it again.
+func (e *Engine) endRunNow(id, state, reason string) {
+	_, err := e.changeRun(id, func(r *config.AFKRun) error { endRun(r, state, reason); return nil })
+	afkWarn(err)
+}
+
+// trySetStep changes the run's current step and says whether it was saved.
+func (e *Engine) trySetStep(id string, fn func(r *config.AFKRun, s *config.AFKStep)) error {
+	_, err := e.changeRun(id, func(r *config.AFKRun) error {
 		if s := r.Current(); s != nil {
 			fn(r, s)
 		}
 		return nil
 	})
+	return err
+}
+
+// setStep changes the run's current step where a save that fails can wait for the
+// next tick, which looks at the step again.
+func (e *Engine) setStep(id string, fn func(r *config.AFKRun, s *config.AFKStep)) {
+	afkWarn(e.trySetStep(id, fn))
+}
+
+// recoverStarting settles a step saved as Starting whose task was not recorded: the
+// run's task for the issue is the step's if the queue has it, and if not the step is
+// taken back so the issue is queued once, now. It says whether the step has its task.
+func (e *Engine) recoverStarting(r config.AFKRun, s config.AFKStep, q config.Queue) bool {
+	prefix := "AFK " + s.Issue + ": "
+	if i := slices.IndexFunc(q.Tasks, func(t config.Task) bool { return t.RunID == r.ID && strings.HasPrefix(t.Title, prefix) }); i >= 0 {
+		task := q.Tasks[i].ID
+		e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) { st.TaskID, st.Starting = task, false })
+		return true
+	}
+	afkWarn(e.changeRunErr(r.ID, func(r *config.AFKRun) error {
+		if n := len(r.Steps); n > 0 && r.Steps[n-1].Starting && r.Steps[n-1].Issue == s.Issue && r.Steps[n-1].TaskID == "" {
+			r.Steps = r.Steps[:n-1]
+		}
+		return nil
+	}))
+	return false
+}
+
+// changeRunErr is changeRun for a caller that wants only the error.
+func (e *Engine) changeRunErr(id string, fn func(r *config.AFKRun) error) error {
+	_, err := e.changeRun(id, fn)
+	return err
 }
 
 // followIssue follows the session working on an issue, through the queue's task.
 func (e *Engine) followIssue(ctx context.Context, r config.AFKRun, s config.AFKStep, w config.Workflow, now time.Time) {
 	q, err := e.Queue()
 	if err != nil {
+		return
+	}
+	if s.Starting {
+		// Saved before its task was made, and the run was cut off since: find the
+		// task, or take the step back so the issue is queued once.
+		if e.recoverStarting(r, s, q) {
+			e.KickRuns()
+		}
 		return
 	}
 	i := slices.IndexFunc(q.Tasks, func(t config.Task) bool { return t.ID == s.TaskID })
@@ -688,7 +767,7 @@ func (e *Engine) adoptSession(ctx context.Context, id, sid string) {
 	if err != nil {
 		return
 	}
-	e.changeRun(id, func(r *config.AFKRun) error {
+	afkWarn(e.changeRunErr(id, func(r *config.AFKRun) error {
 		if s := r.Current(); s != nil {
 			s.SessionID = sid
 		}
@@ -696,7 +775,7 @@ func (e *Engine) adoptSession(ctx context.Context, id, sid string) {
 			r.Anchor, r.Worktree, r.Branch = sid, ses.Worktree, ses.OwnBranch()
 		}
 		return nil
-	})
+	}))
 }
 
 // finishIssue looks at an issue whose session has ended: done by its file, its
@@ -743,17 +822,50 @@ func (e *Engine) finishIssue(ctx context.Context, id, sid string, w config.Workf
 	// Then a second agent reviews it, before the next issue changes the worktree it
 	// reads (WFL-006).
 	if !w.Review.Off {
-		reviewer, err := e.reviewIssue(ctx, r, *s, sid, w, env)
-		if err == nil {
-			e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) {
-				st.Commit, st.Note, st.ReviewID, st.State = commit, note, reviewer, config.StepReviewing
-			})
+		// The step is saved as reviewing before the review is made, and a save that
+		// fails makes no review: a second one would be a second paid session.
+		if err := e.trySetStep(id, func(r *config.AFKRun, st *config.AFKStep) {
+			st.Commit, st.Note, st.State, st.Starting = commit, note, config.StepReviewing, true
+		}); err != nil {
+			stop("its review could not be recorded: "+err.Error(), fmt.Sprintf("The run could not save %s's review step: %v", s.Issue, err))
 			return
 		}
-		note = strings.TrimSpace(note + " Not reviewed: " + err.Error())
+		e.startReview(ctx, id, *s, sid, w, env, false)
+		return
 	}
 	e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) {
 		st.Commit, st.Note, st.State, st.EndedAt = commit, note, config.StepQA, time.Now().UTC()
+	})
+	e.KickRuns()
+}
+
+// startReview makes the review of the step saved as Starting and records it; with
+// recovering, a review its session already has for the issue is the step's.
+func (e *Engine) startReview(ctx context.Context, id string, s config.AFKStep, sid string, w config.Workflow, env environment.Environment, recovering bool) {
+	if recovering {
+		for _, c := range e.subagentsOf(ctx, sid) {
+			if c.Title == "Review: "+s.Issue && slices.Contains(c.Tags, ReviewTag) {
+				e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) { st.ReviewID, st.Starting = c.ID, false })
+				return
+			}
+		}
+	}
+	all, err := e.runs()
+	if err != nil {
+		return
+	}
+	i := slices.IndexFunc(all.Runs, func(r config.AFKRun) bool { return r.ID == id })
+	if i < 0 {
+		return
+	}
+	reviewer, err := e.reviewIssue(ctx, all.Runs[i], s, sid, w, env)
+	if err == nil {
+		e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) { st.ReviewID, st.Starting = reviewer, false })
+		return
+	}
+	e.setStep(id, func(r *config.AFKRun, st *config.AFKStep) {
+		st.Note = strings.TrimSpace(st.Note + " Not reviewed: " + err.Error())
+		st.State, st.Starting, st.EndedAt = config.StepQA, false, time.Now().UTC()
 	})
 	e.KickRuns()
 }
@@ -834,7 +946,24 @@ func (e *Engine) commitLeftovers(ctx context.Context, env environment.Environmen
 
 // followReview follows the review of the current issue; once it has answered, or
 // failed, the issue waits for the user's QA.
-func (e *Engine) followReview(ctx context.Context, r config.AFKRun, s config.AFKStep) {
+func (e *Engine) followReview(ctx context.Context, r config.AFKRun, s config.AFKStep, w config.Workflow) {
+	if s.Starting {
+		// Saved before the review was made, and the run was cut off since (or the
+		// save of its session failed): the session the issue has for it, or one.
+		ses, err := e.store.GetSession(ctx, s.SessionID)
+		if err == nil {
+			env, err := e.localEnv(ses.WorkRoot(), nil)
+			if err == nil {
+				e.startReview(ctx, r.ID, s, s.SessionID, w, env, true)
+				return
+			}
+		}
+		e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) {
+			st.Note = strings.TrimSpace(st.Note + " Not reviewed: its session cannot be read.")
+			st.State, st.Starting, st.EndedAt = config.StepQA, false, time.Now().UTC()
+		})
+		return
+	}
 	ses, err := e.store.GetSession(ctx, s.ReviewID)
 	note := ""
 	switch {
@@ -859,7 +988,7 @@ func (e *Engine) followReview(ctx context.Context, r config.AFKRun, s config.AFK
 // nextIssue queues the next ready AFK issue, or ends the run.
 func (e *Engine) nextIssue(ctx context.Context, r config.AFKRun, w config.Workflow, now time.Time) {
 	end := func(state, reason string) {
-		e.changeRun(r.ID, func(r *config.AFKRun) error { endRun(r, state, reason); return nil })
+		e.endRunNow(r.ID, state, reason)
 	}
 	if len(r.Steps) >= r.MaxIssues {
 		end(config.RunFinished, fmt.Sprintf("It did its cap of %d issues.", r.MaxIssues))
@@ -928,16 +1057,25 @@ func (e *Engine) nextIssue(ctx context.Context, r config.AFKRun, w config.Workfl
 	} else {
 		task.Worktree = true
 	}
+	// The step is saved as starting before the task is made: a save that fails
+	// queues nothing, and a run cut off after it finds the task before it makes one.
+	if err := e.changeRunErr(r.ID, func(r *config.AFKRun) error {
+		r.Steps = append(r.Steps, config.AFKStep{Issue: next.ID, Path: next.Path, Title: next.Title, State: config.StepWorking, Starting: true, StartedAt: now.UTC()})
+		return nil
+	}); err != nil {
+		end(config.RunStopped, "Its next issue could not be recorded, so it was not started: "+err.Error())
+		return
+	}
 	q, err := e.AddTask(task)
 	if err != nil {
-		end(config.RunStopped, "Its next issue could not be queued: "+err.Error())
+		e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) {
+			st.State, st.Starting, st.Note, st.EndedAt = config.StepFailed, false, "not queued: "+err.Error(), time.Now().UTC()
+			endRun(r, config.RunStopped, "Its next issue could not be queued: "+err.Error())
+		})
 		return
 	}
 	added := q.Tasks[len(q.Tasks)-1]
-	e.changeRun(r.ID, func(r *config.AFKRun) error {
-		r.Steps = append(r.Steps, config.AFKStep{Issue: next.ID, Path: next.Path, Title: next.Title, TaskID: added.ID, State: config.StepWorking, StartedAt: now.UTC()})
-		return nil
-	})
+	e.setStep(r.ID, func(r *config.AFKRun, st *config.AFKStep) { st.TaskID, st.Starting = added.ID, false })
 }
 
 // sessionRules are a run's commands as a session's allow rules.

@@ -126,8 +126,10 @@ type Engine struct {
 	workflows  []config.Workflow
 	// afkMu guards afkruns.json, afkStep keeps one pass over the AFK runs at a time,
 	// and afkKick asks the schedule loop for one now (WFL-005).
-	afkMu    sync.Mutex
-	afkStep  sync.Mutex
+	afkMu   sync.Mutex
+	afkStep sync.Mutex
+	// afkSave saves the runs when set (a test's way to make a save fail); under afkMu.
+	afkSave  func(dir string, r config.AFKRuns) error
 	afkKick  chan struct{}
 	dataDir  string
 	home     string

@@ -88,7 +88,12 @@ type AFKStep struct {
 	SessionID string `json:"sessionId,omitempty"`
 	ReviewID  string `json:"reviewId,omitempty"`
 	State     string `json:"state"`
-	Note      string `json:"note,omitempty"`
+	// Starting says the step is recorded and the session it names (the issue's for a
+	// working step, the review's for a reviewing one) may not exist yet: it is saved
+	// before the session is made, so a tick that finds it looks for that session
+	// first, and a crash cannot make a second one (WFL-005).
+	Starting bool   `json:"starting,omitempty"`
+	Note     string `json:"note,omitempty"`
 	// Waiting says why its session has not started yet: the queue's reason, such
 	// as an agent's limit, while its task waits.
 	Waiting   string    `json:"waiting,omitempty"`
