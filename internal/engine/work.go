@@ -137,8 +137,14 @@ func (e *Engine) WorkCost(ctx context.Context, weeks int) (WorkReport, error) {
 	}
 	pending := e.foldWork(ctx)
 	start, _ := time.ParseInLocation(time.DateOnly, weekOf(time.Now()), time.Local)
-	since := start.AddDate(0, 0, -7*(weeks-1))
-	rep := WorkReport{Since: since.Format(time.DateOnly), Pending: pending, Commits: []WorkCommitCost{}, Spend: []WorkSpend{}, Limits: []LimitValue{}}
+	rep, err := e.workCost(ctx, start.AddDate(0, 0, -7*(weeks-1)))
+	rep.Pending = pending
+	return rep, err
+}
+
+// workCost reports the commits from since on, from what is folded.
+func (e *Engine) workCost(ctx context.Context, since time.Time) (WorkReport, error) {
+	rep := WorkReport{Since: since.Format(time.DateOnly), Commits: []WorkCommitCost{}, Spend: []WorkSpend{}, Limits: []LimitValue{}}
 	commits, usage, unattributed, err := e.store.WorkSince(ctx, since)
 	if err != nil {
 		return WorkReport{}, err
@@ -241,6 +247,10 @@ func (e *Engine) WorkCost(ctx context.Context, weeks int) (WorkReport, error) {
 			n := len(un.commits)
 			for _, i := range un.commits {
 				c := commits[i]
+				if c.Before {
+					// From before the window: it only said where the next one starts.
+					continue
+				}
 				info := about(c.SessionID)
 				if info.Title == "" {
 					info = about(root)

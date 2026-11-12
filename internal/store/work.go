@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS work_commits (
 	files        INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS work_commits_unit ON work_commits (unit_ts);
+CREATE INDEX IF NOT EXISTS work_commits_root ON work_commits (root_id, unit_ts);
 CREATE TABLE IF NOT EXISTS work_usage (
 	session_id     TEXT NOT NULL,
 	root_id        TEXT NOT NULL,
@@ -231,7 +233,36 @@ func (s *Store) foldWorkSession(ctx context.Context, w workSession, since int64,
 		}
 		pending = nil
 	}
+	// The model in force: the session's now, unless it changed. Before its first
+	// change that is not recorded, so it is the one the first call named, and
+	// otherwise none, which prices nothing rather than at the wrong model.
+	inForce, inForceProvider := w.model, w.provider
 	for _, ev := range events {
+		if ev.Type == event.ModelChanged {
+			inForce, inForceProvider = "", ""
+			for _, e2 := range events {
+				if e2.Type == event.ModelChanged {
+					break
+				}
+				if e2.Type == event.UsageUpdate {
+					var d event.UsageData
+					if json.Unmarshal(e2.Data, &d) == nil && d.Model != "" {
+						inForce, inForceProvider = d.Model, d.ProviderID
+						break
+					}
+				}
+			}
+			break
+		}
+	}
+	for _, ev := range events {
+		if ev.Type == event.ModelChanged {
+			var d event.ModelChangedData
+			json.Unmarshal(ev.Data, &d)
+			if d.Model != "" {
+				inForce, inForceProvider = d.Model, cmp.Or(d.ProviderID, inForceProvider)
+			}
+		}
 		if ev.Seq <= w.copied {
 			continue
 		}
@@ -253,10 +284,10 @@ func (s *Store) foldWorkSession(ctx context.Context, w workSession, since int64,
 			}
 			provider, model := d.ProviderID, d.Model
 			if provider == "" {
-				provider = w.provider
+				provider = inForceProvider
 			}
 			if model == "" {
-				model = w.model
+				model = inForce
 			}
 			model = pricedModel(model, d)
 			add := func(r *workUsageRow) {
@@ -392,6 +423,9 @@ type WorkCommit struct {
 	Added       int       `json:"added"`
 	Deleted     int       `json:"deleted"`
 	Files       int       `json:"files"`
+	// Before marks a commit from before the window, kept only to say where the
+	// first one in it starts counting.
+	Before bool `json:"-"`
 }
 
 // WorkUsage is one turn's usage of one model in a session, under the session its
@@ -413,48 +447,121 @@ type WorkUsage struct {
 	Calls        int64
 }
 
-// WorkSince returns the commits attributed from since on, and all usage of the
-// sessions they count for together with all usage from since on.
-func (s *Store) WorkSince(ctx context.Context, since time.Time) ([]WorkCommit, []WorkUsage, int, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT sha, root_id, session_id, project_id, unit_seq, unit_ts, committed_at, added, deleted, files FROM work_commits WHERE root_id != '' AND unit_ts >= ? ORDER BY unit_ts, unit_seq`, since.UnixMilli())
-	if err != nil {
-		return nil, nil, 0, fmt.Errorf("store: work: %w", err)
+// Queries of WorkSince; a test reads their plans, as each is to use an index.
+const (
+	workCommitsSince = `SELECT sha, root_id, session_id, project_id, unit_seq, unit_ts, committed_at, added, deleted, files FROM work_commits WHERE root_id != '' AND unit_ts >= ? ORDER BY unit_ts, unit_seq`
+	workCommitBefore = `SELECT sha, root_id, session_id, project_id, unit_seq, unit_ts, committed_at, added, deleted, files FROM work_commits WHERE root_id = ? AND unit_ts < ? ORDER BY unit_ts DESC, unit_seq DESC LIMIT 1`
+	workUnattributed = `SELECT count(*) FROM work_commits WHERE root_id = '' AND committed_at >= ?`
+	workUsageSince   = `SELECT session_id, root_id, project_id, harness_id, end_seq, ts, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls FROM work_usage WHERE ts >= ? ORDER BY ts, end_seq`
+	workUsageOfRoot  = `SELECT session_id, root_id, project_id, harness_id, end_seq, ts, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls FROM work_usage WHERE root_id = ? AND ts >= ? AND ts < ? ORDER BY ts, end_seq`
+)
+
+func scanWorkCommit(rows *sql.Rows) (WorkCommit, error) {
+	var c WorkCommit
+	var unit, at int64
+	if err := rows.Scan(&c.SHA, &c.RootID, &c.SessionID, &c.ProjectID, &c.UnitSeq, &unit, &at, &c.Added, &c.Deleted, &c.Files); err != nil {
+		return c, err
 	}
-	var commits []WorkCommit
-	roots := map[string]bool{}
-	for rows.Next() {
-		var c WorkCommit
-		var unit, at int64
-		if err := rows.Scan(&c.SHA, &c.RootID, &c.SessionID, &c.ProjectID, &c.UnitSeq, &unit, &at, &c.Added, &c.Deleted, &c.Files); err != nil {
-			rows.Close()
-			return nil, nil, 0, fmt.Errorf("store: work: %w", err)
-		}
-		c.UnitTS, c.CommittedAt = time.UnixMilli(unit), time.Unix(at, 0)
-		commits = append(commits, c)
-		roots[c.RootID] = true
-	}
-	rows.Close()
-	var unattributed int
-	s.db.QueryRowContext(ctx, `SELECT count(*) FROM work_commits WHERE root_id = '' AND committed_at >= ?`, since.Unix()).Scan(&unattributed)
-	rows, err = s.db.QueryContext(ctx, `SELECT session_id, root_id, project_id, harness_id, end_seq, ts, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls FROM work_usage ORDER BY ts, end_seq`)
-	if err != nil {
-		return nil, nil, 0, fmt.Errorf("store: work: %w", err)
-	}
-	defer rows.Close()
-	var usage []WorkUsage
+	c.UnitTS, c.CommittedAt = time.UnixMilli(unit), time.Unix(at, 0)
+	return c, nil
+}
+
+func scanWorkUsage(rows *sql.Rows) ([]WorkUsage, error) {
+	var out []WorkUsage
 	for rows.Next() {
 		var u WorkUsage
 		var ts int64
 		if err := rows.Scan(&u.SessionID, &u.RootID, &u.ProjectID, &u.HarnessID, &u.EndSeq, &ts, &u.ProviderID, &u.Model, &u.Input, &u.Output, &u.CacheRead, &u.CacheWrite, &u.CacheWrite1h, &u.Calls); err != nil {
-			return nil, nil, 0, fmt.Errorf("store: work: %w", err)
+			return nil, err
 		}
 		u.TS = time.UnixMilli(ts)
-		if u.TS.Before(since) && !roots[u.RootID] {
-			continue
-		}
-		usage = append(usage, u)
+		out = append(out, u)
 	}
-	return commits, usage, unattributed, rows.Err()
+	return out, rows.Err()
+}
+
+// WorkSince returns the commits attributed from since on, and the usage that
+// counts for them: all usage from since on, and for each session a commit in the
+// window belongs to, the usage since its commit before the window. That commit is
+// returned as well, with Before set, so the first commit in the window takes on
+// only what was spent after it.
+func (s *Store) WorkSince(ctx context.Context, since time.Time) ([]WorkCommit, []WorkUsage, int, error) {
+	fail := func(err error) ([]WorkCommit, []WorkUsage, int, error) {
+		return nil, nil, 0, fmt.Errorf("store: work: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, workCommitsSince, since.UnixMilli())
+	if err != nil {
+		return fail(err)
+	}
+	var commits []WorkCommit
+	var roots []string
+	seen := map[string]bool{}
+	for rows.Next() {
+		c, err := scanWorkCommit(rows)
+		if err != nil {
+			rows.Close()
+			return fail(err)
+		}
+		commits = append(commits, c)
+		if !seen[c.RootID] {
+			seen[c.RootID] = true
+			roots = append(roots, c.RootID)
+		}
+	}
+	rows.Close()
+	var unattributed int
+	s.db.QueryRowContext(ctx, workUnattributed, since.Unix()).Scan(&unattributed)
+	rows, err = s.db.QueryContext(ctx, workUsageSince, since.UnixMilli())
+	if err != nil {
+		return fail(err)
+	}
+	usage, err := scanWorkUsage(rows)
+	rows.Close()
+	if err != nil {
+		return fail(err)
+	}
+	for _, root := range roots {
+		// Usage from the commit before the window; with none, from the start.
+		var from int64
+		rows, err := s.db.QueryContext(ctx, workCommitBefore, root, since.UnixMilli())
+		if err != nil {
+			return fail(err)
+		}
+		if rows.Next() {
+			c, err := scanWorkCommit(rows)
+			if err != nil {
+				rows.Close()
+				return fail(err)
+			}
+			c.Before = true
+			from = c.UnitTS.UnixMilli()
+			commits = append(commits, c)
+		}
+		rows.Close()
+		rows, err = s.db.QueryContext(ctx, workUsageOfRoot, root, from, since.UnixMilli())
+		if err != nil {
+			return fail(err)
+		}
+		more, err := scanWorkUsage(rows)
+		rows.Close()
+		if err != nil {
+			return fail(err)
+		}
+		usage = append(usage, more...)
+	}
+	sort.SliceStable(usage, func(i, j int) bool {
+		if !usage[i].TS.Equal(usage[j].TS) {
+			return usage[i].TS.Before(usage[j].TS)
+		}
+		return usage[i].EndSeq < usage[j].EndSeq
+	})
+	sort.SliceStable(commits, func(i, j int) bool {
+		if !commits[i].UnitTS.Equal(commits[j].UnitTS) {
+			return commits[i].UnitTS.Before(commits[j].UnitTS)
+		}
+		return commits[i].UnitSeq < commits[j].UnitSeq
+	})
+	return commits, usage, unattributed, nil
 }
 
 // LimitSpan is one run of a limit as reports saw it: the first report, and the

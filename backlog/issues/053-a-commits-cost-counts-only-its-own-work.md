@@ -1,6 +1,6 @@
 ---
 title: A commit's cost counts only its own work
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -16,3 +16,6 @@ The cost per commit (GUI-051) filters commits by `unit_ts >= since` (`internal/s
 
 ## Notes
 - The four usage folds (`search.go`, `recentusage.go`, `store/work.go`, `runcost.go`) differ slightly; making them one is out of scope here and named in the PRD.
+
+## Done
+The window now also reads the root's last commit before it (`WorkCommit.Before`, not reported) and the usage since, so the first commit in it costs only its own work; `WorkSince` reads only the window and those roots by index (new `work_commits_root`). A call naming no model is priced by the model in force (`model_changed` events are followed in the fold); before a first change the model is not recorded, so it is the first call's name, else none. `search.go` and `recentusage.go` still start from the session's current model (the folds stay separate, as noted).
