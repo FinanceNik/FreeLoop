@@ -1,6 +1,6 @@
 ---
 title: A turn that will not stop is stopped
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -16,3 +16,6 @@ Suspected, to be shown first: when an external agent does not answer a cancel wi
 
 ## Notes
 - Process groups are already ended on a session's cancel (`internal/engine/runtime.go`); this is the same for one turn.
+
+## Done
+Reproduced: the reference agent (`HANG` prompt) ignoring a cancel kept running after the turn was recorded as cancelled. After the wait (`cancelWait`, 10 s) the agent process is now killed, a notice says it was stopped, and the prompt returns `ErrAgentExited`, so the engine drops the runtime and the next message starts the agent again and loads the session (or sends the recap). A late permission request was already refused through the turn context; the test keeps that.

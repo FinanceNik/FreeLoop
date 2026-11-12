@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -352,4 +353,62 @@ func TestAgentLimits(t *testing.T) {
 	// A report with nothing in it does not end a session.
 	s.reportLimits(nil)
 	s.reportLimits(&sdkRateLimit{Status: "allowed"})
+}
+
+// A turn the agent did not end after a cancel is ended by stopping the agent: it
+// would go on working under a turn recorded as over. The transcript says the agent
+// was stopped, and a request arriving late is refused, not shown.
+func TestAnAgentThatIgnoresCancelIsStopped(t *testing.T) {
+	old := cancelWait
+	cancelWait = 300 * time.Millisecond
+	defer func() { cancelWait = old }()
+	home := t.TempDir()
+	root := filepath.Join(home, "repo")
+	os.MkdirAll(root, 0o755)
+	policy := permission.NewPolicy(home, filepath.Join(home, "appdata"))
+	env, err := environment.NewLocal(environment.LocalOptions{Root: root, Guard: policy.Guard(root), Shell: []string{"sh", "-c"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := &recorder{}
+	broker := permission.NewBroker(policy, func(_ string, typ event.Type, data any) { rec.emit(typ, data) })
+	exe, _ := os.Executable()
+	h := Harness{Preset: config.HarnessPreset{ID: "ref", Name: "Reference", Command: exe, Env: map[string]string{acptest.EnvVar: "1"}}}
+	hs, err := h.NewSession(context.Background(), harness.Params{SessionID: "ses", Env: env, Broker: broker, Mode: permission.ModeAsk, Emit: rec.emit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := hs.(*session)
+	defer s.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for !strings.Contains(rec.text(event.AgentMessageChunk), "hanging") {
+			time.Sleep(5 * time.Millisecond)
+		}
+		cancel()
+	}()
+	stop, err := s.Prompt(ctx, harness.Prompt{Text: "HANG"})
+	if stop != harness.StopCancelled || !errors.Is(err, harness.ErrAgentExited) {
+		t.Fatalf("stop = %q, err = %v", stop, err)
+	}
+	if !strings.Contains(rec.text(event.Notice), "did not stop when asked") {
+		t.Errorf("no notice: %s", rec.text(event.Notice))
+	}
+	select {
+	case <-s.conn.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("the agent is still running")
+	}
+
+	// A request that comes after the turn was recorded as ended is refused.
+	res, err := s.RequestPermission(context.Background(), sdk.RequestPermissionRequest{
+		ToolCall: sdk.ToolCallUpdate{ToolCallId: "late", Title: sdk.Ptr("Edit"), Kind: sdk.Ptr(sdk.ToolKindEdit)},
+		Options:  []sdk.PermissionOption{{OptionId: "yes", Name: "Allow", Kind: sdk.PermissionOptionKindAllowOnce}},
+	})
+	if err != nil || res.Outcome.Cancelled == nil {
+		t.Errorf("late request: %+v, %v", res.Outcome, err)
+	}
+	if p := broker.Pending(); len(p) != 0 {
+		t.Errorf("a late request was shown: %+v", p)
+	}
 }

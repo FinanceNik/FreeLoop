@@ -525,6 +525,9 @@ func (s *session) Close() error {
 	return nil
 }
 
+// cancelWait is how long an agent has to end a turn after a cancel.
+var cancelWait = 10 * time.Second
+
 // Prompt sends one user turn. Cancelling ctx sends session/cancel and waits
 // briefly for the agent to end the turn, as the protocol asks.
 func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopReason, error) {
@@ -571,16 +574,21 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		done <- answer{res, err}
 	}()
 	var a answer
-	answered := true
+	answered, stopped := true, false
 	select {
 	case a = <-done:
 	case <-ctx.Done():
 		s.conn.Cancel(context.Background(), sdk.CancelNotification{SessionId: s.id})
 		select {
 		case a = <-done:
-		case <-time.After(10 * time.Second):
+		case <-time.After(cancelWait):
+			// The agent goes on working under a turn the user believes is over,
+			// spending and asking. End it; the next message starts it again with the
+			// session's history (the engine drops a session whose agent exited).
+			s.proc.Kill()
 			a.res.StopReason = sdk.StopReasonCancelled
 			answered = false
+			stopped = true
 		}
 	case <-s.conn.Done():
 		a.err = harness.ErrAgentExited
@@ -601,6 +609,10 @@ func (s *session) Prompt(ctx context.Context, p harness.Prompt) (harness.StopRea
 		s.p.Emit(event.Error, event.ErrorData{Message: a.err.Error()})
 	} else if ctx.Err() != nil {
 		stop = harness.StopCancelled
+	}
+	if stopped {
+		s.p.Emit(event.Notice, event.NoticeData{Message: fmt.Sprintf("%s did not stop when asked to, so Freeloop stopped it.", s.preset.Name)})
+		a.err = fmt.Errorf("%w: it did not answer a cancel and was stopped", harness.ErrAgentExited)
 	}
 	if !s.endCalls() && answered {
 		s.p.Emit(event.UsageUpdate, turnUsage(a.res.Usage, s.currentModel(), s.preset.InputCountsCache))

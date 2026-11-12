@@ -187,6 +187,11 @@ func (a *agent) Prompt(ctx context.Context, r sdk.PromptRequest) (sdk.PromptResp
 	if a.plugin != "" {
 		say("plugin: " + a.plugin)
 	}
+	// HANG never answers and ignores a cancel, as an agent stuck in a call does.
+	if strings.HasPrefix(text, "HANG") {
+		say("hanging")
+		select {}
+	}
 	if strings.HasPrefix(text, "PLAN") {
 		return a.plan(ctx, r.SessionId, say)
 	}
