@@ -46,7 +46,10 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
   // Nothing is picked until the user types or moves, so ⌘K then a reflex
   // Enter runs nothing, an approval least of all.
   const [pick, setPick] = useState(-1);
-  const grouped = useMemo(() => sections(items, query), [items, query, locale()]);
+  // The section names are the language's, so a change of it sorts them again.
+  const lang = locale();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
+  const grouped = useMemo(() => sections(items, query), [items, query, lang]);
   const shown = useMemo(() => grouped.flatMap((s) => s.items), [grouped]);
   const index = useMemo(() => new Map(shown.map((item, i) => [item, i])), [shown]);
   const list = useRef<HTMLDivElement>(null);

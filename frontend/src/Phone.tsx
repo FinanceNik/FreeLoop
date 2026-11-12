@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { EngineService, type Config } from "./api.ts";
 import { copyText } from "./host.ts";
 import { locale, t } from "./i18n.ts";
@@ -30,14 +30,16 @@ export default function Phone({ config, onSaved, onError }: Props) {
   const remote = config.remote ?? { enabled: false, port: 0, host: "", keepAwake: false };
 
   const refresh = () => EngineService.PhoneStatus().then(setStatus).catch(onError);
+  const refreshNow = useEffectEvent(refresh);
   useEffect(() => {
-    refresh();
-    const timer = setInterval(refresh, 1500);
+    refreshNow();
+    const timer = setInterval(() => refreshNow(), 1500);
     return () => clearInterval(timer);
   }, []);
   const lookTailscale = () => EngineService.Tailscale().then(setTail).catch(onError);
+  const lookNow = useEffectEvent(lookTailscale);
   useEffect(() => {
-    lookTailscale();
+    lookNow();
   }, [remote.port]);
 
   const save = (next: Partial<typeof remote>) =>

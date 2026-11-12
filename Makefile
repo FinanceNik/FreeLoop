@@ -235,17 +235,23 @@ linux-test-sandbox: linux-image ## Try to break out of the Linux sandbox, in a p
 bindings: ## Regenerate the TypeScript bindings for the Go services
 	$(WAILS) generate bindings -clean=true -ts -i -silent ./cmd/freeloop
 
-lint: frontend/node_modules bindings ## gofmt, go vet, architecture boundaries (ENV-001) and TypeScript
+lint: frontend/node_modules frontend/lint/node_modules bindings ## gofmt, go vet, architecture boundaries (ENV-001), TypeScript and the hooks rules
 	@test -z "$$(gofmt -l cmd internal frontend/embed.go)" || { gofmt -l cmd internal frontend/embed.go; echo "gofmt needed"; exit 1; }
 	go vet ./internal/...
 	go test -count=1 ./internal/archtest/
 	cd frontend && npm run typecheck
+	cd frontend && lint/node_modules/.bin/eslint -c lint/eslint.config.js src
 
 fmt: ## Format Go code
 	gofmt -w cmd internal frontend/embed.go
 
 frontend/node_modules: frontend/package-lock.json
 	cd frontend && npm ci
+	@touch $@
+
+# ESLint lives apart from the app's packages: typescript-eslint cannot load TypeScript 7 yet.
+frontend/lint/node_modules: frontend/lint/package-lock.json
+	cd frontend/lint && npm ci
 	@touch $@
 
 clean: ## Remove build output

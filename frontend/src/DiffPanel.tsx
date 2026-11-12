@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { chord, primaryKey } from "./platform.ts";
 import { ask } from "./ask.ts";
 import { EngineService, type ChangedFile, type Changes, type FileDiff, type Session } from "./api.ts";
@@ -75,8 +75,9 @@ export default function DiffPanel({ session, gitKey, agentEdits, onReview, onErr
         setVersion((v) => v + 1);
       })
       .catch(onError);
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
-    load();
+    loadNow();
   }, [session.id, gitKey]);
 
   const act = (p: Promise<unknown>) => {
@@ -312,9 +313,10 @@ function FileRow({ file, sessionId, open, version, edit, busy, onToggle, onStage
   useEffect(() => {
     if (box.current) box.current.indeterminate = file.staged && file.unstaged;
   }, [file.staged, file.unstaged]);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     if (!open) return;
-    EngineService.FileDiff(sessionId, file.path).then(setDiff).catch(onError);
+    EngineService.FileDiff(sessionId, file.path).then(setDiff).catch(failed);
   }, [open, version, sessionId, file.path]);
 
   const rows = diff ? parseDiff(diff.diff) : [];

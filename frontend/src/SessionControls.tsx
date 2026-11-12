@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import { EngineService, MODES, modeHint, type SessionOption, type SessionOptionsReport } from "./api.ts";
 import { t } from "./i18n.ts";
 
@@ -52,8 +52,9 @@ export default function SessionControls({ sessionId, mode, canBypass, offersAuto
     EngineService.SessionOptions(sessionId)
       .then(setReport)
       .catch(onError);
+  const refreshNow = useEffectEvent(refresh);
   useEffect(() => {
-    refresh();
+    refreshNow();
   }, [sessionId, version]);
 
   const choose = (o: SessionOption, value: string) => {

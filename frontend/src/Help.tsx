@@ -39,8 +39,8 @@ function layout(page: string): { lead: string; rest: string; sections: string[] 
 
 // shownTopics is the topics there is a page for, in reading order, in the language
 // in force.
-export function shownTopics() {
-  const pages = helpPages();
+export function shownTopics(lang: Language = language()) {
+  const pages = helpPages(lang);
   return helpTopics().filter((x) => pages[x.slug] !== undefined);
 }
 
@@ -49,7 +49,7 @@ export default function Help({ topic, onTopic, onOpen }: { topic: string; onTopi
   // A change of language re-renders the app, and the page follows it.
   const lang = language();
   const pages = useMemo(() => helpPages(lang), [lang]);
-  const topics = useMemo(() => shownTopics(), [lang]);
+  const topics = useMemo(() => shownTopics(lang), [lang]);
   const hits = useMemo(() => searchHelp(topics, pages, query), [topics, pages, query]);
   const at = Math.max(0, topics.findIndex((x) => x.slug === topic));
   const current = topics[at];

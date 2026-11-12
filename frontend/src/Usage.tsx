@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import UsageOverview from "./UsageOverview.tsx";
 import TokenFigures from "./TokenFigures.tsx";
 import { tabAfterKey } from "./a11y.ts";
@@ -85,10 +85,11 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
   const [exported, setExported] = useState("");
   const [sharing, setSharing] = useState(false);
   const [pricesAsOf, setPricesAsOf] = useState("");
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.BuiltinPrices()
       .then((p) => setPricesAsOf(p.asOf))
-      .catch(onError);
+      .catch(failed);
   }, []);
   const [tab, setTab] = useState<TabID>("tokens");
   const [filters, setFilters] = useState(NO_FILTERS);
@@ -109,7 +110,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
     // Twice the range, for the comparison with the period before.
     EngineService.UsageReport(Math.max(range * 2, MIN_FETCH_DAYS))
       .then((r) => live && setReport(r))
-      .catch(onError)
+      .catch(failed)
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
@@ -127,7 +128,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
           setActivity(r);
           if (r.pending > 0) timer = setTimeout(load, 200);
         })
-        .catch(onError);
+        .catch(failed);
     load();
     return () => {
       live = false;

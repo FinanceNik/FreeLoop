@@ -1,5 +1,5 @@
 import { Browser } from "@wailsio/runtime";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import { EngineService, type RegistryOption, type RegistryServer } from "./api.ts";
 import { list, t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
@@ -25,10 +25,11 @@ export default function McpRegistry({ onPick, onClose, onError }: Props) {
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.MCPRegistryAddress()
       .then((a) => setAddress(a))
-      .catch(onError);
+      .catch(failed);
   }, []);
 
   const search = (cursor = "") => {

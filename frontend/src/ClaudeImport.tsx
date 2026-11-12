@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { secretStore } from "./platform.ts";
 import { EngineService, type ClaudeImport as Preview, type SkillCandidate } from "./api.ts";
 import { t, type PlainKey } from "./i18n.ts";
@@ -53,7 +53,8 @@ export default function ClaudeImport({ onDone, onError }: Props) {
       )
       .catch(onError);
   };
-  useEffect(load, []);
+  const loadNow = useEffectEvent(load);
+  useEffect(() => loadNow(), []);
 
   const toggle = (key: string, on: boolean) => setPicked((p) => (on ? [...p, key] : p.filter((k) => k !== key)));
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import { secretStore } from "./platform.ts";
 import { ask } from "./ask.ts";
 import { Browser } from "@wailsio/runtime";
@@ -141,13 +141,14 @@ export default function MCP({ configVersion, onImport, onError }: Props) {
     EngineService.ListMCPServers()
       .then((l) => setServers(l ?? []))
       .catch(onError);
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
-    load();
+    loadNow();
   }, [configVersion]);
   // Starting servers change state in the background.
   useEffect(() => {
     if (!servers.some((s) => s.status.state === "starting")) return;
-    const timer = setTimeout(load, 1000);
+    const timer = setTimeout(() => loadNow(), 1000);
     return () => clearTimeout(timer);
   }, [servers]);
 

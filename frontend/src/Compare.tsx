@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { ask } from "./ask.ts";
 import { EngineService, type CompareRun } from "./api.ts";
 import { compact } from "./analytics.ts";
@@ -28,14 +28,15 @@ export default function Compare({ tag, onOpen, onError }: { tag: string; onOpen:
     EngineService.Compare(tag)
       .then((r) => setRuns(r ?? []))
       .catch(onError);
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
-    load();
+    loadNow();
   }, [tag]);
   // The runs' numbers move while they work, and a run can start or stop
   // at any time, so the page reads them again every few seconds.
   const working = (runs ?? []).some((r) => WORKING.has(r.session.status));
   useEffect(() => {
-    const t = setInterval(load, working ? 3000 : 8000);
+    const t = setInterval(() => loadNow(), working ? 3000 : 8000);
     return () => clearInterval(t);
   }, [working, tag]);
   const keep = async (r: CompareRun) => {

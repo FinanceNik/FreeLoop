@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { EngineService, type Config, type VoiceStatus } from "./api.ts";
 import DictateButton, { size, useVoiceDownload } from "./Dictation.tsx";
 import { LANGUAGES, t } from "./i18n.ts";
@@ -17,8 +17,9 @@ export default function Voice({ config, onSaved, onError }: Props) {
   const [heard, setHeard] = useState("");
   const [said, setSaid] = useState("");
   const refresh = () => EngineService.VoiceStatus().then(setStatus).catch(onError);
+  const refreshNow = useEffectEvent(refresh);
   useEffect(() => {
-    refresh();
+    refreshNow();
   }, []);
   useVoiceDownload(status, setStatus);
   const download = () => EngineService.InstallVoice().then(refresh).catch(onError);

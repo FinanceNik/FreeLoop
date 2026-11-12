@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { compact, withoutCacheReads, type Row } from "./analytics.ts";
 import { duration, weekdayName, type ActivityRow } from "./activity.ts";
 import { EngineService } from "./api.ts";
@@ -23,6 +23,7 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
   const [today, setToday] = useState("");
   const [turns, setTurns] = useState<ActivityRow[]>([]);
   const [titles, setTitles] = useState<Map<string, string>>(new Map());
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     let live = true;
     EngineService.UsageReport(YEAR)
@@ -31,7 +32,7 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
         setRows((r.rows ?? []) as Row[]);
         setToday(r.until);
       })
-      .catch(onError);
+      .catch(failed);
     // A long history is counted in steps: ask again until none is left.
     let timer: ReturnType<typeof setTimeout>;
     const load = () =>
@@ -41,11 +42,11 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
           setTurns((r.rows ?? []) as ActivityRow[]);
           if (r.pending > 0) timer = setTimeout(load, 200);
         })
-        .catch(onError);
+        .catch(failed);
     load();
     EngineService.ListSessions()
       .then((list) => live && setTitles(new Map((list ?? []).map((s) => [s.id, s.title]))))
-      .catch(onError);
+      .catch(failed);
     return () => {
       live = false;
       clearTimeout(timer);
@@ -56,8 +57,10 @@ export default function UsageOverview({ cacheReads, compact: inPane = false, onE
   // The month names and the name of a model that did not say are the language's, so they
   // change with it.
   const loc = locale();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
   const overview = useMemo(() => usageOverview(shown, today), [shown, today, loc]);
   const weeks = useMemo(() => (today ? calendar(shown, today) : []), [shown, today]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
   const months = useMemo(() => monthLabels(weeks), [weeks, loc]);
   const chat = useMemo(() => longestChat(turns), [turns]);
   const max = overview.peak?.tokens ?? 0;

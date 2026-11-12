@@ -1,6 +1,6 @@
 ---
 title: A lint rule for effects and their dependencies
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -18,3 +18,8 @@ prd: before-going-public
 
 ## Notes
 - Three packages at most: `eslint`, `eslint-plugin-react-hooks`, `typescript-eslint`.
+
+## Done
+ESLint 10.14.0, eslint-plugin-react-hooks 7.1.1 and typescript-eslint 8.72.2 are pinned in `frontend/lint/` with their own lockfile, not in `frontend/package.json`: typescript-eslint's newest release (8.72.2) accepts TypeScript below 6.1 only and needs the compiler's JavaScript API, which TypeScript 7.0.2 (the app's `tsc`) does not have, so npm refused the install (`ERESOLVE`) and an override did not help. `frontend/package-lock.json` is untouched; the lint folder has TypeScript 6.0.3 for parsing only. `make lint` installs it and runs both hooks rules as errors over `frontend/src`.
+
+The first run found 115 problems. All are fixed: effects that read a callback or value they do not restart on take it through `useEffectEvent` (about 90), a few got the dependency they were missing (`form` in ToolView's key handler, `session.id` in SessionView's draft effects), `useFindings` and `useAgent` (not hooks) were renamed, and the effect at `SessionView.tsx:999` that subscribed on every render now subscribes once. Exemptions: 6, all the same one, a memo keyed by the language (`locale()`), which `t()` reads and the rule cannot see.

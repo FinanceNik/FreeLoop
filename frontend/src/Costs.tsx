@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 import { EngineService, type DayCost, type Price, type ProviderInfo } from "./api.ts";
@@ -132,10 +132,11 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
 // table, so they refresh when version (bumped on save) changes.
 export function UsageTable({ version, onPrice, onError }: { version: unknown; onPrice: (providerId: string, model: string) => void; onError: (err: unknown) => void }) {
   const [days, setDays] = useState<DayCost[] | null>(null);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.Usage(30)
       .then((d) => setDays(d ?? []))
-      .catch(onError);
+      .catch(failed);
   }, [version]);
   if (!days) return null;
   if (days.length === 0) return <p className="muted">{t("usage.none")}</p>;

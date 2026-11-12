@@ -1,5 +1,5 @@
 import { Events } from "@wailsio/runtime";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { EngineService, EVENT_NAME } from "./api.ts";
 import { formatCost } from "./cost.ts";
 import {
@@ -75,6 +75,7 @@ export default function LiveUsage({
   const [step, setStep] = useState(15);
   const latest = useRef(0);
 
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     let settle: ReturnType<typeof setTimeout> | undefined;
     const load = () => {
@@ -86,7 +87,7 @@ export default function LiveUsage({
           setStarts((r.buckets ?? []).map((b) => b.start));
           setStep(r.stepMinutes);
         })
-        .catch(onError);
+        .catch(failed);
     };
     load();
     const every = setInterval(load, REFRESH_MS);

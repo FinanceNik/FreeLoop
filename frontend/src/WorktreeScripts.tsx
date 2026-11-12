@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { t, type PlainKey } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 import { EngineService, type ProjectScriptsInfo } from "./api.ts";
@@ -25,8 +25,9 @@ export default function WorktreeScripts({ projectId, onError }: { projectId: str
         setForm({ copy: (i.app.copy ?? []).join("\n"), setup: i.app.setup, run: i.app.run, archive: i.app.archive });
       })
       .catch(onError);
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
-    load();
+    loadNow();
   }, [projectId]);
   if (!info) return null;
   const eff = info.effective;

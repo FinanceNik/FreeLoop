@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { EngineService, type Profile, type ReviewInfo, type Session } from "./api.ts";
 import { openSessionEvent } from "./ToolView.tsx";
 import { t } from "./i18n.ts";
@@ -19,23 +19,27 @@ export default function AgentReview({ session, gitKey, onMessage, onError }: { s
     EngineService.Reviews(session.id)
       .then((r) => setReviews(r ?? []))
       .catch(onError);
+  const loadNow = useEffectEvent(load);
+  const failed = useEffectEvent((err: unknown) => onError(err));
+  // The profile to start with is the first other than the session's, read once per load.
+  const ownProfile = useEffectEvent(() => session.profileId);
   useEffect(() => {
-    load();
+    loadNow();
     Promise.resolve(EngineService.ListProfiles())
       .then((list) => {
         const all = list ?? [];
         setProfiles(all);
         // Another profile than the session's is the point of a second opinion.
-        setProfileId((id) => id || all.find((p) => p.id !== session.profileId)?.id || all[0]?.id || "");
+        setProfileId((id) => id || all.find((p) => p.id !== ownProfile())?.id || all[0]?.id || "");
       })
-      .catch(onError);
+      .catch(failed);
   }, [session.id, gitKey]);
   // A review that was just asked for has not started yet, so one without a
   // reply counts as under way too.
   const waiting = reviews.some((r) => WORKING.has(r.session.status) || !r.reply);
   useEffect(() => {
     if (!waiting) return;
-    const timer = setInterval(load, 3000);
+    const timer = setInterval(() => loadNow(), 3000);
     return () => clearInterval(timer);
   }, [waiting, session.id]);
 
@@ -49,7 +53,7 @@ export default function AgentReview({ session, gitKey, onMessage, onError }: { s
       .catch(onError)
       .finally(() => setBusy(false));
   };
-  const useFindings = (id: string) => EngineService.ReviewFindings(id).then(onMessage).catch(onError);
+  const applyFindings = (id: string) => EngineService.ReviewFindings(id).then(onMessage).catch(onError);
 
   return (
     <section className="agent-review" aria-label={t("review.label")}>
@@ -82,7 +86,7 @@ export default function AgentReview({ session, gitKey, onMessage, onError }: { s
                   {t("review.open")}
                 </button>
                 {r.reply && !WORKING.has(r.session.status) && (
-                  <button onClick={() => useFindings(r.session.id)} title={t("review.useTitle")}>
+                  <button onClick={() => applyFindings(r.session.id)} title={t("review.useTitle")}>
                     {t("review.use")}
                   </button>
                 )}

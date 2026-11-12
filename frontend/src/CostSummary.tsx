@@ -1,5 +1,5 @@
 import { Clipboard } from "@wailsio/runtime";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EngineService } from "./api.ts";
 import { drawSummary, summaryText, type CostSummary } from "./costsummary.ts";
 import { locale, t } from "./i18n.ts";
@@ -9,13 +9,15 @@ import { basename } from "./paths.ts";
 // picture to save. Nothing leaves the app unless the user pastes or sends it. Its
 // headings are in the language in force, so a change of language draws it again.
 export default function CostSummaryPanel({ summary, onClose, onError }: { summary: CostSummary; onClose: () => void; onError: (err: unknown) => void }) {
-  const text = useMemo(() => summaryText(summary), [summary, locale()]);
+  // Written in the language in force, which a change of it draws again.
+  const lang = locale();
+  const text = summaryText(summary);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [said, setSaid] = useState("");
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
     if (ctx) drawSummary(summary, ctx);
-  }, [summary, locale()]);
+  }, [summary, lang]);
   const say = (message: string) => {
     setSaid(message);
     setTimeout(() => setSaid(""), 4000);

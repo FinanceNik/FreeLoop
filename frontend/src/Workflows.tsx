@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { EngineService, modeName, type Config, type WorkflowSkill, type WorkflowStatus } from "./api.ts";
 import { stageAction } from "./workflows.ts";
 import { t, type PlainKey } from "./i18n.ts";
@@ -43,8 +43,9 @@ export default function Workflows({ config, version, onSaved, onError }: Props) 
     EngineService.ListWorkflows()
       .then((l) => setList(l ?? []))
       .catch(onError);
+  const refreshNow = useEffectEvent(refresh);
   useEffect(() => {
-    refresh();
+    refreshNow();
   }, [version]);
 
   const approve = (w: WorkflowStatus) =>

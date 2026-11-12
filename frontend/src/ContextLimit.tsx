@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useEffectEvent, useState, type KeyboardEvent } from "react";
 import { EngineService } from "./api.ts";
 import { parseLimit } from "./contextMeter.ts";
 import { t } from "./i18n.ts";
@@ -22,9 +22,10 @@ export default function ContextLimit({ providerId, model, onChanged, onError }: 
         setKnown((c?.contextWindow ?? 0) > 0);
       })
       .catch(() => setKnown(false));
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
     setDone(false);
-    load();
+    loadNow();
   }, [providerId, model]);
 
   const limit = parseLimit(text);

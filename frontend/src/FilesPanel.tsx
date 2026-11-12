@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useEffectEvent, useMemo, useState, type ReactElement } from "react";
 import { EngineService, type FileEntry, type FileView, type Session } from "./api.ts";
 import type { FileChange } from "./transcript.ts";
 import { isMarkdownFile, isPdfFile, relative } from "./paths.ts";
@@ -34,9 +34,12 @@ export default function FilesPanel({ session, gitKey, agentEdits, onError }: Pro
       .catch(onError);
   // The open folders reload when the agent changes something; closed ones
   // are forgotten, so they load afresh when opened again.
-  useEffect(() => {
+  const reloadOpen = useEffectEvent(() => {
     setFolders((f) => Object.fromEntries(Object.entries(f).filter(([rel]) => open.has(rel))));
     for (const rel of open) load(rel);
+  });
+  useEffect(() => {
+    reloadOpen();
     EngineService.Changes(session.id)
       .then((c) => setGitChanged(c.repo && !c.blocked ? (c.files ?? []).map((f) => f.path) : []))
       .catch(() => setGitChanged([]));

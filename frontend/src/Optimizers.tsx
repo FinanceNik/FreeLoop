@@ -1,5 +1,5 @@
 import { Clipboard } from "@wailsio/runtime";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { EngineService, type Config, type OptimizerCheck, type OptimizerStatus } from "./api.ts";
 import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
@@ -25,8 +25,9 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
     EngineService.ListOptimizers()
       .then((l) => setList(l ?? []))
       .catch(onError);
+  const refreshNow = useEffectEvent(refresh);
   useEffect(() => {
-    refresh();
+    refreshNow();
   }, [version]);
 
   const check = (id: string) =>
@@ -63,11 +64,12 @@ export default function Optimizers({ config, version, onSaved, onError }: Props)
 
   const chosen = config.defaults.optimizer;
   const [waitsApproval, setWaitsApproval] = useState(false);
+  const configKey = JSON.stringify(config);
   useEffect(() => {
     EngineService.StartWaiting("")
       .then((w) => setWaitsApproval(w.optimizer && !!chosen))
       .catch(() => setWaitsApproval(false));
-  }, [JSON.stringify(config)]);
+  }, [configKey, chosen]);
   return (
     <section className="page">
       <h2>{t("settings.page.optimizers")}</h2>

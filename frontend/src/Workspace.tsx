@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
 import { t } from "./i18n.ts";
@@ -66,7 +66,8 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
 
   const split = work.layout > 1;
   const asTabs = tabbed(work, width);
-  useEffect(() => onTabbed(asTabs), [asTabs]);
+  const tabbedNow = useEffectEvent((on: boolean) => onTabbed(on));
+  useEffect(() => tabbedNow(asTabs), [asTabs]);
   // How much of the width the left column of panes takes (GUI-032).
   const [storedShare, setShare] = useState<number | null>(storedSplit);
   const columnsApart = split && !asTabs;

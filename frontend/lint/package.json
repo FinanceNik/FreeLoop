@@ -1,0 +1,13 @@
+{
+  "name": "freeloop-lint",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "ESLint's hooks rules for ../src (issue 048, OQ-055). Apart from ../package.json because typescript-eslint cannot yet load TypeScript 7, the compiler there; the TypeScript here only parses.",
+  "devDependencies": {
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2"
+  }
+}

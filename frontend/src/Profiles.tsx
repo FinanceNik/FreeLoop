@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
 import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
@@ -57,17 +57,18 @@ function blank(): Profile {
 export default function Profiles({ profiles, harnesses, providers, onChanged, onError }: Props) {
   // Token optimizers to choose from (HRN-019).
   const [optimizers, setOptimizers] = useState<OptimizerStatus[]>([]);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.ListOptimizers()
       .then((l) => setOptimizers(l ?? []))
-      .catch(onError);
+      .catch(failed);
   }, []);
   // Workflows to choose from (WFL-002).
   const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
   useEffect(() => {
     EngineService.Workflows()
       .then((l) => setWorkflows(l ?? []))
-      .catch(onError);
+      .catch(failed);
   }, []);
   // A custom harness from a template (HRN-011).
   const [scaffold, setScaffold] = useState<{ name: string; language: string; folder: string; made?: string } | null>(null);
@@ -87,17 +88,18 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
   // The YAML editor (GUI-009): the file as written, checked as you type.
   const [yamlEdit, setYamlEdit] = useState<{ id: string; text: string } | null>(null);
   const [yamlIssues, setYamlIssues] = useState<Issue[]>([]);
+  const checkYAML = useEffectEvent((id: string, text: string) =>
+    EngineService.CheckProfileYAML(id, text)
+      .then((l) => setYamlIssues(l ?? []))
+      .catch(onError),
+  );
+  const yamlId = yamlEdit?.id;
+  const yamlText = yamlEdit?.text;
   useEffect(() => {
-    if (!yamlEdit) return;
-    const timer = setTimeout(
-      () =>
-        EngineService.CheckProfileYAML(yamlEdit.id, yamlEdit.text)
-          .then((l) => setYamlIssues(l ?? []))
-          .catch(onError),
-      250,
-    );
+    if (yamlId === undefined || yamlText === undefined) return;
+    const timer = setTimeout(() => checkYAML(yamlId, yamlText), 250);
     return () => clearTimeout(timer);
-  }, [yamlEdit?.text]);
+  }, [yamlId, yamlText]);
   const openYAML = (id: string) =>
     EngineService.ProfileYAML(id)
       .then((text) => setYamlEdit({ id, text }))
@@ -532,10 +534,11 @@ export default function Profiles({ profiles, harnesses, providers, onChanged, on
 // (HRN-020). A profile's own onLimit continues without asking; this only offers.
 function FallbackCard({ profiles, harnesses, onError }: { profiles: Profile[]; harnesses: HarnessInfo[]; onError: (err: unknown) => void }) {
   const [fallbacks, setFallbacks] = useState<Record<string, string> | null>(null);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.Config()
       .then((c) => setFallbacks(Object.fromEntries(Object.entries(c.fallbacks ?? {}).filter((e): e is [string, string] => !!e[1]))))
-      .catch(onError);
+      .catch(failed);
   }, []);
   if (fallbacks === null) return null;
   const save = (agent: string, profileId: string) => {

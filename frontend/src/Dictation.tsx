@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { EngineService, type VoiceStatus } from "./api.ts";
 import { language, locale, t } from "./i18n.ts";
 import { MicIcon, StopIcon } from "./icons.tsx";
@@ -200,12 +200,13 @@ export default function DictateButton({ active, onText, onAnnounce }: Props) {
   };
 
   // The clock, and the end of the longest recording taken.
+  const finishNow = useEffectEvent(() => finish());
   useEffect(() => {
     if (phase !== "recording") return;
     const timer = setInterval(() => {
       const s = (Date.now() - (run.current?.started ?? Date.now())) / 1000;
       setSeconds(s);
-      if (s >= MAX_SECONDS) finish();
+      if (s >= MAX_SECONDS) finishNow();
     }, 250);
     return () => clearInterval(timer);
   }, [phase]);
@@ -292,9 +293,10 @@ export function size(bytes: number): string {
 // useDownload follows a download of the speech model, asking every half second.
 export function useVoiceDownload(status: VoiceStatus | null, onStatus: (s: VoiceStatus) => void) {
   const downloading = status?.state === "downloading";
+  const report = useEffectEvent((s: VoiceStatus) => onStatus(s));
   useEffect(() => {
     if (!downloading) return;
-    const timer = setInterval(() => EngineService.VoiceStatus().then(onStatus).catch(() => {}), 500);
+    const timer = setInterval(() => EngineService.VoiceStatus().then(report).catch(() => {}), 500);
     return () => clearInterval(timer);
   }, [downloading]);
 }
@@ -304,8 +306,9 @@ export function useVoiceDownload(status: VoiceStatus | null, onStatus: (s: Voice
 function VoiceDownload({ status, onStatus, onClose, onReady }: { status: VoiceStatus | null; onStatus: (s: VoiceStatus) => void; onClose: () => void; onReady: () => void }) {
   const [error, setError] = useState("");
   useVoiceDownload(status, onStatus);
+  const ready = useEffectEvent(() => onReady());
   useEffect(() => {
-    if (status?.state === "ready") onReady();
+    if (status?.state === "ready") ready();
   }, [status?.state]);
   const download = () => {
     setError("");

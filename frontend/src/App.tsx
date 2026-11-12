@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { screenName } from "./a11y.ts";
 import { ariaKeys, bindingOf, keyLabel, pressed, setBindings } from "./shortcuts.ts";
 import { isMac, otherKey, primaryKey, primaryOnly } from "./platform.ts";
@@ -72,7 +72,7 @@ import { pruneHistory } from "./history.ts";
 import SourceMark from "./SourceMark.tsx";
 import GitMark from "./GitMark.tsx";
 import { contextHigh, contextLabel, contextTitle } from "./contextMeter.ts";
-import { sourceId, sourceIndex, type SourceChoices } from "./source.ts";
+import { sourceIndex, type SourceChoices } from "./source.ts";
 import ContextMenu, { type MenuItem } from "./ContextMenu.tsx";
 import { ask } from "./ask.ts";
 import { trustLines } from "./trust.ts";
@@ -124,6 +124,17 @@ const STATUS_LABEL: Record<string, PlainKey> = {
 };
 
 // statusText is a status in words, or as the engine gave it when the app has none.
+// What an Events.On callback gets from the engine.
+type EngineEventData = Parameters<Parameters<typeof Events.On>[1]>[0]["data"];
+
+// useStableBy keeps the value it first saw for a key, so a list that is rebuilt at every event
+// does not rebuild what is computed from it unless the key changes.
+function useStableBy<T>(value: T, key: string): T {
+  const kept = useRef({ key, value });
+  if (kept.current.key !== key) kept.current = { key, value };
+  return kept.current.value;
+}
+
 const statusText = (status: string) => (Object.hasOwn(STATUS_LABEL, status) ? t(STATUS_LABEL[status]) : status);
 
 // How many sessions of a collapsed project have a status, on its heading.
@@ -228,16 +239,19 @@ export default function App() {
     document.title = screenTitle ? `${screenTitle} · Freeloop` : "Freeloop";
   }, [screenTitle]);
   const firstScreen = useRef(true);
+  const screenChanged = useEffectEvent(() => {
+    setHeardScreen(screenTitle);
+    const at = document.activeElement;
+    const kept = screen.kind === "session" && at && at !== document.body;
+    if (!kept && !mainBox.current?.contains(at)) mainBox.current?.focus({ preventScroll: true });
+  });
   useEffect(() => {
     if (screen.kind === "none") return;
     if (firstScreen.current) {
       firstScreen.current = false;
       return;
     }
-    setHeardScreen(screenTitle);
-    const at = document.activeElement;
-    const kept = screen.kind === "session" && at && at !== document.body;
-    if (!kept && !mainBox.current?.contains(at)) mainBox.current?.focus({ preventScroll: true });
+    screenChanged();
   }, [screen.kind, screenId]);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -485,13 +499,16 @@ export default function App() {
   }, [language]);
 
   // Appearance (GUI-011, GUI-025): theme, font size and fonts from config.yaml.
-  useEffect(() => {
+  const applyAppearance = useEffectEvent(() => {
     if (!config) return;
     const root = document.documentElement;
     if (config.ui.theme === "system") delete root.dataset.theme;
     else root.dataset.theme = config.ui.theme;
     root.style.setProperty("--font-size", `${config.ui.fontSize || 14}px`);
     applyFonts(root.style, config.ui);
+  });
+  useEffect(() => {
+    applyAppearance();
   }, [config?.ui.theme, config?.ui.fontSize, config?.ui.textFont, config?.ui.codeFont]);
 
   // The user's colors (GUI-022). A change shows at once and is saved a moment
@@ -555,19 +572,16 @@ export default function App() {
   };
 
   // Files edited by hand are reloaded by the engine (SET-001).
-  useEffect(
-    () =>
-      Events.On(CONFIG_EVENT_NAME, () => {
-        refreshConfig();
-        refreshProviders();
-        refreshEnvironments();
-        refreshProfiles();
-        setConfigVersion((v) => v + 1);
-      }),
-    [],
-  );
+  const configReloaded = useEffectEvent(() => {
+    refreshConfig();
+    refreshProviders();
+    refreshEnvironments();
+    refreshProfiles();
+    setConfigVersion((v) => v + 1);
+  });
+  useEffect(() => Events.On(CONFIG_EVENT_NAME, () => configReloaded()), []);
 
-  useEffect(() => {
+  const boot = useEffectEvent(() => {
     refreshSessions();
     refreshProviders();
     refreshProjects();
@@ -576,8 +590,8 @@ export default function App() {
     refreshAttention();
     refreshProfiles();
     if (STANDALONE) openSession(STANDALONE);
-
-    return Events.On(EVENT_NAME, ({ data: ev }) => {
+  });
+  const engineEvent = useEffectEvent((ev: EngineEventData) => {
       ingest(ev.sid, [ev]);
       if (ev.type === "turn_ended") refreshToday();
       if (finishedTurn(ev)) setUnread((list) => markFinished(list, ev.sid, seenNow.current));
@@ -604,7 +618,10 @@ export default function App() {
         if (ev.type === "tags_changed") s.tags = (ev.data as { tags?: string[] }).tags ?? [];
         return [s, ...list.slice(0, i), ...list.slice(i + 1)];
       });
-    });
+  });
+  useEffect(() => {
+    boot();
+    return Events.On(EVENT_NAME, ({ data: ev }) => engineEvent(ev));
   }, []);
 
   // A session opens in the active pane, or with where "new" in another one
@@ -638,9 +655,7 @@ export default function App() {
 
   // The workspace comes back as it was left, without sessions deleted since,
   // and is saved whenever a pane changes (GUI-017).
-  useEffect(() => {
-    if (STANDALONE || !sessionsLoaded || workLoaded.current) return;
-    workLoaded.current = true;
+  const restoreWorkspace = useEffectEvent(() => {
     EngineService.Workspace()
       .then((saved) => {
         const exists = (sid: string) => sessions.some((x) => x.id === sid);
@@ -652,6 +667,11 @@ export default function App() {
         if (active || (w.layout > 1 && sessions.length > 0)) setScreen((sc) => (sc.kind === "none" ? { kind: "session", id: sid ?? "" } : sc));
       })
       .catch(() => {});
+  });
+  useEffect(() => {
+    if (STANDALONE || !sessionsLoaded || workLoaded.current) return;
+    workLoaded.current = true;
+    restoreWorkspace();
   }, [sessionsLoaded]);
   useEffect(() => {
     if (!workLoaded.current) return;
@@ -831,8 +851,11 @@ export default function App() {
   };
 
   // The first-run guide (GUI-010) opens once, before the first session.
-  useEffect(() => {
+  const maybeOnboard = useEffectEvent(() => {
     if (!STANDALONE && config && sessionsLoaded && !config.ui.onboarded && sessions.length === 0 && screen.kind === "none") setScreen({ kind: "onboarding" });
+  });
+  useEffect(() => {
+    maybeOnboard();
   }, [config, sessionsLoaded]);
 
   // A clicked notification opens its session (GUI-008).
@@ -842,17 +865,17 @@ export default function App() {
   // The Help menu.
   useEffect(() => (STANDALONE ? undefined : Events.On(OPEN_HELP_EVENT_NAME, () => setScreen({ kind: "help" }))), []);
   // A link inside a session (a subagent's transcript, HRN-014).
+  const openLinked = useEffectEvent((sid: string) => {
+    // A session window keeps its session; another opens in its own.
+    if (STANDALONE) {
+      if (sid !== STANDALONE) openWindow(sid);
+      return;
+    }
+    refreshSessions();
+    openRef.current(sid);
+  });
   useEffect(() => {
-    const open = (e: Event) => {
-      const sid = String((e as CustomEvent).detail);
-      // A session window keeps its session; another opens in its own.
-      if (STANDALONE) {
-        if (sid !== STANDALONE) openWindow(sid);
-        return;
-      }
-      refreshSessions();
-      openRef.current(sid);
-    };
+    const open = (e: Event) => openLinked(String((e as CustomEvent).detail));
     window.addEventListener(OPEN_SESSION_DOM_EVENT, open);
     return () => window.removeEventListener(OPEN_SESSION_DOM_EVENT, open);
   }, []);
@@ -927,8 +950,9 @@ export default function App() {
   const prices = useMemo(() => [...(config?.prices ?? []), ...listPrices], [config?.prices, listPrices]);
 
   // Saved prices change today's estimate.
+  const refreshTodayNow = useEffectEvent(refreshToday);
   useEffect(() => {
-    if (config) refreshToday();
+    if (config) refreshTodayNow();
   }, [config]);
 
   // The query also searches every transcript, once typing pauses.
@@ -1261,10 +1285,9 @@ export default function App() {
   const statusLabels: Record<string, string> = Object.fromEntries(Object.keys(STATUS_LABEL).map((status) => [status, statusText(status)]));
 
   // What each session runs on, shown as a mark wherever it is (GUI-034).
-  const sourceOf = useMemo(
-    () => sourceIndex(providers, harnesses, sessions, config?.ui.sourceMarks as SourceChoices),
-    [providers, harnesses, config?.ui.sourceMarks, sessions.map((s) => sourceId(s)).join()],
-  );
+  // Only a change of what the sessions run on builds the index again, not each event.
+  const runs = useStableBy(sessions, sessions.map((s) => `${s.harnessId ?? ""}/${s.providerId}`).join());
+  const sourceOf = useMemo(() => sourceIndex(providers, harnesses, runs, config?.ui.sourceMarks as SourceChoices), [providers, harnesses, config?.ui.sourceMarks, runs]);
   const sessionView = (s: Session, active = true, onClosePane?: () => void, onPaneDrag?: (e: DragEvent) => void) => (
     <SessionView
       key={s.id}

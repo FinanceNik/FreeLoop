@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import { ask } from "./ask.ts";
 import { basename } from "./paths.ts";
 import { commandOutcome, defaultAllow } from "./afk.ts";
@@ -45,10 +45,11 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
     EngineService.Schedules()
       .then((l) => setList(l ?? []))
       .catch(onError);
+  const refreshNow = useEffectEvent(refresh);
   useEffect(() => {
-    refresh();
+    refreshNow();
     // The next and last runs move while the page is open.
-    const every = setInterval(refresh, 30_000);
+    const every = setInterval(() => refreshNow(), 30_000);
     return () => clearInterval(every);
   }, []);
 
@@ -56,16 +57,22 @@ export default function Schedules({ projects, profiles, providers, harnesses, de
   // here, once, as in the run's own dialog.
   const [plan, setPlan] = useState<AFKPlan | null>(null);
   const afk = !!form?.afk;
-  useEffect(() => {
-    setPlan(null);
-    if (!afk || !form?.projectRoot) return;
-    EngineService.PrepareAFK(form.projectRoot, form.afk?.workflowId ?? "")
+  // The plan is asked for when the folder or the choice of an AFK run changes, not on
+  // each edit of the form, so the form is read as it stands then.
+  const prepare = useEffectEvent((projectRoot: string) =>
+    EngineService.PrepareAFK(projectRoot, form?.afk?.workflowId ?? "")
       .then((p) => {
         setPlan(p);
-        if (!form.id && (form.afk?.allow ?? []).length === 0) setForm((f) => f && { ...f, afk: { ...f.afk, allow: defaultAllow(p.commands ?? []) } });
+        if (!form?.id && (form?.afk?.allow ?? []).length === 0) setForm((f) => f && { ...f, afk: { ...f.afk, allow: defaultAllow(p.commands ?? []) } });
       })
-      .catch(() => setPlan(null));
-  }, [afk, form?.projectRoot]);
+      .catch(() => setPlan(null)),
+  );
+  const planRoot = form?.projectRoot;
+  useEffect(() => {
+    setPlan(null);
+    if (!afk || !planRoot) return;
+    prepare(planRoot);
+  }, [afk, planRoot]);
   const setAllow = (c: string, on: boolean) =>
     form && setForm({ ...form, afk: { ...form.afk, allow: on ? [...(form.afk?.allow ?? []), c] : (form.afk?.allow ?? []).filter((x) => x !== c) } });
   const profile = profiles.find((p) => p.id === form?.profileId);

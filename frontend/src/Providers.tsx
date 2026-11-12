@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import { secretStore } from "./platform.ts";
 import { ask } from "./ask.ts";
 import { keyMoves, plainRemote } from "./addresses.ts";
@@ -44,10 +44,11 @@ export default function Providers({ providers, onChanged, onError, agents, defau
   const [tests, setTests] = useState<Record<string, TestState>>({});
   const [busy, setBusy] = useState(false);
 
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.ProviderPresets()
       .then((list) => setPresets(list ?? []))
-      .catch(onError);
+      .catch(failed);
   }, []);
 
   const preset = presets.find((p) => p.id === form?.preset);

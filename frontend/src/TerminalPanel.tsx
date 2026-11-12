@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -32,6 +32,8 @@ export default function TerminalPanel({ session, onError }: Props) {
       .catch(onError);
 
   // Read again after an archive, which ends the session's shells.
+  const openNow = useEffectEvent(open);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     if (archived) {
       setTerms(null);
@@ -42,9 +44,9 @@ export default function TerminalPanel({ session, onError }: Props) {
       .then((list) => {
         setTerms(list ?? []);
         if (list?.length) setCurrent(list[list.length - 1].id);
-        else open();
+        else openNow();
       })
-      .catch(onError);
+      .catch(failed);
   }, [session.id, archived]);
 
   const close = (id: string) => {
@@ -112,6 +114,7 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
   const box = useRef<HTMLDivElement>(null);
   const [exited, setExited] = useState<number | null>(null);
 
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     const term = new Terminal({
       fontFamily: codeFont(),
@@ -178,7 +181,7 @@ function TerminalView({ id, onError }: { id: string; onError: (err: unknown) => 
         fit();
         term.focus();
       })
-      .catch(onError);
+      .catch(failed);
     const input = term.onData((d) => EngineService.WriteTerminal(id, d).catch(() => {}));
     return () => {
       off();

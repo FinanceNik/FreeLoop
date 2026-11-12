@@ -1,5 +1,5 @@
 import { AllowedIcon, PenIcon, RuleIcon } from "./icons.tsx";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { editMark, quietCommand, toolStatusLabel, visibleCommand } from "./a11y.ts";
 import { EngineService } from "./api.ts";
 import { McpFormView, useMcpForm } from "./McpForm.tsx";
@@ -55,6 +55,7 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
   // Shortcuts (GUI-006) go to the first waiting card on screen only.
   const box = useRef<HTMLDivElement>(null);
   const shownAt = useRef(0);
+  const decideNow = useEffectEvent((optionId: string) => decide(optionId));
   useEffect(() => {
     // A keypress never sends a form.
     if (!waiting || form) return;
@@ -70,11 +71,11 @@ export default function ToolView({ item, roots = [], onError }: { item: Extract<
       if (!opt) return;
       e.preventDefault();
       if (Date.now() - shownAt.current < APPROVAL_GRACE_MS) return;
-      decide(opt.optionId);
+      decideNow(opt.optionId);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [waiting, item.permission, reason, scope]);
+  }, [waiting, form, item.permission, reason, scope]);
 
   // A token optimizer ran this command in a shorter form (HRN-019).
   const via = item.via ?? item.content.find((c) => c.via)?.via;

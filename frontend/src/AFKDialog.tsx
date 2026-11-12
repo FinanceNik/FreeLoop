@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { EngineService, modeName, type AFKPlan, type AFKRun, type ModelChoice, type Profile, type ProfileEfforts, type ProfileModels } from "./api.ts";
 import { commandFrom, commandOutcome, defaultAllow } from "./afk.ts";
 import { fromSetNote, keptEffort, modelOffered } from "./modelChoice.ts";
@@ -44,6 +44,11 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, fromS
   const set = plan?.modelSet ?? null;
   const setIssues = rowValue(set?.issues);
   const setReviews = rowValue(set?.reviews);
+  const failed = useEffectEvent((err: unknown) => {
+    onError(err);
+    onClose();
+  });
+  const escape = useEffectEvent(() => onClose());
   useEffect(() => {
     EngineService.PrepareAFK(root, workflowId ?? "")
       .then((p) => {
@@ -56,13 +61,10 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, fromS
         setReviewModel(rowValue(p.modelSet?.reviews));
         setReviewEffort(p.modelSet?.reviews?.effort ?? "");
       })
-      .catch((err) => {
-        onError(err);
-        onClose();
-      });
+      .catch(failed);
   }, [root, workflowId]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && escape();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
@@ -244,17 +246,19 @@ export default function AFKDialog({ root, workflowId, profiles, startedBy, fromS
 // last said it offers.
 function ModelPicker({ label, root, profileId, value, onChange, fromSet, onReset, onBlocked, onError }: { label: string; root: string; profileId: string; value: string; onChange: (v: string) => void; fromSet: { value: string; name: string; why: string }; onReset: () => void; onBlocked: (b: boolean) => void; onError: (err: unknown) => void }) {
   const [models, setModels] = useState<ProfileModels | null>(null);
+  const failed = useEffectEvent((err: unknown) => onError(err));
+  const blockedNow = useEffectEvent((b: boolean) => onBlocked(b));
   useEffect(() => {
     setModels(null);
     if (!profileId) return;
     EngineService.ProfileModels(root, profileId)
       .then(setModels)
-      .catch(onError);
+      .catch(failed);
   }, [root, profileId]);
   // What stands in the way: the set's model gone or without its key, or one the
   // profile cannot have, as with an external agent.
   const problem = !models ? "" : fromSet.why && value === fromSet.value ? t("afk.model.unavailable", { why: fromSet.why }) : !modelOffered({ choices: models.choices ?? [], custom: !!models.custom }, value) ? t("afk.model.notOffered") : "";
-  useEffect(() => onBlocked(!!problem), [problem]);
+  useEffect(() => blockedNow(!!problem), [problem]);
   const note = fromSetNote(fromSet.value, value, fromSet.name);
   return (
     <label>
@@ -296,6 +300,8 @@ function rowValue(row?: ModelChoice | null): string {
 // profile's, or a level the model offers; disabled for a model without effort.
 function EffortPicker({ label, root, profileId, model, value, onChange, onError }: { label: string; root: string; profileId: string; model: string; value: string; onChange: (v: string) => void; onError: (err: unknown) => void }) {
   const [efforts, setEfforts] = useState<ProfileEfforts | null>(null);
+  const failed = useEffectEvent((err: unknown) => onError(err));
+  const chosen = useEffectEvent((eff: ProfileEfforts) => onChange(keptEffort(eff.choices ?? [], value)));
   useEffect(() => {
     if (!profileId) return;
     let live = true;
@@ -303,9 +309,9 @@ function EffortPicker({ label, root, profileId, model, value, onChange, onError 
       .then((eff) => {
         if (!live) return;
         setEfforts(eff);
-        onChange(keptEffort(eff.choices ?? [], value));
+        chosen(eff);
       })
-      .catch(onError);
+      .catch(failed);
     return () => {
       live = false;
     };

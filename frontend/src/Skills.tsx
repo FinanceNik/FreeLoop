@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { ask } from "./ask.ts";
 import { Events } from "@wailsio/runtime";
 import { EngineService, FILES_DROPPED_EVENT_NAME, type ProjectInfo, type ProviderInfo, type SkillCandidate, type SkillList, type SkillTest } from "./api.ts";
@@ -48,8 +48,9 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
     EngineService.ListSkills(root)
       .then(setList)
       .catch(onError);
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
-    load();
+    loadNow();
   }, [root, configVersion]);
 
   const toggle = (name: string, projectId: string, on: boolean) =>
@@ -86,7 +87,8 @@ export default function Skills({ projects, providers, configVersion, onConfigCha
       .then((p) => p && open(p))
       .catch(onError);
   // A folder or .zip dropped on the drop zone.
-  useEffect(() => Events.On(FILES_DROPPED_EVENT_NAME, ({ data }) => open(((data as string[]) ?? [])[0] ?? "")), []);
+  const openDropped = useEffectEvent((src: string) => open(src));
+  useEffect(() => Events.On(FILES_DROPPED_EVENT_NAME, ({ data }) => openDropped(((data as string[]) ?? [])[0] ?? "")), []);
   const install = () => {
     if (!preview) return;
     setBusy(true);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { EngineService, type IssueDetail } from "./api.ts";
 import { issueCostLine, stepLabel } from "./afk.ts";
 import { laneTitle, shortId, since, type Lane } from "./board.ts";
@@ -30,6 +30,10 @@ export default function IssuePanel({
 }) {
   const [detail, setDetail] = useState<IssueDetail | null>(null);
   const close = useRef<HTMLButtonElement>(null);
+  const failed = useEffectEvent((err: unknown) => {
+    onError(err);
+    onClose();
+  });
   useEffect(() => {
     setDetail(null);
     let current = true;
@@ -37,8 +41,7 @@ export default function IssuePanel({
       .then((d) => current && setDetail(d))
       .catch((err) => {
         if (!current) return;
-        onError(err);
-        onClose();
+        failed(err);
       });
     return () => {
       current = false;

@@ -3,7 +3,7 @@ import { inFileManager, isMac, primaryKey, showInFiles } from "./platform.ts";
 import { nameStart } from "./paths.ts";
 import { ask as askUser } from "./ask.ts";
 import { isDemo } from "./demo.ts";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent } from "react";
+import { memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent } from "react";
 import { insertMention, mentionAt, rankFiles, sessionFiles, type Mention } from "./mentions.ts";
 import { commandHint, matchCommands, modeCommands, modeCommand, slashQuery, type SlashCommand } from "./commands.ts";
 import { historyEntries, nextWord, onFirstLine, onLastLine, recallList, rememberPrompt, rightToLeft, searchPrompts, subscribeHistory, suggestion, type PastPrompt } from "./history.ts";
@@ -180,14 +180,15 @@ export default function SessionView({ session, events, focus, prices, initialDra
   // Only an agent with such a mode of its own can approve by itself (SEC-001).
   const offersAuto = !!harness?.modes?.includes("auto");
   const canAuto = offersAuto && !!project?.trusted;
-  const modeAllowed = (m: string) => (m === "bypass" ? canBypass : m === "auto" ? canAuto : true);
+  const modeAllowed = useCallback((m: string) => (m === "bypass" ? canBypass : m === "auto" ? canAuto : true), [canBypass, canAuto]);
+  const projectRoot = project?.root;
   useEffect(() => {
     setTrustSettings(null);
-    if (!untrusted || !project) return;
-    EngineService.ProjectSettings(project.root)
+    if (!untrusted || !projectRoot) return;
+    EngineService.ProjectSettings(projectRoot)
       .then((s) => setTrustSettings(s))
       .catch(() => setTrustSettings(null));
-  }, [untrusted, project?.root]);
+  }, [untrusted, projectRoot]);
   const trustProject = async (ask: boolean) => {
     if (!project) return;
     const step = trustStep(trustLookup, ask);
@@ -276,6 +277,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
   // The view's notices and fallback titles, and the costs below, are written in the
   // language in force, so both follow a change of it (GUI-048).
   const loc = locale();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
   const view = useMemo(() => buildView(events), [events, loc]);
   // Estimated cost of the session and of each turn, by turn_end key.
   const costs = useMemo(() => {
@@ -287,6 +289,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
       if (e.unpriced < it.calls.length) turns.set(it.key, e.unpriced ? t("session.turnCost.unpriced", { cost: formatCost(e.cost) }) : `≈ ${formatCost(e.cost)}`);
     }
     return { session: estimate(prices, view.calls, own), calls: view.calls.filter((c) => !c.adjustment).length, turns };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
   }, [view, prices, session.providerId, session.model, loc]);
 
   // Screen readers hear approvals and turn ends, not every streamed word
@@ -294,12 +297,15 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const waitingTools = view.items.filter((i) => i.kind === "tool" && awaitingDecision(i));
   const [announcement, setAnnouncement] = useState("");
   const heard = useRef({ waiting: waitingTools.length, running: view.running });
-  useEffect(() => {
+  const announceChange = useEffectEvent(() => {
     const before = heard.current;
     const last = waitingTools[waitingTools.length - 1];
     if (waitingTools.length > before.waiting && last?.kind === "tool") setAnnouncement(t("session.announce.approval", { title: last.title }));
     else if (before.running && !view.running) setAnnouncement(t(view.status === "error" ? "session.announce.error" : "session.announce.finished"));
     heard.current = { waiting: waitingTools.length, running: view.running };
+  });
+  useEffect(() => {
+    announceChange();
   }, [waitingTools.length, view.running]);
   // Cleared after a moment: the same words again are only heard as a change.
   useEffect(() => {
@@ -315,9 +321,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
     rememberDraft(session.id, draft);
     const later = setTimeout(() => storeDraft(session.id, draft, EngineService.RedactText), 400);
     return () => clearTimeout(later);
-  }, [draft]);
+  }, [session.id, draft]);
   // Leaving before the pause is over still writes it.
-  useEffect(() => () => void storeDraft(session.id, typed.current, EngineService.RedactText), []);
+  useEffect(() => () => void storeDraft(session.id, typed.current, EngineService.RedactText), [session.id]);
   const [queued, setQueued] = useState(0);
   const mode = view.mode ?? session.mode;
   const approvalWaiting = view.items.some((i) => i.kind === "tool" && awaitingDecision(i));
@@ -382,35 +388,39 @@ export default function SessionView({ session, events, focus, prices, initialDra
     EngineService.SessionMCP(session.id)
       .then(setMcp)
       .catch(() => setMcp(null));
+  const refreshMcpNow = useEffectEvent(refreshMcp);
   useEffect(() => {
-    refreshMcp();
+    refreshMcpNow();
   }, [session.id, view.running]);
+  const slashClosed = slash === null;
   useEffect(() => {
-    if (slash !== null) refreshMcp();
-  }, [slash === null]);
+    if (!slashClosed) refreshMcpNow();
+  }, [slashClosed]);
   // Workflows (WFL-002): the session's workflow's stages are slash commands.
   const [workflows, setWorkflows] = useState<WorkflowInfo[]>([]);
   const loadWorkflows = () =>
     EngineService.Workflows()
       .then((list) => setWorkflows(list ?? []))
       .catch(onError);
+  const loadWorkflowsNow = useEffectEvent(loadWorkflows);
   useEffect(() => {
-    loadWorkflows();
+    loadWorkflowsNow();
   }, [session.id]);
   const workflow = workflows.find((w) => w.id === session.workflow);
   const setWorkflow = (id: string) => EngineService.SetWorkflow(session.id, id).catch(onError);
   // The project's AFK run, for the stage strip's AFK stage (WFL-008).
   const [afkRun, setAfkRun] = useState<AFKRun | null>(null);
+  const workflowId = workflow?.id;
   useEffect(() => {
-    if (!workflow) return setAfkRun(null);
+    if (!workflowId) return setAfkRun(null);
     const load = () =>
-      EngineService.Backlog(session.projectRoot, workflow.id)
+      EngineService.Backlog(session.projectRoot, workflowId)
         .then((b) => setAfkRun(b.run ?? null))
         .catch(() => setAfkRun(null));
     load();
     const timer = setInterval(load, 10000);
     return () => clearInterval(timer);
-  }, [workflow?.id, session.projectRoot, view.running]);
+  }, [workflowId, session.projectRoot, view.running]);
   const commands = useMemo<SlashCommand[]>(
     () => [
       ...modeCommands().filter((c) => modeAllowed(c.mode ?? "")),
@@ -423,7 +433,8 @@ export default function SessionView({ session, events, focus, prices, initialDra
         prompt: { server: p.server, name: p.name, arguments: p.arguments ?? [] },
       })),
     ],
-    [view.commands, canBypass, canAuto, mcp, workflow, loc],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the language is a cache key: the words come from t(), which reads it
+    [view.commands, modeAllowed, mcp, workflow, loc],
   );
   // Resources attached to the next message, and the open prompt form.
   const keptExtras = extrasOf<ComposerExtras>(session.id);
@@ -448,7 +459,7 @@ export default function SessionView({ session, events, focus, prices, initialDra
     });
   // Text files for the next message (SES-019).
   const [textFiles, setTextFiles] = useState<TextFile[]>(keptExtras?.textFiles ?? []);
-  useEffect(() => rememberExtras(session.id, { attached, pictures, textFiles } satisfies ComposerExtras), [attached, pictures, textFiles]);
+  useEffect(() => rememberExtras(session.id, { attached, pictures, textFiles } satisfies ComposerExtras), [session.id, attached, pictures, textFiles]);
   const addFiles = (files: File[]) => {
     addPictures(files.filter((f) => isPicture(f.type)));
     for (const f of files.filter((f) => !isPicture(f.type))) {
@@ -514,9 +525,12 @@ export default function SessionView({ session, events, focus, prices, initialDra
   const rest = ghostRoom && !hint && !recalling && hiddenFor !== draft ? suggestion(draft, pastPrompts, session.projectRoot) : "";
   // Said once as one appears, not again at every key that keeps it.
   const ghostSaid = useRef(false);
-  useEffect(() => {
+  const sayGhost = useEffectEvent(() => {
     if (rest && !ghostSaid.current) setAnnouncement(t("composer.suggestion", { text: draft + rest }));
     ghostSaid.current = !!rest;
+  });
+  useEffect(() => {
+    sayGhost();
   }, [rest]);
   const syncCaret = (el: HTMLTextAreaElement) => setCaretAtEnd(el.selectionStart === el.selectionEnd && el.selectionEnd === el.value.length);
   // putText replaces the text and puts the caret at its end.
@@ -928,8 +942,9 @@ export default function SessionView({ session, events, focus, prices, initialDra
     EngineService.Optimizers(session.id)
       .then((list) => setOptimizers(list ?? []))
       .catch(onError);
+  const loadOptimizersNow = useEffectEvent(loadOptimizers);
   useEffect(() => {
-    loadOptimizers();
+    loadOptimizersNow();
   }, [session.id]);
   // One that cannot be used yet says why here, with a way to install it.
   const [optimizerHelp, setOptimizerHelp] = useState<OptimizerInfo | null>(null);
@@ -996,13 +1011,14 @@ export default function SessionView({ session, events, focus, prices, initialDra
     if (!panelOpen) togglePanel();
   };
   // A plan's card opens the Plan tab (GUI-043).
+  const reviewPlan = useEffectEvent(() => showPanel("plan"));
   useEffect(() => {
     const el = layoutBox.current;
     if (!el) return;
-    const review = () => showPanel("plan");
+    const review = () => reviewPlan();
     el.addEventListener(REVIEW_PLAN_EVENT, review);
     return () => el.removeEventListener(REVIEW_PLAN_EVENT, review);
-  });
+  }, []);
   const showRules = () => {
     showPanel("approvals");
     requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`[data-rules="${session.id}"]`)?.scrollIntoView({ block: "start" })));

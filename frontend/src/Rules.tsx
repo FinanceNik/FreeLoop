@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import { EngineService, MODES, errorText, modeName, type PolicyCheck, type PolicyOverview, type ProjectInfo, type Rule, type Session } from "./api.ts";
 import { CHECK_TOOLS, headline, ruleWhere, toQuery } from "./policy.ts";
 import { t, type PlainKey } from "./i18n.ts";
@@ -38,8 +38,9 @@ export default function Rules({ session, projects, version, onError }: Props) {
       .then((list) => setRules(list ?? []))
       .catch(onError);
 
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
-    load();
+    loadNow();
   }, [session?.id, version]);
 
   const add = (e: FormEvent) => {
@@ -168,8 +169,11 @@ function PolicyCheckForm({ session, projects, version }: { session: Session | nu
       });
   };
   // A rule added or a file edited changes the answer.
-  useEffect(() => {
+  const recheck = useEffectEvent(() => {
     if (verdict) check();
+  });
+  useEffect(() => {
+    recheck();
   }, [version]);
 
   if (where.length === 0) return null;

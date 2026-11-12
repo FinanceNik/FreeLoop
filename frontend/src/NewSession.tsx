@@ -1,5 +1,5 @@
 import ContextLimit from "./ContextLimit.tsx";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import WorktreeScripts from "./WorktreeScripts.tsx";
 import IssuePicker from "./IssuePicker.tsx";
 import {
@@ -107,10 +107,11 @@ export default function NewSession({ providers, projects, environments, profiles
   // The token optimizer (HRN-019): empty takes the profile's or the default.
   const [optimizer, setOptimizer] = useState("");
   const [optimizers, setOptimizers] = useState<OptimizerStatus[]>([]);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.ListOptimizers()
       .then((l) => setOptimizers(l ?? []))
-      .catch(onError);
+      .catch(failed);
   }, []);
   // The workflow (WFL-002): empty takes the profile's or the default.
   const [workflow, setWorkflow] = useState(initialWorkflow ?? "");
@@ -122,23 +123,29 @@ export default function NewSession({ providers, projects, environments, profiles
   // (WFL-014): the fields take it, still editable, and say where it came from.
   const planning = workflows.find((w) => w.id === workflow)?.planning;
   const planningSet = workflows.find((w) => w.id === workflow)?.modelSet ?? "";
-  useEffect(() => {
+  const takePlanning = useEffectEvent(() => {
     if (!planning || !providers.some((p) => p.id === planning.provider)) return;
     setProviderId(planning.provider);
     setModel(planning.model);
+  });
+  useEffect(() => {
+    takePlanning();
   }, [workflow, planning?.provider, planning?.model]);
   const firstStage = (chosenWorkflow?.stages ?? [])[0];
   useEffect(() => {
     EngineService.Workflows()
       .then((l) => setWorkflows(l ?? []))
-      .catch(onError);
+      .catch(failed);
   }, []);
 
-  useEffect(() => {
+  const firstProvider = useEffectEvent(() => {
     if (!providerId && providers[0]) {
       setProviderId(providers[0].id);
       setModel(providers[0].defaultModel);
     }
+  });
+  useEffect(() => {
+    firstProvider();
   }, [providers]);
 
   // Discover the provider's models (PRV-003).
@@ -168,20 +175,24 @@ export default function NewSession({ providers, projects, environments, profiles
   };
 
   // What the chosen model can do (PRV-005), after typing settles.
+  const loadCapsNow = useEffectEvent(loadCaps);
   useEffect(() => {
-    const timer = setTimeout(() => loadCaps(false), 400);
+    const timer = setTimeout(() => loadCapsNow(false), 400);
     return () => clearTimeout(timer);
   }, [providerId, model]);
 
   // A known project preselects its default environment.
   const project = projects.find((p) => p.root === root);
-  useEffect(() => {
+  const takeProject = useEffectEvent(() => {
     if (!project) return;
     setEnvironmentId(project.defaultEnvironmentId || defaults?.environmentId || "local");
     pickProfile(project.defaultProfileId || defaults?.profileId || fallbackProfile);
     setMakeDefault(false);
     setRememberWorktree(false);
     setWorktree(project.worktreeDefault === "always" || (project.worktreeDefault !== "never" && sessionsIn(project.id) > 0));
+  });
+  useEffect(() => {
+    takeProject();
   }, [project?.id]);
   const sessionsIn = (projectId: string) => sessions.filter((s) => s.projectId === projectId && s.status !== "archived").length;
   const others = project ? sessionsIn(project.id) : 0;
@@ -193,9 +204,10 @@ export default function NewSession({ providers, projects, environments, profiles
       .then(setSettings)
       .catch(() => setSettings(null));
   };
+  const loadSettingsNow = useEffectEvent(loadSettings);
   useEffect(() => {
     setSettings(null);
-    const timer = setTimeout(loadSettings, 300);
+    const timer = setTimeout(() => loadSettingsNow(), 300);
     return () => clearTimeout(timer);
   }, [root]);
   const trust = () =>
@@ -210,11 +222,12 @@ export default function NewSession({ providers, projects, environments, profiles
   const profile = allProfiles.find((p) => p.id === profileId);
   // What a file chose and the user has not approved does not apply yet (SET-005).
   const [waits, setWaits] = useState<StartWaits | null>(null);
+  const defaultsKey = JSON.stringify(defaults);
   useEffect(() => {
     EngineService.StartWaiting(profileId)
       .then(setWaits)
       .catch(() => setWaits(null));
-  }, [profileId, JSON.stringify(defaults)]);
+  }, [profileId, defaultsKey]);
   const harness = harnesses.find((h) => h.id === (profile?.harness || "builtin"));
   const usesProvider = !harness || harness.usesProvider;
   // The first profile that runs on a provider, to offer from one that does not.

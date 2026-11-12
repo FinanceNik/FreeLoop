@@ -1,6 +1,6 @@
 import ModelSees from "./ModelSees.tsx";
 import ContextLimit from "./ContextLimit.tsx";
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { visibleCommand } from "./a11y.ts";
 import { tabAfterKey } from "./a11y.ts";
 import { describeRule, RULE_TOOLS } from "./Rules.tsx";
@@ -219,8 +219,9 @@ function SessionRules({ session, version, onError }: { session: Session; version
     EngineService.ListRules(session.id)
       .then((list) => setRules(list ?? []))
       .catch(onError);
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
-    load();
+    loadNow();
   }, [session.id, version]);
   const add = (e: FormEvent) => {
     e.preventDefault();
@@ -396,10 +397,11 @@ function Info({ session, view, turns, provider, environment, configVersion, cost
   }, [session.id, session.optimizer, turns]);
   // Refetched when a decision may have saved a rule or the files changed.
   const saved = view.items.filter((i) => i.kind === "tool" && i.permission?.decided?.persisted).length;
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.ListRules(session.id)
       .then((list) => setRules((list ?? []).filter((r) => r.scope === "session")))
-      .catch(onError);
+      .catch(failed);
   }, [session.id, saved, configVersion]);
 
   const mode = view.mode ?? session.mode;

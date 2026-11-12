@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 import { ask } from "./ask.ts";
@@ -17,9 +17,11 @@ export function PendingCommands({ version, onSaved, onError }: { version: unknow
     EngineService.PendingCommands()
       .then((l) => setList(l ?? []))
       .catch(onError);
+  const refreshNow = useEffectEvent(refresh);
+  const versionKey = JSON.stringify(version);
   useEffect(() => {
-    refresh();
-  }, [JSON.stringify(version)]);
+    refreshNow();
+  }, [versionKey]);
   const approve = (c: PendingCommand) =>
     EngineService.ApproveCommand(c.fingerprint)
       .then((saved) => {

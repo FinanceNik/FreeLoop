@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { list, t } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
 import { formAnswers, formFields, initialValues, type FormField, type FormValues } from "./forms.ts";
@@ -33,11 +33,14 @@ export function useMcpForm(form: McpFormRequest | null | undefined, requestId: s
   const [values, setValues] = useState<FormValues>(() => initialValues(form?.schema));
   const [error, setError] = useState("");
   const shown = useRef(requestId);
+  const reset = useEffectEvent(() => {
+    setValues(initialValues(form?.schema));
+    setError("");
+  });
   useEffect(() => {
     if (shown.current === requestId) return;
     shown.current = requestId;
-    setValues(initialValues(form?.schema));
-    setError("");
+    reset();
   }, [requestId]);
   return {
     fields,

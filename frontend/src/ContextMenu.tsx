@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { menuPosition, nextMenuItem } from "./menu.ts";
 
 export interface MenuItem {
@@ -20,19 +20,21 @@ export default function ContextMenu({ x, y, label, items, onClose }: { x: number
     setPlace(menuPosition(x, y, el.offsetWidth, el.offsetHeight, window.innerWidth, window.innerHeight));
     el.querySelector("button")?.focus();
   }, [x, y]);
+  const close = useEffectEvent(() => onClose());
   useEffect(() => {
+    const dismiss = () => close();
     const back = document.activeElement instanceof HTMLElement && !box.current?.contains(document.activeElement) ? document.activeElement : null;
     const outside = (e: Event) => {
-      if (!(e.target instanceof Node) || !box.current?.contains(e.target)) onClose();
+      if (!(e.target instanceof Node) || !box.current?.contains(e.target)) dismiss();
     };
     window.addEventListener("pointerdown", outside, true);
-    window.addEventListener("blur", onClose);
-    window.addEventListener("resize", onClose);
+    window.addEventListener("blur", dismiss);
+    window.addEventListener("resize", dismiss);
     window.addEventListener("scroll", outside, true);
     return () => {
       window.removeEventListener("pointerdown", outside, true);
-      window.removeEventListener("blur", onClose);
-      window.removeEventListener("resize", onClose);
+      window.removeEventListener("blur", dismiss);
+      window.removeEventListener("resize", dismiss);
       window.removeEventListener("scroll", outside, true);
       back?.focus?.();
     };

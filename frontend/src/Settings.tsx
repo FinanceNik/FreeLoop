@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ask } from "./ask.ts";
 import { autoSaved, pageTitle, settingsKey, type GeneralPage } from "./settings.ts";
 import { LANGUAGES, list, locale, t, type PlainKey } from "./i18n.ts";
@@ -176,10 +176,11 @@ export default function Settings({ page, config, providers, harnesses, environme
   const [saved, setSaved] = useState(false);
   // Connections local-only mode refused (NFR-OFF-003).
   const [blocked, setBlocked] = useState<Blocked[]>([]);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.BlockedConnections()
       .then((b) => setBlocked(b ?? []))
-      .catch(onError);
+      .catch(failed);
   }, [config]);
   // Config backup (SET-005).
   const [backup, setBackup] = useState<string | null>(null);
@@ -211,13 +212,17 @@ export default function Settings({ page, config, providers, harnesses, environme
   const ownSave = useRef("");
   // Not on opening: the form starts from the config already, with any draft kept.
   const opened = useRef(true);
+  const adopt = useEffectEvent(() => {
+    if (ownSave.current !== settingsKey(config)) setForm(config);
+  });
+  const savedKey = JSON.stringify([savedRest, savedUi]);
   useEffect(() => {
     if (opened.current) {
       opened.current = false;
       return;
     }
-    if (ownSave.current !== settingsKey(config)) setForm(config);
-  }, [JSON.stringify([savedRest, savedUi])]);
+    adopt();
+  }, [savedKey]);
   useEffect(
     () => setForm((f) => ({ ...f, ui: { ...f.ui, fontSize: savedFontSize, textFont: savedTextFont, codeFont: savedCodeFont, style: savedStyle } })),
     [savedFontSize, savedTextFont, savedCodeFont, savedStyle],
@@ -231,7 +236,7 @@ export default function Settings({ page, config, providers, harnesses, environme
     EngineService.AppBuild().then(setBuild).catch(() => setBuild(null));
   }, []);
   useEffect(() => {
-    EngineService.UpdateStatus().then(setUpdate).catch(onError);
+    EngineService.UpdateStatus().then(setUpdate).catch(failed);
   }, [config]);
   const checkNow = () => {
     setChecking(true);
@@ -263,30 +268,33 @@ export default function Settings({ page, config, providers, harnesses, environme
   };
   const current = useRef({ form, config });
   current.current = { form, config };
+  const savedNow = useEffectEvent((c: Config) => onSaved(c));
+  const failedNow = useEffectEvent((err: unknown) => onError(err));
+  const autoSave = useEffectEvent(() => {
+    const typing = document.activeElement;
+    if (typing && formBox.current?.contains(typing) && typing.matches('input:not([type="checkbox"]), textarea')) return;
+    saveByItself(form, config)
+      ?.then((c) => {
+        if (!c) return;
+        ownSave.current = settingsKey(c);
+        savedNow(c);
+        // What waits for the Save button stays as typed.
+        setForm((f) => ({ ...c, hooks: f.hooks, prices: f.prices, budgets: f.budgets, web: f.web }));
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1500);
+      })
+      .catch(failedNow);
+  });
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const typing = document.activeElement;
-      if (typing && formBox.current?.contains(typing) && typing.matches('input:not([type="checkbox"]), textarea')) return;
-      saveByItself(form, config)
-        ?.then((c) => {
-          if (!c) return;
-          ownSave.current = settingsKey(c);
-          onSaved(c);
-          // What waits for the Save button stays as typed.
-          setForm((f) => ({ ...c, hooks: f.hooks, prices: f.prices, budgets: f.budgets, web: f.web }));
-          setSaved(true);
-          setTimeout(() => setSaved(false), 1500);
-        })
-        .catch(onError);
-    }, 250);
+    const timer = setTimeout(() => autoSave(), 250);
     return () => clearTimeout(timer);
   }, [form, left]);
   useEffect(
     () => () => {
       const { form: f, config: c } = current.current;
       saveByItself(f, c)
-        ?.then((saved) => saved && onSaved(saved))
-        .catch(onError);
+        ?.then((saved) => saved && savedNow(saved))
+        .catch(failedNow);
       // Leaving for another page keeps what waits for Save, for the app's run.
       const waiting = { hooks: f.hooks, prices: f.prices, budgets: f.budgets, web: f.web };
       waitingDraft = JSON.stringify(waiting) === JSON.stringify({ hooks: c.hooks, prices: c.prices, budgets: c.budgets, web: c.web }) ? null : waiting;

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import { EngineService, type Profile, type ProjectInfo } from "./api.ts";
 import { DownIcon, UpIcon } from "./icons.tsx";
 import { basename } from "./paths.ts";
@@ -19,8 +19,9 @@ export default function Queue({ projects, profiles, onOpen, onError }: { project
   const [profileId, setProfileId] = useState("");
   const [worktree, setWorktree] = useState(true);
   const take = (q: unknown) => setQueue(q as QueueState);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
-    const load = () => EngineService.Queue().then(take).catch(onError);
+    const load = () => EngineService.Queue().then(take).catch(failed);
     load();
     // The queue starts tasks every 30 seconds; this follows it.
     const every = setInterval(load, 3000);

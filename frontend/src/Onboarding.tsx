@@ -44,7 +44,7 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
   const hasProvider = providers.some((p) => !p.builtin);
   const ready = hasProvider || agents.some((h) => !h.missing);
   // Choosing an agent makes it the default for new sessions.
-  const useAgent = (h: HarnessInfo) =>
+  const chooseAgent = (h: HarnessInfo) =>
     EngineService.SaveSettings({ ...config, defaults: { ...config.defaults, profileId: h.id } })
       .then((c) => {
         onSaved(c);
@@ -120,7 +120,7 @@ export default function Onboarding({ config, providers, harnesses, onProvidersCh
                     {h.missing ? (
                       <span className="error-text">{h.missing}</span>
                     ) : (
-                      <button className="primary" onClick={() => useAgent(h)}>
+                      <button className="primary" onClick={() => chooseAgent(h)}>
                         {t("onboarding.agent.use", { name: h.name })}
                       </button>
                     )}

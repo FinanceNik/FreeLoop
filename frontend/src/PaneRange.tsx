@@ -1,5 +1,5 @@
 import { Events } from "@wailsio/runtime";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { compact, dailyByType, days, groupBy, TOKEN_TYPES, tokensOf, topKeys, type Row, type TokenType } from "./analytics.ts";
 import { EngineService, EVENT_NAME, type UsageRow } from "./api.ts";
 import TokenFigures from "./TokenFigures.tsx";
@@ -27,6 +27,7 @@ export default function PaneRange({ view, providers, harnesses, onError }: { vie
   const [rows, setRows] = useState<(Row & UsageRow)[] | null>(null);
   const [until, setUntil] = useState("");
   const latest = useRef(0);
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     let settle: ReturnType<typeof setTimeout> | undefined;
     const load = () => {
@@ -37,7 +38,7 @@ export default function PaneRange({ view, providers, harnesses, onError }: { vie
           setRows((r.rows ?? []) as (Row & UsageRow)[]);
           setUntil(r.until);
         })
-        .catch(onError);
+        .catch(failed);
     };
     load();
     const off = Events.On(EVENT_NAME, ({ data: ev }) => {

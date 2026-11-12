@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { compact, weeks as weeksOf } from "./analytics.ts";
 import { EngineService, type WorkCommitCost, type WorkReport } from "./api.ts";
 import { formatCost } from "./cost.ts";
@@ -38,6 +38,7 @@ export default function WorkCostView({ matches, tagged, cacheReads, onOpenSessio
   const [open, setOpen] = useState<string | null>(null);
   const [exported, setExported] = useState("");
   // A long history is folded in steps: ask again until none is left.
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -48,7 +49,7 @@ export default function WorkCostView({ matches, tagged, cacheReads, onOpenSessio
           setReport(r);
           if (r.pending > 0) timer = setTimeout(load, 200);
         })
-        .catch(onError);
+        .catch(failed);
     load();
     return () => {
       live = false;

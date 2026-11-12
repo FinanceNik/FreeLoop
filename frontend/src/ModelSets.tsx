@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { EngineService, type Config, type ModelChoice, type ModelSet, type ModelSetInfo, type ProfileEfforts, type ProfileModels } from "./api.ts";
 import { ask } from "./ask.ts";
 import { keptEffort, modelLabel } from "./modelChoice.ts";
@@ -39,11 +39,15 @@ export default function ModelSets({ version, onSaved, onError }: Props) {
     EngineService.ListModelSets()
       .then((l) => setSets(l ?? []))
       .catch(onError);
+  const refreshNow = useEffectEvent(refresh);
+  const loadModels = useEffectEvent(() => {
+    if (editing && !models) EngineService.AllModels().then(setModels).catch(onError);
+  });
   useEffect(() => {
-    refresh();
+    refreshNow();
   }, [version]);
   useEffect(() => {
-    if (editing && !models) EngineService.AllModels().then(setModels).catch(onError);
+    loadModels();
   }, [editing]);
   const done = (c: Config) => {
     onSaved(c);
@@ -115,6 +119,11 @@ export default function ModelSets({ version, onSaved, onError }: Props) {
 function RowEditor({ label, models, row, onChange, onError }: { label: string; models: ProfileModels | null; row: ModelChoice; onChange: (c: ModelChoice) => void; onError: (err: unknown) => void }) {
   const [efforts, setEfforts] = useState<ProfileEfforts | null>(null);
   const v = value(row);
+  const keepEffort = useEffectEvent((eff: ProfileEfforts) => {
+    const kept = keptEffort(eff.choices ?? [], row.effort);
+    if (kept !== row.effort) onChange({ ...row, effort: kept });
+  });
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     if (!v) {
       setEfforts(null);
@@ -125,10 +134,9 @@ function RowEditor({ label, models, row, onChange, onError }: { label: string; m
       .then((eff) => {
         if (!live) return;
         setEfforts(eff);
-        const kept = keptEffort(eff.choices ?? [], row.effort);
-        if (kept !== row.effort) onChange({ ...row, effort: kept });
+        keepEffort(eff);
       })
-      .catch(onError);
+      .catch(failed);
     return () => {
       live = false;
     };

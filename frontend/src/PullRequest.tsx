@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Browser } from "@wailsio/runtime";
 import { EngineService, type ChecksInfo, type PullRequestInfo, type Session } from "./api.ts";
 import { t, type PlainKey } from "./i18n.ts";
@@ -27,6 +27,7 @@ export default function PullRequest({ session, gitKey, onMessage, onError }: Pro
   const [busy, setBusy] = useState("");
   const [created, setCreated] = useState("");
 
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     EngineService.PullRequestInfo(session.id)
       .then((i) => {
@@ -34,7 +35,7 @@ export default function PullRequest({ session, gitKey, onMessage, onError }: Pro
         setBase((b) => b || i.base);
         setTitle((cur) => cur || i.title);
       })
-      .catch(onError);
+      .catch(failed);
   }, [session.id, gitKey]);
 
   if (!info) return null;
@@ -161,12 +162,13 @@ function Checks({ sessionId, url, onMessage, onError }: { sessionId: string; url
         setProblem("");
       })
       .catch((err) => setProblem(err instanceof Error ? err.message : String(err)));
+  const loadNow = useEffectEvent(load);
   useEffect(() => {
-    load();
+    loadNow();
   }, [sessionId, url]);
   useEffect(() => {
     if (!checks?.pending) return;
-    const timer = setInterval(load, 30_000);
+    const timer = setInterval(() => loadNow(), 30_000);
     return () => clearInterval(timer);
   }, [checks?.pending]);
   const send = () => {

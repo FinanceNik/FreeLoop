@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import { EngineService, EVENT_NAME } from "./api.ts";
 import { since } from "./board.ts";
@@ -13,6 +13,7 @@ const COLUMNS: PlainKey[] = ["limits.col.limit", "limits.col.runs", "limits.col.
 export default function Limits({ compact = false, onError }: { compact?: boolean; onError: (err: unknown) => void }) {
   const [periods, setPeriods] = useState<LimitPeriodRow[] | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const failed = useEffectEvent((err: unknown) => onError(err));
   useEffect(() => {
     const load = () =>
       EngineService.Limits()
@@ -20,7 +21,7 @@ export default function Limits({ compact = false, onError }: { compact?: boolean
           setPeriods((list ?? []) as LimitPeriodRow[]);
           setNow(new Date());
         })
-        .catch(onError);
+        .catch(failed);
     load();
     // A reset comes with no event, so the clock moves the page on as well.
     const every = setInterval(() => setNow(new Date()), 30000);

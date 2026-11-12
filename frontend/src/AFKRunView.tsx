@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { EngineService, type AttentionItem, type BacklogInfo } from "./api.ts";
 import { runCostLine, runLine, stepLabel } from "./afk.ts";
 import { t } from "./i18n.ts";
@@ -20,8 +20,9 @@ interface Props {
 
 export default function AFKRunView({ backlog, attention, onOpen, onClose, onChanged, onError }: Props) {
   const run = backlog.run;
+  const escape = useEffectEvent(() => onClose());
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && escape();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
