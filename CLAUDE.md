@@ -23,7 +23,7 @@ Status: M0 to M2 and nearly all of v1 are built; real-provider runs and a first 
 - The engine runs in-process behind a transport-agnostic API until v1; the daemon split is EXT-004.
 - SQLite through a pure-Go driver for index and metadata, one append-only JSONL file per session for transcripts, YAML for config, secrets only in the system keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service) behind the `Secrets` interface.
 - ACP (Agent Client Protocol over stdio) is the harness protocol. MCP goes through the official Go SDK targeting the 2026-07-28 revision. Skills use the Agent Skills `SKILL.md` format. Project instructions come from `AGENTS.md` first, `CLAUDE.md` as fallback, both read-only.
-- Apache-2.0. No telemetry; the only outbound traffic is to user-configured endpoints plus an opt-in update check, a pinned token optimizer download the user clicks, voice input's pinned speech model (and, on Windows and Linux, whisper.cpp) when the user downloads it, and the MCP registry when the user browses it.
+- Apache-2.0. No telemetry; the only outbound traffic is to user-configured endpoints plus an opt-in update check, a pinned token optimizer download the user clicks, voice input's pinned speech model (and, on Windows and Linux, whisper.cpp) when the user downloads it, the MCP registry when the user browses it, and encrypted Web Push to the push service (Apple, Google or Mozilla) of a phone that turned notifications on.
 
 ## Hard rules
 

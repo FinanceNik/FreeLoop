@@ -30,5 +30,6 @@ Op een iPhone geeft **Zet op beginscherm** in Safari een eigen pictogram; vraagt
 - Freeloop antwoordt alleen op deze computer. Tailscale brengt het versleuteld naar de telefoon, en geen ander apparaat bereikt het.
 - Alleen gekoppelde en op de computer bevestigde telefoons komen erin. **Alle telefoons afmelden** op de pagina beëindigt ze allemaal, met hun open streams, direct.
 - De sleutel van een telefoon staat in de eigen opslag van de telefoon-app en wordt als header verstuurd, nooit als cookie. Een andere pagina onder dezelfde Tailscale-naam krijgt hem dus nooit, en hij werkt niet onder een andere Tailscale-login of na 90 dagen ongebruikt. Een telefoon die met een eerdere build is gekoppeld, moet opnieuw koppelen.
+- Een melding gaat via de pushdienst van je telefoon (die van Apple, Google of Mozilla), zo versleuteld dat alleen die telefoon hem leest, en bevat alleen wat er gebeurde en het ID van een sessie. De pushdienst merkt dat er een bericht is verstuurd en wanneer. De Alleen-lokaal-modus verstuurt er geen.
 - Opdrachten die agents uitvoeren, bereiken de poort zoals elke op deze computer, maar krijgen daar zonder gekoppelde telefoon niets.
 - Tailscale vermeldt HTTPS-certificaten openbaar, dus de Tailscale-naam van de computer wordt openbaar.

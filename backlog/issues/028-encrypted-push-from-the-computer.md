@@ -1,6 +1,6 @@
 ---
 title: The computer sends an encrypted push
-status: open
+status: done
 type: afk
 blockedBy: [027-push-subscriptions-per-phone]
 prd: sessions-from-the-phone
@@ -19,3 +19,7 @@ prd: sessions-from-the-phone
 ## Notes
 - No new dependency: `crypto/hkdf`, `crypto/aes`, `crypto/cipher`, `crypto/ecdsa`.
 - Apple refuses a missing or invalid `sub`.
+
+## Done
+
+The sending is in `internal/remote/pushsend.go` (`Server.Push(deviceID, kind, sessionID)`), next to `push.go`. The worker shows English, German or Dutch text for the kinds `approval`, `done` and `failed` and a generic line for any other; issue 029 sets the kinds the engine sends and should match them there. Tapping a notification opens `/phone/#session=<id>`; the phone app does not read that link yet.

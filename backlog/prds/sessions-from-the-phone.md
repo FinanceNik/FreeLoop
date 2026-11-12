@@ -11,7 +11,7 @@ Someone who leaves several sessions running wants to keep them moving while away
 
 The app answers paired phones on a port of the computer itself, and the user's own Tailscale network carries it to the phone, encrypted. A web app served by Freeloop, added to the phone's home screen, shows what needs the user and every session live; from it the user allows or denies a request once, sends a message and stops a turn. The phone is told when a session needs them, finishes or fails, by Web Push sent from the app itself. Everything else, the rules, settings, forms and plans, stays on the computer.
 
-Built so far (2026-11-11, phase 1): the phone server, pairing, the phone app without push, the Settings page, keeping the app alive. Home-screen install is built (issue 026), and so are the VAPID key and a subscription per phone (issue 027). Left: trying it on real phones, push, a QR code, re-confirming approvals, and Windows and Linux.
+Built so far (2026-11-11, phase 1): the phone server, pairing, the phone app without push, the Settings page, keeping the app alive. Home-screen install is built (issue 026), and so are the VAPID key and a subscription per phone (issue 027) and the encrypted push the computer sends (issue 028, `Server.Push`). Left: trying it on real phones, push, a QR code, re-confirming approvals, and Windows and Linux.
 
 ## User stories
 

@@ -65,6 +65,8 @@ type Server struct {
 	streams map[string]map[int]context.CancelFunc
 	nextRun int
 	vapid   *ecdsa.PrivateKey
+	// pushClient sends to push services; nil means newPushClient(), tests set their own.
+	pushClient *http.Client
 }
 
 // pairing is an open pairing window: the code the phone sends, and the phone that

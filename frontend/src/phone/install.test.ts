@@ -57,3 +57,28 @@ test("opened without a pairing link the app has no code to fill in", () => {
   assert.equal(pairCode(""), "");
   assert.equal(pairCode("#"), "");
 });
+
+test("the worker shows a notification from a push's kind and session, and nothing else", () => {
+  const listeners: Record<string, (e: unknown) => void> = {};
+  const shown: { title: string; options: { body: string; tag: string; data: { url: string } } }[] = [];
+  const self = {
+    addEventListener: (type: string, fn: (e: unknown) => void) => (listeners[type] = fn),
+    skipWaiting: () => {},
+    clients: { claim: () => {} },
+    navigator: { language: "de-CH" },
+    registration: { showNotification: (title: string, options: never) => (shown.push({ title, options }), Promise.resolve()) },
+  } as Record<string, unknown>;
+  new Function("self", read("sw.js"))(self);
+  const push = (json: () => unknown) => listeners.push({ data: { json }, waitUntil: () => {} });
+  push(() => ({ kind: "approval", sessionId: "ses_1", secret: "leaks" }));
+  assert.equal(shown[0].options.body, "Eine Sitzung braucht deine Antwort");
+  assert.equal(shown[0].options.data.url, "/phone/#session=ses_1");
+  assert.doesNotMatch(JSON.stringify(shown[0]), /leaks/);
+  push(() => {
+    throw new Error("not json");
+  });
+  assert.equal(shown.length, 2, "a bad payload still shows a notification");
+  push(() => ({ kind: "<b>x</b>", sessionId: "../../x" }));
+  assert.equal(shown[2].options.data.url, "/phone/");
+  assert.equal(shown[2].options.body, "In einer Sitzung ist etwas passiert");
+});

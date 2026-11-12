@@ -30,5 +30,6 @@ On an iPhone, **Add to Home Screen** in Safari gives it its own icon; if it asks
 - Freeloop answers only on this computer. Tailscale carries it to your phone, encrypted, and no one else's device can reach it.
 - Only phones you paired, and confirmed on the computer, get in. **Sign out every phone** on the page ends them all, and the streams they have open, at once.
 - A phone's key is kept in the phone app's own storage and sent as a header, never as a cookie, so another page on the same Tailscale name never receives it, and it stops working under another Tailscale login or after 90 days unused. A phone paired with an earlier build is asked to pair again.
+- A notification goes through your phone's push service (Apple's, Google's or Mozilla's), encrypted so that only that phone reads it, and holds only what happened and a session's ID. The push service learns that a message was sent and when. Local-only mode sends none.
 - Commands that agents run can reach the port, like any on this computer, but get nothing there without a paired phone.
 - Tailscale lists HTTPS certificates publicly, so the computer's Tailscale name becomes public.

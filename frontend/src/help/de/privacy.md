@@ -27,16 +27,17 @@ Was ein Anbieter mit den Daten macht, regeln seine eigenen Bedingungen. Ein Mode
 
 ## Weitere Verbindungen
 
-Neben dem, was eingerichtet oder angefordert wird, etwa Anbieter, MCP-Server, Agenten, SSH-Rechner, die Git-Adresse einer Fähigkeit oder eine Seite, die der Agent mit Freigabe abruft, verbindet sich Freeloop mit vier Dingen, und nur, wenn sie genutzt werden:
+Neben dem, was eingerichtet oder angefordert wird, etwa Anbieter, MCP-Server, Agenten, SSH-Rechner, die Git-Adresse einer Fähigkeit oder eine Seite, die der Agent mit Freigabe abruft, verbindet sich Freeloop mit fünf Dingen, und nur, wenn sie genutzt werden:
 
 - Die Suche nach Updates ist aus, bis **Einmal täglich nach einer neueren Version suchen** unter Einstellungen → Netzwerk eingeschaltet wird. Die Suche fragt GitHub nach der neuesten Veröffentlichung und sendet nichts über diese Kopie der App. **Jetzt prüfen** führt sie einmal aus.
 - Der Download eines Token-Optimierers geschieht nur beim Klick auf seine Schaltfläche zum Installieren, etwa **RTK installieren**, unter Einstellungen → Token-Optimierer. Er kommt von GitHub, in einer festgelegten Version, und wird gegen eine bekannte Prüfsumme geprüft.
 - Das Sprachmodell der Spracheingabe wird nur beim Klick auf **Herunterladen** geladen, im Nachrichtenfeld oder unter Einstellungen → Spracheingabe. Es kommt von Hugging Face, unter Windows und Linux whisper.cpp von GitHub, jeweils festgelegt und gegen eine bekannte Prüfsumme geprüft. Das Gesagte wird auf diesem Computer zu Text und nirgendwohin gesendet.
 - Das MCP-Verzeichnis wird nur kontaktiert, wenn es über **Ein Verzeichnis durchsuchen…** auf der Seite MCP-Server durchsucht wird. Es erhält die Suchbegriffe an der gewählten Verzeichnisadresse.
+- Die Benachrichtigung für ein Telefon geht an dessen Push-Dienst (den von Apple, Google oder Mozilla, je nachdem, welchen sein Browser nutzt), und nur für ein Telefon, bei dem **Benachrichtige mich** an ist. Die Nachricht ist so verschlüsselt, dass nur dieses Telefon sie lesen kann, und enthält nur, was geschehen ist, und die ID einer Sitzung, nie ihren Inhalt. Der Push-Dienst sieht, dass eine Nachricht gesendet wurde und wann. Der Nur-lokal-Modus sendet keine.
 
 Ist unter Einstellungen → Netzwerk eine Suchadresse für die Websuche des eingebauten Agenten eingetragen, gehen die Suchanfragen dorthin. Jede Suche fragt vorher nach, sofern keine Erlaubnisregel und nicht der Umgehungsmodus sie durchlässt.
 
-Ist **Dem Telefon antworten** unter Einstellungen → Telefon an, lesen gekoppelte Telefone die Sitzungen über das eigene Tailscale-Netz. Freeloop selbst antwortet nur auf diesem Computer und verbindet sich dafür mit nichts. Der Nur-lokal-Modus schaltet es aus.
+Ist **Dem Telefon antworten** unter Einstellungen → Telefon an, lesen gekoppelte Telefone die Sitzungen über das eigene Tailscale-Netz. Freeloop selbst antwortet nur auf diesem Computer und verbindet sich dafür nur zur Benachrichtigung oben. Der Nur-lokal-Modus schaltet es aus.
 
 ## Nur-lokal-Modus
 
