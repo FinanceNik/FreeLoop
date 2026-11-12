@@ -276,6 +276,32 @@ func (s *Store) index(ctx context.Context, t *transcript, sid string, ev event.E
 	}
 }
 
+// addUsage adds one call's tokens to the day's row for its session and model.
+func addUsage(ctx context.Context, db interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}, sid string, u usage) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO usage (day, session_id, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls, turn_totals, unreported)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (day, session_id, provider_id, model) DO UPDATE SET
+		input = input + excluded.input, output = output + excluded.output, cache_read = cache_read + excluded.cache_read,
+		cache_write = cache_write + excluded.cache_write, cache_write_1h = cache_write_1h + excluded.cache_write_1h, calls = calls + excluded.calls,
+		turn_totals = turn_totals + excluded.turn_totals, unreported = unreported + excluded.unreported`,
+		u.day, sid, u.providerID, u.model, u.input, u.output, u.cacheRead, u.cacheWrite, u.cacheWrite1h, u.calls, u.turnTotals, u.unreported)
+	return err
+}
+
+// AddSessionlessUsage books a model call that belongs to no session (a skill's test)
+// to the day it was made, under no session, so the day's totals include it (PRV-008).
+func (s *Store) AddSessionlessUsage(ctx context.Context, at time.Time, d event.UsageData) error {
+	if d.InputTokens+d.OutputTokens+d.CacheReadTokens+d.CacheWriteTokens <= 0 {
+		return nil
+	}
+	return addUsage(ctx, s.db, "", usage{day: at.In(time.Local).Format(time.DateOnly),
+		providerID: d.ProviderID, model: pricedModel(d.Model, d),
+		input: d.InputTokens, output: d.OutputTokens, cacheRead: d.CacheReadTokens, cacheWrite: d.CacheWriteTokens,
+		cacheWrite1h: d.CacheWrite1hTokens, calls: callCount(d)})
+}
+
 func (s *Store) writeIndex(ctx context.Context, sid string, b batch, done int64, sets string, args []any) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -283,13 +309,7 @@ func (s *Store) writeIndex(ctx context.Context, sid string, b batch, done int64,
 	}
 	defer tx.Rollback()
 	for _, u := range b.usage {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO usage (day, session_id, provider_id, model, input, output, cache_read, cache_write, cache_write_1h, calls, turn_totals, unreported)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT (day, session_id, provider_id, model) DO UPDATE SET
-			input = input + excluded.input, output = output + excluded.output, cache_read = cache_read + excluded.cache_read,
-			cache_write = cache_write + excluded.cache_write, cache_write_1h = cache_write_1h + excluded.cache_write_1h, calls = calls + excluded.calls,
-			turn_totals = turn_totals + excluded.turn_totals, unreported = unreported + excluded.unreported`,
-			u.day, sid, u.providerID, u.model, u.input, u.output, u.cacheRead, u.cacheWrite, u.cacheWrite1h, u.calls, u.turnTotals, u.unreported); err != nil {
+		if err := addUsage(ctx, tx, sid, u); err != nil {
 			return err
 		}
 	}
@@ -611,7 +631,7 @@ func (s *Store) UsageRowsSince(ctx context.Context, since string) ([]UsageRow, e
 		`SELECT u.day, u.provider_id, u.model, sum(u.input), sum(u.output), sum(u.cache_read), sum(u.cache_write), sum(u.cache_write_1h), sum(u.calls),
 		        sum(u.turn_totals), sum(u.unreported),
 		        u.session_id, coalesce(s.title, ''), coalesce(s.project_id, ''), coalesce(s.project_root, ''),
-		        coalesce(s.harness_id, ''), coalesce(s.profile_id, ''), coalesce(s.parent_id, ''), coalesce(s.tags, ''), s.id IS NULL
+		        coalesce(s.harness_id, ''), coalesce(s.profile_id, ''), coalesce(s.parent_id, ''), coalesce(s.tags, ''), (s.id IS NULL AND u.session_id <> '')
 		 FROM usage u LEFT JOIN sessions s ON s.id = u.session_id
 		 WHERE u.day >= ?
 		 GROUP BY u.day, u.session_id, u.provider_id, u.model

@@ -1583,7 +1583,7 @@ export const en = {
   "usagePage.loading": "Loading…",
   // {range} is the page's range, such as 30 days.
   "usagePage.none": "No model calls in the last {range}.",
-  "usagePage.noneNote": "Usage is counted from every session's model calls, including external agents that report their tokens.",
+  "usagePage.noneNote": "Usage is counted from every model call: each session's, including external agents that report their tokens, and the app's own (commit messages, skill tests). A call that was stopped counts the tokens the provider reported before it stopped.",
   "usagePage.unpriced": "{tokens} tokens are on models without a price and count as no cost.",
   "usagePage.addPrices": "Add prices",
   "usagePage.chart.tokensDay": "Tokens per day",
@@ -1716,6 +1716,7 @@ export const en = {
   "insights.share": "Share",
   "insights.session": "Session",
   "insights.deletedSession": "Deleted session",
+  "insights.appCalls": "The app's own calls",
   "insights.untitled": "Untitled",
   "insights.failed": "Failed",
   "insights.turns": "Turns",

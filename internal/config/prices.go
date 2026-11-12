@@ -5,6 +5,7 @@ import (
 	"math"
 	"path"
 	"strings"
+	"time"
 )
 
 // Price is what a model's tokens cost, in US dollars per million tokens
@@ -20,6 +21,11 @@ type Price struct {
 	CacheWrite float64 `yaml:"cacheWrite,omitempty" json:"cacheWrite"`
 	// CacheWrite1h is a write that lasts an hour; 0 charges it as CacheWrite.
 	CacheWrite1h float64 `yaml:"cacheWrite1h,omitempty" json:"cacheWrite1h"`
+	// From is the first day (YYYY-MM-DD, local time) the price holds; empty means
+	// always. A model may have several rows, the newest first: a day is priced by the
+	// first row whose From is not after it, so history keeps the prices it was
+	// spent at (PRV-008).
+	From string `yaml:"from,omitempty" json:"from"`
 	// LongPromptOver is the prompt size above which a call pays the prices of the
 	// row named Model+LongPromptSuffix; only the built-in table has one.
 	LongPromptOver int64 `yaml:"-" json:"longPromptOver"`
@@ -38,9 +44,15 @@ func PricedModel(model string, prompt int64) string {
 	return model
 }
 
-// FindPrice returns the first entry for a provider's model.
+// FindPrice returns the first entry for a provider's model, as of today.
 func FindPrice(prices []Price, providerID, model string) (Price, bool) {
-	if p, ok := findPrice(prices, providerID, model); ok {
+	return FindPriceOn(prices, providerID, model, time.Now().Format(time.DateOnly))
+}
+
+// FindPriceOn returns the first entry for a provider's model that holds on day
+// (YYYY-MM-DD): one with a From after it does not apply yet.
+func FindPriceOn(prices []Price, providerID, model, day string) (Price, bool) {
+	if p, ok := findPrice(prices, providerID, model, day); ok {
 		return p, true
 	}
 	// An agent may name a model with its provider, openai/gpt-5.5, or with its
@@ -49,16 +61,19 @@ func FindPrice(prices []Price, providerID, model string) (Price, bool) {
 	// Only for an agent's usage, which names no provider: a model on one of the
 	// user's own providers (a local one, say) is priced by its own name or not at all.
 	if before, after, ok := strings.Cut(model, "/"); ok && providerID == "" {
-		if p, ok := findPrice(prices, providerID, after); ok {
+		if p, ok := findPrice(prices, providerID, after, day); ok {
 			return p, true
 		}
-		return findPrice(prices, providerID, before)
+		return findPrice(prices, providerID, before, day)
 	}
 	return Price{}, false
 }
 
-func findPrice(prices []Price, providerID, model string) (Price, bool) {
+func findPrice(prices []Price, providerID, model, day string) (Price, bool) {
 	for _, p := range prices {
+		if p.From > day {
+			continue
+		}
 		if p.ProviderID != "" && p.ProviderID != providerID {
 			continue
 		}
@@ -91,6 +106,11 @@ func validatePrices(prices []Price) ([]Price, []Issue) {
 			bad = "a price needs a model"
 		} else if _, err := path.Match(p.Model, ""); err != nil {
 			bad = fmt.Sprintf("%q is not a valid pattern", p.Model)
+		}
+		if p.From != "" {
+			if _, err := time.Parse(time.DateOnly, p.From); err != nil {
+				bad = fmt.Sprintf("%q is not a date (YYYY-MM-DD)", p.From)
+			}
 		}
 		for _, v := range []float64{p.Input, p.Output, p.CacheRead, p.CacheWrite, p.CacheWrite1h} {
 			if v < 0 || math.IsNaN(v) || math.IsInf(v, 0) {

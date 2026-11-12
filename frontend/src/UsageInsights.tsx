@@ -254,7 +254,9 @@ export function ActivityView({ rows: all, since, until, rangeLabel, onOpenSessio
               return (
                 <tr key={s.sessionId}>
                   <td>
-                    {r?.deleted ? (
+                    {!s.sessionId ? (
+                      <span className="muted">{t("insights.appCalls")}</span>
+                    ) : r?.deleted ? (
                       <span className="muted">{t("insights.deletedSession")}</span>
                     ) : (
                       <button className="link usage-pick" onClick={() => onOpenSession(s.sessionId)}>

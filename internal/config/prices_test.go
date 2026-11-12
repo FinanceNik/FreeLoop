@@ -116,3 +116,35 @@ func TestQwenFlashIsPriced(t *testing.T) {
 		t.Error("the row reaches another Qwen model, at the wrong price")
 	}
 }
+
+// PRV-008: a price holds from a day; a day is priced by the newest row that has
+// begun by then, so a change of price leaves earlier days as they were.
+func TestPriceHoldsFromADay(t *testing.T) {
+	prices := []Price{
+		{Model: "m", From: "2026-12-01", Input: 4},
+		{Model: "m", Input: 2},
+	}
+	for _, c := range []struct {
+		day   string
+		input float64
+	}{{"2026-11-30", 2}, {"2026-12-01", 4}, {"2027-01-05", 4}} {
+		if p, ok := FindPriceOn(prices, "", "m", c.day); !ok || p.Input != c.input {
+			t.Errorf("on %s: %+v, %v", c.day, p, ok)
+		}
+	}
+	// Only a row that has begun applies: with none, the model has no price.
+	if _, ok := FindPriceOn(prices[:1], "", "m", "2026-11-30"); ok {
+		t.Error("a price that has not begun applied")
+	}
+	// The built-in table's change of a price is dated too.
+	before, _ := FindPriceOn(BuiltinPrices(), "", "gemini-4-argon", "2026-11-30")
+	after, _ := FindPriceOn(BuiltinPrices(), "", "gemini-4-argon", "2026-12-01")
+	if before.Input != 2 || after.Input != 4 {
+		t.Errorf("gemini-4-argon: %v before, %v after", before.Input, after.Input)
+	}
+	c := Default()
+	c.Prices = []Price{{Model: "ok", From: "soon", Input: 1}, {Model: "ok", From: "2026-12-01", Input: 1}}
+	if issues := c.Validate(); len(c.Prices) != 1 || len(issues) != 1 {
+		t.Errorf("prices = %+v, issues = %+v", c.Prices, issues)
+	}
+}

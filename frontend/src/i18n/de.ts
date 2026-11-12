@@ -1418,7 +1418,7 @@ export const de = translationOf<typeof en>()({
   "usagePage.loading": "Wird geladen…",
   // The range comes first: „30 Tage“ is not the dative „in den letzten 30 Tagen“ needs.
   "usagePage.none": "Letzte {range}: keine Modellaufrufe.",
-  "usagePage.noneNote": "Die Nutzung wird aus den Modellaufrufen jeder Sitzung gezählt, auch von externen Agenten, die ihre Token melden.",
+  "usagePage.noneNote": "Die Nutzung wird aus jedem Modellaufruf gezählt: aus denen jeder Sitzung, auch von externen Agenten, die ihre Token melden, und aus denen der App selbst (Commit-Nachrichten, Skill-Tests). Ein gestoppter Aufruf zählt die Token, die der Anbieter bis dahin gemeldet hat.",
   "usagePage.unpriced": "{tokens} Token stammen von Modellen ohne Preis und zählen als kostenlos.",
   "usagePage.addPrices": "Preise hinzufügen",
   "usagePage.chart.tokensDay": "Token pro Tag",
@@ -1535,6 +1535,7 @@ export const de = translationOf<typeof en>()({
   "insights.share": "Anteil",
   "insights.session": "Sitzung",
   "insights.deletedSession": "Gelöschte Sitzung",
+  "insights.appCalls": "Aufrufe der App selbst",
   "insights.untitled": "Ohne Titel",
   "insights.failed": "Fehlgeschlagen",
   "insights.turns": "Runden",

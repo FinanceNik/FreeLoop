@@ -503,11 +503,16 @@ func (e *Engine) complete(ctx context.Context, ses session.Session, system, prom
 		return "", err
 	}
 	var text strings.Builder
+	spend := e.spending(ses.ID, ses.ProviderID, ses.Model)
+	defer spend.end()
 	for ev := range ch {
 		switch ev.Type {
+		case provider.EventUsage:
+			spend.report(ev.Usage)
 		case provider.EventError:
 			return "", ev.Err
 		case provider.EventDone:
+			spend.done(ev.Usage)
 			if ev.Message != nil {
 				for _, part := range ev.Message.Parts {
 					if part.Type == provider.PartText {

@@ -182,7 +182,7 @@ The templates live in `internal/harness/templates` as `.tmpl` files; their tests
 
 ## Updating prices
 
-`listPrices` in `internal/config/builtinprices.go` holds the vendors' list prices, with the pages they come from; set `PricesAsOf` when you change them. Add a model's name only: dated names get a row of their own. A model that charges more above a prompt size has `longOver` and a row named with `LongPromptSuffix`, ahead of it. Its calls are counted under that name, so that the sums per model can be priced.
+`listPrices` in `internal/config/builtinprices.go` holds the vendors' list prices, with the pages they come from; set `PricesAsOf` when you change them. Add a model's name only: dated names get a row of their own. A model that charges more above a prompt size has `longOver` and a row named with `LongPromptSuffix`, ahead of it. Its calls are counted under that name, so that the sums per model can be priced. A price that changes on a known day gets a row with `from: "YYYY-MM-DD"` above the row it replaces: `config.FindPriceOn` prices a day by the first row that has begun by then, so history keeps the prices it was spent at (the Usage page, budgets, the run comparison and recent usage use it; a session's own live cost in the window, a run's cost and what a commit cost still use the price of today). A row of the user's in `config.yaml` may have `from` too.
 
 Claude Code sessions report tokens per model call through the adapter's raw SDK messages (`internal/harness/acp/calls.go`). Other external agents report at the end of each turn, as ACP has it, and name no model, so they show no cost unless their session names one.
 

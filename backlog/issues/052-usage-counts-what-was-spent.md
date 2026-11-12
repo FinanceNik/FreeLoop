@@ -1,6 +1,6 @@
 ---
 title: Usage counts what was spent
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
@@ -17,3 +17,8 @@ Three kinds of spending leave no record (PRV-008): a call on the built-in loop t
 
 ## Notes
 - `internal/engine/builtinprices.go`, `internal/engine/usage.go`.
+
+## Done
+- Skill tests with no session are booked under an empty session id and shown as "The app's own calls". The session's live cost in the window (`cost.ts`), a run's cost (`runcost.go`) and what a commit cost (`work.go`) still use today's prices; the Usage page, budgets, the run comparison and recent usage price by day.
+- Ollama, the Responses API and the OpenAI-compatible adapter report tokens only at the end of a stream, so a call cut off there records nothing; Anthropic and Gemini send running totals.
+- A price added for 2026-12-01 is entered only for gemini-4-argon.

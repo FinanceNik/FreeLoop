@@ -9,6 +9,7 @@ const PricesAsOf = "2026-11-03"
 // listPrice is one model's standard rate, per million tokens.
 type listPrice struct {
 	model                               string
+	from                                string // the first day it holds, or "" for always
 	input, output, read, write, write1h float64
 	longOver                            int64
 }
@@ -23,9 +24,11 @@ type listPrice struct {
 // inference, batch rates, Gemini's audio rates and hourly cache storage, OpenAI's
 // cache writes. Claude on Bedrock or Vertex has other prices and other names.
 //
-// Due to change: gemini-4-argon doubles on 2026-12-01, and gemini-3.8-flash and
-// gemini-3.6-flash on 2027-01-01. gemini-2.5-pro and gemini-2.5-flash go elsewhere
-// on 2026-12-01.
+// A price that changes on a known day gets a row with that day as its from, above
+// the row it replaces, so the usage before is still priced as it was (PRV-008):
+// gemini-4-argon doubles on 2026-12-01. Due to change and not yet entered:
+// gemini-3.8-flash and gemini-3.6-flash on 2027-01-01, and gemini-2.5-pro and
+// gemini-2.5-flash, which go elsewhere on 2026-12-01.
 //
 // A long prompt's row comes first: the pattern of its model's dated names would
 // match it too.
@@ -97,6 +100,7 @@ var listPrices = []listPrice{
 	{model: "o3", input: 2, output: 8, read: 0.5},
 	{model: "chat-latest", input: 5, output: 30, read: 0.5},
 
+	{model: "gemini-4-argon", from: "2026-12-01", input: 4, output: 20, read: 0.2},
 	{model: "gemini-4-argon", input: 2, output: 10, read: 0.1},
 	{model: "gemini-3.8-flash", input: 0.75, output: 3.75, read: 0.075},
 	{model: "gemini-3.6-flash", input: 0.75, output: 3.75, read: 0.075},
@@ -120,7 +124,7 @@ var builtinPrices = func() []Price {
 	var out []Price
 	for _, l := range listPrices {
 		name, long, _ := cutLongPrompt(l.model)
-		p := Price{Model: name + long, Input: l.input, Output: l.output, CacheRead: l.read, CacheWrite: l.write, CacheWrite1h: l.write1h, LongPromptOver: l.longOver}
+		p := Price{Model: name + long, From: l.from, Input: l.input, Output: l.output, CacheRead: l.read, CacheWrite: l.write, CacheWrite1h: l.write1h, LongPromptOver: l.longOver}
 		dated := p
 		dated.Model = name + "-20*" + long
 		out = append(out, p, dated)

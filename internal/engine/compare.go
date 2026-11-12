@@ -129,7 +129,7 @@ func (e *Engine) Compare(ctx context.Context, tag string) ([]CompareRun, error) 
 				continue
 			}
 			r.Tokens += u.InputTokens + u.OutputTokens + u.CacheReadTokens + u.CacheWriteTokens
-			if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
+			if p, ok := config.FindPriceOn(prices, u.ProviderID, u.Model, u.Day); ok {
 				r.Cost += p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheWrite1hTokens)
 				r.Priced = true
 			}

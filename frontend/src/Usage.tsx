@@ -139,7 +139,7 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
     if (r.harnessId && r.harnessId !== "builtin") return harnesses.find((h) => h.id === r.harnessId)?.name ?? r.harnessId;
     return providers.find((p) => p.id === r.providerId)?.name ?? (r.providerId || t("usagePage.unknownProvider"));
   };
-  const project = (r: Pick<UsageRow, "projectId" | "projectRoot">) => projects.find((p) => p.id === r.projectId)?.name ?? (r.projectRoot ? basename(r.projectRoot) : t("usagePage.deletedSessions"));
+  const project = (r: Pick<UsageRow, "projectId" | "projectRoot"> & { sessionId?: string }) => projects.find((p) => p.id === r.projectId)?.name ?? (r.projectRoot ? basename(r.projectRoot) : (r.sessionId === "" ? t("insights.appCalls") : t("usagePage.deletedSessions")));
   const keyOf: Record<Exclude<GroupID, "type">, (r: UsageRow) => string> = {
     model: (r) => r.model || t("recentUsage.modelNotReported", { name: agent(r) }),
     agent,
@@ -538,7 +538,9 @@ export default function Usage({ onShowInPane, projects, providers, harnesses, on
                         return (
                           <tr key={g.key}>
                             <td>
-                              {r.deleted ? (
+                              {!r.sessionId ? (
+                                <span className="muted">{t("insights.appCalls")}</span>
+                              ) : r.deleted ? (
                                 <span className="muted">{t("insights.deletedSession")}</span>
                               ) : (
                                 <button className="link" onClick={() => onOpenSession(g.key)}>

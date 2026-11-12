@@ -527,7 +527,7 @@ export default function Settings({ page, config, providers, harnesses, environme
           version={config}
           onError={onError}
           onPrice={(providerId, model) => {
-            setForm({ ...form, prices: [...(form.prices ?? []), { providerId, model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0 }] });
+            setForm({ ...form, prices: [...(form.prices ?? []), { providerId, model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0, from: "" }] });
             requestAnimationFrame(() => document.getElementById("prices")?.scrollIntoView({ block: "start" }));
           }}
         />

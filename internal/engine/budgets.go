@@ -60,7 +60,7 @@ func (e *Engine) budgetStates(ctx context.Context, now time.Time) ([]BudgetState
 			if r.InputTokens+r.OutputTokens+r.CacheReadTokens+r.CacheWriteTokens == 0 {
 				continue // only unreported turns; an adjustment has tokens and counts
 			}
-			if p, ok := config.FindPrice(prices, r.ProviderID, r.Model); ok {
+			if p, ok := config.FindPriceOn(prices, r.ProviderID, r.Model, r.Day); ok {
 				st.Spent += p.Cost(r.InputTokens, r.OutputTokens, r.CacheReadTokens, r.CacheWriteTokens, r.CacheWrite1hTokens)
 			} else {
 				st.Unpriced = true

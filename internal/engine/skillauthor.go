@@ -102,7 +102,7 @@ type SkillTest struct {
 
 // TestSkill runs a prompt past a model with the skills a session would list
 // (the tested one included even if it is off) and reports whether the model
-// called load_skill for it. The call's tokens are not booked to a session.
+// called load_skill for it. The call's tokens are booked to the day, under no session (PRV-008).
 func (e *Engine) TestSkill(ctx context.Context, req SkillTestRequest) (SkillTest, error) {
 	if strings.TrimSpace(req.Prompt) == "" {
 		return SkillTest{}, errors.New("write a sample prompt")
@@ -143,11 +143,16 @@ func (e *Engine) TestSkill(ctx context.Context, req SkillTestRequest) (SkillTest
 	if err != nil {
 		return SkillTest{}, err
 	}
+	spend := e.spending("", req.ProviderID, model)
+	defer spend.end()
 	for ev := range ch {
 		switch ev.Type {
+		case provider.EventUsage:
+			spend.report(ev.Usage)
 		case provider.EventError:
 			return SkillTest{}, ev.Err
 		case provider.EventDone:
+			spend.done(ev.Usage)
 			var res SkillTest
 			if ev.Message != nil {
 				for _, p := range ev.Message.Parts {

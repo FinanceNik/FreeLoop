@@ -88,7 +88,7 @@ export function PriceTable({ prices, providers, onChange }: { prices: Price[]; p
         </div>
       )}
       <div className="row">
-        <button type="button" onClick={() => onChange([...prices, { providerId: "", model: "", input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0 }])}>
+        <button type="button" onClick={() => onChange([...prices, { providerId: "", model: "", input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, longPromptOver: 0, from: "" }])}>
           {t("prices.add")}
         </button>
       </div>

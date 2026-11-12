@@ -7,12 +7,15 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
+	"github.com/FinanceNik/Freeloop/internal/event"
+	"github.com/FinanceNik/Freeloop/internal/provider"
 	"github.com/FinanceNik/Freeloop/internal/store"
 )
 
@@ -44,8 +47,9 @@ type DayCost struct {
 
 // Usage returns the estimated cost per day for the last days days, today
 // included, newest first; days without model calls are left out. Costs come
-// from the current price table, so a price added later applies to past
-// usage too.
+// from the current price table, a day at the price that held on it (a row's
+// From), so a price that changes later leaves earlier days as they were; a
+// price added for a model that had none applies to its past usage too.
 func (e *Engine) Usage(ctx context.Context, days int) ([]DayCost, error) {
 	if days <= 0 {
 		days = 30
@@ -70,7 +74,7 @@ func (e *Engine) Usage(ctx context.Context, days int) ([]DayCost, error) {
 			// adjustment has no calls of its own but does have tokens, which cost.
 			continue
 		}
-		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
+		if p, ok := config.FindPriceOn(prices, u.ProviderID, u.Model, u.Day); ok {
 			m.Cost, m.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheWrite1hTokens), true
 			d.Cost += m.Cost
 		}
@@ -131,7 +135,7 @@ func (e *Engine) UsageReport(ctx context.Context, days int) (UsageReport, error)
 		if w, ok := ofRun[u.SessionID]; ok {
 			r.Run, r.RunLabel, r.Issue, r.Commit = w.run, w.label, w.issue, w.commit
 		}
-		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
+		if p, ok := config.FindPriceOn(prices, u.ProviderID, u.Model, u.Day); ok {
 			r.Cost, r.Priced = p.Cost(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheWrite1hTokens), true
 			r.CostInput = p.Cost(u.InputTokens, 0, 0, 0, 0)
 			r.CostOutput = p.Cost(0, u.OutputTokens, 0, 0, 0)
@@ -282,7 +286,7 @@ func (e *Engine) RecentUsage(ctx context.Context, hours int) (RecentUsageReport,
 		b.Calls += u.Calls
 		row := RecentRow{Start: b.Start, ProjectID: u.ProjectID, ProjectRoot: u.ProjectRoot, HarnessID: u.HarnessID, ProviderID: u.ProviderID, Model: u.Model,
 			Input: u.Input, Output: u.Output, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite, Calls: u.Calls}
-		if p, ok := config.FindPrice(prices, u.ProviderID, u.Model); ok {
+		if p, ok := config.FindPriceOn(prices, u.ProviderID, u.Model, u.Start.In(time.Local).Format(time.DateOnly)); ok {
 			row.Cost = p.Cost(u.Input, u.Output, u.CacheRead, u.CacheWrite, u.CacheWrite1h)
 			b.Cost += row.Cost
 		} else {
@@ -292,4 +296,49 @@ func (e *Engine) RecentUsage(ctx context.Context, hours int) (RecentUsageReport,
 		out.Rows = append(out.Rows, row)
 	}
 	return out, nil
+}
+
+// spend books what one of the app's own model calls (a commit message, a skill's test)
+// used, as a usage event in its session or, with none, against the day (PRV-008). A
+// call that is cut off books what the provider had reported by then, marked partial.
+type spend struct {
+	e                *Engine
+	sid, prov, model string
+	reported         provider.Usage
+	finished         bool
+}
+
+func (e *Engine) spending(sid, providerID, model string) *spend {
+	return &spend{e: e, sid: sid, prov: providerID, model: model}
+}
+
+// report takes a running total, which replaces the one before.
+func (s *spend) report(u provider.Usage) { s.reported = u }
+
+// done books the final count.
+func (s *spend) done(u provider.Usage) {
+	s.finished = true
+	s.book(u, false)
+}
+
+// end books the partial count of a call that did not finish; defer it.
+func (s *spend) end() {
+	if !s.finished {
+		s.book(s.reported, true)
+	}
+}
+
+func (s *spend) book(u provider.Usage, partial bool) {
+	if u.InputTokens+u.OutputTokens+u.CacheReadTokens+u.CacheWriteTokens == 0 {
+		return
+	}
+	d := event.UsageData{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens, CacheReadTokens: u.CacheReadTokens,
+		CacheWriteTokens: u.CacheWriteTokens, Partial: partial, ProviderID: s.prov, Model: s.model}
+	if s.sid != "" {
+		s.e.emit(s.sid, event.UsageUpdate, d)
+		return
+	}
+	if err := s.e.store.AddSessionlessUsage(context.Background(), time.Now(), d); err != nil {
+		log.Printf("engine: usage of %s: %v", s.model, err)
+	}
 }
