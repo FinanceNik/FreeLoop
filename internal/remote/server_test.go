@@ -80,7 +80,8 @@ func freePort(t *testing.T) int {
 func started(t *testing.T) (*engine.Engine, *Server, *phone) {
 	t.Helper()
 	dir := t.TempDir()
-	e, err := engine.Open(engine.Options{DataDir: dir, Secrets: secrets.NewMemory(), Home: t.TempDir(), Dev: true, WatchInterval: -1, ScheduleInterval: -1})
+	keys := secrets.NewMemory()
+	e, err := engine.Open(engine.Options{DataDir: dir, Secrets: keys, Home: t.TempDir(), Dev: true, WatchInterval: -1, ScheduleInterval: -1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +91,7 @@ func started(t *testing.T) (*engine.Engine, *Server, *phone) {
 	if _, err := e.SaveSettings(cfg); err != nil {
 		t.Fatal(err)
 	}
-	s := New(e, dir, fstest.MapFS{
+	s := New(e, dir, keys, fstest.MapFS{
 		"index.html":           {Data: []byte("<!doctype html><title>phone</title>")},
 		"manifest.webmanifest": {Data: []byte("{}")},
 		"icon-192.png":         {Data: []byte("png")},

@@ -46,6 +46,10 @@ name: AFK demo
 provider: demo
 model: scripted
 YAML
+# A paired phone that turned notifications on (issue 027): Settings, Phone lists it so.
+cat > "$FREELOOP_HOME/devices.json" <<'JSON'
+[{"id":"dev_0000000000000001","name":"Check phone","tokenHash":"00","paired":"2026-11-01T10:00:00Z","lastSeen":"2026-11-01T10:00:00Z","push":{"endpoint":"https://fcm.googleapis.com/fcm/send/check","p256dh":"x","auth":"y"}}]
+JSON
 
 . "$HERE/appcheck/lived-in.sh"
 

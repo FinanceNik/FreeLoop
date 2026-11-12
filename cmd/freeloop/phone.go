@@ -11,6 +11,7 @@ import (
 	"github.com/FinanceNik/Freeloop/frontend"
 	"github.com/FinanceNik/Freeloop/internal/engine"
 	"github.com/FinanceNik/Freeloop/internal/remote"
+	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
 // phone runs the phone server (GUI-052) and keeps the app going for it while the
@@ -22,7 +23,7 @@ type phone struct {
 	awake atomic.Bool
 }
 
-func startPhone(ctx context.Context, eng *engine.Engine, dataDir string) *phone {
+func startPhone(ctx context.Context, eng *engine.Engine, dataDir string, keys secrets.Store) *phone {
 	// A build made without the phone app serves an empty folder.
 	var files fs.FS = embed.FS{}
 	if sub, err := fs.Sub(frontend.Assets(), "phone"); err == nil {
@@ -30,7 +31,7 @@ func startPhone(ctx context.Context, eng *engine.Engine, dataDir string) *phone 
 	} else {
 		log.Printf("freeloop: phone app: %v", err)
 	}
-	p := &phone{srv: remote.New(eng, dataDir, files), eng: eng}
+	p := &phone{srv: remote.New(eng, dataDir, keys, files), eng: eng}
 	go p.srv.Run(ctx)
 	go p.stayAwake(ctx)
 	return p

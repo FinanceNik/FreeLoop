@@ -8,6 +8,7 @@ package remote
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/engine"
+	"github.com/FinanceNik/Freeloop/internal/secrets"
 )
 
 const (
@@ -47,6 +49,7 @@ const (
 // Server is the phone server. Its zero value is not usable; use New.
 type Server struct {
 	eng     *engine.Engine
+	keys    secrets.Store
 	dataDir string
 	assets  fs.FS
 	now     func() time.Time
@@ -61,6 +64,7 @@ type Server struct {
 	// streams cancel what a phone has open, so signing it out ends them at once.
 	streams map[string]map[int]context.CancelFunc
 	nextRun int
+	vapid   *ecdsa.PrivateKey
 }
 
 // pairing is an open pairing window: the code the phone sends, and the phone that
@@ -84,8 +88,8 @@ type claim struct {
 
 // New makes the server for eng, its phone app's files under assets (the built
 // frontend's phone/ folder).
-func New(eng *engine.Engine, dataDir string, assets fs.FS) *Server {
-	s := &Server{eng: eng, dataDir: dataDir, assets: assets, now: time.Now}
+func New(eng *engine.Engine, dataDir string, keys secrets.Store, assets fs.FS) *Server {
+	s := &Server{eng: eng, keys: keys, dataDir: dataDir, assets: assets, now: time.Now}
 	if d, err := config.LoadDevices(dataDir); err == nil {
 		s.devices = d
 	} else {
@@ -164,6 +168,8 @@ type Device struct {
 	Login    string    `json:"login,omitempty"`
 	Paired   time.Time `json:"paired"`
 	LastSeen time.Time `json:"lastSeen"`
+	// Notify is whether the phone turned notifications on.
+	Notify bool `json:"notify"`
 }
 
 // Status says how the phone server is.
@@ -178,7 +184,7 @@ func (s *Server) Status() Status {
 		}
 	}
 	for _, d := range s.devices {
-		st.Devices = append(st.Devices, Device{ID: d.ID, Name: d.Name, Login: d.Login, Paired: d.Paired, LastSeen: d.LastSeen})
+		st.Devices = append(st.Devices, Device{ID: d.ID, Name: d.Name, Login: d.Login, Paired: d.Paired, LastSeen: d.LastSeen, Notify: d.Push != nil})
 	}
 	return st
 }
@@ -445,6 +451,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/sessions/{id}/prompt", s.authed(s.prompt))
 	mux.HandleFunc("POST /api/sessions/{id}/cancel", s.authed(s.cancel))
 	mux.HandleFunc("POST /api/decide", s.authed(s.decide))
+	mux.HandleFunc("GET /api/push/key", s.authed(s.pushKey))
+	mux.HandleFunc("POST /api/push/subscribe", s.authed(s.pushSubscribe))
+	mux.HandleFunc("POST /api/push/unsubscribe", s.authed(s.pushUnsubscribe))
 	mux.HandleFunc("POST /api/logout", s.authed(s.logout))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()

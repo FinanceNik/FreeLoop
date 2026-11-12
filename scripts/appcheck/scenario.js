@@ -604,6 +604,8 @@ await step("the phone page turns the phone server on, and pairs only with a code
   (await until("the palette entry", () => all(".palette-item").find((e) => e.textContent.trim().startsWith("Phone")), 3000)).click();
   const page = await until("the phone page", () => all(".page").find((p) => p.querySelector("h2")?.textContent === "Phone"), 5000);
   const status = () => page.querySelector('[role="status"]')?.textContent ?? "";
+  const listed = await until("the paired phone", () => [...page.querySelectorAll(".phone-devices li")].find((li) => li.querySelector("input")?.value === "Check phone"), 5000);
+  check("the list says the phone gets notifications", listed.textContent.includes("notifications on"), listed.textContent);
   const enable = withText("label", "Answer my phone", page).querySelector("input");
   enable.click();
   await until("the server on", () => /^On, on this computer's port \d+\./.test(status()), 8000);

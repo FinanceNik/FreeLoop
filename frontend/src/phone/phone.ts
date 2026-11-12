@@ -78,3 +78,25 @@ export function parseSSE(rest: string, chunk: string): { messages: SSEMessage[];
 export function reconnectDelay(attempt: number): number {
   return Math.min(500 * 2 ** attempt, 15000);
 }
+
+// applicationServerKey reads the server's push key (base64url) as the bytes a
+// browser's subscribe call takes.
+export function applicationServerKey(b64: string): Uint8Array<ArrayBuffer> {
+  const padded = b64.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob(padded);
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+// pushBody is what the phone posts of a subscription: the endpoint and its two keys,
+// nothing else the browser adds.
+export function pushBody(sub: { toJSON(): { endpoint?: string; keys?: Record<string, string> } }): { endpoint: string; keys: { p256dh: string; auth: string } } {
+  const j = sub.toJSON();
+  if (!j.endpoint || !j.keys?.p256dh || !j.keys?.auth) throw new Error("the browser's subscription is incomplete");
+  return { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } };
+}
+
+// pushSupported says whether this browser can take Web Push at all. On an iPhone that
+// is only the app added to the home screen (iOS 16.4 and later).
+export function pushSupported(env: { serviceWorker?: unknown; PushManager?: unknown; Notification?: unknown }): boolean {
+  return !!env.serviceWorker && !!env.PushManager && !!env.Notification;
+}

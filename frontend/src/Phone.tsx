@@ -193,6 +193,7 @@ export default function Phone({ config, onSaved, onError }: Props) {
                   />
                   <span className="muted">
                     {d.login ? `${d.login} · ` : ""}
+                    {d.notify ? `${t("phone.devices.notify")} · ` : ""}
                     {t("phone.devices.seen", { time: time(d.lastSeen) })}
                   </span>
                   <button onClick={() => EngineService.RemovePhone(d.id).then(refresh).catch(onError)}>{t("common.remove")}</button>

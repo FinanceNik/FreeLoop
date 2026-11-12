@@ -1587,6 +1587,12 @@ export const en = {
   "phone.settings.about": "This phone talks only to your computer, over your Tailscale network.",
   "phone.settings.install": "To add it to the home screen: in Safari tap Share, then Add to Home Screen; in Chrome open the menu, then Install app. The app on the home screen has its own sign-in and is paired once from there: open it and enter a new code from the computer.",
   "phone.settings.signOut": "Sign out this phone",
+  "phone.settings.notify": "Notify me",
+  "phone.settings.notify.on": "Notifications are on for this phone. Turn them off",
+  "phone.settings.notify.hint": "Freeloop tells this phone when a session needs you, finishes or fails. The message holds no session details.",
+  "phone.settings.notify.denied": "The browser refused notifications. Allow them for this app in the phone's settings, then try again.",
+  "phone.settings.notify.unsupported": "This browser cannot receive notifications here. On an iPhone, add the app to the home screen first (iOS 16.4 or later).",
+  "phone.devices.notify": "notifications on",
   "usagePage.counting": "Still counting older sessions ({pending} left)…",
   "usagePage.loading": "Loading…",
   // {range} is the page's range, such as 30 days.

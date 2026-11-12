@@ -1,6 +1,6 @@
 ---
 title: A phone can turn push on, and the computer keeps its subscription
-status: open
+status: done
 type: afk
 blockedBy: [026-the-phone-app-on-the-home-screen]
 prd: sessions-from-the-phone
@@ -19,3 +19,6 @@ The app makes a VAPID key pair (P-256) once and keeps it in the keychain through
 ## Notes
 - No new dependency: `crypto/ecdh`, `crypto/ecdsa`.
 - PRD decision 9; SEC-009 changes in issue 028.
+
+## Done
+The VAPID key is in `Secrets` as `keychain://freeloop/phone/vapid`; `remote.New` takes the store. Subscribe and key are also refused when the phone server is off; the endpoint check comes first. Sending push, and the service worker handling it, are issue 029.

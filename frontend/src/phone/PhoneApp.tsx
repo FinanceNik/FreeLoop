@@ -3,7 +3,7 @@ import { language, LANGUAGES, setLanguage, t, type Language } from "../i18n.ts";
 import { Markdown } from "../Markdown.tsx";
 import { apply, buildView, emptyTranscript, phoneName, type Item, type Transcript } from "../transcript.ts";
 import { api, followSession, followSummary, Unpaired, type PhoneRequest, type Summary } from "./api.ts";
-import { deviceName, onceOptions, pairCode } from "./phone.ts";
+import { applicationServerKey, deviceName, onceOptions, pairCode, pushBody, pushSupported } from "./phone.ts";
 
 // The phone app (GUI-052): what needs the user, the sessions, one session live with
 // a message box, and settings. From here a plain request is allowed or denied once;
@@ -320,6 +320,7 @@ function Settings({ onLanguage, onSignedOut }: { onLanguage: (l: Language) => vo
           ))}
         </select>
       </label>
+      <Notify />
       <p className="phone-note">{t("phone.settings.about")}</p>
       <p className="phone-note">{t("phone.settings.install")}</p>
       <button
@@ -334,5 +335,63 @@ function Settings({ onLanguage, onSignedOut }: { onLanguage: (l: Language) => vo
       </button>
       {error && <p role="alert">{error}</p>}
     </div>
+  );
+}
+
+// Notify is the phone's switch for push: on a tap it asks the browser's permission,
+// subscribes with the computer's key and hands the subscription to the computer; off
+// takes it back. The browser's own subscription is the truth about whether it is on.
+function Notify() {
+  const supported = pushSupported({
+    serviceWorker: "serviceWorker" in navigator ? navigator.serviceWorker : undefined,
+    PushManager: "PushManager" in window ? PushManager : undefined,
+    Notification: "Notification" in window ? Notification : undefined,
+  });
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!supported) return;
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setOn(sub !== null))
+      .catch(() => {});
+  }, [supported]);
+  if (!supported) return <p className="phone-note">{t("phone.settings.notify.unsupported")}</p>;
+  const turnOn = async () => {
+    if ((await Notification.requestPermission()) !== "granted") throw new Error(t("phone.settings.notify.denied"));
+    const reg = await navigator.serviceWorker.ready;
+    const { key } = await api.pushKey();
+    const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey(key) }));
+    try {
+      await api.pushSubscribe(pushBody(sub));
+    } catch (err) {
+      await sub.unsubscribe().catch(() => {});
+      throw err;
+    }
+    setOn(true);
+  };
+  const turnOff = async () => {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    await api.pushUnsubscribe();
+    await sub?.unsubscribe();
+    setOn(false);
+  };
+  return (
+    <>
+      <button
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setError("");
+          (on ? turnOff() : turnOn()).catch((err) => setError(String(err.message ?? err))).finally(() => setBusy(false));
+        }}
+      >
+        {on ? t("phone.settings.notify.on") : t("phone.settings.notify")}
+      </button>
+      <p className="phone-note">{t("phone.settings.notify.hint")}</p>
+      {error && <p role="alert">{error}</p>}
+    </>
   );
 }

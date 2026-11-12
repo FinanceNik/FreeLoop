@@ -1422,6 +1422,12 @@ export const de = translationOf<typeof en>()({
   "phone.settings.about": "Dieses Telefon spricht nur mit dem eigenen Computer, über das eigene Tailscale-Netz.",
   "phone.settings.install": "Auf den Home-Bildschirm kommt sie so: in Safari auf Teilen tippen, dann Zum Home-Bildschirm; in Chrome das Menü öffnen, dann App installieren. Die App auf dem Home-Bildschirm hat eine eigene Anmeldung und wird dort einmal gekoppelt: öffnen und einen neuen Code eingeben.",
   "phone.settings.signOut": "Dieses Telefon abmelden",
+  "phone.settings.notify": "Benachrichtige mich",
+  "phone.settings.notify.on": "Benachrichtigungen sind für dieses Telefon an. Ausschalten",
+  "phone.settings.notify.hint": "Freeloop meldet diesem Telefon, wenn eine Sitzung eine Antwort braucht, fertig ist oder fehlschlägt. Die Nachricht enthält keine Einzelheiten der Sitzung.",
+  "phone.settings.notify.denied": "Der Browser hat Benachrichtigungen abgelehnt. Erlaube sie für diese App in den Einstellungen des Telefons und versuche es erneut.",
+  "phone.settings.notify.unsupported": "Dieser Browser kann hier keine Benachrichtigungen empfangen. Auf einem iPhone zuerst die App zum Home-Bildschirm hinzufügen (iOS 16.4 oder neuer).",
+  "phone.devices.notify": "Benachrichtigungen an",
   "usagePage.counting": "Ältere Sitzungen werden noch gezählt (noch {pending})…",
   "usagePage.loading": "Wird geladen…",
   // The range comes first: „30 Tage“ is not the dative „in den letzten 30 Tagen“ needs.

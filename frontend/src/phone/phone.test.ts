@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deviceName, onceOptions, pairCode, parseSSE, pickLanguage, reconnectDelay } from "./phone.ts";
+import { applicationServerKey, deviceName, pushBody, onceOptions, pairCode, parseSSE, pickLanguage, pushSupported, reconnectDelay } from "./phone.ts";
 
 test("the phone answers only once", () => {
   const options = [
@@ -47,4 +47,23 @@ test("a stream that dropped goes on after a pause that grows to a limit", () => 
   assert.equal(reconnectDelay(1), 1000);
   assert.equal(reconnectDelay(2), 2000);
   assert.equal(reconnectDelay(20), 15000);
+});
+
+test("the push key from the server is read as bytes for subscribe", () => {
+  // 0x04 then 64 bytes: a P-256 point, as the server sends it in base64url.
+  const bytes = Uint8Array.from([4, ...Array.from({ length: 64 }, (_, i) => 250 - i)]);
+  const b64 = Buffer.from(bytes).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  assert.deepEqual(Array.from(applicationServerKey(b64)), Array.from(bytes));
+});
+
+test("a subscription is posted as its endpoint and two keys", () => {
+  const sub = { toJSON: () => ({ endpoint: "https://fcm.googleapis.com/x", expirationTime: null, keys: { p256dh: "P", auth: "A" } }) };
+  assert.deepEqual(pushBody(sub), { endpoint: "https://fcm.googleapis.com/x", keys: { p256dh: "P", auth: "A" } });
+  assert.throws(() => pushBody({ toJSON: () => ({ endpoint: "https://x" }) }));
+});
+
+test("push needs a service worker, push and notifications in the browser", () => {
+  assert.equal(pushSupported({}), false);
+  assert.equal(pushSupported({ serviceWorker: {}, PushManager: {}, Notification: {} }), true);
+  assert.equal(pushSupported({ serviceWorker: {}, PushManager: {} }), false);
 });

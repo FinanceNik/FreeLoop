@@ -56,6 +56,16 @@ type Device struct {
 	Login    string    `json:"login,omitempty"`
 	Paired   time.Time `json:"paired"`
 	LastSeen time.Time `json:"lastSeen"`
+	// Push is the phone's Web Push subscription, once it turned notifications on.
+	Push *PushSubscription `json:"push,omitempty"`
+}
+
+// PushSubscription is what a browser's push service gave the phone app: where to
+// send, and the keys that encrypt what is sent (RFC 8291). One per phone.
+type PushSubscription struct {
+	Endpoint string `json:"endpoint"`
+	P256dh   string `json:"p256dh"`
+	Auth     string `json:"auth"`
 }
 
 // LoadDevices reads the paired phones.

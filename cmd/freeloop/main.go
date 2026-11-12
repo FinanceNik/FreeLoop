@@ -109,9 +109,10 @@ func main() {
 	if err != nil {
 		log.Printf("freeloop: external agents get no token optimizer: %v", err)
 	}
+	keys := secretStore()
 	eng, err := engine.Open(engine.Options{
 		HookProgram: hookProgram,
-		DataDir:     dataDir, Secrets: secretStore(), Confiner: thisPlatform.Confiner, ProcessStarted: thisPlatform.ProcessStarted, GroupMembers: thisPlatform.GroupMembers, EditorArgv: thisPlatform.EditorArgv, PDFArgv: thisPlatform.PDFArgv, FolderArgv: thisPlatform.FolderArgv, SystemInfo: thisPlatform.SystemInfo, Dev: devEnv("FREELOOP_DEV") == "1", ScriptedVoice: devEnv("FREELOOP_DEV_VOICE") == "scripted",
+		DataDir:     dataDir, Secrets: keys, Confiner: thisPlatform.Confiner, ProcessStarted: thisPlatform.ProcessStarted, GroupMembers: thisPlatform.GroupMembers, EditorArgv: thisPlatform.EditorArgv, PDFArgv: thisPlatform.PDFArgv, FolderArgv: thisPlatform.FolderArgv, SystemInfo: thisPlatform.SystemInfo, Dev: devEnv("FREELOOP_DEV") == "1", ScriptedVoice: devEnv("FREELOOP_DEV_VOICE") == "scripted",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: devEnv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).
@@ -172,7 +173,7 @@ func main() {
 	// Sessions from the phone (GUI-052): off until turned on in Settings.
 	phoneCtx, stopPhone := context.WithCancel(context.Background())
 	closers = append(closers, stopPhone)
-	ph := startPhone(phoneCtx, eng, dataDir)
+	ph := startPhone(phoneCtx, eng, dataDir, keys)
 	guard.phoneOn = ph.on
 
 	svc := &EngineService{eng: eng, phone: ph}

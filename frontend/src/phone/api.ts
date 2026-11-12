@@ -75,6 +75,9 @@ export const api = {
   prompt: (sid: string, text: string) => call<{ queued: boolean }>("POST", `/api/sessions/${encodeURIComponent(sid)}/prompt`, { text }),
   cancel: (sid: string) => call("POST", `/api/sessions/${encodeURIComponent(sid)}/cancel`, {}),
   decide: (requestId: string, optionId: string) => call("POST", "/api/decide", { requestId, optionId }),
+  pushKey: () => call<{ key: string }>("GET", "/api/push/key"),
+  pushSubscribe: (body: { endpoint: string; keys: { p256dh: string; auth: string } }) => call("POST", "/api/push/subscribe", body),
+  pushUnsubscribe: () => call("POST", "/api/push/unsubscribe", {}),
   logout: () => call("POST", "/api/logout", {}).then((r) => (localStorage.removeItem(KEY), r)),
 };
 
