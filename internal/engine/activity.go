@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -59,8 +60,19 @@ type activityKey struct {
 // foldActivity counts one transcript. Events up to copiedSeq were counted in the
 // session a fork came from (SES-009).
 func foldActivity(events []event.Event, copiedSeq int64) []store.ActivityCount {
+	return foldActivityFrom(events, copiedSeq, 0)
+}
+
+// foldActivityFrom is foldActivity for events that start before what is new: events up
+// to countedSeq were counted already, and are read only for what they say about a turn
+// or a tool call that goes on after them.
+func foldActivityFrom(events []event.Event, copiedSeq, countedSeq int64) []store.ActivityCount {
 	counts := map[activityKey]*store.ActivityCount{}
+	var cur int64
 	bump := func(at time.Time, kind, name string, count, failures, millis int64) {
+		if cur <= countedSeq {
+			return
+		}
 		at = at.In(time.Local)
 		k := activityKey{at.Format(time.DateOnly), at.Hour(), kind, name}
 		c := counts[k]
@@ -96,6 +108,7 @@ func foldActivity(events []event.Event, copiedSeq int64) []store.ActivityCount {
 		if ev.Seq <= copiedSeq {
 			continue
 		}
+		cur = ev.Seq
 		switch ev.Type {
 		case event.UserMessageChunk:
 			if turnStart.IsZero() {
@@ -253,15 +266,52 @@ func (e *Engine) foldStale(ctx context.Context) int {
 		if !time.Now().Before(deadline) {
 			return len(stale) - i
 		}
-		evs, err := e.store.Events(ctx, st.ID, 0)
-		if err == nil {
-			err = e.store.ReplaceActivity(ctx, st.ID, st.LastSeq, foldActivity(evs, st.CopiedSeq))
-		}
+		err := e.foldActivityOf(ctx, st)
 		if err != nil {
 			log.Printf("engine: activity of %s: %v", st.ID, err)
 		}
 	}
 	return 0
+}
+
+// foldActivityOf counts what a session did since it was last folded. One that was
+// never folded is read whole; one that was is read from the start of the turn its
+// last fold ended in, since a turn's tool calls and questions are counted when they
+// end, and added to what is counted. That is what a long session costs on each report,
+// in place of reading all of it.
+func (e *Engine) foldActivityOf(ctx context.Context, st store.StaleSession) error {
+	from := int64(0)
+	if st.ActivitySeq > 0 {
+		// The start of the turn in which the last fold ended.
+		e.store.ScanBack(ctx, st.ID, func(ev event.Event) bool {
+			if ev.Seq <= st.ActivitySeq && ev.Type == event.TurnStarted {
+				from = ev.Seq - 1
+				return true
+			}
+			return false
+		})
+	}
+	if from == 0 {
+		evs, err := e.store.Events(ctx, st.ID, 0)
+		if err != nil {
+			return err
+		}
+		evs = upTo(evs, st.LastSeq)
+		return e.store.ReplaceActivity(ctx, st.ID, st.LastSeq, foldActivity(evs, st.CopiedSeq))
+	}
+	evs, err := e.store.Events(ctx, st.ID, from)
+	if err != nil {
+		return err
+	}
+	evs = upTo(evs, st.LastSeq)
+	return e.store.AddActivity(ctx, st.ID, st.LastSeq, foldActivityFrom(evs, st.CopiedSeq, st.ActivitySeq))
+}
+
+// upTo is the events with seq up to last. What follows is chunks the row does not
+// count yet, or events appended since the list of stale sessions was made; they are
+// folded next time, so none is counted twice.
+func upTo(evs []event.Event, last int64) []event.Event {
+	return evs[:sort.Search(len(evs), func(i int) bool { return evs[i].Seq > last })]
 }
 
 // ActivityReport returns the last days days of activity, today included.

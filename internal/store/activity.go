@@ -40,11 +40,13 @@ type StaleSession struct {
 	ID        string
 	LastSeq   int64
 	CopiedSeq int64
+	// ActivitySeq is how far the session's counts go; 0 when it was never folded.
+	ActivitySeq int64
 }
 
 // ActivityStale lists the sessions to fold again, latest first.
 func (s *Store) ActivityStale(ctx context.Context) ([]StaleSession, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, last_seq, copied_seq FROM sessions WHERE activity_seq != last_seq ORDER BY updated_at DESC`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, last_seq, copied_seq, activity_seq FROM sessions WHERE activity_seq != last_seq ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("store: stale activity: %w", err)
 	}
@@ -52,7 +54,7 @@ func (s *Store) ActivityStale(ctx context.Context) ([]StaleSession, error) {
 	var out []StaleSession
 	for rows.Next() {
 		var st StaleSession
-		if err := rows.Scan(&st.ID, &st.LastSeq, &st.CopiedSeq); err != nil {
+		if err := rows.Scan(&st.ID, &st.LastSeq, &st.CopiedSeq, &st.ActivitySeq); err != nil {
 			return nil, err
 		}
 		out = append(out, st)
@@ -72,6 +74,26 @@ func (s *Store) ReplaceActivity(ctx context.Context, sid string, seq int64, coun
 	}
 	for _, c := range counts {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO activity (day, hour, session_id, kind, name, count, failures, millis) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			c.Day, c.Hour, sid, c.Kind, c.Name, c.Count, c.Failures, c.Millis); err != nil {
+			return fmt.Errorf("store: activity: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE sessions SET activity_seq = ? WHERE id = ?`, seq, sid); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// AddActivity adds counts to a session's, which were folded up to seq now.
+func (s *Store) AddActivity(ctx context.Context, sid string, seq int64, counts []ActivityCount) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, c := range counts {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO activity (day, hour, session_id, kind, name, count, failures, millis) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (day, hour, session_id, kind, name) DO UPDATE SET count = count + excluded.count, failures = failures + excluded.failures, millis = millis + excluded.millis`,
 			c.Day, c.Hour, sid, c.Kind, c.Name, c.Count, c.Failures, c.Millis); err != nil {
 			return fmt.Errorf("store: activity: %w", err)
 		}

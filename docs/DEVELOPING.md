@@ -145,6 +145,26 @@ The bill lists what is in the app: Go modules from the binary's build informatio
 
 `logs/freeloop.log` holds the log and, in a launched app, crash traces; a development build also keeps its terminal. Everything through `log` passes the engine's redaction. Deleting `freeloop.db` is safe: it is rebuilt from the daily copy, `meta.json` and the transcripts, with projects untrusted unless the copy says otherwise. A data folder takes one copy of the app at a time, so `make dev` beside an installed app needs its own `FREELOOP_HOME`.
 
+## Reading a transcript (NFR-PERF-002)
+
+A session can hold tens of thousands of events, so a question about it is answered from the part that answers it. The store gives four reads: `Events(ctx, sid, after)` and `EventsLimit` start near a seq they are given (the table of seq to offset), `TailEvents` reads the last n, and `ScanBack(ctx, sid, visit)` walks events newest first and stops when `visit` returns true, reading the file from its end in windows of 64 KB growing fourfold. `ScanBack` does not open the transcript, so asking about a session that was released (OQ-053) does not hold its file open again. `LastError` is one event read: the row keeps the seq of the last error (`last_error_seq`; 0 for a row from before it, which falls back to `ScanBack`). `Store.ObserveReads` lets a test see every read, and `TestSmallQuestionsDoNotReadWholeTranscripts` fails when attention, activity, live usage, the queue, the AFK tick or the pull request check read a long session from seq 0.
+
+Answering "what was the last X" with `Events(ctx, sid, 0)` and a loop is a mistake; use `ScanBack`. A fold that goes on from where it was (the activity fold, recent usage) reads from the seq it keeps; the activity fold rewinds to the start of the turn its last fold ended in and adds, since a tool call or a question is counted when it ends.
+
+These callers still read a whole transcript, each for a reason:
+
+| Caller | Why |
+|---|---|
+| `export.go`, `fork.go`, `handoff.go` | They copy or render the whole transcript. |
+| `runtime.go` `startRuntime` | Starting a session replays it: rules, history for the built-in loop (`builtin.Restore`), pending handoff. |
+| `runtime.go` `recover` | At launch, once, for sessions the app left mid-turn (a few): open requests and the open turn may begin anywhere in it. |
+| `runcost.go` `sessionCost` | Sums every usage event of a run's sessions, for the Workflows page and an issue's cost, on the user's asking; the AFK tick does not call it. |
+| `subagents.go` | A subagent's last reply, once when its task ends; its transcript is short. |
+| `stuck.go` `HandOff` | The user's last message across turns, on the user's asking. |
+| `worktreescripts.go` `containerStarted` | Whether an `env_health` event with a container exists anywhere, when a session is archived. |
+| `store/work.go` `foldWorkSession` | The commits and their usage per turn are folded whole, a session at a time, within a time budget (GUI-051). It should go on from `work_seq` as the activity fold does. |
+| `ScanBack` that finds nothing | A session with no pull request or no agent message is read to its first line. |
+
 ## Before the repository goes public
 
 The repository is private. Publishing exposes all of its history, so do these first, once no branch is in flight:

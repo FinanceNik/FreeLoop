@@ -157,19 +157,18 @@ func defaultBranch(ctx context.Context, env environment.Environment, remote stri
 // lastPullRequest returns the last pull request the session's transcript
 // records.
 func (e *Engine) lastPullRequest(ctx context.Context, sid string) *event.PullRequestData {
-	evs, err := e.store.Events(ctx, sid, 0)
-	if err != nil {
-		return nil
-	}
-	for i := len(evs) - 1; i >= 0; i-- {
-		if evs[i].Type == event.PullRequest {
-			var d event.PullRequestData
-			if json.Unmarshal(evs[i].Data, &d) == nil {
-				return &d
-			}
+	var found *event.PullRequestData
+	e.store.ScanBack(ctx, sid, func(ev event.Event) bool {
+		if ev.Type != event.PullRequest {
+			return false
 		}
-	}
-	return nil
+		var d event.PullRequestData
+		if json.Unmarshal(ev.Data, &d) == nil {
+			found = &d
+		}
+		return found != nil
+	})
+	return found
 }
 
 // maxPRDiff caps the diff sent to the model for a description.

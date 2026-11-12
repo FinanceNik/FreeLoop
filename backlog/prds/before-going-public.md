@@ -60,6 +60,16 @@ Stages 1, 3 and 4 touch different packages (`internal/permission` and `internal/
 
    The first number is met by a factor of 20 or more, and the memory is the same on a 22 MB and a 105 MB file. A read from seq 0 allocates less than before because the slice is sized once.
 
+   **After issue 042** (same machine and benchmark, `-benchtime 20x`): the attention view's last error is one event read through a seq kept in the session's row (`last_error_seq`); a lookup of the last event of a kind, `Store.ScanBack`, reads the file back from its end and stops at the answer; the activity fold goes on from the turn it ended in; the live usage poll reads from the seq it keeps.
+
+   | | text | tools |
+   |---|---|---|
+   | store, last error, through the row (was 74 / 144 ms, 58 / 247 MB) | 0.09 ms, 0.11 MB | 0.49 ms, 0.88 MB |
+   | store, last error found by `ScanBack` (the fixture's last error is 40% back, so this is the slow case) | 23 ms, 30 MB | 58 ms, 132 MB |
+   | live usage poll, 50 new events | 0.19 ms, 0.17 MB | 0.30 ms, 0.47 MB |
+
+   None of attention, activity, live usage, the queue or the AFK tick reads a whole long transcript now; a test fails if one does. A `ScanBack` costs in proportion to how far back its answer is, and only a session without the answer is read whole.
+
 4. **Opening at the end (046) is built only if the last number is missed** once 041 to 045 are in. It is the largest change to the window in this plan, and the cheaper ones may be enough.
 5. **No large rework before going public.** `Engine` (567 methods), `App.tsx` and `SessionView.tsx` (48 and 46 pieces of state) stay as they are, since splitting them changes nothing a user sees and risks a lot. The same for the four usage folds, the built-in harness's 23 branches in the engine and the app check's fixed waits. They are listed under "Out of scope" so they are not forgotten.
 6. **Checks run here.** CI cannot run until the repository is public, so each issue ends with `make lint` and `make test`, and `make check-app` for a change to the window.

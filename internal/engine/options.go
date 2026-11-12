@@ -81,6 +81,26 @@ func optionsInEvents(events []event.Event) []harness.Option {
 	return nil
 }
 
+// reportedOptions is what an agent last said a session can be changed in, looked for
+// from the end of the transcript, as optionsInEvents does in a list of events.
+func (e *Engine) reportedOptions(ctx context.Context, sid string) ([]harness.Option, error) {
+	var options []harness.Option
+	err := e.store.ScanBack(ctx, sid, func(ev event.Event) bool {
+		if ev.Type != event.ConfigOptionUpdate {
+			return false
+		}
+		var d struct {
+			ConfigOptions json.RawMessage `json:"configOptions"`
+		}
+		if json.Unmarshal(ev.Data, &d) != nil {
+			return false
+		}
+		options = harness.ParseOptions(d.ConfigOptions)
+		return true
+	})
+	return options, err
+}
+
 // SessionOptions lists what can be changed in a session. It starts nothing: an
 // agent that has not run yet waits for LoadSessionOptions.
 func (e *Engine) SessionOptions(ctx context.Context, sid string) (SessionOptionsReport, error) {
@@ -97,11 +117,11 @@ func (e *Engine) SessionOptions(ctx context.Context, sid string) (SessionOptions
 	if r != nil {
 		return e.agentOptions(ses, r), nil
 	}
-	events, err := e.store.Events(ctx, sid, 0)
+	options, err := e.reportedOptions(ctx, sid)
 	if err != nil {
 		return SessionOptionsReport{}, err
 	}
-	if options := optionsInEvents(events); len(options) > 0 {
+	if len(options) > 0 {
 		return SessionOptionsReport{Options: options}, nil
 	}
 	return SessionOptionsReport{Options: []harness.Option{}, Unknown: true}, nil

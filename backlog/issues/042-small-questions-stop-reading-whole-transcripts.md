@@ -1,6 +1,6 @@
 ---
 title: The engine's small questions stop reading whole transcripts
-status: open
+status: done
 type: afk
 blockedBy: [041-the-store-reads-from-where-it-is-asked]
 prd: before-going-public
@@ -17,3 +17,8 @@ Eighteen places call `store.Events(ctx, sid, 0)`, most to answer something small
 
 ## Notes
 - Where a caller wants "the last event of type X", prefer a seq kept in the session's row or the activity index over scanning backwards.
+
+## Done
+- `Store.ScanBack` (newest first, stops when the visitor says so, reads the file from its end without opening the transcript, so a released session stays released) and `Store.LastError` (one event, through the new `sessions.last_error_seq` column, falling back to `ScanBack` for a row that does not say) are the new reads. `Store.ObserveReads` is the test seam.
+- Changed: attention's last error, the queue's task state, the AFK run's `endedBecause`, `lastPullRequest`, the last reply (compare, reviews, QA), options an agent reported (session options, model sets), the activity fold (from the turn its last fold ended in, added to the counts by `Store.AddActivity`). Recent usage already read from its seq; a benchmark and the watch test now hold it to that.
+- Left reading everything, with the reason: the table in DEVELOPING.md, "Reading a transcript". `runcost.go` and `store/work.go` are the two a later issue could narrow.

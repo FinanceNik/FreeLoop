@@ -190,8 +190,12 @@ func (e *Engine) taskState(ctx context.Context, sid string) string {
 	case session.StatusError:
 		return config.TaskFailed
 	case session.StatusIdle:
-		evs, err := e.store.Events(ctx, sid, 0)
-		if err == nil && slices.ContainsFunc(evs, func(ev event.Event) bool { return ev.Type == event.TurnEnded }) {
+		ended := false
+		err := e.store.ScanBack(ctx, sid, func(ev event.Event) bool {
+			ended = ev.Type == event.TurnEnded
+			return ended
+		})
+		if err == nil && ended {
 			return config.TaskDone
 		}
 	}

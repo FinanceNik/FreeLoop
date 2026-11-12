@@ -94,11 +94,11 @@ func (e *Engine) reportedOption(ctx context.Context, harnessID string, category 
 		if looked++; looked > howManyToLook {
 			break
 		}
-		events, err := e.store.Events(ctx, ses.ID, 0)
+		options, err := e.reportedOptions(ctx, ses.ID)
 		if err != nil {
 			continue
 		}
-		for _, o := range optionsInEvents(events) {
+		for _, o := range options {
 			if o.Category == category && len(o.Choices) > 0 {
 				return o, true
 			}

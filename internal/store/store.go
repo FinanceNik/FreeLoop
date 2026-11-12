@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -66,6 +67,9 @@ type Store struct {
 	// indexing are sessions IndexAll is catching up from their files; they
 	// open when it is done (closing the channel).
 	indexing map[string]chan struct{}
+
+	// observer is set by a test: see ObserveReads.
+	observer atomic.Pointer[func(string, int64, int)]
 
 	stop    chan struct{}
 	done    chan struct{}
@@ -312,6 +316,10 @@ func (s *Store) appendAt(ctx context.Context, sid string, typ event.Type, data j
 			sets += ", " + f.column + " = ?"
 			args = append(args, f.value)
 		}
+		if typ == event.Error {
+			sets += ", last_error_seq = ?"
+			args = append(args, ev.Seq)
+		}
 		// The transcript is the source of truth; a failed index update is
 		// repaired from it on the next open, so it does not fail the append.
 		s.index(ctx, t, sid, ev, sets, args)
@@ -381,7 +389,11 @@ func sessionFields(typ event.Type, data []byte) []sessionField {
 func replaySets(events []event.Event) (sets string, args []any) {
 	at := map[string]int{}
 	for _, ev := range events {
-		for _, f := range sessionFields(ev.Type, ev.Data) {
+		fields := sessionFields(ev.Type, ev.Data)
+		if ev.Type == event.Error {
+			fields = append(fields, sessionField{"last_error_seq", ev.Seq})
+		}
+		for _, f := range fields {
 			if f.column == "status" {
 				continue
 			}
@@ -416,6 +428,7 @@ func (s *Store) EventsLimit(ctx context.Context, sid string, afterSeq int64, lim
 	if _, err := s.GetSession(ctx, sid); err != nil {
 		return nil, err
 	}
+	s.noteRead(sid, afterSeq, limit)
 	t, err := s.transcript(ctx, sid)
 	if err != nil {
 		return nil, err
@@ -685,6 +698,9 @@ var addedColumns = []struct{ table, column, definition string }{
 	{"usage", "unreported", "INTEGER NOT NULL DEFAULT 0"},
 	// How far a session's commits and their usage are folded (GUI-051).
 	{"sessions", "work_seq", "INTEGER NOT NULL DEFAULT 0"},
+	// The seq of a session's last error event, 0 when not known, so the attention view
+	// reads that one event (NFR-PERF-002).
+	{"sessions", "last_error_seq", "INTEGER NOT NULL DEFAULT 0"},
 }
 
 // addColumns adds what addedColumns holds and the database does not.

@@ -875,26 +875,35 @@ func (e *Engine) startReview(ctx context.Context, id string, s config.AFKStep, s
 // so the run does not call a cancelled or failed turn one that merely forgot to mark
 // the issue done.
 func (e *Engine) endedBecause(ctx context.Context, sid string) string {
-	evs, err := e.store.Events(ctx, sid, 0)
-	if err != nil {
-		return "ended without marking it done"
-	}
-	stop, problem := "", ""
-	for _, ev := range evs {
+	// From the end: the last turn's stop reason, and the last error since the last
+	// message the user sent, which is the first one met before a user message.
+	var stop, problem string
+	var haveStop, haveProblem, sawUser bool
+	err := e.store.ScanBack(ctx, sid, func(ev event.Event) bool {
 		switch ev.Type {
 		case event.UserMessageChunk:
-			problem = ""
+			sawUser = true
 		case event.Error:
-			var d event.ErrorData
-			if json.Unmarshal(ev.Data, &d) == nil {
-				problem = d.Message
+			if !sawUser && !haveProblem {
+				var d event.ErrorData
+				if json.Unmarshal(ev.Data, &d) == nil {
+					problem = d.Message
+				}
+				haveProblem = true
 			}
 		case event.TurnEnded:
-			var d event.TurnEndedData
-			if json.Unmarshal(ev.Data, &d) == nil {
-				stop = d.StopReason
+			if !haveStop {
+				var d event.TurnEndedData
+				if json.Unmarshal(ev.Data, &d) == nil {
+					stop = d.StopReason
+				}
+				haveStop = true
 			}
 		}
+		return haveStop && (sawUser || haveProblem)
+	})
+	if err != nil {
+		return "ended without marking it done"
 	}
 	switch harness.StopReason(stop) {
 	case harness.StopCancelled:

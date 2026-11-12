@@ -196,34 +196,26 @@ func (e *Engine) lastReply(ctx context.Context, sid string) string {
 
 // fullReply is the agent's last message in a session.
 func (e *Engine) fullReply(ctx context.Context, sid string) string {
-	evs, err := e.store.Events(ctx, sid, 0)
+	// From the end: the run of message chunks last seen, usage updates among them
+	// not ending it.
+	var parts []string
+	err := e.store.ScanBack(ctx, sid, func(ev event.Event) bool {
+		switch {
+		case ev.Type == event.AgentMessageChunk:
+			var c event.MessageChunk
+			json.Unmarshal(ev.Data, &c)
+			parts = append(parts, c.Content.Text)
+			return false
+		case len(parts) > 0 && ev.Type != event.UsageUpdate:
+			return true
+		}
+		return false
+	})
 	if err != nil {
 		return ""
 	}
-	var cur, last strings.Builder
-	inReply := false
-	for _, ev := range evs {
-		if ev.Type == event.AgentMessageChunk {
-			if !inReply {
-				cur.Reset()
-				inReply = true
-			}
-			var c event.MessageChunk
-			json.Unmarshal(ev.Data, &c)
-			cur.WriteString(c.Content.Text)
-			continue
-		}
-		if inReply && ev.Type != event.UsageUpdate {
-			last.Reset()
-			last.WriteString(cur.String())
-			inReply = false
-		}
-	}
-	if inReply {
-		last.Reset()
-		last.WriteString(cur.String())
-	}
-	return strings.TrimSpace(last.String())
+	slices.Reverse(parts)
+	return strings.TrimSpace(strings.Join(parts, ""))
 }
 
 // KeepCompare keeps one run of a comparison and archives the others.

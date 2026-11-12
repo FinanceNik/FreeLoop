@@ -265,6 +265,45 @@ func BenchmarkLong(b *testing.B) {
 				}
 			}
 		})
+		// What the engine's attention view does since issue 042: look back from the end.
+		b.Run(string(shape)+"/last-error-scan-back", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				var got int64
+				err := f.s.ScanBack(ctx, f.sid, func(ev event.Event) bool {
+					if ev.Type == event.Error {
+						got = ev.Seq
+					}
+					return got != 0
+				})
+				if err != nil || got != f.lastError {
+					b.Fatalf("last error %d, want %d, %v", got, f.lastError, err)
+				}
+			}
+		})
+		b.Run(string(shape)+"/last-error-row", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				ev, ok, err := f.s.LastError(ctx, f.sid)
+				if err != nil || !ok || ev.Seq != f.lastError {
+					b.Fatalf("last error %d, want %d, %v", ev.Seq, f.lastError, err)
+				}
+			}
+		})
+		// The recent usage poll, 60 seconds apart: about 50 new events since the last.
+		b.Run(string(shape)+"/usage-poll", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				if _, err := f.s.db.ExecContext(ctx, `UPDATE sessions SET recent_seq = ?, updated_at = ? WHERE id = ?`, f.n-50, time.Now().UnixMilli(), f.sid); err != nil {
+					b.Fatal(err)
+				}
+				b.StartTimer()
+				if err := f.s.foldRecent(ctx); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 		b.Run(string(shape)+"/last-error", func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {

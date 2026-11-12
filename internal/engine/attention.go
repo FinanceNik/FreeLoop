@@ -86,18 +86,16 @@ func (e *Engine) Attention(ctx context.Context) ([]AttentionItem, error) {
 
 // lastError returns the message of a session's latest error event.
 func (e *Engine) lastError(ctx context.Context, sid string) string {
-	events, err := e.store.Events(ctx, sid, 0)
+	ev, ok, err := e.store.LastError(ctx, sid)
 	if err != nil {
 		return err.Error()
 	}
-	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].Type == event.Error {
-			var d event.ErrorData
-			json.Unmarshal(events[i].Data, &d)
-			return d.Message
-		}
+	if !ok {
+		return ""
 	}
-	return ""
+	var d event.ErrorData
+	json.Unmarshal(ev.Data, &d)
+	return d.Message
 }
 
 // DismissError takes a session out of the error status; the error stays in
