@@ -579,3 +579,10 @@ for (const shape of ["text", "tools"] as FixtureShape[]) {
     console.log(`fold ${shape}: at once ${once.toFixed(0)} ms (${((once * 1000) / LONG_EVENTS).toFixed(2)} us per event); apply one at a time at the end ${((applied * 1000) / streamed).toFixed(0)} us per event; rebuilding the view per event at the end ${(stepped / tail).toFixed(0)} ms per event`);
   });
 }
+
+test("an image whose uri is not a string is left out, not thrown on", () => {
+  for (const uri of [42, null, { a: 1 }, ["attachment:a.png"]]) {
+    const { items } = buildView([{ ...ev(1, { content: { type: "image", uri, mimeType: "image/png" } }), type: "user_message_chunk" }]);
+    assert.deepEqual(items.filter((i) => i.kind === "user"), []);
+  }
+});

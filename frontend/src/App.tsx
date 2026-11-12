@@ -29,6 +29,7 @@ import { apply, emptyTranscript, type Transcript, type TranscriptEvent } from ".
 import { hitLabel, snippetParts } from "./search.ts";
 import { formatCost, type PriceEntry } from "./cost.ts";
 import { windowSession } from "./windows.ts";
+import PaneBoundary from "./PaneBoundary.tsx";
 import * as ws from "./workspace.ts";
 import { allTags, dateGroups, isEmpty, matches, parseQuery, sameFilter, saveFilter, statusSummary, type SavedFilter, type SessionFilter } from "./filters.ts";
 import { Palette, PaletteContext, useRegistry } from "./Palette.tsx";
@@ -647,6 +648,8 @@ export default function App() {
       if (!transcriptsRef.current[sid]) catchUp(sid);
     }
   };
+  // Panes whose view failed to draw: not saved, so a reload does not open on them.
+  const [failedPanes, setFailedPanes] = useState<ReadonlySet<string>>(new Set());
   const workRef = useRef(work);
   workRef.current = work;
   const activatePane = (i: number) => {
@@ -679,11 +682,12 @@ export default function App() {
   }, [sessionsLoaded]);
   useEffect(() => {
     if (!workLoaded.current) return;
+    const saved = ws.withoutFailed(work, failedPanes);
     const timer = setTimeout(() => {
-      EngineService.SaveWorkspace({ layout: work.layout, panes: work.panes.map((x) => x ?? ""), active: work.active }).catch(() => {});
+      EngineService.SaveWorkspace({ layout: saved.layout, panes: saved.panes.map((x) => x ?? ""), active: saved.active }).catch(() => {});
     }, 400);
     return () => clearTimeout(timer);
-  }, [work]);
+  }, [work, failedPanes]);
   useEffect(() => {
     if (sessionsLoaded) setWork((w) => ws.forget(w, (sid) => sessions.some((x) => x.id === sid)));
     if (sessionsLoaded) {
@@ -1805,8 +1809,10 @@ export default function App() {
             onNew={() => setScreen({ kind: "new" })}
             onUsagePage={() => setScreen({ kind: "usage" })}
             onError={report}
+            onFailed={(sid, failed) => setFailedPanes((set) => (set.has(sid) === failed ? set : new Set(failed ? [...set, sid] : [...set].filter((x) => x !== sid))))}
           />
         )}
+        <PaneBoundary key={screen.kind} kind="page" onClose={screen.kind === "session" || screen.kind === "none" ? undefined : () => showWork(workRef.current)}>
         {screen.kind === "new" && (
           <NewSession
             key={`${screen.root ?? ""}|${screen.workflow ?? ""}`}
@@ -1983,6 +1989,7 @@ export default function App() {
             onError={report}
           />
         )}
+        </PaneBoundary>
         {STANDALONE && screen.kind === "session" && !selected && sessionsLoaded && <div className="empty">{t("app.empty.gone")}</div>}
         {!STANDALONE && screen.kind === "none" && (
           <div className="empty">

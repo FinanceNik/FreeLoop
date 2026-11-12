@@ -17,3 +17,6 @@ The only error boundary is around the whole window (`main.tsx:20`): one item tha
 
 ## Notes
 - The phone's policy is in `internal/remote`; the desktop's assets come from `frontend/embed.go` through Wails.
+
+## Progress
+Done: a boundary per pane and per page (`PaneBoundary.tsx`) with "Copy a report" and a way to close, a failed pane left out of the saved workspace (`withoutFailed`), and the non-string image `uri` fix, each with unit tests. Left open: the desktop page's Content Security Policy, and an app check step that makes a session throw while drawing (it needs a way to feed the window an event it cannot draw).

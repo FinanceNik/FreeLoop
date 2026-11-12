@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chooseLayout, closePane, cycle, focusPane, forget, movePane, openIn, placeIn, restore, setLayout, SINGLE, stableOrder, swapPanes, tabbed, type WorkspaceState, USAGE_PANE, isSession } from "./workspace.ts";
+import { withoutFailed, chooseLayout, closePane, cycle, focusPane, forget, movePane, openIn, placeIn, restore, setLayout, SINGLE, stableOrder, swapPanes, tabbed, type WorkspaceState, USAGE_PANE, isSession } from "./workspace.ts";
 
 const w = (layout: 1 | 2 | 3 | 4, panes: (string | null)[], active = 0): WorkspaceState => ({ layout, panes, active });
 
@@ -122,4 +122,12 @@ test("moving between panes follows the layout on screen and wraps around", () =>
   assert.equal(at(4, 3, "right", true), 0);
   assert.equal(at(4, 0, "left", true), 3);
   assert.equal(at(4, 1, "down", true), 1);
+});
+
+test("a pane that failed is left out of what is saved, the rest kept in place", () => {
+  const work = w(2, ["a", "b"], 1);
+  assert.deepEqual(withoutFailed(work, new Set(["b"])), w(2, ["a", null], 1));
+  assert.deepEqual(withoutFailed(work, new Set(["x"])), work);
+  assert.equal(withoutFailed(work, new Set()), work);
+  assert.deepEqual(withoutFailed(w(2, [USAGE_PANE, "b"]), new Set([USAGE_PANE])), w(2, [null, "b"]));
 });

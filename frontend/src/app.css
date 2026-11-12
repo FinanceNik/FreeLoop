@@ -6618,3 +6618,15 @@ table.hooks .hook-command {
 .decision-via {
   font-size: calc(12rem / 14);
 }
+
+.pane-failed {
+  max-width: 560px;
+}
+
+.pane-failed pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: left;
+  max-height: 160px;
+  overflow: auto;
+}

@@ -3,6 +3,7 @@ import type { Session } from "./api.ts";
 import { tabAfterKey } from "./a11y.ts";
 import { t } from "./i18n.ts";
 import { basename } from "./paths.ts";
+import PaneBoundary from "./PaneBoundary.tsx";
 import Splitter from "./Splitter.tsx";
 import SourceMark from "./SourceMark.tsx";
 import UsagePane from "./UsagePane.tsx";
@@ -32,6 +33,8 @@ interface Props {
   // Opens the full usage page.
   onUsagePage: () => void;
   onError: (err: unknown) => void;
+  // A pane's view failed to draw, or draws again.
+  onFailed: (sid: string, failed: boolean) => void;
   // Sessions that finished work the user has not seen (SES-022).
   unread: readonly string[];
   // What a session runs on: a mark on its tab, a line along its pane (GUI-034).
@@ -49,7 +52,7 @@ interface Props {
 
 const MAX_OFFERED = 6;
 
-export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onSwap, onClose, onNew, onUsagePage, onError, unread, sourceOf, activityOf, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
+export default function Workspace({ work, sessions, renderSession, onActivate, onPlace, onSwap, onClose, onNew, onUsagePage, onError, onFailed, unread, sourceOf, activityOf, statusLabel, onTabbed, projects, providers, harnesses }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const panesBox = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -213,40 +216,42 @@ export default function Workspace({ work, sessions, renderSession, onActivate, o
               }}
               onDrop={(e) => drop(e, i)}
             >
-              {sid === USAGE_PANE ? (
-                <UsagePane
-                  draggable={split && !asTabs}
-                  onDragStart={(e) => startPaneDrag(e, i)}
-                  onUsagePage={onUsagePage}
-                  onClose={() => onClose(i)}
-                  projects={projects}
-                  providers={providers}
-                  harnesses={harnesses}
-                  onError={onError}
-                />
-              ) : s ? (
-                renderSession(s, active, split ? () => onClose(i) : undefined, split && !asTabs ? (e) => startPaneDrag(e, i) : undefined)
-              ) : (
-                <div className="empty pane-empty">
-                  <p>{offered.length > 0 ? t("workspace.choose") : t("workspace.create")}</p>
-                  {offered.length > 0 && (
-                    <ul>
-                      {offered.map((o) => (
-                        <li key={o.id}>
-                          <button className="pane-offer" onClick={() => onPlace(o.id, i)}>
-                            {o.title} <span className="muted">{basename(o.projectRoot)}</span> {statusOf(o.id)}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="row">
-                    <button onClick={onNew}>{t("app.newSession")}</button>
-                    {!work.panes.includes(USAGE_PANE) && <button onClick={() => onPlace(USAGE_PANE, i)}>{t("workspace.showUsage")}</button>}
-                    {split && <button onClick={() => onClose(i)}>{t("workspace.close")}</button>}
+              <PaneBoundary key={sid ?? key} kind="pane" sessionId={s?.id} onClose={() => onClose(i)} onFailed={sid ? (failed) => onFailed(sid, failed) : undefined}>
+                {sid === USAGE_PANE ? (
+                  <UsagePane
+                    draggable={split && !asTabs}
+                    onDragStart={(e) => startPaneDrag(e, i)}
+                    onUsagePage={onUsagePage}
+                    onClose={() => onClose(i)}
+                    projects={projects}
+                    providers={providers}
+                    harnesses={harnesses}
+                    onError={onError}
+                  />
+                ) : s ? (
+                  renderSession(s, active, split ? () => onClose(i) : undefined, split && !asTabs ? (e) => startPaneDrag(e, i) : undefined)
+                ) : (
+                  <div className="empty pane-empty">
+                    <p>{offered.length > 0 ? t("workspace.choose") : t("workspace.create")}</p>
+                    {offered.length > 0 && (
+                      <ul>
+                        {offered.map((o) => (
+                          <li key={o.id}>
+                            <button className="pane-offer" onClick={() => onPlace(o.id, i)}>
+                              {o.title} <span className="muted">{basename(o.projectRoot)}</span> {statusOf(o.id)}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="row">
+                      <button onClick={onNew}>{t("app.newSession")}</button>
+                      {!work.panes.includes(USAGE_PANE) && <button onClick={() => onPlace(USAGE_PANE, i)}>{t("workspace.showUsage")}</button>}
+                      {split && <button onClick={() => onClose(i)}>{t("workspace.close")}</button>}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </PaneBoundary>
             </section>
           );
         })}

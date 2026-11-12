@@ -329,7 +329,7 @@ export function buildView(events: readonly TranscriptEvent[]): SessionView {
           break;
         }
         if (d.content?.type === "image") {
-          const uri = d.content.uri ?? "";
+          const uri = typeof d.content.uri === "string" ? d.content.uri : "";
           const image = { name: uri.slice("attachment:".length), mimeType: d.content.mimeType ?? "" };
           if (uri.startsWith("attachment:")) {
             if (prev?.kind === "user") items[items.length - 1] = { ...prev, rev, images: [...(prev.images ?? []), image] };

@@ -168,3 +168,10 @@ export function restore(saved: unknown): WorkspaceState {
 export function tabbed(w: WorkspaceState, width: number): boolean {
   return w.layout > 1 && width > 0 && width < columns(w.layout) * PANE_MIN_WIDTH;
 }
+
+// withoutFailed is the workspace as it is saved: a pane whose view failed to draw is
+// left empty, so the window does not open on it again (GUI-017).
+export function withoutFailed(w: WorkspaceState, failed: ReadonlySet<string>): WorkspaceState {
+  if (!w.panes.some((s) => s !== null && failed.has(s))) return w;
+  return { ...w, panes: w.panes.map((s) => (s !== null && failed.has(s) ? null : s)) };
+}
