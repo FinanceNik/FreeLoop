@@ -316,6 +316,10 @@ func (p *Provider) run(seq iter.Seq2[*genai.GenerateContentResponse, error], sen
 				OutputTokens:    int64(u.CandidatesTokenCount + u.ThoughtsTokenCount),
 				CacheReadTokens: int64(u.CachedContentTokenCount),
 			}
+			// Each chunk's metadata is the running total, so a cut-off call has it.
+			if !send(provider.Event{Type: provider.EventUsage, Usage: usage}) {
+				return provider.Event{}, context.Canceled
+			}
 		}
 		if len(resp.Candidates) == 0 || resp.Candidates[0] == nil || resp.Candidates[0].Content == nil {
 			if len(resp.Candidates) > 0 && resp.Candidates[0] != nil && resp.Candidates[0].FinishReason != "" {

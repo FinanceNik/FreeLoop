@@ -399,6 +399,7 @@
         "cacheWriteTokens": { "type": "integer" },
         "cacheWrite1hTokens": { "type": "integer" },
         "adjustment": { "type": "boolean" },
+        "partial": { "type": "boolean", "description": "The call was stopped or failed; the tokens are those the provider had reported by then." },
         "contextTokens": { "type": "integer" },
         "contextWindow": { "type": "integer" },
         "providerId": { "type": "string" },

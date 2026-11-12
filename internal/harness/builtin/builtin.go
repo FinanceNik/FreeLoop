@@ -453,8 +453,23 @@ func (s *session) callOnce(ctx context.Context, prov provider.Provider, req prov
 	if err != nil {
 		return nil, "", false, err
 	}
+	// What the provider reported before the call ended any other way than done
+	// was spent all the same (PRV-008).
+	var reported provider.Usage
+	finished := false
+	defer func() {
+		if finished || reported == (provider.Usage{}) {
+			return
+		}
+		u := reported
+		s.p.Emit(event.UsageUpdate, event.UsageData{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
+			CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens, Partial: true,
+			ProviderID: prov.ID(), Model: req.Model})
+	}()
 	for ev := range ch {
 		switch ev.Type {
+		case provider.EventUsage:
+			reported = ev.Usage
 		case provider.EventTextDelta:
 			streamed = true
 			s.p.Emit(event.AgentMessageChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: ev.Text}})
@@ -462,6 +477,7 @@ func (s *session) callOnce(ctx context.Context, prov provider.Provider, req prov
 			streamed = true
 			s.p.Emit(event.AgentThoughtChunk, event.MessageChunk{Content: event.ContentBlock{Type: "text", Text: ev.Text}})
 		case provider.EventDone:
+			finished = true
 			u := ev.Usage
 			total := u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
 			s.mu.Lock()

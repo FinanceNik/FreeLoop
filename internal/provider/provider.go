@@ -201,8 +201,12 @@ const (
 	// EventToolArgsDelta and are complete only in EventDone's Message.
 	EventToolCallStart EventType = "tool_call_start"
 	EventToolArgsDelta EventType = "tool_args_delta"
-	EventDone          EventType = "done"
-	EventError         EventType = "error"
+	// EventUsage reports the tokens spent so far, as running totals that replace an
+	// earlier report; a provider that knows them before the end sends it, so a call
+	// cut off still has its tokens (PRV-008). EventDone's Usage is the final count.
+	EventUsage EventType = "usage"
+	EventDone  EventType = "done"
+	EventError EventType = "error"
 )
 
 // Event is one streamed item.
@@ -214,7 +218,8 @@ type Event struct {
 	// Set on EventDone.
 	Message    *Message
 	StopReason StopReason
-	Usage      Usage
+	// Usage is the final count on EventDone and the running total on EventUsage.
+	Usage Usage
 	// Set on EventError.
 	Err error
 }

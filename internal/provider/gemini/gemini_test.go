@@ -122,13 +122,18 @@ func collect(t *testing.T, p *Provider, req provider.ChatRequest) provider.Event
 	for ev := range ch {
 		types = append(types, ev.Type)
 		switch ev.Type {
+		case provider.EventUsage:
+			// A running total, in the same terms as the final count (PRV-008).
+			if ev.Usage != (provider.Usage{InputTokens: 20, OutputTokens: 42, CacheReadTokens: 100}) {
+				t.Errorf("reported usage = %+v", ev.Usage)
+			}
 		case provider.EventDone:
 			done = ev
 		case provider.EventError:
 			t.Fatal(ev.Err)
 		}
 	}
-	want := []provider.EventType{provider.EventThinkingDelta, provider.EventTextDelta, provider.EventTextDelta, provider.EventToolCallStart, provider.EventToolArgsDelta, provider.EventDone}
+	want := []provider.EventType{provider.EventThinkingDelta, provider.EventTextDelta, provider.EventTextDelta, provider.EventUsage, provider.EventToolCallStart, provider.EventToolArgsDelta, provider.EventDone}
 	if !slices.Equal(types, want) {
 		t.Errorf("events = %v", types)
 	}

@@ -221,6 +221,15 @@ func (p *Provider) Stream(ctx context.Context, req provider.ChatRequest) (<-chan
 			}
 			var out provider.Event
 			switch e := ev.AsAny().(type) {
+			case sdk.MessageStartEvent, sdk.MessageDeltaEvent:
+				// The input counts come with message_start and the output count with
+				// message_delta; a stream cut off after either has spent them.
+				out = provider.Event{Type: provider.EventUsage, Usage: provider.Usage{
+					InputTokens:      msg.Usage.InputTokens,
+					OutputTokens:     msg.Usage.OutputTokens,
+					CacheReadTokens:  msg.Usage.CacheReadInputTokens,
+					CacheWriteTokens: msg.Usage.CacheCreationInputTokens,
+				}}
 			case sdk.ContentBlockStartEvent:
 				if tu, ok := e.ContentBlock.AsAny().(sdk.ToolUseBlock); ok {
 					out = provider.Event{Type: provider.EventToolCallStart, ToolCallID: tu.ID, ToolName: tu.Name}

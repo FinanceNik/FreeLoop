@@ -167,6 +167,9 @@ type UsageData struct {
 	CacheWrite1hTokens int64 `json:"cacheWrite1hTokens,omitempty"`
 	// Adjustment adds what earlier calls' counts missed; it is no call itself.
 	Adjustment bool `json:"adjustment,omitempty"`
+	// Partial marks a call that was stopped or failed: the tokens are what the
+	// provider had reported by then, and they were spent (PRV-008).
+	Partial bool `json:"partial,omitempty"`
 	// ContextTokens is the size of the context this call sent, and
 	// ContextWindow the model's, for the context meter (HRN-013).
 	ContextTokens int64 `json:"contextTokens,omitempty"`

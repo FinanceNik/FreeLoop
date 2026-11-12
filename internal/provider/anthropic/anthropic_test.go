@@ -71,8 +71,12 @@ func TestStreamToolUse(t *testing.T) {
 	}
 	var types []provider.EventType
 	var done provider.Event
+	var reported []provider.Usage
 	for ev := range ch {
 		types = append(types, ev.Type)
+		if ev.Type == provider.EventUsage {
+			reported = append(reported, ev.Usage)
+		}
 		if ev.Type == provider.EventDone {
 			done = ev
 		}
@@ -80,9 +84,13 @@ func TestStreamToolUse(t *testing.T) {
 			t.Fatal(ev.Err)
 		}
 	}
-	want := "thinking_delta,text_delta,tool_call_start,tool_args_delta,tool_args_delta,done"
+	want := "usage,thinking_delta,text_delta,tool_call_start,tool_args_delta,tool_args_delta,usage,done"
 	if got := joinTypes(types); got != want {
 		t.Errorf("events = %s\nwant      %s", got, want)
+	}
+	// The input comes with message_start, the output with message_delta (PRV-008).
+	if len(reported) != 2 || reported[0].InputTokens != 120 || reported[0].CacheReadTokens != 100 || reported[1] != done.Usage {
+		t.Errorf("reported usage = %+v, final %+v", reported, done.Usage)
 	}
 	if done.StopReason != provider.StopToolUse {
 		t.Errorf("stop = %s", done.StopReason)
