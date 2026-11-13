@@ -3,6 +3,7 @@ import { ask } from "./ask.ts";
 import { autoSaved, pageTitle, settingsKey, type GeneralPage } from "./settings.ts";
 import { LANGUAGES, list, locale, t, type PlainKey } from "./i18n.ts";
 import { tNodes } from "./i18nNodes.tsx";
+import { updateView } from "./update.ts";
 import ShortcutsEditor from "./ShortcutsEditor.tsx";
 import ColorEditor from "./ColorEditor.tsx";
 import SourceMarks from "./SourceMarks.tsx";
@@ -245,6 +246,30 @@ export default function Settings({ page, config, providers, harnesses, environme
       .catch(() => EngineService.UpdateStatus().then(setUpdate))
       .finally(() => setChecking(false));
   };
+  // Updating in place (SET-008): the download is asked for here, and its progress read
+  // until it ends.
+  const updating = updateView(update);
+  const downloading = updating.kind === "downloading";
+  useEffect(() => {
+    if (!downloading) return;
+    const timer = setInterval(() => EngineService.UpdateStatus().then(setUpdate).catch(() => {}), 500);
+    return () => clearInterval(timer);
+  }, [downloading]);
+  const downloadUpdate = () =>
+    EngineService.DownloadUpdate()
+      .then(setUpdate)
+      .catch((err) => {
+        onError(err);
+        EngineService.UpdateStatus().then(setUpdate);
+      });
+  const cancelUpdate = () => EngineService.CancelUpdate().then(setUpdate).catch(onError);
+  const installUpdate = (force: boolean) =>
+    EngineService.InstallUpdate(force)
+      .then(() => EngineService.UpdateStatus().then(setUpdate))
+      .catch((err) => {
+        onError(err);
+        EngineService.UpdateStatus().then(setUpdate);
+      });
 
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -680,6 +705,41 @@ export default function Settings({ page, config, providers, harnesses, environme
           {update && !update.newer && update.latest && <span className="muted">{t("settings.updates.upToDate", { version: update.current })}</span>}
           {update?.error && <span className="muted">{update.error}</span>}
         </div>
+        {updating.kind !== "none" && (
+          <div className="row update-install" role="status">
+            {updating.kind === "offer" && (
+              <button type="button" className="primary" disabled={!!form.network?.localOnly} onClick={downloadUpdate}>
+                {t("settings.updates.install")}
+              </button>
+            )}
+            {updating.kind === "cannot" && <span className="muted">{t("settings.updates.cannot", { reason: updating.reason })}</span>}
+            {updating.kind === "downloading" && (
+              <>
+                <progress max={100} value={updating.percent} aria-label={t("settings.updates.downloading", { version: updating.version, percent: updating.percent })} />
+                <span>{t("settings.updates.downloading", { version: updating.version, percent: updating.percent })}</span>
+                <button type="button" onClick={cancelUpdate}>
+                  {t("settings.updates.cancel")}
+                </button>
+              </>
+            )}
+            {updating.kind === "ready" && (
+              <>
+                <span>{t("settings.updates.ready", { version: updating.version })}</span>
+                {updating.busy && <span className="update-busy">{t("settings.updates.busy")}</span>}
+                <button type="button" className="primary" onClick={() => installUpdate(updating.busy)}>
+                  {updating.busy ? t("settings.updates.restartAnyway") : t("settings.updates.restart")}
+                </button>
+                <button type="button" onClick={cancelUpdate}>
+                  {t("settings.updates.cancel")}
+                </button>
+              </>
+            )}
+            {updating.kind === "installing" && <span>{t("settings.updates.installing", { version: updating.version })}</span>}
+            {(updating.kind === "offer" || updating.kind === "ready") && updating.failed && (
+              <span className="update-failed">{t("settings.updates.failed", { reason: updating.failed })}</span>
+            )}
+          </div>
+        )}
 
           </>,
         )}

@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/FinanceNik/Freeloop/internal/config"
 	"github.com/FinanceNik/Freeloop/internal/engine"
+	"github.com/FinanceNik/Freeloop/internal/environment"
 	"github.com/FinanceNik/Freeloop/internal/event"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/permission"
@@ -31,6 +33,8 @@ type EngineService struct {
 	phone *phone
 	// logPath is the app's log file.
 	logPath string
+	// quitForUpdate quits the app without asking, once an update is in place.
+	quitForUpdate func()
 
 	// restoring is the backup last previewed. The page names only its
 	// fingerprint: the user chose the file, and nothing else can.
@@ -394,6 +398,39 @@ func (s *EngineService) UpdateStatus() engine.UpdateInfo { return s.eng.UpdateSt
 
 func (s *EngineService) CheckForUpdate(ctx context.Context) (engine.UpdateInfo, error) {
 	return s.eng.CheckForUpdate(ctx)
+}
+
+// DownloadUpdate, CancelUpdate and InstallUpdate update the app in place
+// (SET-008): the download is the user's click, UpdateStatus says how far it is,
+// and installing starts the new copy and quits this one.
+func (s *EngineService) DownloadUpdate() (engine.UpdateInfo, error) {
+	err := s.eng.DownloadUpdate()
+	return s.eng.UpdateStatus(), err
+}
+
+func (s *EngineService) CancelUpdate() engine.UpdateInfo {
+	s.eng.CancelUpdate()
+	return s.eng.UpdateStatus()
+}
+
+// InstallUpdate refuses while sessions work or wait, unless force: the page asks
+// first, with what UpdateStatus says would be interrupted.
+func (s *EngineService) InstallUpdate(ctx context.Context, force bool) error {
+	relaunch, err := s.eng.InstallUpdate(ctx, force)
+	if err != nil {
+		return err
+	}
+	if err := environment.StartDetached(relaunch); err != nil {
+		return fmt.Errorf("the update is in place, but the new copy did not start (%w); quit Freeloop and open it again", err)
+	}
+	if s.quitForUpdate != nil {
+		// After the answer has reached the page.
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			s.quitForUpdate()
+		}()
+	}
+	return nil
 }
 
 // SignInMCPServer and SignOutMCPServer run and forget a remote server's

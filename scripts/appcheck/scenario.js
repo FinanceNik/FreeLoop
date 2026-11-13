@@ -140,8 +140,8 @@ await step("a pane shows how full its context is", async () => {
   if (!panelWasOpen) panelToggle.click();
   (await until("the Info tab", () => withText(".panel-tabs [role=tab]", "Info"))).click();
   const field = await until("the limit's field", () => document.querySelector("aside.panel .context-limit input"));
-  // In the Mac's own number format.
-  const detected = `${(100000).toLocaleString()} (detected)`;
+  // In the number format of the interface's language (GUI-048), not the Mac's region.
+  const detected = `${(100000).toLocaleString(document.documentElement.lang || undefined)} (detected)`;
   // The model's limit is looked up when the tab opens.
   await until("the detected limit", () => field.placeholder === detected, 8000).catch(() => {});
   check("a detected limit shows as such", field.placeholder === detected, field.placeholder);
@@ -560,8 +560,17 @@ await step("the terminal says what it is and counts wide characters", async () =
   const box = await until("a terminal", () => { const b = document.querySelector(".terminal-box"); return b?.querySelector(".xterm-helper-textarea") && b; });
   check("the terminal counts widths by Unicode 11", box.dataset.unicode === "11", box.dataset.unicode);
   await sleep(1500);
-  // As typed: xterm takes inserted text from its hidden text box.
-  box.querySelector(".xterm-helper-textarea").dispatchEvent(new InputEvent("input", { data: "echo in=$TERM_PROGRAM/$COLORTERM\r", inputType: "insertText" }));
+  // As pasted, then Enter: with the screen reader mode on, xterm takes no inserted text
+  // from its hidden text box, and a shell does not run a paste's own line end.
+  const keys = box.querySelector(".xterm-helper-textarea");
+  const paste = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: { getData: () => "echo in=$TERM_PROGRAM/$COLORTERM" } });
+  keys.dispatchEvent(paste);
+  await sleep(300);
+  const enter = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true });
+  Object.defineProperty(enter, "keyCode", { value: 13 });
+  Object.defineProperty(enter, "which", { value: 13 });
+  keys.dispatchEvent(enter);
   await until("the shell's answer", () => box.textContent.includes("in=Freeloop/truecolor"), 10000);
   check("a shell in the terminal knows it runs in Freeloop", true);
   named(".terminal-tabs button", "Close shell 1")?.click();

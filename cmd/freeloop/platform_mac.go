@@ -21,4 +21,7 @@ var thisPlatform = platform{
 	NoNap:          darwin.NoNap,
 	KeepAwake:      darwin.KeepAwake,
 	HideOnClose:    true,
+	UpdateKind:     darwin.UpdateKind,
+	ApplyUpdate:    darwin.ApplyUpdate,
+	FinishUpdate:   darwin.FinishUpdate,
 }

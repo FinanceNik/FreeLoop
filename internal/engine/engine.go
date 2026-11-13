@@ -28,6 +28,7 @@ import (
 	"github.com/FinanceNik/Freeloop/internal/mcp"
 	"github.com/FinanceNik/Freeloop/internal/netguard"
 	"github.com/FinanceNik/Freeloop/internal/permission"
+	"github.com/FinanceNik/Freeloop/internal/release"
 	"github.com/FinanceNik/Freeloop/internal/secrets"
 	"github.com/FinanceNik/Freeloop/internal/session"
 	"github.com/FinanceNik/Freeloop/internal/store"
@@ -88,6 +89,18 @@ type Options struct {
 	// GH replaces the GitHub CLI with a stand-in, in development builds
 	// only, for trying pull requests, checks and issues without GitHub.
 	GH string
+	// UpdateKind names the kind of release file this copy of the app can be
+	// replaced with (release.KindDMG and so on), or says why it cannot be
+	// (SET-008). ApplyUpdate puts such a file, already checked against the
+	// release's signed list, in place of the running copy, running the
+	// system's programs through run and keeping its own files in scratch, and
+	// returns the command that starts the new copy. Without them the app only
+	// says a newer release exists.
+	UpdateKind  func() (string, error)
+	ApplyUpdate func(ctx context.Context, file, version, scratch string, run UpdateRunner) (relaunch []string, err error)
+	// ReleaseKeys replaces the keys a release must be signed with (SEC-021), for
+	// tests. The app never sets it: no switch, file or setting names a key.
+	ReleaseKeys []string
 }
 
 // ConfigChange lists the config files that were reloaded, relative to the
@@ -207,6 +220,12 @@ type Engine struct {
 	updates    onceReset
 	updateErr  string
 	releaseAPI string
+	// selfUpdate is an update in place (SET-008); releaseKeys are the keys a
+	// release must be signed with (SEC-021), release.Keys outside tests.
+	selfUpdate   selfUpdate
+	releaseKeys  []string
+	updateKindOf func() (string, error)
+	applyUpdate  func(ctx context.Context, file, version, scratch string, run UpdateRunner) ([]string, error)
 	// schedules guards schedules.json and the runs it starts (SES-012);
 	// stopSchedules ends the loop, and Close waits on scheduling.
 	schedules     sync.Mutex
@@ -264,6 +283,9 @@ func Open(opts Options) (*Engine, error) {
 		systemInfo:    opts.SystemInfo,
 		pdfArgv:       opts.PDFArgv,
 		folderArgv:    opts.FolderArgv,
+		releaseKeys:   release.Keys,
+		updateKindOf:  opts.UpdateKind,
+		applyUpdate:   opts.ApplyUpdate,
 		modelLists:    map[string]modelList{},
 		cfg:           cfg,
 		issues:        map[string][]config.Issue{issueConfig: issues},
@@ -274,6 +296,9 @@ func Open(opts Options) (*Engine, error) {
 		runtimes:      map[string]*runtime{},
 		starting:      map[string]*runtime{},
 		streams:       map[string]*streamBuf{},
+	}
+	if len(opts.ReleaseKeys) > 0 {
+		e.releaseKeys = opts.ReleaseKeys
 	}
 	if opts.Dev {
 		e.releaseAPI = opts.ReleaseAPI
@@ -385,6 +410,8 @@ func (e *Engine) Close() error {
 	e.terms.pumps.Wait()
 	e.mcp.StopAll()
 	e.voice.close()
+	// A download for an update in place ends with the app (SET-008).
+	e.selfUpdate.stop()
 	close(e.quit)
 	e.watching.Wait()
 	e.bg.Wait()

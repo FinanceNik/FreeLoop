@@ -8,11 +8,14 @@ import "github.com/FinanceNik/Freeloop/internal/platform/windows"
 // command's job ends with the app (internal/environment/proc_windows.go), so there is
 // no ledger of leftovers to check.
 var thisPlatform = platform{
-	Keys:       windows.CredentialManager{},
-	EditorArgv: windows.EditorArgv,
-	PDFArgv:    windows.PDFArgv,
-	FolderArgv: windows.FolderArgv,
-	SystemInfo: windows.SystemInfo,
-	NoNap:      windows.NoNap,
-	KeepAwake:  windows.KeepAwake,
+	Keys:         windows.CredentialManager{},
+	EditorArgv:   windows.EditorArgv,
+	PDFArgv:      windows.PDFArgv,
+	FolderArgv:   windows.FolderArgv,
+	SystemInfo:   windows.SystemInfo,
+	NoNap:        windows.NoNap,
+	KeepAwake:    windows.KeepAwake,
+	UpdateKind:   windows.UpdateKind,
+	ApplyUpdate:  windows.ApplyUpdate,
+	FinishUpdate: windows.FinishUpdate,
 }

@@ -6630,3 +6630,18 @@ table.hooks .hook-command {
   max-height: 160px;
   overflow: auto;
 }
+
+/* Updating in place (SET-008): the offer, the download and the restart, under the check. */
+.update-install {
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.update-install progress {
+  width: 160px;
+}
+.update-busy {
+  color: var(--warn);
+}
+.update-failed {
+  color: var(--danger);
+}

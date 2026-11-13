@@ -46,7 +46,14 @@ tasks:
       - task: create:app:bundle
 
   create:app:bundle:
-    summary: Creates an ad-hoc signed `.app` bundle
+    summary: Creates the `.app` bundle, signed ad hoc or with SIGN_IDENTITY (a Developer ID)
+    # SIGN_IDENTITY names a signing identity in the keychain, "Developer ID Application:
+    # Name (TEAMID)" for a release others download (SEC-021). Such a signature carries
+    # Apple's timestamp, which notarization asks for. Without it the bundle is signed ad
+    # hoc, as every local build is.
+    vars:
+      SIGN_ID: '{{.SIGN_IDENTITY | default "-"}}'
+      SIGN_TIME: '{{if .SIGN_IDENTITY}}--timestamp{{end}}'
     cmds:
       - test -n "{{.BIN_DIR}}" && test -n "{{.APP_NAME}}" && rm -rf -- "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
@@ -63,8 +70,8 @@ tasks:
       - xattr -cr "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       # The helper first, without the app's entitlements: only the app may open the
       # microphone (build/darwin/entitlements.plist).
-      - codesign --force --options runtime --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/whisper-cli"
-      - codesign --force --options runtime --entitlements build/darwin/entitlements.plist --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+      - codesign --force --options runtime {{.SIGN_TIME}} --sign "{{.SIGN_ID}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/whisper-cli"
+      - codesign --force --options runtime {{.SIGN_TIME}} --entitlements build/darwin/entitlements.plist --sign "{{.SIGN_ID}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - codesign --verify --deep --strict "{{.BIN_DIR}}/{{.APP_NAME}}.app"
 
   run:

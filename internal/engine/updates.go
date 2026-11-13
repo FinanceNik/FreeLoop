@@ -18,10 +18,10 @@ import (
 
 // The update check (SEC-009, OQ-015): off unless the user turns it on in
 // Settings. When on, the app asks GitHub for the project's latest release
-// at most once a day and says when it is newer than the running version;
-// it downloads and installs nothing (in-app updates are not planned, since
-// builds are not signed: OQ-009). The request carries no version, ID or other detail of this
-// copy of the app, and a failure is silent (NFR-OFF-002).
+// at most once a day and says when it is newer than the running version.
+// It downloads nothing: that is the user's click (SET-008, selfupdate.go).
+// The request carries no version, ID or other detail of this copy of the
+// app, and a failure is silent (NFR-OFF-002).
 
 // AppVersion is this build's version; build/config.yml says the same.
 const AppVersion = "0.1.0-beta.1"
@@ -42,6 +42,22 @@ type UpdateInfo struct {
 	Checked time.Time `json:"checked"`
 	// Error is the last check's failure, shown in Settings only.
 	Error string `json:"error,omitempty"`
+	// CanInstall says this copy can replace itself with the newer release
+	// (SET-008); WhyNot says why it cannot, when a newer one is known.
+	CanInstall bool   `json:"canInstall"`
+	WhyNot     string `json:"whyNot,omitempty"`
+	// Step is how far an update in place is: "" (not started), "downloading",
+	// "ready" (downloaded and checked; installing restarts the app) or
+	// "installing". Received of Total bytes have arrived.
+	Step     string `json:"step,omitempty"`
+	Received int64  `json:"received,omitempty"`
+	Total    int64  `json:"total,omitempty"`
+	// Ready is the version that is downloaded and waits to be installed.
+	Ready string `json:"ready,omitempty"`
+	// InstallError is why the last download or install failed.
+	InstallError string `json:"installError,omitempty"`
+	// Busy is what installing now would interrupt, as quitting would (GUI-027).
+	Busy QuitCheck `json:"busy"`
 }
 
 // UpdateStatus returns what the last check found, starting a check in the
@@ -69,6 +85,7 @@ func (e *Engine) updateInfo() UpdateInfo {
 	enabled = enabled && e.commandApproved(config.UpdatesFingerprint())
 	info := UpdateInfo{Enabled: enabled, Current: AppVersion, Latest: st.Latest, URL: st.URL, Checked: st.CheckedAt, Error: lastErr}
 	info.Newer = st.Latest != "" && newerVersion(st.Latest, AppVersion)
+	e.selfUpdateInfo(&info)
 	return info
 }
 
@@ -78,7 +95,8 @@ func (e *Engine) CheckForUpdate(ctx context.Context) (UpdateInfo, error) {
 	if netguard.LocalOnly() {
 		return e.updateInfo(), errors.New("the app is set to connect to nothing but this computer")
 	}
-	latest, url, err := fetchLatestRelease(ctx, e.releaseURL())
+	rel, err := fetchLatestRelease(ctx, e.releaseURL())
+	latest, url := rel.Version, rel.Page
 	e.mu.Lock()
 	e.updateErr = ""
 	if err != nil {
@@ -106,43 +124,69 @@ func (e *Engine) releaseURL() string {
 	return latestReleaseURL
 }
 
-func fetchLatestRelease(ctx context.Context, url string) (version, page string, err error) {
+// latestRelease is what GitHub says about the project's latest release.
+type latestRelease struct {
+	Version, Page string
+	// Assets are its files by name.
+	Assets map[string]releaseAsset
+}
+
+type releaseAsset struct {
+	URL  string
+	Size int64
+}
+
+func fetchLatestRelease(ctx context.Context, url string) (latestRelease, error) {
+	version, page, assets, err := fetchRelease(ctx, url)
+	return latestRelease{Version: version, Page: page, Assets: assets}, err
+}
+
+func fetchRelease(ctx context.Context, url string) (version, page string, assets map[string]releaseAsset, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 	// GitHub wants a User-Agent; this one says nothing about this copy.
 	req.Header.Set("User-Agent", "Freeloop-update-check")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("could not reach GitHub: %w", err)
+		return "", "", nil, fmt.Errorf("could not reach GitHub: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return "", "", errors.New("the project has published no release yet")
+		return "", "", nil, errors.New("the project has published no release yet")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("GitHub answered %d", resp.StatusCode)
+		return "", "", nil, fmt.Errorf("GitHub answered %d", resp.StatusCode)
 	}
 	var rel struct {
 		TagName    string `json:"tag_name"`
 		HTMLURL    string `json:"html_url"`
 		Draft      bool   `json:"draft"`
 		Prerelease bool   `json:"prerelease"`
+		Assets     []struct {
+			Name string `json:"name"`
+			URL  string `json:"browser_download_url"`
+			Size int64  `json:"size"`
+		} `json:"assets"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel); err != nil {
-		return "", "", fmt.Errorf("read the release: %w", err)
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&rel); err != nil {
+		return "", "", nil, fmt.Errorf("read the release: %w", err)
 	}
 	v := strings.TrimPrefix(rel.TagName, "v")
 	if _, _, ok := parseVersion(v); !ok || rel.Draft || rel.Prerelease {
-		return "", "", fmt.Errorf("the latest release %q is not a version", rel.TagName)
+		return "", "", nil, fmt.Errorf("the latest release %q is not a version", rel.TagName)
 	}
 	// Only a page on GitHub opens from the app.
 	if !strings.HasPrefix(rel.HTMLURL, "https://github.com/") {
 		rel.HTMLURL = "https://github.com/FinanceNik/Freeloop/releases"
 	}
-	return v, rel.HTMLURL, nil
+	assets = map[string]releaseAsset{}
+	for _, a := range rel.Assets {
+		assets[a.Name] = releaseAsset{URL: a.URL, Size: a.Size}
+	}
+	return v, rel.HTMLURL, assets, nil
 }
 
 // parseVersion reads major.minor.patch, and says whether a pre-release such as

@@ -27,8 +27,9 @@ var execAllowed = []string{"internal/environment", "internal/platform/windows"}
 // app's own infrastructure: the store, config loading and the platform layers.
 // Everything else, the harnesses above all, goes through an Environment.
 // cmd/freeloop-sbom is a tool make release runs on the build machine, to read the
-// licenses of what went into the app; it is not part of the app.
-var fsAllowed = []string{"internal/environment", "internal/store", "internal/config", "internal/platform/darwin", "internal/platform/linux", "internal/platform/windows", "cmd/freeloop-sbom"}
+// licenses of what went into the app; it is not part of the app. Neither is
+// cmd/freeloop-sign, which signs the release's checksums there (SEC-021).
+var fsAllowed = []string{"internal/environment", "internal/store", "internal/config", "internal/platform/darwin", "internal/platform/linux", "internal/platform/windows", "cmd/freeloop-sbom", "cmd/freeloop-sign"}
 
 // Only the Wails adapter may depend on Wails; the engine stays
 // transport-agnostic.

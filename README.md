@@ -37,7 +37,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing   # macOS
 sha256sum -c SHA256SUMS --ignore-missing       # Linux, or Git Bash on Windows
 ```
 
-Releases are not signed, so your system warns about a downloaded one the first time.
+Every release's checksums are signed with the project's key (`SHA256SUMS.sig`), and a copy of Freeloop checks that before it updates itself: Settings → Network, once you turn the update check on. The files are not yet signed for Apple or Microsoft, so your system warns about a downloaded one the first time.
 
 - **macOS:** `Freeloop.dmg`. Open it and drag Freeloop to Applications. macOS blocks it the first time: try to open it, then choose Open Anyway in System Settings, under Privacy & Security. The Keychain asks again after each update, because the signature changes with every build. Needs a Mac with Apple Silicon (M1 or later) and macOS 14 or later; there is no Intel build.
 - **Windows:** `Freeloop-<version>-windows-<arch>-setup.exe` installs Freeloop for your user alone, without administrator rights; the `-portable.zip` runs from any folder. Take `amd64` for most PCs and `arm64` for ARM ones. If SmartScreen stops it, choose More info, then Run anyway. Needs Windows 10 version 1809 or later with the Microsoft Edge WebView2 Runtime, which Windows 11 includes and the installer offers otherwise, and [Git for Windows](https://git-scm.com), since commands, hooks and the terminal run through Git Bash.
@@ -49,7 +49,7 @@ On a Mac with Apple Silicon and macOS 14 or later. You need Go, Node.js with npm
 
 ```sh
 make tools     # once: install the pinned wails3 CLI
-make package   # build bin/Freeloop.app, ad-hoc signed
+make package   # build bin/Freeloop.app, signed ad hoc
 make dmg       # optional: bin/Freeloop.dmg with the app and a link to Applications
 ```
 
@@ -91,7 +91,7 @@ Everything is in one folder, readable and editable by hand; edits are picked up 
 
 A project can add `.freeloop/rules.yaml` (deny rules) and `.freeloop/profiles/`, read once the project is trusted. Set `FREELOOP_HOME` to use another folder.
 
-Freeloop has no telemetry. It connects to the providers, MCP servers and agents you configure, and to four things only if you use them: the update check you can turn on in Settings (GitHub), a token optimizer's pinned download when you click it (GitHub), voice input's speech model when you download it (Hugging Face, and whisper.cpp from GitHub on Windows and Linux), and the MCP registry when you browse it. [docs/SECURITY.md](docs/SECURITY.md) describes the threat model and the limits you should know, among them that the local environment is not a sandbox.
+Freeloop has no telemetry. It connects to the providers, MCP servers and agents you configure, and to four things only if you use them: the update check you can turn on in Settings and the release it downloads when you click to update (GitHub), a token optimizer's pinned download when you click it (GitHub), voice input's speech model when you download it (Hugging Face, and whisper.cpp from GitHub on Windows and Linux), and the MCP registry when you browse it. [docs/SECURITY.md](docs/SECURITY.md) describes the threat model and the limits you should know, among them that the local environment is not a sandbox.
 
 ## Develop
 

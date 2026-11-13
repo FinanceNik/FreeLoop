@@ -294,6 +294,41 @@ jobs:
           fi
           test -f "docs/release-notes/$version.md" || { echo "docs/release-notes/$version.md is missing" >&2; exit 1; }
 
+      # With a Developer ID certificate in the repository's secrets, the app and the
+      # disk image are signed with it and notarized (SEC-021); without, they are signed
+      # ad hoc, as before. The certificate lives in a keychain made for this run.
+      - name: Take the Developer ID certificate, when there is one
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ] || [ -z "$MACOS_SIGN_IDENTITY" ]; then
+            echo "no Developer ID certificate in the secrets: the app is signed ad hoc"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" >/dev/null
+          security list-keychain -d user -s "$keychain" login.keychain-db
+          echo "SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
+          if [ -n "$NOTARY_PASSWORD" ]; then
+            xcrun notarytool store-credentials freeloop-notary --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD" --keychain "$keychain"
+            echo "NOTARY_PROFILE=freeloop-notary" >> "$GITHUB_ENV"
+            echo "NOTARY_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          else
+            echo "no notary credentials in the secrets: the disk image is signed and not notarized"
+          fi
+
       - name: Build the Mac release files
         run: make frontend/node_modules release RELEASE_PLATFORMS=mac
 
@@ -314,6 +349,16 @@ jobs:
           cp bin/release-windows/* bin/release-linux/* bin/release/
           make release-sums
           ls -l bin/release
+
+      # The project's signature over the version and the checksums, which a copy of the
+      # app checks before it updates itself in place (SEC-021, SET-008). A tag without
+      # the key fails: a release no copy can update to is not one to publish. The key
+      # is the secret RELEASE_SIGNING_KEY, the line `make release-key` wrote.
+      - name: Sign the checksums
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_KEY_FILE: /nonexistent
+        run: make release-sign REQUIRE_SIGNATURE=${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
 
       - name: Keep the files of a dry run
         if: github.event_name == 'workflow_dispatch'

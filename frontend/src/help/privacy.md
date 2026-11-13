@@ -29,7 +29,7 @@ A provider's own terms govern what it does with the data. A model served on your
 
 Besides what you configure or ask for, such as providers, MCP servers, agents, SSH machines, a skill's git address or a page the agent fetches with your approval, Freeloop connects to five things, and only when you use them:
 
-- The update check is off until you turn on **Check for a newer version once a day** in Settings → Network. It asks GitHub for the latest release and sends nothing about your copy of the app. **Check now** runs it once.
+- The update check is off until you turn on **Check for a newer version once a day** in Settings → Network. It asks GitHub for the latest release and sends nothing about your copy of the app. **Check now** runs it once. A newer version is downloaded only when you click **Download and install** there, from GitHub, and kept only if the Freeloop project signed it.
 - A token optimizer's download happens only when you click its **Install** button, such as **Install RTK**, in Settings → Token optimizers. It comes from GitHub, at a pinned version, and is checked against a known checksum.
 - Voice input's speech model is downloaded only when you click **Download** for it, in the message box or in Settings → Voice input. It comes from Hugging Face, and on Windows and Linux whisper.cpp from GitHub, each pinned and checked against a known checksum. What you say is turned into text on this computer and is never sent anywhere.
 - The MCP registry is contacted only when you search it from **Browse a registry…** on the MCP servers page. It sends your search words to the registry address you chose.

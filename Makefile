@@ -14,7 +14,7 @@ VERSION := $(shell sed -n 's/^ *version: "\(.*\)"/\1/p' build/config.yml)
 # shasum on macOS; sha256sum where Perl's shasum is missing (Git for Windows). Same output.
 SHA256 := $(shell command -v shasum >/dev/null 2>&1 && echo "shasum -a 256" || echo sha256sum)
 
-.PHONY: help tools dev build package whisper-cli install check-app dmg notices windows windows-exe windows-tools linux-package linux-package-arch release release-mac release-windows release-linux release-sums verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
+.PHONY: help tools dev build package whisper-cli install check-app dmg notices windows windows-exe windows-tools linux-package linux-package-arch release release-mac release-windows release-linux release-sums release-sign release-key verify-repro verify-deps bindings test cmd-test test-keychain verify-agents memcheck frontend-test lint fmt clean
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-19s %s\n", $$1, $$2}'
@@ -28,8 +28,13 @@ dev: ## Run the app in development mode with live reload (offers the scripted de
 build: ## Build a production binary into bin/
 	$(WAILS) build
 
-package: whisper-cli ## Build bin/Freeloop.app (ad-hoc signed; SHIPPED=1 for the build users get)
-	$(WAILS) package $(if $(filter 1,$(SHIPPED)),SHIPPED=1)
+# SIGN_IDENTITY is a signing identity in the keychain, "Developer ID Application: Name
+# (TEAMID)", for a release others download; without it the app is signed ad hoc.
+# NOTARY_PROFILE is a notarytool keychain profile (xcrun notarytool store-credentials),
+# with which `make dmg` has Apple notarize the disk image (SEC-021; DEVELOPING.md,
+# "Signing a release").
+package: whisper-cli ## Build bin/Freeloop.app (ad-hoc signed, or SIGN_IDENTITY=...; SHIPPED=1 for the build users get)
+	$(WAILS) package $(if $(filter 1,$(SHIPPED)),SHIPPED=1) $(if $(SIGN_IDENTITY),SIGN_IDENTITY="$(SIGN_IDENTITY)")
 
 # The speech program voice input runs (GUI-050), which the Mac app carries; needs cmake.
 whisper-cli: ## Build bin/whisper-cli from whisper.cpp's pinned source (macOS)
@@ -39,7 +44,8 @@ install: ## Quit Freeloop, rebuild it from this commit and leave that as the onl
 	scripts/install.sh
 
 # The DMG holds the app and a link to /Applications, compressed (UDZO). It is
-# as signed as the app inside: ad-hoc (OQ-009). Its app is the build users get,
+# as signed as the app inside: ad hoc, or by SIGN_IDENTITY and then notarized
+# with NOTARY_PROFILE (OQ-056). Its app is the build users get,
 # which reads no development switch (FREELOOP_DEV, FREELOOP_DEV_*, FREELOOP_HOME,
 # FREELOOP_RELEASE_API; cmd/freeloop/devenv.go). make passes SHIPPED on to the
 # package it builds for the DMG, and so for a release; `make package` alone,
@@ -53,6 +59,11 @@ dmg: package notices ## Build bin/Freeloop.dmg from bin/Freeloop.app
 	ln -s /Applications bin/dmg/Applications
 	hdiutil create -volname Freeloop -srcfolder bin/dmg -ov -format UDZO -quiet bin/Freeloop.dmg
 	rm -rf bin/dmg
+	@if [ -n "$(SIGN_IDENTITY)" ]; then codesign --force --timestamp --sign "$(SIGN_IDENTITY)" bin/Freeloop.dmg || exit 1; \
+		else echo "  the app and the disk image are signed ad hoc (no SIGN_IDENTITY): macOS asks before opening a download"; fi
+	@if [ -n "$(NOTARY_PROFILE)" ]; then test -n "$(SIGN_IDENTITY)" || { echo "NOTARY_PROFILE needs SIGN_IDENTITY: Apple notarizes only what a Developer ID signed"; exit 1; }; \
+		xcrun notarytool submit bin/Freeloop.dmg --keychain-profile "$(NOTARY_PROFILE)" $(if $(NOTARY_KEYCHAIN),--keychain "$(NOTARY_KEYCHAIN)") --wait && xcrun stapler staple bin/Freeloop.dmg || exit 1; \
+		else echo "  the disk image is not notarized (no NOTARY_PROFILE)"; fi
 	@echo "bin/Freeloop.dmg"
 
 # The speech program a Mac app carries (GUI-050), in its bill and notices.
@@ -118,7 +129,7 @@ release: ## Build bin/release for RELEASE_PLATFORMS (default: what this host can
 	rm -rf bin/release
 	mkdir -p bin/release
 	for p in $(RELEASE_PLATFORMS); do $(MAKE) release-$$p || exit 1; done
-	$(MAKE) release-sums
+	$(MAKE) release-sums release-sign
 	@echo "bin/release"
 
 # The Mac: the DMG, its bill, the tools it was built with, and checksums of every
@@ -165,7 +176,26 @@ release-linux: linux-package
 # Checksums of every file in bin/release, files another machine built and copied
 # in included (CI's release job adds the Windows and Linux files that way).
 release-sums:
-	cd bin/release && rm -f SHA256SUMS && find . -type f | sed 's|^\./||' | LC_ALL=C sort | xargs $(SHA256) > ../SHA256SUMS.tmp && mv ../SHA256SUMS.tmp SHA256SUMS
+	cd bin/release && rm -f SHA256SUMS SHA256SUMS.sig && find . -type f | sed 's|^\./||' | LC_ALL=C sort | xargs $(SHA256) > ../SHA256SUMS.tmp && mv ../SHA256SUMS.tmp SHA256SUMS
+
+# The project's signature over the version and SHA256SUMS (SEC-021), which a copy of
+# the app checks before it updates itself in place (SET-008). The key is
+# RELEASE_SIGNING_KEY (CI's secret) or the file RELEASE_SIGNING_KEY_FILE names, by
+# default the one `make release-key` writes. Without a key the release is left
+# unsigned, loudly, and no copy updates to it in place; REQUIRE_SIGNATURE=1 fails
+# instead, as CI's release job asks.
+export RELEASE_SIGNING_KEY_FILE ?= $(HOME)/.config/freeloop-release/signing.key
+
+release-sign: ## Sign bin/release/SHA256SUMS with the project's release key (after release-sums)
+	@if [ -n "$$RELEASE_SIGNING_KEY" ] || [ -f "$$RELEASE_SIGNING_KEY_FILE" ]; then \
+		go run ./cmd/freeloop-sign sign -version $(VERSION) -dir bin/release && \
+		go run ./cmd/freeloop-sign verify -version $(VERSION) -dir bin/release; \
+	elif [ "$(REQUIRE_SIGNATURE)" = 1 ]; then echo "no release signing key (RELEASE_SIGNING_KEY or $$RELEASE_SIGNING_KEY_FILE)"; exit 1; \
+	else echo "NOT SIGNED: no release signing key, so no copy of the app will update to this release in place"; fi
+
+release-key: ## Make the project's release signing key, once (never over one), and print its public half for internal/release
+	go run ./cmd/freeloop-sign keygen -out "$$RELEASE_SIGNING_KEY_FILE"
+	@echo "Add the line above to Keys in internal/release/release.go, and keep $$RELEASE_SIGNING_KEY_FILE safe: it is the only copy."
 
 verify-repro: ## Build twice from clean clones and compare every file (NFR-SEC-004; REF=<tag> for a release)
 	scripts/verify-repro.sh $(REF)

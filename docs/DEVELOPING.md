@@ -107,7 +107,7 @@ A release comes from a tag, made by CI (the `release` job in `.github/workflows/
 3. **Push and wait for CI to pass** (`gh run watch`).
 4. **Dry run.** On the Actions page, run CI with *dry run* checked, or `gh workflow run CI -f dry_run=true`. The release job builds every file of a release and keeps them as an artifact; download it and check `shasum -a 256 -c SHA256SUMS` and the version in the app.
 5. **Tag and push the tag**: `git tag v<version> && git push origin v<version>`. CI runs every check, the real agents and the reproducibility check, then makes a **draft** pre-release with the files and the notes. The tag must be `v` plus `AppVersion`.
-6. **Read the draft** on the Releases page and publish it.
+6. **Read the draft** on the Releases page and publish it. The job makes it a pre-release; the update check, and so updating in place, only ever offers a release that is not one, so untick that for a version without `-beta`.
 
 **When CI cannot run** (no Actions minutes left), the same files come from a Mac: check out the tag, run `make test lint check-app`, then `make release` (with makensis installed and Docker running, so that the Windows and Linux files are built too), and make the draft yourself with `gh release create v<version> --draft --prerelease --verify-tag --title "Freeloop <version>" --notes-file docs/release-notes/<version>.md bin/release/*`. CI's reproducibility check (`make verify-repro REF=v<version>`) is then yours to run too.
 
@@ -121,7 +121,35 @@ What it builds:
 - **Windows:** the two installers and two zips, `Freeloop-windows-<arch>.sbom.cdx.json`, `THIRD_PARTY_NOTICES-windows.txt`, `BUILDINFO-windows.txt`, and `WINDOWS-FILES.sha256` for the two exes.
 - **Linux:** the AppImages and `.deb`s, `Freeloop-linux-<arch>.sbom.cdx.json`, `THIRD_PARTY_NOTICES-linux.txt`, and `BUILDINFO-linux-<arch>.txt`, which records the image's Ubuntu, glibc, GTK, WebKitGTK and linuxdeploy.
 
-`SHA256SUMS` covers every file (`make release-sums` rewrites it after files are added by hand).
+`SHA256SUMS` covers every file (`make release-sums` rewrites it after files are added by hand, and removes the signature, which `make release-sign` makes again).
+
+### Signing a release (SEC-021)
+
+Two signatures, for two questions (OQ-056).
+
+**The project's own, on every system.** `make release` ends with `make release-sign`, which writes `SHA256SUMS.sig`: an Ed25519 signature over the version and `SHA256SUMS`. A copy of the app checks it before it updates itself in place (SET-008), against the public keys in `internal/release/release.go` (`Keys`). Anyone can check a downloaded release folder with `go run ./cmd/freeloop-sign verify -version <version> -dir <folder>`.
+
+- The key is read from `RELEASE_SIGNING_KEY` (the key itself; CI's release job takes it from the repository secret of that name) or from the file `RELEASE_SIGNING_KEY_FILE` names, by default `~/.config/freeloop-release/signing.key`. It is never in the repository.
+- Without a key, `make release-sign` says NOT SIGNED and goes on, for a local build nobody updates to; `REQUIRE_SIGNATURE=1` fails instead, which the release job sets for a tag.
+- `make release-key` makes a key once, never over an existing file, and prints its public half for `Keys`. The project's was made on 2026-11-12. Keep the file in a password manager too: it is the only copy, and without it copies that carry only its public half cannot install the next release in place.
+- To replace the key: add the new public key to `Keys`, release once signed with the old key, then sign with the new one and remove the old key a release later. `freeloop-sign sign` refuses a key that is not in `Keys`.
+
+**Apple's, for the Mac.** Without it the app is signed ad hoc, macOS asks before opening a download and the Keychain asks again after each update. With a Developer ID (OQ-057; none exists yet, so none of this has run):
+
+1. Join the Apple Developer Program and make a "Developer ID Application" certificate in Xcode or on developer.apple.com; it lands in the login keychain. `security find-identity -v -p codesigning` shows its name.
+2. Store notary credentials once: `xcrun notarytool store-credentials freeloop-notary --apple-id <id> --team-id <team> --password <app-specific password>`.
+3. Build: `make release SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" NOTARY_PROFILE=freeloop-notary`. The app and its speech program are signed with the hardened runtime and Apple's timestamp, the disk image is signed, sent to Apple and stapled, and only then are the checksums written.
+4. For CI, export the certificate as a `.p12` and set the secrets `MACOS_CERTIFICATE` (its base64), `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY`, and for notarization `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID` and `NOTARY_PASSWORD`. The release job makes a keychain for the run; without the secrets it signs ad hoc and says so.
+
+Once a copy signed by a team runs, an update in place takes only an app signed by the same team. Going from ad hoc to a Developer ID is taken; going back is refused.
+
+**Windows** files carry no Authenticode signature, so SmartScreen warns once (OQ-057). Linux packages are not signed for a package repository.
+
+### Updating in place (SET-008)
+
+`internal/engine/selfupdate.go` downloads and checks; `update.go` in each platform package puts the file in place; `EngineService.InstallUpdate` starts the new copy and quits. To try it without GitHub, run a development build with `FREELOOP_RELEASE_API=http://127.0.0.1:<port>/`, a server that answers with a release's JSON (`tag_name`, `html_url`, and `assets` with `name`, `browser_download_url` and `size`) and serves the files from the same address; a shipped build ignores the switch. The signature is still checked against `Keys`, so the stand-in's files must be signed with the project's key. `cmd/freeloop/update_mac_test.go` does all of it with a key of its own (`Options.ReleaseKeys`, which the app never sets): a signed release on a stand-in server, a real disk image, and a bundle replaced by the system's programs.
+
+A copy updates from the file of its kind: `Freeloop.dmg`, `Freeloop-<version>-windows-<arch>-portable.zip` (an installed copy too), `Freeloop-<version>-linux-<arch>.AppImage`. Renaming those in a release breaks updating for every copy already out; `release.Asset` and its test hold the names.
 
 ### Which build is this, and keeping one copy (NFR-REL-006)
 
@@ -133,7 +161,7 @@ The version in `build/config.yml` is the same for every build of a release, so e
 
 `verify-repro` also builds the two Windows exes in both clones and compares them. They are cross-compiled pure Go, so any host produces the same bytes, which can be checked against `WINDOWS-FILES.sha256`. The installers, zips, AppImages and `.deb`s carry timestamps and are not compared. Linux builds are not compared either.
 
-Two things differ by design. A DMG is stamped with the time, so compare the app inside it. Should a build ever carry a Developer ID signature, which releases do not (OQ-009), it is dated, so remove it first (`codesign --remove-signature`) and sign both ad hoc.
+Two things differ by design. A DMG is stamped with the time, so compare the app inside it. A build that carries a Developer ID signature (`SIGN_IDENTITY`; none has yet, OQ-057) is dated, so remove it first (`codesign --remove-signature`) and sign both ad hoc.
 
 `make notices` writes `bin/THIRD_PARTY_NOTICES.txt`, the license and notice files of the same things, which goes in the DMG and the release. It names on stderr anything with no such file, for you to check before a release; `@wailsio/runtime` is one, with its license in the Wails Go module that is also listed.
 

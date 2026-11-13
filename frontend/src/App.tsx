@@ -1674,7 +1674,12 @@ export default function App() {
             )}
           </nav>
           {update?.newer && update.url && (
-          <button className="link today" title={update.url} onClick={() => Browser.OpenURL(update.url!).catch(report)}>
+          <button
+            className="link today"
+            title={update.canInstall ? t("sidebar.updateHere", { version: update.latest ?? "" }) : update.url}
+            // A copy that can replace itself does so from Settings (SET-008); another is shown the release.
+            onClick={() => (update.canInstall ? setScreen({ kind: "network" }) : Browser.OpenURL(update.url!).catch(report))}
+          >
             {t("sidebar.update", { version: update.latest ?? "" })}
           </button>
         )}

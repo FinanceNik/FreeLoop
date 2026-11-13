@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -71,6 +72,11 @@ var windowPermissions = map[application.PermissionType]application.Permission{
 	application.PermissionMicrophone: application.PermissionAllow,
 }
 
+// afterUpdateArg is what a copy of the app is started with by the copy it
+// replaced (SET-008); afterUpdateWait is how long it waits for that one to quit.
+const afterUpdateArg = "--after-update"
+const afterUpdateWait = 30 * time.Second
+
 func main() {
 	// Inside a sandbox, before anything that needs the data folder (OQ-037).
 	if len(os.Args) > 1 && os.Args[1] == environment.SandboxBridgeArg {
@@ -94,6 +100,16 @@ func main() {
 		log.Printf("freeloop: this build ignores the development switches %s", strings.Join(names, ", "))
 	}
 	lock, err := environment.LockFolder(filepath.Join(dataDir, ".lock"))
+	// Started by the copy an update replaced (SET-008), which is still quitting
+	// and holds the data folder until it has: wait for it, then clear up after it.
+	afterUpdate := slices.Contains(os.Args[1:], afterUpdateArg)
+	for end := time.Now().Add(afterUpdateWait); afterUpdate && errors.Is(err, environment.ErrLocked) && time.Now().Before(end); {
+		time.Sleep(200 * time.Millisecond)
+		lock, err = environment.LockFolder(filepath.Join(dataDir, ".lock"))
+	}
+	if afterUpdate && err == nil && thisPlatform.FinishUpdate != nil {
+		thisPlatform.FinishUpdate()
+	}
 	if errors.Is(err, environment.ErrLocked) {
 		failStartup("Freeloop is already running with this data folder, and two copies would overwrite each other's work. Switch to the one that is open.")
 	} else if err != nil {
@@ -112,7 +128,7 @@ func main() {
 	keys := secretStore()
 	eng, err := engine.Open(engine.Options{
 		HookProgram: hookProgram,
-		DataDir:     dataDir, Secrets: keys, Confiner: thisPlatform.Confiner, ProcessStarted: thisPlatform.ProcessStarted, GroupMembers: thisPlatform.GroupMembers, EditorArgv: thisPlatform.EditorArgv, PDFArgv: thisPlatform.PDFArgv, FolderArgv: thisPlatform.FolderArgv, SystemInfo: thisPlatform.SystemInfo, Dev: devEnv("FREELOOP_DEV") == "1", ScriptedVoice: devEnv("FREELOOP_DEV_VOICE") == "scripted",
+		DataDir:     dataDir, Secrets: keys, Confiner: thisPlatform.Confiner, ProcessStarted: thisPlatform.ProcessStarted, GroupMembers: thisPlatform.GroupMembers, EditorArgv: thisPlatform.EditorArgv, PDFArgv: thisPlatform.PDFArgv, FolderArgv: thisPlatform.FolderArgv, SystemInfo: thisPlatform.SystemInfo, UpdateKind: thisPlatform.UpdateKind, ApplyUpdate: thisPlatform.ApplyUpdate, Dev: devEnv("FREELOOP_DEV") == "1", ScriptedVoice: devEnv("FREELOOP_DEV_VOICE") == "scripted",
 		// A fake release server for trying the update check (OQ-015).
 		ReleaseAPI: devEnv("FREELOOP_RELEASE_API"),
 		// A stand-in for the GitHub CLI (SES-011, SES-017, SES-018).
@@ -176,7 +192,13 @@ func main() {
 	ph := startPhone(phoneCtx, eng, dataDir, keys)
 	guard.phoneOn = ph.on
 
-	svc := &EngineService{eng: eng, phone: ph}
+	svc := &EngineService{eng: eng, phone: ph, quitForUpdate: func() {
+		// The user chose to update, knowing what it interrupts (InstallUpdate).
+		guard.confirmed.Store(true)
+		if guard.app != nil {
+			guard.app.Quit()
+		}
+	}}
 	desk := newDesktop(eng)
 	app := application.New(application.Options{
 		Name:        "Freeloop",

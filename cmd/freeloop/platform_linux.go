@@ -15,4 +15,7 @@ var thisPlatform = platform{
 	Confiner:       linux.Bubblewrap{},
 	NoNap:          linux.NoNap,
 	KeepAwake:      linux.KeepAwake,
+	UpdateKind:     linux.UpdateKind,
+	ApplyUpdate:    linux.ApplyUpdate,
+	FinishUpdate:   linux.FinishUpdate,
 }
