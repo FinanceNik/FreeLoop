@@ -1,6 +1,6 @@
 ---
 title: The documents say what is
-status: open
+status: done
 type: afk
 blockedBy: []
 prd: before-going-public
