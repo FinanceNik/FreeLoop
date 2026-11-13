@@ -77,8 +77,9 @@ notices: ## Write bin/THIRD_PARTY_NOTICES.txt from what bin/Freeloop.app was bui
 
 # Windows (NFR-XPLAT-003) is pure Go (WebView2 through go-webview2), so it
 # cross-compiles from any host with CGO_ENABLED=0; build/windows/Taskfile.yml has
-# the steps. The installer needs NSIS 3's makensis, the zip needs zip. Both are
-# unsigned for now, as the Mac build is ad-hoc signed (OQ-009).
+# the steps. The installer needs NSIS 3's makensis, the zip needs zip. Neither
+# carries an Authenticode signature (OQ-057); the release's checksums are signed
+# with the project's key (SEC-021).
 WINDOWS_ARCHS := amd64 arm64
 
 windows-tools:

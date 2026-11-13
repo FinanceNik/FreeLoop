@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/FinanceNik/Freeloop/schemas/events.json",
   "title": "Freeloop session event",
-  "description": "One line of a session transcript (sessions/<id>/events.jsonl). Schema v0 (EXT-002): a strict superset of ACP session/update (OQ-012). ACP variants keep ACP's type name and payload minus the sessionUpdate discriminator; payload fields are camelCase. Variants without a payload definition below are reserved: their payload is not fixed yet and may be any object.",
+  "description": "One line of a session transcript (sessions/<id>/events.jsonl). Schema version 1, the v field (EXT-002): a strict superset of ACP session/update (OQ-012). ACP variants keep ACP's type name and payload minus the sessionUpdate discriminator; payload fields are camelCase. Variants without a payload definition below are reserved: their payload is not fixed yet and may be any object.",
   "type": "object",
   "required": ["v", "seq", "ts", "sid", "type", "data"],
   "additionalProperties": false,

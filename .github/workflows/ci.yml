@@ -24,9 +24,10 @@ permissions:
   contents: read
 
 # For what minutes cost on a private repository, where a macOS minute counts ten: the
-# tests on Linux and on Windows for every push, and the macOS build, lint and real-app
-# check on tags, weekly and from the Actions page (docs/ROADMAP.md, "From here to
-# 0.1.0"), where the Windows and Linux packages are built too (NFR-XPLAT-003).
+# tests on Linux and on Windows for every push that changes more than documents, the
+# macOS build, lint and real-app check on tags and from the Actions page, where the
+# Windows and Linux packages are built too (NFR-XPLAT-003), and the real agents weekly
+# and on tags (docs/ROADMAP.md, "From here to 0.1.0").
 jobs:
   test:
     if: github.event_name != 'schedule'

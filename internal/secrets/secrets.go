@@ -1,7 +1,8 @@
 // Package secrets defines the interface every secret goes through (SEC-004).
 // Config files hold references such as keychain://freeloop/providers/anthropic;
-// values are resolved only at request or spawn time. The macOS backend is in
-// internal/platform/darwin, the Linux one (the Secret Service) in internal/platform/linux;
+// values are resolved only at request or spawn time. The backends are the system's
+// keyrings: the macOS Keychain in internal/platform/darwin, the Secret Service in
+// internal/platform/linux and the Credential Manager in internal/platform/windows;
 // Memory is the fake for tests.
 package secrets
 

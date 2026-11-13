@@ -1,16 +1,16 @@
 # Architecture
 
-Architecture for **Freeloop**. M0 built the store, event schema, engine API, config skeleton and secrets interface (as `secrets.Store`); the rest is proposed; interface sketches are Go-flavoured pseudocode meant to fix names and responsibilities, not to compile. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENTS.md); unsettled points refer to [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+Architecture for **Freeloop**. What it describes is built unless a sentence says otherwise; the paragraphs marked *As built* say how a part was built and when. The Go blocks in section 4 are the code's own declarations, trimmed, with `ctx` standing for `context.Context`. Many paragraphs were written when the app ran on a Mac only: where one says Keychain, zsh or "this Mac", the other systems have their own (the Windows Credential Manager and Git Bash, the Linux Secret Service and login shell), as the paragraph "As built for three systems" in section 4.6 says. Requirement IDs refer to [REQUIREMENTS.md](REQUIREMENTS.md); unsettled points refer to [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 ## 1. Stack
 
 | Layer | Choice | Why |
 |---|---|---|
 | Core (engine) | **Go** | Supervising many child processes (harnesses, MCP servers, shells, PTYs, git) with goroutines and contexts; one static binary; official Go SDKs for MCP, Anthropic, OpenAI and Google; the author is productive in it |
-| Desktop shell | **Wails v3** (v3.0.0, released 2026-10-26, pinned) on WKWebView (macOS), WebView2 (Windows) and WebKitGTK 4.1 (Linux) | Go-native shell with multi-window, generated TypeScript bindings for Go services, and an event bus; v2.17 as fallback (OQ-002) |
+| Desktop shell | **Wails v3** (v3.0.0, released 2026-10-26, pinned) on WKWebView (macOS), WebView2 (Windows) and WebKitGTK 4.1 (Linux) | Go-native shell with multi-window, generated TypeScript bindings for Go services, and an event bus; v2.17 was the fallback, not needed (OQ-002) |
 | Frontend | **React + TypeScript** | Largest component ecosystem and best AI-assisted code generation; the author will not hand-write most of it (OQ-004) |
 | Harness protocol | **ACP** (Agent Client Protocol), JSON-RPC over stdio | Already spoken by Claude Code (via adapter), Gemini CLI, Codex (via adapter), Copilot CLI, Goose, OpenCode, Cline and 40-odd others; its permission and tool-call model is a good normalization target |
-| Tools protocol | **MCP** via the official Go SDK (v1.7+, spec 2026-07-28, with older revisions for existing servers) | Stateless revision with `server/discover` and multi round-trip requests; the SDK handles version negotiation |
+| Tools protocol | **MCP** via the official Go SDK (v1.8.0, spec 2026-07-28, with older revisions for existing servers) | Stateless revision with `server/discover` and multi round-trip requests; the SDK handles version negotiation |
 | Skills | **Agent Skills** (`SKILL.md`) | De facto standard; the author's existing skills load unchanged |
 | Storage | **SQLite** (pure-Go driver) for index and metadata, **JSONL** per session for transcripts, **YAML** for config | Readable, greppable, crash-safe appends, no server |
 | Secrets | The system keyring behind a `Secrets` interface: **macOS Keychain**, **Windows Credential Manager**, **Linux Secret Service** | Never in files; one backend per system in `internal/platform` (NFR-XPLAT-002) |
@@ -32,8 +32,8 @@ Architecture for **Freeloop**. M0 built the store, event schema, engine API, con
 
 ```mermaid
 flowchart LR
-  subgraph App["Freeloop.app (one process in MVP)"]
-    UI["React / TypeScript UI<br/>(WKWebView)"]
+  subgraph App["Freeloop (one process)"]
+    UI["React / TypeScript UI<br/>(the system's web view)"]
     Bridge["Wails bindings + events"]
     subgraph Engine["Engine (Go, transport-agnostic API)"]
       SM["Session runtimes"]
@@ -44,7 +44,7 @@ flowchart LR
       SK["SkillStore"]
       MM["MCPManager"]
       ST["Store<br/>(SQLite + JSONL)"]
-      SEC["Secrets<br/>(Keychain)"]
+      SEC["Secrets<br/>(system keyring)"]
       CFG["Config<br/>(YAML, hot reload)"]
     end
   end
@@ -57,8 +57,8 @@ flowchart LR
   ACPA -. "JSON-RPC over stdio" .-> EXT["External agents<br/>Claude Code (adapter), Gemini CLI,<br/>Codex (adapter), Goose, OpenCode, custom"]
   EXT -. "fs/* and terminal/* requests" .-> ACPA
   ACPA --> EM & PB & MM
-  EM --> LOCAL["Local folder env"] & DOCKER["Docker / devcontainer env (v1)"] & SSH["SSH env (v1, built-in agent)"]
-  PR --> ANTH["Anthropic API"] & OAIC["OpenAI-compatible<br/>OpenAI, OpenRouter, LM Studio,<br/>llama.cpp, vLLM"] & OLL["Ollama native"]
+  EM --> LOCAL["Local folder env"] & DOCKER["Docker / devcontainer env"] & SSH["SSH env (built-in agent only)"]
+  PR --> ANTH["Anthropic API"] & OAIC["OpenAI-compatible<br/>OpenAI, OpenRouter, LM Studio,<br/>llama.cpp, vLLM"] & OLL["Ollama native"] & OAIR["OpenAI Responses API"] & GEM["Gemini API"]
   MM -. "MCP stdio / Streamable HTTP" .-> MCPS["MCP servers"]
   EM --> SEC
   PR --> SEC
@@ -66,11 +66,11 @@ flowchart LR
 
 ## 3. Process model
 
-**MVP: one process.** The Wails app hosts the engine in-process. Child processes are: external harnesses (ACP over stdio), stdio MCP servers, shell commands and PTYs spawned by environments, and `git`/`docker` invocations. Each child belongs to a process group owned by its session so cancellation kills the whole tree.
+**One process.** The Wails app hosts the engine in-process. Child processes are: external harnesses (ACP over stdio), stdio MCP servers, shell commands and PTYs spawned by environments, and `git`, `docker` and `ssh` invocations. Each command and each spawned process runs in a process group of its own (a job object on Windows), so cancelling it kills the whole tree.
 
-**Why not a daemon from day one.** A separate engine daemon would let sessions survive a GUI crash and give the headless CLI for free, at the cost of an IPC layer and process lifecycle work before anything else exists. The engine API is designed transport-agnostic (section 11) and all state is persisted per event (SES-002), so a GUI crash loses nothing but in-flight streams, and the daemon split can happen at v1 with EXT-004 (OQ-003).
+**Why not a daemon from day one.** A separate engine daemon would let sessions survive a GUI crash and give the headless CLI for free, at the cost of an IPC layer and process lifecycle work before anything else exists. The engine API is transport-agnostic (section 10) and all state is persisted per event (SES-002), so a GUI crash loses nothing but in-flight streams. The socket of EXT-004 is built (section 4.6); the daemon split, in which the engine outlives the window, is not (OQ-003).
 
-**Concurrency.** The engine (`internal/engine/runtime.go`) runs each session as a goroutine group under a per-session `context.Context`. Provider calls go through a per-provider semaphore (OQ-013). *As built in M2:* `internal/engine/limit.go` wraps a session's provider so a model call takes one of the provider's `maxConcurrent` slots (default 4) and frees it when its stream ends; a call that has to wait marks the session `queued` until it gets one. Events fan out through a bus with bounded buffers; the store subscriber is synchronous (persist before publish), UI subscribers are asynchronous and may fall back to catch-up reads from the store if they lag. The race detector runs in CI; a chaos test runs ten sessions with random cancels.
+**Concurrency.** The engine (`internal/engine/runtime.go`) runs each session as a goroutine group under a per-session `context.Context`. Provider calls go through a per-provider semaphore (OQ-013). *As built in M2:* `internal/engine/limit.go` wraps a session's provider so a model call takes one of the provider's `maxConcurrent` slots (default 4) and frees it when its stream ends; a call that has to wait marks the session `queued` until it gets one. Events fan out through a bus with bounded buffers; the store subscriber is synchronous (persist before publish), UI subscribers are asynchronous and may fall back to catch-up reads from the store if they lag. The race detector runs in CI's Go tests. *As built (NFR-PERF-004, OQ-053):* `internal/engine/idle.go` stops the runtime of a session that has had no turn, no waiting approval, no queued message and no open terminal for 30 minutes (`sessions.idleStop` in `config.yaml`, or `never`), with its agent's process or container; the next message starts them again with the session's history, as after a restart of the app.
 
 ## 4. Core abstractions
 
@@ -79,68 +79,91 @@ flowchart LR
 A configured model endpoint: one Anthropic key, one OpenRouter key, one local Ollama. Providers know nothing about agents.
 
 ```go
+// internal/provider/provider.go
 type Provider interface {
     ID() string
-    Type() ProviderType                 // anthropic | openai_compat | ollama | (v1) gemini | openai_responses
+    Type() Type                         // anthropic | openai_compat | openai_responses | gemini | ollama | scripted (development builds)
     ListModels(ctx) ([]ModelInfo, error)
     Capabilities(model string) ModelCaps
-    Stream(ctx, ChatRequest) (<-chan ChatEvent, error) // text deltas, thought deltas, tool-call deltas, usage, stop reason
-    CountTokens(ctx, ChatRequest) (int, error)        // estimate when the API has no counter
+    // The channel ends with exactly one event of type done or error.
+    Stream(ctx, ChatRequest) (<-chan Event, error) // text_delta, thinking_delta, tool_call_start, tool_args_delta, usage, done, error
 }
 
 type ModelCaps struct {
-    Tools, ToolChoice, ParallelTools, StreamedToolArgs, StableToolCallIDs bool
-    StructuredOutput, Vision, Reasoning, PromptCaching bool
+    Source CapsSource                   // static | reported | probe | override | unknown
+    Tools, ParallelTools, StreamedToolArgs, StableToolCallIDs bool
+    Reasoning, Effort, PromptCaching, Images bool
     ContextWindow, MaxOutput int
+    ContextLimitSet bool                // ContextWindow is the user's own, not a detected one
 }
 ```
 
-Normalization rules live in one package: synthesize tool-call IDs when a runtime omits them (Ollama native returns an index only), buffer streamed tool arguments until the JSON is complete, map reasoning fields (`thinking`, `reasoning_content`, `reasoning`) to one `ThoughtDelta`, and disable parallel tool calls when `ParallelTools` is false. Local runtimes get a tool-calling probe on first use that fills `ModelCaps` (PRV-005, OQ-011).
+There is no token counter: the built-in harness estimates what was added since the last call's reported usage (HRN-013, section 5). Normalization happens inside each adapter, so the harness only sees these types (PRV-004): an adapter makes up tool-call IDs when a runtime omits them (Ollama native returns an index only), delivers a tool call's arguments complete in the `done` event's message, and maps reasoning fields (`thinking`, `reasoning_content`, `reasoning`) to `thinking_delta`. `ParallelTools` is recorded per model, and nothing reads it yet. Local runtimes get a tool-calling probe on first use that fills `ModelCaps` (PRV-005, OQ-011).
 
 ### 4.2 Harness and sessions
 
 A harness is anything that can run an agent session. The interface is deliberately shaped like ACP so that the ACP adapter is a one-to-one mapping and the built-in harness is "an ACP agent linked in-process".
 
 ```go
+// internal/harness/harness.go
 type Harness interface {
-    Info() HarnessInfo                                  // id, name, kind (builtin|acp|cli), negotiated capabilities
-    NewSession(ctx, SessionParams) (SessionHandle, error)
-    LoadSession(ctx, externalID string, SessionParams) (SessionHandle, error) // replays history; only if capable
+    Info() Info                                     // id, name, kind (builtin | acp)
+    NewSession(ctx, Params) (Session, error)
 }
 
-type SessionParams struct {
-    Env        Environment
-    Profile    Profile          // model, prompt, tools, policy, skills, MCP servers, limits
-    Cwd        string
-    MCPServers []MCPServerSpec  // resolved from profile + environment, paths valid inside Env
+type Params struct {                                // trimmed; the profile's settings arrive resolved
+    SessionID  string
+    Env        environment.Environment
+    Broker     *permission.Broker
+    Provider   provider.Provider                    // with Model, Fallback, ContextWindow, Effort: the built-in harness's
+    Mode       permission.Mode
+    History    []provider.Message                   // restores a built-in session's context after a restart
+    SystemPrompt string; Tools, DisabledTools []string; MaxTurns int; Commands []Command
+    Skills     SkillSource                          // asked at every model call
+    MCP        MCPSource                            // the session's MCP tools, for the built-in harness
+    MCPServers []MCPServerSpec                      // the same servers, passed to an external agent
+    Subagents  Subagents
+    ExternalID string                               // the harness-side session to load instead of starting a new one
+    Recap      func() string                        // the conversation as text, for an agent that could not load it
+    Emit       Emitter                              // func(typ event.Type, data any)
 }
 
-type SessionHandle interface {
-    Prompt(ctx, []ContentBlock) (StopReason, error) // end_turn | max_tokens | max_turns | refusal | cancelled
-    Cancel(ctx) error
-    SetMode(ctx, ModeID) error                      // ask | accept_edits | plan | auto | bypass, plus harness-defined modes
-    SetConfig(ctx, key string, value any) error     // model, thought level, harness-specific options
-    Events() <-chan Event
+type Session interface {
+    Prompt(ctx, Prompt) (StopReason, error)         // end_turn | max_tokens | max_turns | refusal | cancelled | error
+    Mode() permission.Mode
+    SetMode(permission.Mode)                        // ask | accept_edits | plan | auto | bypass
     Close() error
 }
+
+// Optional, found by type assertion:
+type Resumable interface { ExternalID() string }
+type ModelSetter interface { SetModel(p provider.Provider, model string, contextWindow int) }
+type EffortSetter interface { SetEffort(effort string) }
+type Configurable interface { Options() []Option; SetOption(ctx, id, value string) error }
 ```
 
-*As built in M1 (`internal/harness`):* sessions receive an `Emit(type, data)` function in their parameters instead of exposing an event channel, so every event goes straight to the store (persist, then publish); cancel is the prompt's context; `SetConfig` waits until a harness needs it. The built-in harness records each context message as a `history_message` event, which is how a session continues with its full context after a restart. A prompt is text plus embedded resources: the engine reads the files a message `@`-mentions through the session's environment and hands them to the harness, as an ACP client embeds resources, so mentions work the same for every harness (GUI-004); the transcript shows each one as a `resource_link` user content block.
+*As built in M1 (`internal/harness`):* sessions receive an `Emit(type, data)` function in their parameters instead of exposing an event channel, so every event goes straight to the store (persist, then publish); cancel is the prompt's context; loading an agent's earlier session is `Params.ExternalID`, not a method. A session whose agent reports options (ACP's session config options: model and thought level) implements `Configurable` (PRV-014). The built-in harness records each context message as a `history_message` event, which is how a session continues with its full context after a restart. A prompt is text plus embedded resources: the engine reads the files a message `@`-mentions through the session's environment and hands them to the harness, as an ACP client embeds resources, so mentions work the same for every harness (GUI-004); the transcript shows each one as a `resource_link` user content block.
 
 *As built in M2 (HRN-003):* a profile is `config.Profile`, loaded from `profiles/<id>.yaml` with unknown fields rejected and validation problems reported with their line; the session records its profile ID, the project records a default profile, and `config.yaml` has a fallback under `defaults.profileId`. Provider, model and mode come from the profile when the new-session request leaves them empty. When a session starts, the engine passes the profile's effort, system prompt (added after the harness's own, before project instructions), tool list (`present_plan` stays available for plan mode), turn cap and instruction policy in `harness.Params`; a running session keeps them, while the profile's rules are read at every permission check, between the global and the session rules. Slash commands follow ACP (GUI-004): the engine records the profile's commands as an `available_commands_update` event when a session is created and again when it starts with a changed list, the harness expands a prompt that starts with `/name` (the built-in harness from `harness.Params.Commands`), and the GUI only lists what the event says, so an ACP agent's own commands appear the same way. Mode commands are the GUI's, since modes are common to every harness.
 
 The engine-side `Session` record is what the GUI lists:
 
 ```go
+// internal/session/session.go
 type Session struct {
     ID, ProjectID, EnvironmentID, HarnessID, ProfileID string
-    ExternalID   string          // harness-side id for ACP session/load or session/resume
+    ProjectRoot  string
+    ExternalID   string          // harness-side id for ACP session/load
     Title        string
-    Status       SessionStatus   // idle | running | waiting_permission | waiting_input | error | archived
-    Model        ModelRef
-    Mode         ModeID
+    Status       Status          // idle | running | waiting_permission | waiting_input | queued | error | archived
+    ProviderID, Model, Mode, Effort string
     BaseCommit, Branch string    // for the diff panel and git badge
-    Usage        Usage
+    Worktree, WorktreeBranch string // the session's own git worktree (SES-010)
+    ParentID     string          // the session whose task tool started this one (HRN-014)
+    Tags         []string
+    Optimizer, Workflow, ImportedFrom string
+    PortBase     int             // SES-016
+    LastSeq      int64
     CreatedAt, UpdatedAt time.Time
 }
 ```
@@ -150,23 +173,29 @@ type Session struct {
 Where a session's processes run and where its files are. Every tool execution, file access and PTY goes through this interface; a lint rule forbids `os/exec` and direct file I/O elsewhere in the engine (ENV-001).
 
 ```go
+// internal/environment/environment.go
 type Environment interface {
     ID() string
-    Kind() EnvKind                     // local | docker | ssh
-    Root() string                      // project root as seen inside the environment
-    Capabilities() EnvCaps             // sandboxed, network, pty, setup/health supported
-    Exec(ctx, ExecSpec) (Process, error) // argv, cwd, env (with secret refs resolved at spawn), stdin, pty, timeout, output caps
-    FS() FileSystem                    // Read, Write, Stat, List, Glob, Grep; path policy enforced here
-    Setup(ctx) error                   // post-create script (v1)
-    Health(ctx) error
+    Kind() Kind                        // local | docker | ssh
+    Root() string                      // project root as an absolute path inside the environment
+    Resolve(path string) string        // a clean absolute path; checks no policy
+    Contains(path string) bool         // whether path resolves to a location inside Root
+    Exec(ctx, ExecSpec) (ExecResult, error) // a shell command, or argv; cwd, env, stdin, timeout, output cap; runs to its end
+    FS() FileSystem                    // ReadFile, WriteFile, Stat, ReadDir, Glob, Grep; every call passes the Guard (path policy) first
 }
+
+// Optional, found by type assertion:
+type Spawner interface { Spawn(ctx, SpawnSpec) (Process, error) }             // long-running processes on stdio: local, docker
+type Terminals interface { OpenTerminal(ctx, TerminalSpec) (Terminal, error) } // local, docker
 ```
+
+The interface has no capabilities, setup or health methods: a Docker environment's setup and health check are options of `environment.Docker`, run when the session's container starts (ENV-006, below), and what an environment can do is told by the optional interfaces it implements.
 
 *As built for v1 (SES-010):* a session can have its own git worktree, recorded as the session's `worktree`; `Session.WorkRoot()` is where its environment, diff panel and `@` mentions work, while `projectRoot` keeps the project it belongs to. Worktrees are created with `git worktree add -b freeloop/<title>-<random> <path> HEAD` under `<data folder>-worktrees/<project>/`, next to the data folder (the protected-path policy covers the data folder itself) and outside the repository; archiving runs `git worktree remove`, which refuses when there is uncommitted work (the session then keeps it and says so), unarchiving checks the branch out again, and branches are never deleted. "Merge…" in the Diff tab runs `git merge --no-ff --no-edit` of the session's branch in the main checkout, only when both sides have no uncommitted changes to tracked files, and aborts a conflicting merge. Like the diff panel these commands need a trusted project whose git config names no programs, and run with hooks off. The worktree's branch is recorded with the session (`worktree_branch`), apart from the branch the git state reports, which can be empty; archive keeps a worktree whose HEAD has left that branch, since removing it would strand its commits.
 
 *As built for v1 (SES-011):* the Diff tab's "Pull request" section (`PullRequest.tsx` over `internal/engine/pullrequest.go`) proposes the session's current branch against the remote's default branch (`refs/remotes/<remote>/HEAD`, else `main` or `master`, editable), on `origin` or the only remote, listing the commits the remote's base lacks (or those since the session's base commit when there is no remote-tracking ref). It is off, with the reason shown, in an untrusted project, a repository whose config names programs, on a detached HEAD, on the base branch itself, or without commits to propose. "Draft description" asks the session's model once for a title and a Markdown description from the commit messages and the diff (capped at 40 KB), for the user to edit. "Create pull request" pushes `HEAD:refs/heads/<branch>` with `--set-upstream` under the panel's git guards (hooks off, no terminal prompt; credentials come from the user's own helpers and SSH agent) and runs `gh pr create --title … --body-file - --base … --head … [--draft]` through the login shell (`ExecSpec.LoginShell`) with the description on stdin and prompts and the update notifier off; branch names are checked before they reach the command line. It is refused in local-only mode, and in a repository whose own config names a program a push or gh's git calls would run (`core.sshCommand`, `core.gitProxy`, `core.askPass`, `core.fsmonitor`, credential helpers, a remote's `receivepack` or `uploadpack`); the user's global config is theirs. gh signs in on its own and the app never reads its token (HRN-008); without gh, or when it fails, the error says so and that the branch is already pushed. The pull request's URL, title and branches are recorded as a `pull_request` event, shown in the conversation and the Markdown export, and as "Opened from this session" in the section. Like committing, these are the user's own actions from the GUI and do not pass through the permission broker; an agent that runs `gh` itself does so through its shell tool, under the broker.
 
-*As built in M2:* the local environment also implements `Spawner` (`Spawn(ctx, SpawnSpec) (Process, error)`) for long-running processes that talk over stdio: MCP servers now, ACP agents next.
+*As built in M2:* the local environment also implements `Spawner` (`Spawn(ctx, SpawnSpec) (Process, error)`) for long-running processes that talk over stdio: MCP servers and ACP agents.
 
 *As built in M1:* an environment's settings (variables, secret references, disabled tools, default mode) live in `environments/<id>.yaml` and are separate from where it runs: a local environment runs in the session's project folder, so one environment can serve several projects and sessions (ENV-003). A project is a row in SQLite with its root and a git fingerprint (first commit, origin URL) for relinking after a move (OQ-020). Secrets are read from the Keychain when a session's environment starts and passed as variables; every value is added to the transcript redaction list. The app's own git queries (`git status --porcelain=v2 --branch` after each finished tool call and turn) run through `Environment.Exec` with argv, outside the permission broker, because they are the app's reads rather than a harness's side effects. *As built in M2:* the diff panel (GUI-005, `internal/engine/changes.go`) lists files from `git status --porcelain=v2 -z --no-renames --untracked-files=all` merged with `git diff --name-status <base>` (git's empty tree when the session started before the first commit), shows `git diff <base> -- <path>` (`--no-index` against `/dev/null` for untracked files) parsed in `frontend/src/diff.ts`, and stages, commits and discards with `git add`/`reset`, `commit -m` and `checkout HEAD --`/`rm`/`clean`; every action is checked against the current list of changed files, runs with the same guards as the reads, refuses repositories whose local config sets `filter.*` or `gpg.*`, and is followed by a `git_state` event, which is what makes the open panel refresh. These are the user's actions, so they do not go through the permission broker either.
 
@@ -174,29 +203,34 @@ type Environment interface {
 
 *As built for v1 (ENV-008, OQ-034):* `environment.SSH` runs commands on another machine through `/usr/bin/ssh`, with options on the command line that a `~/.ssh/config` cannot loosen, in a working copy per session under `remoteDir/freeloop-<session>/work`. `Root` and `FS` stay this Mac's, so file tools, git, diffs and checkpoints work on the project here. `Exec` sends what changed here, runs the command, and brings back what changed there; `internal/environment/sshsync.go` is that sync, with a baseline hash per file so a change on each side can be told apart. Variables reach a command through its standard input. `Resolve` maps a path of the working copy to the same file here. It implements neither `Spawner` nor `Terminals`, so the engine refuses an external agent and the terminal has no way in.
 
-The local implementation is thin wrappers over the OS. The Docker implementation (v1) runs `docker exec -i` for `Exec`, `docker cp` or `exec cat`/`tee` for `FS`, and reuses `.devcontainer/devcontainer.json` through the devcontainer CLI when present. Because ACP is stdio, an external harness runs *inside* an environment by spawning it through `Environment.Exec` with stdio pipes; the same path later covers `ssh`. MCP server commands passed to such a harness must be paths valid inside the environment.
+The local implementation is thin wrappers over the OS. The Docker implementation runs `docker exec` for `Exec` and `Spawn`, reads and writes the bind-mounted files on the host for `FS`, and reads `.devcontainer/devcontainer.json` itself, without the devcontainer CLI (see ENV-005 above). Because ACP is stdio, an external harness runs *inside* an environment by spawning it through the environment's `Spawn` with stdio pipes; the SSH environment has no `Spawn`, so an external agent cannot run there. MCP server commands passed to such a harness must be paths valid inside the environment.
 
 ### 4.4 Skill
 
 ```go
+// internal/skill/skill.go
 type Skill struct {
     Name, Description string          // name must equal directory name (spec)
-    Dir         string
-    Source      SkillSource           // app_store | project_freeloop | project_claude | project_agents | imported{from, at}
+    Source      string                // .freeloop | .agents | .claude | app
+    Dir, Path   string                // the folder relative to the FS it was read from, and absolute
     License, Compatibility string
     Metadata    map[string]string
-    AllowedTools []string             // experimental in the spec; used as a policy hint only
+    AllowedTools []string             // experimental in the spec; only shown, never treated as permission
+    Lines       int                   // the body's lines; the spec recommends under 500
 }
 
-type SkillStore interface {
-    Discover(ctx, project *Project) ([]Skill, error)   // app store, .freeloop/skills, .claude/skills, .agents/skills
-    Enabled(scope Scope) []Skill
-    SetEnabled(name string, scope Scope, on bool) error
-    Import(src string, opts ImportOpts) (Skill, error)  // one-way copy with provenance
-    Validate(dir string) []Issue                        // frontmatter rules from the spec
-    Load(name string) (Body, error)                      // SKILL.md body plus file list, for load_skill
+type FS interface {                   // the part of an environment's file system discovery needs
+    ReadFile(path string) ([]byte, error)
+    ReadDir(path string) ([]environment.FileInfo, error)
 }
+
+func Discover(fs FS, base, source, root string) ([]Skill, []Issue) // the skills in the folders below base; validates each
+func Merge(lists ...[]Skill) []Skill                               // precedence: the first skill of a name wins
+func Body(fs FS, s Skill) (string, error)                          // SKILL.md without its frontmatter, for load_skill
+func Files(fs FS, s Skill, limit int) []string
 ```
+
+There is no `SkillStore` type. The engine lists, switches, imports and installs skills (`ListSkills`, `SetSkillEnabled`, `PreviewSkills`, `InstallSkills`, `RemoveSkill` in `internal/engine/skills.go` and `skillinstall.go`), and an imported skill's provenance is a file in its folder in the store.
 
 *As built in M2:* `internal/skill` parses and discovers skills through an `FS` (an environment's file system), so it does no file I/O of its own; the engine reads the app store through a local environment rooted at `skills/` whose guard allows reads there only (the protected-path policy keeps the data folder from the agent's file tools, so `load_skill` with `file` is how the model reads a store skill's references), and project skills through the project's environment, only once the project is trusted. Global switches are `skills.disabled` in `config.yaml`, project switches a column on the project row, and a profile's `skills:` is an allowlist; the harness gets a `SkillSource` it asks at every model call, so switches apply at once. `load_skill` asks the broker as `skill:<name>`, so rules can allow or deny a skill by name.
 
@@ -209,45 +243,61 @@ Progressive disclosure (SKL-004): the system prompt carries name and description
 ACP's `session/request_permission` shape is the canonical approval event. The built-in harness and the ACP adapter both produce it; the GUI renders one dialog.
 
 ```go
-type ToolCall struct {
-    ID, Title string
-    Kind      ToolKind      // read | edit | delete | move | search | execute | think | fetch | switch_mode | other
-    Status    ToolStatus    // pending | in_progress | completed | failed
-    Tool      string        // canonical: shell, edit_file, mcp__<server>__<tool>, acp:<raw title>
-    RawInput, RawOutput json.RawMessage
-    Content   []ToolContent // text | diff{path, old, new} | terminal{id}
-    Locations []Location    // {path, line}
-}
+// A tool call has no Go type: it is the data of a tool_call event, ACP's ToolCall
+// plus the tool field, built as a map by the built-in harness and marshalled
+// from the SDK's type by the ACP client.
+//   toolCallId, title
+//   kind       read | edit | delete | move | search | execute | think | fetch | switch_mode | other
+//   status     pending | in_progress | completed | failed
+//   tool       canonical: shell, edit_file, mcp__<server>__<tool>, acp:<kind>
+//   rawInput, content (text | diff{path, oldText, newText} | terminal{terminalId}), locations ({path, line})
 
-type PermissionRequest struct {
-    ID, SessionID string
-    ToolCall      ToolCall
-    Options       []PermissionOption // kinds: allow_once | allow_always | reject_once | reject_always
-    RequestedAt   time.Time
+// internal/permission/broker.go, rules.go (trimmed)
+type Request struct {
+    ID, SessionID, ToolCallID string
+    Tool      string
+    Kind      Kind
+    Title     string
+    Input     json.RawMessage
+    Paths     []string        // absolute and clean
+    Command   string
+    Contained Containment     // the caller will run this command in the sandbox (ENV-009)
+    Options   []Option        // kinds: allow_once | allow_always | reject_once | reject_always
+    Created   time.Time
+    Form      *Form           // an MCP server's request for input (MCP-008); always put to the user
 }
 
 type Rule struct {
     Effect  Effect   // allow | deny
-    Tool    string   // shell | edit_file | write_file | mcp__github__* | skill:<name> | acp:*
-    Match   Matcher  // prefix (commands), glob (paths), namespace (MCP), exact
+    Tool    string   // shell | edit_file | write_file | mcp__github__* | skill:<name> | acp:* | *
+    Command string   // shell: an exact command, or a prefix written "git *"
+    Path    string   // file tools: a glob with ** for any depth, relative to the project root, or absolute
+    Literal bool     // the command or path is matched as written; "Allow always" sets it
     Scope   Scope    // global | environment | profile | project | session
-    Source  string   // file and line the rule came from
+    Source  string   // where the rule came from
 }
 
 type Decision struct {
-    OptionKind OptionKind
-    Actor      Actor        // user | rule{id} | mode{name} | protected_path
-    Persisted  *Scope       // when the user chose "allow always", where it was saved
+    RequestID, ToolCallID string
+    Outcome   Outcome      // allowed | denied | cancelled
+    OptionID  string
+    Actor     Actor        // user | mode | protected_path | policy | rule | hook | sandbox
+    Reason    string
+    Rule      *Rule        // the rule that decided, when Actor is rule
+    Persisted *Rule        // the rule "Allow always" created
+    Via       string       // where the user decided when not in this computer's window (GUI-052)
 }
 
-type PermissionBroker interface {
-    Request(ctx, PermissionRequest) (Decision, error) // blocks until decided or ctx cancelled
-    Pending() []PermissionRequest                     // feeds the attention view
-    Decide(requestID, optionID string, persistAs *Scope) error
-}
+type Context struct { Mode Mode; Root string } // the session state a request is judged in
+
+// Broker is a struct, not an interface.
+func (b *Broker) Request(ctx, pc Context, req Request) Decision // blocks until decided or ctx ends
+func (b *Broker) Pending() []Request                            // feeds the attention view
+func (b *Broker) Decide(requestID, optionID, reason string, scope Scope) error
+func (b *Broker) CancelSession(sid, reason string)
 ```
 
-Evaluation order in `Request`: protected paths (SEC-005, always deny) → deny rules at any scope (they hold even in `bypass`) → environment constraints (a sandboxed environment may auto-allow execution; v1) → session mode (`plan` denies writes and execution, `bypass` allows all) → allow rules → `accept_edits` allows edits under the project root, reads inside the root are allowed → queue for the user. *As built in M2:* profile and environment scopes hold the `rules:` of the session's profile and environment files, and the project scope a trusted project's deny rules; the broker sees global, environment, profile, project, then session rules. *As built in M1:* scopes are global (`rules.yaml`) and session (rules created by "Allow always", recorded as the `persisted` rule of a `permission_decided` event and rebuilt from the transcript); a shell prefix rule (`git *`) approves only a single plain command, never a chain, pipe, substitution or redirection: outside single quotes the line may hold none of `$`, backticks, `<`, `>`, parentheses, braces or backslashes (and inside double quotes none of `$`, backticks or backslashes), which also closes zsh's `=(...)`, glob qualifiers such as `*(e:...:)` and `${(e)...}` (review 2026-10-31), while an exact rule matches exactly the line it names (spaces and tabs collapsed, newlines kept) and a deny rule matches any command in a line, looking through wrappers such as `env`, subshells and `sh -c`. Rules created by "Allow always" are `literal`: their command or path is matched as written, never as a pattern. When `rules.yaml` has errors the broker fails closed (everything except reads inside the project asks) and the app refuses to rewrite the file until it is fixed. Paths reach the broker resolved (`Environment.Resolve` follows symlinks), and containment checks and path rule globs ignore case; absolute patterns also match under each spelling of their folders (`/tmp` and `/private/tmp`). The built-in `glob` and `grep` leave out files a deny path rule hides (`Broker.Hidden`), since their request names only the folder searched. A write through a symlink whose target does not exist is refused, and files are opened with `O_NOFOLLOW`. An external agent's `fs/*` request reuses a just-given approval only of the same kind, and a write or command spends it. "Allow always" saves no rule for a call one rule cannot narrow (several paths, or a command it does not show); the call is allowed once. "Allow always" writes a rule into the chosen scope's YAML. Cancelling a turn resolves pending requests as `cancelled`, which the ACP adapter forwards as the protocol requires. *As built in M2:* the attention view (GUI-002) is `Engine.Attention`, which joins `Pending()` with the session index: every session with pending requests, in `waiting_input`, or in `error` (a turn that failed, or a prompt whose session could not start, sets `error` until the next prompt or `DismissError`); the GUI refreshes it on `permission_requested`, `permission_decided` and `session_status` events, so there is no separate attention queue table.
+Evaluation order in `Request` (`Broker.decide`): protected paths (SEC-005, always deny) → deny rules at any scope (they hold even in `bypass`) → session mode (`bypass` allows, except a request to leave the sandbox, which asks, and a command that builds its program when it runs, which is refused because deny rules cannot be checked against it; `plan` denies writes and execution, except a command the sandbox holds read-only) → allow rules → a command the caller runs inside the sandbox is allowed (ENV-009) → `accept_edits` allows edits under the project root → reads inside the root are allowed → queue for the user. Hooks run after this for a call that was not denied (EXT-005, below). *As built in M2:* profile and environment scopes hold the `rules:` of the session's profile and environment files, and the project scope a trusted project's deny rules; the broker sees global, environment, profile, project, then session rules. *As built in M1:* scopes are global (`rules.yaml`) and session (rules created by "Allow always", recorded as the `persisted` rule of a `permission_decided` event and rebuilt from the transcript); a shell prefix rule (`git *`) approves only a single plain command, never a chain, pipe, substitution or redirection: outside single quotes the line may hold none of `$`, backticks, `<`, `>`, parentheses, braces or backslashes (and inside double quotes none of `$`, backticks or backslashes), which also closes zsh's `=(...)`, glob qualifiers such as `*(e:...:)` and `${(e)...}` (review 2026-10-31), while an exact rule matches exactly the line it names (spaces and tabs collapsed, newlines kept) and a deny rule matches any command in a line, looking through wrappers such as `env`, subshells and `sh -c`. Rules created by "Allow always" are `literal`: their command or path is matched as written, never as a pattern. When `rules.yaml` has errors the broker fails closed (everything except reads inside the project asks) and the app refuses to rewrite the file until it is fixed. Paths reach the broker resolved (`Environment.Resolve` follows symlinks), and containment checks and path rule globs ignore case; absolute patterns also match under each spelling of their folders (`/tmp` and `/private/tmp`). The built-in `glob` and `grep` leave out files a deny path rule hides (`Broker.Hidden`), since their request names only the folder searched. A write through a symlink whose target does not exist is refused, and files are opened with `O_NOFOLLOW`. An external agent's `fs/*` request reuses a just-given approval only of the same kind, and a write or command spends it. "Allow always" saves no rule for a call one rule cannot narrow (several paths, or a command it does not show); the call is allowed once. "Allow always" for the session records its rule in the transcript; for every session it writes the rule into `rules.yaml`. Cancelling a turn resolves pending requests as `cancelled`, which the ACP adapter forwards as the protocol requires. *As built in M2:* the attention view (GUI-002) is `Engine.Attention`, which joins `Pending()` with the session index: every session with pending requests, in `waiting_input`, or in `error` (a turn that failed, or a prompt whose session could not start, sets `error` until the next prompt or `DismissError`); the GUI refreshes it on `permission_requested`, `permission_decided` and `session_status` events, so there is no separate attention queue table.
 
 This mirrors Codex's separation of sandbox from approval policy: the environment says what is *possible*, the policy says when to *ask*.
 
@@ -257,7 +307,7 @@ One versioned schema (EXT-002), a strict superset of ACP's `session/update` vari
 
 | From ACP | Added by Freeloop |
 |---|---|
-| `user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`, `plan`, `available_commands_update`, `current_mode_update`, `config_option_update`, `session_info_update`, `usage_update`, `notice`, `compaction_update`, `compaction_summary_chunk` | `turn_started`, `turn_ended{stopReason}`, `permission_requested`, `permission_decided{actor, scope}`, `session_status`, `git_state`, `model_changed`, `optimizer_changed{optimizer, name}` (HRN-019), `env_health`, `hook_ran{event, command, exitCode, blocked}` (EXT-005), `error`, `history_message` (built-in harness context, not rendered), `checkpoint{commit, historyLen}` and `rewind{checkpointSeq, commit, saved, context}` (SES-014) |
+| `user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`, `plan`, `available_commands_update`, `current_mode_update`, `config_option_update`, `session_info_update`, `usage_update`, `notice`, `compaction_update`, `compaction_summary_chunk` | `turn_started`, `turn_ended{stopReason}`, `permission_requested`, `permission_decided{actor, scope}`, `session_status`, `git_state`, `model_changed`, `optimizer_changed{optimizer, name}` (HRN-019), `env_health`, `hook_ran{event, command, exitCode, blocked}` (EXT-005), `error`, `history_message` (built-in harness context, not rendered), `checkpoint{commit, historyLen}` and `rewind{checkpointSeq, commit, saved, context}` (SES-014), `handoff` (HRN-012), `pull_request` (SES-011), `tags_changed` (SES-013), `worktree_setup` (SES-016), `effort_changed` (PRV-014), `session_rule_changed`, `session_imported` (SES-020), `limit_update`, `mode_refused`, `stuck`, `handed_off`, `model_context` (NFR-PRIV-003), `workflow_changed` (WFL-002), `workflow_stage` (WFL-008) |
 
 *As built for v1 (SES-014):* before each prompt the engine snapshots the session's folder, except the project's `.claude/` (never written) and `.freeloop/` (the user's settings and deny rules), into `sessions/<id>/checkpoints.git`, a bare repository of the session's own driven with `--git-dir` and `--work-tree` (the project's repository, if any, is never touched; `.gitignore` files apply, `.git` is skipped, and nothing from the project's git configuration runs), and records a `checkpoint` event before the turn's events. Rewind snapshots the current state, restores the checkpoint with `read-tree --reset -u` (files the later turns added are removed, ignored files left alone), cuts the built-in harness's history back to the checkpoint's length through `history_message` reset events, and records `rewind`, which the conversation shows by dimming the turns after the checkpoint; an external agent's own context cannot be cut back, which the transcript says, and neither can a context a compaction or an earlier rewind replaced after the checkpoint (a `history_message` with `reset` follows it), so then only the files are restored. A rewind holds the session busy, so a prompt sent meanwhile waits in the queue. A folder that cannot be snapshotted in 90 seconds turns checkpoints off for the session.
 
@@ -309,24 +359,24 @@ One versioned schema (EXT-002), a strict superset of ACP's `session/update` vari
 
 *As built for v1 (HRN-011, EXT-003):* `internal/harness/templates` embeds a Python agent (standard library, newline-delimited JSON-RPC) and a Go agent (on `coder/acp-go-sdk`), each with a test that plays the client over the protocol; both are `.tmpl` files and `make test` renders and runs them (the Go one offline, against the module cache). `Engine.ScaffoldHarness` writes one into a folder the user chose and saves a preset that runs it, with `watch:` set to that folder; the config watch fingerprints watched folders on every poll and stops the runtimes of idle sessions on that harness when they change, so the next message starts the agent with the new code (an agent without session/load starts without its earlier context, which the notice implies).
 
-*As built for v1 (EXT-004):* while the app runs, `internal/rpc` serves JSON-RPC 2.0, one message per line, on `freeloop.sock` in the data folder (or, when that path is too long for a Unix socket, in the user's `$TMPDIR` under a name derived from the data folder). It is a thin adapter over the engine like the Wails service: `sessions.list`, `.get`, `.create` (the Settings defaults fill in an empty provider), `.prompt`, `.cancel`, `.events`, `.wait` (blocks until a session has events after a seq), `approvals.list` and `approvals.decide`. The engine runs in-process, so a session the API starts appears in the GUI live. The same binary is the command line: given a command (`sessions`, `new`, `prompt`, `events`, `approvals`, `approve`, `deny`, `help`) it acts as a client and exits; `prompt` streams the reply and says when a request waits for approval. A second app on the same data folder serves no API. The daemon split, in which the engine outlives the window, is still to come.
+*As built for v1 (EXT-004):* while the app runs, `internal/rpc` serves JSON-RPC 2.0, one message per line, on `freeloop.sock` in the data folder (or, when that path is too long for a Unix socket, in a folder with a random name that only this user can enter, in `$XDG_RUNTIME_DIR` or the temporary folder, its path recorded in `socket-path` in the data folder; SEC-018). It is a thin adapter over the engine like the Wails service, with a small part of it: 18 methods, where the Wails service has 237. They are `sessions.list`, `.get`, `.create` (the Settings defaults fill in an empty provider), `.prompt`, `.cancel`, `.events`, `.wait` (blocks until a session has events after a seq), `.optimizers` and `.setOptimizer` (HRN-019), `.options` and `.setOption` (PRV-014), `.importable` and `.import` (SES-020), `.rewriteForAgent` (an external agent's hook asking what to run, HRN-019), `policy.check` and `policy.overview` (SEC-018), `approvals.list` and `approvals.decide`. Settings, providers, profiles, skills, MCP servers, the diff panel, terminals, workflows and the rest of the service are not on the socket. The engine runs in-process, so a session the API starts appears in the GUI live. The same binary is the command line: given a command (`sessions`, `new`, `import`, `prompt`, `events`, `approvals`, `approve`, `deny`, `optimizer`, `check`, `help`) it acts as a client and exits; `prompt` streams the reply and says when a request waits for approval. A second app on the same data folder does not start. The daemon split, in which the engine outlives the window, is still to come.
 
 Transcript line format: `{"v":1,"seq":412,"ts":"2026-10-24T09:12:03.120Z","sid":"…","type":"tool_call","data":{…}}`. `data` is the ACP update object without its `sessionUpdate` discriminator, with ACP's camelCase field names; Freeloop's own payloads use camelCase too. The store writes each event with one write call before publishing it (an app crash loses at most the event being written), fsyncs dirty transcripts every 200 ms and on close, and truncates a torn last line on open. `seq` is contiguous per session, so a UI subscriber that misses events notices the gap and catches up from the store.
 
 ## 5. Harness adapters
 
-- **Built-in** (`harness/builtin`): implements `Harness` directly. Loop: assemble system prompt (profile prompt, instruction files per HRN-010, skills index, environment facts) → `Provider.Stream` → assemble tool calls → for each call: `PermissionBroker.Request` → execute through `Environment`, `MCPManager` or `SkillStore` → append results → repeat until stop reason or limits. Parallel independent calls and subagents at v1 (HRN-014); compaction at v1 (HRN-013). *As built for v1 (HRN-013):* each `usage_update` carries the call's context size and the model's window (from its capabilities); when the next call's context would reach 80 % of the window (the last call's context plus an estimate, four characters a token, of what was added since, so one large tool result cannot push a call past the window), before that call the harness asks the same model, without streaming into the transcript, for a summary of the session, then continues from one user message holding the summary, followed mid-turn by the turn in progress when that is under a quarter of the window. A summary request larger than 70 % of the window has its longest tool results cut until it fits. A prompt after a stopped or failed turn follows a short assistant note ("The previous turn ended before a reply.") rather than being merged into the user's last message, so history lengths stay exact for checkpoints. `compaction_update` records the start and the result with the summary; `history_message` events carry `reset` on the first message so `Restore` rebuilds the compacted history after a restart. `/compact` does the same between turns, and a conversation still over the window after compaction stops the turn with an error. A model whose window is unknown is compacted only on request.
-- **ACP client** (`harness/acp`): generic. Spawns the agent through `Environment.Exec`, runs `initialize`, negotiates capabilities, `session/new` with `cwd` and `mcpServers`, streams `session/update` into events, routes `session/request_permission` to the broker, fulfils `fs/*` and `terminal/*` requests through the environment with path policy applied, uses `session/load` or `session/resume` when the agent advertises them and otherwise re-creates with a summary (SES-003). Built on `coder/acp-go-sdk` (community, schema-generated), vendored so a protocol bump means regenerating, not waiting.
-- **Claude Code preset**: the ACP adapter configured with Zed's Claude Code ACP adapter as the command (OQ-005).
+- **Built-in** (`harness/builtin`): implements `Harness` directly. Loop: assemble system prompt (profile prompt, instruction files per HRN-010, skills index, environment facts) → `Provider.Stream` → assemble tool calls → for each call: `Broker.Request` → execute through `Environment`, the session's `MCPSource` or its `SkillSource` → append results → repeat until stop reason or limits. Parallel read-only calls and subagents (HRN-014) and compaction (HRN-013) are built. *As built for v1 (HRN-013):* each `usage_update` carries the call's context size and the model's window (from its capabilities); when the next call's context would reach 80 % of the window (the last call's context plus an estimate, four characters a token, of what was added since, so one large tool result cannot push a call past the window), before that call the harness asks the same model, without streaming into the transcript, for a summary of the session, then continues from one user message holding the summary, followed mid-turn by the turn in progress when that is under a quarter of the window. A summary request larger than 70 % of the window has its longest tool results cut until it fits. A prompt after a stopped or failed turn follows a short assistant note ("The previous turn ended before a reply.") rather than being merged into the user's last message, so history lengths stay exact for checkpoints. `compaction_update` records the start and the result with the summary; `history_message` events carry `reset` on the first message so `Restore` rebuilds the compacted history after a restart. `/compact` does the same between turns, and a conversation still over the window after compaction stops the turn with an error. A model whose window is unknown is compacted only on request.
+- **ACP client** (`harness/acp`): generic. Spawns the agent through the environment's `Spawn`, runs `initialize`, negotiates capabilities, `session/new` with `cwd` and `mcpServers`, streams `session/update` into events, routes `session/request_permission` to the broker, fulfils `fs/*` and `terminal/*` requests through the environment with path policy applied, uses `session/load` when the agent advertises it and otherwise starts a new session whose first prompt carries the conversation so far as text (SES-003). Built on `coder/acp-go-sdk` (community, schema-generated), a pinned Go module (v0.13.5).
+- **Claude Code preset**: the ACP client configured with the Claude Code ACP adapter as the command, `@agentclientprotocol/claude-agent-acp` at a pinned version, first published by Zed (OQ-005).
 
-*As built in M2:* `internal/harness/acp` uses `coder/acp-go-sdk` as a pinned Go module rather than a vendored copy; `go.sum` fixes its content, and vendoring stays an option if a protocol bump outpaces upstream. The agent is spawned through `environment.Local.Spawn` in the project root. Updates are marshalled to JSON and recorded under their `sessionUpdate` name, minus the discriminator; a `tool_call` gains a `tool` field from its kind (execute → `shell`, edit, delete and move → `edit_file`, read → `read_file`, search → `grep`, others `acp:<kind>`), which is also the name permission requests are judged under, so rules written for the built-in harness hold for agents. ACP's context-usage `usage_update` and variants newer than the event schema are dropped; the turn's `PromptResponse.usage` becomes Freeloop's `usage_update`. An approved permission request covers the agent's following `fs/write_text_file` for the same path or `terminal/create` for the same command for two minutes; anything else the agent writes, reads outside the project or runs goes to the broker first. Cancel sends `session/cancel` and waits up to ten seconds for the turn to end. The agent's session ID is the session record's `externalId` (SES-003); on the next start the harness tries `session/load` with it, drops the updates the agent replays meanwhile, and falls back to `session/new` with a `notice` event. The Claude Code adapter was renamed from `@zed-industries/claude-code-acp` to `@agentclientprotocol/claude-agent-acp`; the preset pins a version. Login happens in Claude Code's own flow; the app passes no credentials and reads none (HRN-008).
+*As built in M2:* `internal/harness/acp` uses `coder/acp-go-sdk` as a pinned Go module rather than a vendored copy; `go.sum` fixes its content, and vendoring stays an option if a protocol bump outpaces upstream. The agent is spawned through the session environment's `Spawn` (`environment.Spawner`: the local environment, or `docker exec -i` in a Docker session) in the session's folder. Updates are marshalled to JSON and recorded under their `sessionUpdate` name, minus the discriminator; a `tool_call` gains a `tool` field from its kind (execute → `shell`, edit, delete and move → `edit_file`, read → `read_file`, search → `grep`, others `acp:<kind>`), which is also the name permission requests are judged under, so rules written for the built-in harness hold for agents. ACP's context-usage `usage_update` and variants newer than the event schema are dropped; the turn's `PromptResponse.usage` becomes Freeloop's `usage_update`. An approved permission request covers the agent's following `fs/write_text_file` for the same path or `terminal/create` for the same command for two minutes; anything else the agent writes, reads outside the project or runs goes to the broker first. Cancel sends `session/cancel` and waits up to ten seconds for the turn to end. The agent's session ID is the session record's `externalId` (SES-003); on the next start the harness tries `session/load` with it, drops the updates the agent replays meanwhile, and falls back to `session/new` with a `notice` event. The Claude Code adapter was renamed from `@zed-industries/claude-code-acp` to `@agentclientprotocol/claude-agent-acp`; the preset pins a version. Login happens in Claude Code's own flow; the app passes no credentials and reads none (HRN-008).
 - **CLI wrapper** (`harness/cli`, fallback only): for agents with a streaming JSON mode but no ACP. Not planned unless the ACP route for Claude Code fails.
 
-Presets are YAML entries (command, args, env, auth notes, known quirks); adding an agent that speaks ACP needs no Go.
+Presets are YAML entries (`name`, `description`, `command`, `args`, `env`, `modes`, `notes`, `watch`, `skills` and a few switches for an agent's quirks); adding an agent that speaks ACP needs no Go.
 
 ## 6. MCP management
 
-Built on the official Go SDK (v1.7+). Each configured server gets one client. On connect the manager calls `server/discover` to select the protocol revision and read capabilities; the SDK handles the `initialize` handshake for servers on 2025-11-25 and earlier. Under 2026-07-28 the design is stateless: every request carries version and client capabilities in `_meta`, there is no session ID, and `tools/list` results carry `ttlMs` so the manager caches tool lists per server. When a `tools/call` returns `resultType: "input_required"`, the manager turns the input requests into inbox forms and retries the call with `inputResponses` (MCP-008); older servers' `elicitation/create` requests take the same path. Roots, sampling and logging are deprecated in the current revision and are not implemented. OAuth (v1) uses the SDK's authorization package with Client ID Metadata Documents, Dynamic Client Registration as fallback, issuer validation, and tokens in the Keychain keyed by issuer (MCP-006).
+Built on the official Go SDK (v1.8.0). Each configured server gets one client. The SDK negotiates the protocol revision, with `server/discover` for servers on 2026-07-28 and the `initialize` handshake for servers on 2025-11-25 and earlier. Under 2026-07-28 the protocol is stateless: every request carries version and client capabilities in `_meta` and there is no session ID. The manager lists a server's tools when it connects. When a `tools/call` returns `resultType: "input_required"`, the SDK's client puts the input requests to the app's elicitation handler, which shows them as forms, and retries the call with the responses (MCP-008, below); older servers' `elicitation/create` requests take the same path. Roots, sampling and logging are deprecated in the current revision and are not implemented. OAuth uses the SDK's authorization package with a client ID the user enters or Dynamic Client Registration, issuer validation, and tokens in the Keychain per server (MCP-006, below); a Client ID Metadata Document is not built (OQ-024).
 
 *As built in M2:* `internal/mcp` holds one SDK client per server; stdio servers are started by `environment.Local.Spawn` (stdin and stdout pipes, the base environment plus the server's variables and secrets, its own process group, and the login shell's `exec "$0" "$@"` so `npx` and `uvx` resolve on the user's PATH), HTTP servers use the SDK's Streamable HTTP transport with configured and secret headers and no standalone SSE stream. App-wide servers run in a local environment at the user's home, not in a project. Approval (MCP-005) stores a fingerprint of the configuration in `mcp.yaml`'s `approved:`; a hand edit that changes what runs no longer matches. Names are made safe for providers (letters, digits, `_` and `-`, at most 64 characters, with a hash suffix when cut). Tool results are rendered to text (media become a note); resources, prompts and input-required round trips are v1 (MCP-007, MCP-008).
 
@@ -340,21 +390,24 @@ Tools are exposed to the built-in harness as `mcp__<server>__<tool>` with the se
 
 ## 7. Skills
 
-Discovery locations in precedence order: `.freeloop/skills/` in the project, `.agents/skills/` and `.claude/skills/` in the project (read-only), the app skill store. Validation follows the spec: `name` 1 to 64 lowercase characters equal to the folder name, `description` 1 to 1024 characters, body under 500 lines recommended. Imports from `~/.claude/skills` copy into the app store with provenance (SKL-003); the app never writes into `~/.claude` or `.claude/`. How enabled skills reach external harnesses is open (OQ-006, SKL-008).
+Discovery locations in precedence order: `.freeloop/skills/` in the project, `.agents/skills/` and `.claude/skills/` in the project (read-only), the app skill store. Validation follows the spec: `name` 1 to 64 lowercase characters equal to the folder name, `description` 1 to 1024 characters, body under 500 lines recommended. Imports from `~/.claude/skills` copy into the app store with provenance (SKL-003); the app never writes into `~/.claude` or `.claude/`. Enabled skills reach an external agent whose preset says `skills: claude-plugin` as a Claude Code plugin (SKL-008, section 4.6); other external agents get none from the app.
 
 ## 8. Providers in detail
 
-Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one OpenAI-compatible adapter with presets. *As built in M1:* the OpenAI-compatible adapter (`internal/provider/openaicompat`) is hand-written rather than built on the OpenAI SDK, so it can absorb endpoint deviations; the official OpenAI SDK arrives with the native Responses provider (PRV-012). Capabilities resolve in this order: the user's per-model override in `providers.yaml`, a cached probe result in `capabilities.yaml`, what the endpoint reports (Ollama `/api/show`), and the adapter's static knowledge; a model still unknown is probed when a session starts (OpenAI, OpenRouter with its attribution headers, LM Studio, llama.cpp server, vLLM, Ollama `/v1`), and an Ollama native adapter for `/api/chat`, `/api/tags`, `/api/show`. Known differences the capability table must capture: Ollama's compatible endpoint has no `tool_choice` and no documented tool-call IDs; its native API returns an index per call; llama.cpp needs `--jinja` for tools; LM Studio's streamed tool-call shapes deviate from OpenAI; vLLM is close to parity. Requests and responses are recorded as fixtures for replay tests (NFR-REL-003).
+Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one OpenAI-compatible adapter with presets. *As built in M1:* the OpenAI-compatible adapter (`internal/provider/openaicompat`) is hand-written rather than built on the OpenAI SDK, so it can absorb endpoint deviations; the official OpenAI SDK arrives with the native Responses provider (PRV-012). Capabilities resolve in this order: the user's per-model override in `providers.yaml`, a cached probe result in `capabilities.yaml`, what the endpoint reports (Ollama `/api/show`), and the adapter's static knowledge; a model still unknown is probed when a session starts (OpenAI, OpenRouter with its attribution headers, LM Studio, llama.cpp server, vLLM, Ollama `/v1`), and an Ollama native adapter for `/api/chat`, `/api/tags`, `/api/show`. Known differences the capability table must capture: Ollama's compatible endpoint has no `tool_choice` and no documented tool-call IDs; its native API returns an index per call; llama.cpp needs `--jinja` for tools; LM Studio's streamed tool-call shapes deviate from OpenAI; vLLM is close to parity. Each adapter's tests play the endpoint's responses from a local HTTP server (`httptest`), written into the tests rather than recorded in fixture files (NFR-REL-003).
 
 *As built for v1 (PRV-012):* two native adapters on the official SDKs (`github.com/openai/openai-go/v3` v3.90.0 and `google.golang.org/genai` v1.77.0, approved 2026-10-30). `internal/provider/openairesponses` (type `openai_responses`) calls the Responses API with `store: false`; for reasoning models it asks for summaries, which stream as thinking, and for `reasoning.encrypted_content`, and each reasoning item is kept as the thinking part's opaque data and sent back as it came, so the model keeps its reasoning across tool calls without OpenAI storing the conversation. Function tools are sent non-strict (the harness validates arguments), the app's efforts map onto the API's low, medium and high (`xhigh` and `max` become `high`, as on the compatible path; `-chat` models get none), errors inside a stream are retried like their HTTP kind, and the model list leaves out embedding, audio, image and realtime models. `internal/provider/gemini` (type `gemini`) uses the Gen AI SDK against the Gemini API with the key always given explicitly, since the SDK would otherwise read `GEMINI_API_KEY` from the app's own environment; thoughts stream as thinking and are not sent back, thought signatures stay with the text or call part they came on and go back with it, calls without an ID get a made-up one, unique across the session's responses, that is not sent to the API, and a function response is named after its call. Effort is a thinking level from Gemini 3 on and a token budget on 2.5, at most 24576 tokens on Flash and 32768 on Pro. Both retry nothing themselves and report failures as `provider.HTTPError` for the harness's retries (PRV-010), and both use `http.DefaultTransport` for local-only mode. The OpenAI-compatible "OpenAI" preset stays for Chat Completions.
 
 ## 9. Data storage
+
+The data folder is `freeloop` in the system's configuration folder (Go's `os.UserConfigDir`): `~/Library/Application Support/freeloop` on a Mac, `%AppData%\freeloop` on Windows, `~/.config/freeloop` on Linux, or `FREELOOP_HOME` when set.
 
 ```
 ~/Library/Application Support/freeloop/
   config.yaml              general settings and defaults (SET-001, SET-004)
   .config-last-good.yaml   the last config.yaml that could be read, started with when it cannot be
   providers.yaml           providers; secrets as keychain references only
+  capabilities.yaml        tool-calling probe results, so a model is probed once (PRV-005)
   colors.json              colors chosen over the app's own (GUI-022)
   styles/<id>.json         saved styles: fonts and colors under a name (GUI-053)
   profiles/<id>.yaml       harness profiles (HRN-003)
@@ -363,25 +416,37 @@ Thin adapters over the official Anthropic, OpenAI and Google Go SDKs plus one Op
   rules.yaml               global permission rules (SEC-002)
   skills/<name>/           app skill store (SKL-002)
   presets/harnesses/*.yaml ACP agent presets (HRN-006, HRN-007)
+  optimizers/*.yaml        token optimizers (HRN-019)
+  workflows/*.yaml         workflows (WFL-001)
+  session-skills/<id>/     an external agent's session skills as a plugin folder (SKL-008)
   schedules.json           scheduled and recurring sessions and their last runs (SES-012)
+  queue.json               the queue of tasks (SES-025)
+  afkruns.json             the workflows' AFK runs (WFL-005)
+  devices.json             the paired phones (GUI-052)
+  update-check.json        the last update check (OQ-015)
   workspace.json           the main window's panes (GUI-017)
-  freeloop.db              SQLite: projects, sessions, tokens per day and model (PRV-008), FTS5 search index (SES-007)
+  running.json             the process groups this run started, stopped by the next run after a crash (NFR-REL-005)
+  backups/<time>/          the files a restore replaced (SET-005)
+  freeloop.sock            the headless API's socket (EXT-004)
+  freeloop.db              SQLite: projects, sessions, tokens per day and model (PRV-008), FTS5 search index (SES-007); freeloop.db.bak is a daily copy
   sessions/<id>/events.jsonl   append-only transcript (SES-002); a torn last line is cut on open, a damaged line elsewhere is repaired with the original kept as events.jsonl.damaged-<time>
+  sessions/<id>/meta.json      what the transcript cannot say about the session, for rebuilding a lost database
   sessions/<id>/attachments/   pictures attached to messages, one file per content named by its SHA-256 (SES-015)
+  sessions/<id>/checkpoints.git  the session's file snapshots, a bare repository (SES-014)
   logs/                    local only, secrets redacted
 ```
 
-Project level, read after trust (SEC-006): `.freeloop/{profiles/,skills/,mcp.yaml,rules.yaml,hooks.yaml,environment.yaml,worktree.yaml}` plus `AGENTS.md` and `CLAUDE.md` read-only. *As built in M2:* trust is a flag on the project row (`SetProjectTrust`); `internal/engine/trust.go` reads `.freeloop/rules.yaml` and `.freeloop/profiles/*.yaml` through the project's environment, cached for two seconds because permission checks consult them on every tool call. Project configuration can tighten but never loosen: only deny rules apply (at the new `project` scope, after global and profile rules), project profiles (IDs prefixed `project:`) may start in ask or plan and carry deny rules only, and a broken `.freeloop/rules.yaml` makes the broker fail closed for the project's sessions. The built-in harness asks `harness.Params.Trusted` before every model call, so trusting or distrusting a project changes what a running session reads from its next call; the app's git calls check trust each time.
+Project level, read after trust (SEC-006): `.freeloop/{profiles/,skills/,rules.yaml,hooks.yaml,worktree.yaml}` plus `AGENTS.md` and `CLAUDE.md` read-only. A project's `.freeloop/mcp.yaml` or `.freeloop/environment.yaml` is not read: MCP servers and environments are the app's own files. *As built in M2:* trust is a flag on the project row (`SetProjectTrust`); `internal/engine/trust.go` reads `.freeloop/rules.yaml` and `.freeloop/profiles/*.yaml` through the project's environment, cached for two seconds because permission checks consult them on every tool call. Project configuration can tighten but never loosen: only deny rules apply (at the new `project` scope, after global and profile rules), project profiles (IDs prefixed `project:`) may start in ask or plan and carry deny rules only, and a broken `.freeloop/rules.yaml` makes the broker fail closed for the project's sessions. The built-in harness asks `harness.Params.Trusted` before every model call, so trusting or distrusting a project changes what a running session reads from its next call; the app's git calls check trust each time.
 
-Secret references look like `keychain://freeloop/providers/anthropic` and are resolved only at spawn or request time (ENV-004). Config files are validated against JSON Schemas in `schemas/` and hot-reloaded with a file watcher. *As built in M1:* the watcher polls the size and modification time of `config.yaml`, `providers.yaml`, `rules.yaml`, `environments/*.yaml` and (from M2) `profiles/*.yaml` every second instead of using file-system notifications, which needs no dependency and meets SET-001's two seconds; a changed file is reloaded, its problems replace that file's earlier ones in `ConfigIssues`, and the UI is told on the `freeloop:config` Wails event. Running sessions keep the provider and environment they started with; permission checks see new rules at once.
+Secret references look like `keychain://freeloop/providers/anthropic` and are resolved only at spawn or request time (ENV-004). Config files are validated in Go when they are loaded (`internal/config`: unknown fields are rejected and problems reported with their line; the only JSON Schema in `schemas/` is the events') and hot-reloaded by a watcher. *As built in M1:* the watcher polls the size and modification time of `config.yaml`, `providers.yaml`, `rules.yaml`, `mcp.yaml`, `colors.json`, `environments/*.yaml`, `profiles/*.yaml`, `presets/harnesses/*.yaml`, `optimizers/*.yaml`, `workflows/*.yaml` and `styles/*.json` every second instead of using file-system notifications, which needs no dependency and meets SET-001's two seconds; a changed file is reloaded, its problems replace that file's earlier ones in `ConfigIssues`, and the UI is told on the `freeloop:config` Wails event. Running sessions keep the provider and environment they started with; permission checks see new rules at once.
 
 ## 10. GUI to engine
 
-Wails v3 exposes Go services as generated TypeScript bindings for request/response and an event bus for streams. The engine's public surface is one Go package (`engine`) with plain request and response types; the Wails service layer is a thin adapter over it. A second adapter exposing the same package as JSON-RPC over a Unix socket gives the headless CLI and the optional daemon split at v1 (EXT-004, OQ-003) without touching engine code.
+Wails v3 exposes Go services as generated TypeScript bindings for request/response and an event bus for streams. The engine's public surface is one Go package (`engine`) with plain request and response types; the Wails service layer is a thin adapter over it. A second adapter, `internal/rpc`, offers a small part of the same package as JSON-RPC over a Unix socket for the command line (EXT-004: 18 methods, listed in section 4.6, where the Wails service has 237); the daemon split is not built (OQ-003). A third, `internal/remote`, is the phone server (GUI-052): a small HTTP API and a web app (`frontend/src/phone/`) that listen on 127.0.0.1 only, off until turned on in Settings, which the user makes reachable over their own private network, such as with `tailscale serve`. A phone paired with a confirmation on this computer can read a session live, send it a message, stop it, allow or deny a plain request once, and turn on Web Push; nothing else of the engine is reachable from it.
 
-Frontend state is one reducer per session over the event schema, so the transcript view is a pure function of events, which also makes replay from JSONL trivial. Message deltas are persisted as received and reach the window in batches, one per frame (about 16 ms; `frontend/src/eventBatch.ts`, issue 043): the engine still emits one Wails event per engine event, the window gathers them and applies a batch with one update per piece of state, so a burst of chunks is a handful of renders. A permission request, a decision, a turn's end and a status change flush the batch at once, with what came before them, so order within a session is kept and a gap still starts the catch-up. The phone's session stream is batched the same way. Batching is in the window, not in Go, so the event's name and payload stay the same for every subscriber. The transcript list is virtualized (NFR-PERF-002); tool outputs load lazily. *As built for v1 (NFR-PERF-004):* idle memory is measured, not estimated: `scripts/memcheck.sh` (`make memcheck`) starts the packaged app on a scratch data folder, runs a demo turn in ten sessions through the command line, waits 20 s and sums the physical footprint (`footprint`) of the app's process and the WebKit processes that started with it. On 2026-10-30 that was 110 MB (38 MB app, 72 MB WebKit) against 300 MB. A session holds no goroutines once its turn ends and `TestIdleSessionsMemory` keeps ten idle sessions under 32 MB of engine heap (0.6 MB measured).
+Frontend state is one reducer per session over the event schema, so the transcript view is a pure function of events, which also makes replay from JSONL trivial. Message deltas are persisted as received and reach the window in batches, one per frame (about 16 ms; `frontend/src/eventBatch.ts`, issue 043): the engine still emits one Wails event per engine event, the window gathers them and applies a batch with one update per piece of state, so a burst of chunks is a handful of renders. A permission request, a decision, a turn's end and a status change flush the batch at once, with what came before them, so order within a session is kept and a gap still starts the catch-up. The phone's session stream is batched the same way. Batching is in the window, not in Go, so the event's name and payload stay the same for every subscriber. The transcript list is not virtualized: every item of a session on screen is in the page, and `content-visibility: auto` on all but the last three lets WebKit skip the layout and paint of those off screen (`app.css`; `drawOnce` in `frontend/src/scrollPlace.ts` draws each once so its height is known); a tool call's input and output sit in a closed `<details>`. The fold goes on from where it was instead of starting over (`viewOf` in `frontend/src/transcript.ts`, issue 044), and a session in no pane holds no transcript: the window fetches its events when it is shown and lets them go 30 s after it no longer is (`frontend/src/heldTranscripts.ts`, issue 045). *As built for v1 (NFR-PERF-004):* idle memory is measured, not estimated: `scripts/memcheck.sh` (`make memcheck`) starts the packaged app on a scratch data folder, runs a demo turn in ten sessions through the command line, waits 20 s and sums the physical footprint (`footprint`) of the app's process and the WebKit processes that started with it. On 2026-10-30 that was 110 MB (38 MB app, 72 MB WebKit) against 300 MB. A session holds no goroutines once its turn ends and `TestIdleSessionsMemory` keeps ten idle sessions under 32 MB of engine heap (0.6 MB measured).
 
-*As built (look, 2026-10-31):* `frontend/src/app.css` starts with the tokens every rule uses: neutral greys in layers (`--bg-app` for the sidebar and the right panel, the darkest; `--bg` for the conversation; `--surface` and `--surface-2` above it), one blue (`--accent` for buttons, `--link` for links and live states, `--accent-soft` behind them), and corners by level (`--r-xs` 6 px for badges, `--r-sm` 8 px for controls, `--r-md` 10 px for cards and tool calls, `--r-lg` 14 px for the composer and the guide's choices; status pills are round). Blue marks only what is live: focus, the selected session and page, a running turn, and anything waiting for the user (a waiting tool call, its panel entry, the attention item and the "Needs you" badge). The conversation and the composer sit in a centred column of at most 760 px, the user's messages as bubbles on the right; the session header keeps "Continue with…", "More" (rename, new window, export, archive, delete) and the panel switch. The configuration pages sit behind one "Settings" entry at the foot of the sidebar (also ⌘,), which opens a settings area: a column listing the pages in groups (Models: Providers, Profiles; Agents: Skills, MCP servers, Token optimizers, Policy; Workspace: Environments, Schedules; App: Appearance, Keyboard, Sessions, Costs, Permissions, Network, Data, which were one General page until 2026-11-06 and share one form, so moving between them keeps what waits for Save; ⌘, opens the page last shown) beside the page, with Back returning to the screen before it (`frontend/src/settings.ts`, `SettingsNav.tsx`); in windows narrower than 900 px the list runs across the top. Type is the system's SF Pro and SF Mono, with no web fonts, which would be outbound traffic. Light and dark share the structure and follow the system unless Settings picks one (GUI-011). The first-run guide (GUI-010) starts with the two ways to run agents: an agent that signs in by itself, listed from the presets with their own description and readiness (choosing one makes its profile the default for new sessions, so the Claude Code profile comes preselected), or a provider with an API key or a local model.
+*As built (look, 2026-10-31):* `frontend/src/app.css` starts with the tokens every rule uses: neutral greys in layers (`--bg-app` for the sidebar and the right panel, the darkest; `--bg` for the conversation; `--surface` and `--surface-2` above it), one blue (`--accent` for buttons, `--link` for links and live states, `--accent-soft` behind them), and corners by level (`--r-xs` 6 px for badges, `--r-sm` 8 px for controls, `--r-md` 10 px for cards and tool calls, `--r-lg` 14 px for the composer and the guide's choices; status pills are round). Blue marks only what is live: focus, the selected session and page, a running turn, and anything waiting for the user (a waiting tool call, its panel entry, the attention item and the "Needs you" badge). The conversation and the composer sit in a centred column of at most 760 px, the user's messages as bubbles on the right; the session header keeps "Continue with…", "More" (rename, new window, export, archive, delete) and the panel switch. The configuration pages sit behind one "Settings" entry at the foot of the sidebar (also ⌘,), which opens a settings area: a column listing the pages in groups (Models: Providers, Profiles; Agents: Skills, MCP servers, Token optimizers, Policy; Workspace: Environments, Schedules; App: Appearance, Keyboard, Sessions, Costs, Permissions, Network, Data, which were one General page until 2026-11-06 and share one form, so moving between them keeps what waits for Save; ⌘, opens the page last shown) beside the page, with Back returning to the screen before it (`frontend/src/settings.ts`, `SettingsNav.tsx`); in windows narrower than 900 px the list runs across the top. Type is the system's own (SF Pro and SF Mono on a Mac, Segoe UI and Cascadia Mono or Consolas on Windows, the desktop's fonts on Linux), with no web fonts, which would be outbound traffic. Light and dark share the structure and follow the system unless Settings picks one (GUI-011). The first-run guide (GUI-010) starts with the two ways to run agents: an agent that signs in by itself, listed from the presets with their own description and readiness (choosing one makes its profile the default for new sessions, so the Claude Code profile comes preselected), or a provider with an API key or a local model.
 
 
 *As built (sandbox shell, 2026-11-02):* a sandboxed environment runs `zsh -fc` (on Linux the login shell's no-startup form, `environment.LoginShell().NoStartup`: OQ-019), reading no startup files, with what they set from `Engine.loginVars`: one login shell outside the sandbox per run of the app, minus names and values that look like secrets (`secretValue`), and `GIT_CONFIG_GLOBAL=/dev/null` with the user's name and email as `GIT_AUTHOR_*` and `GIT_COMMITTER_*`. A change to the startup files shows after a restart.
@@ -402,49 +467,59 @@ Frontend state is one reducer per session over the event schema, so the transcri
 
 - **Files:** profiles, environments, rules, MCP servers, provider configs, harness presets, skills.
 - **Processes:** ACP harnesses (any language), MCP servers, hooks (v1, EXT-005: JSON on stdin, exit code contract).
-- **Schemas:** events, profiles, rules and presets are published JSON Schemas; the harness SDK templates (v1, EXT-003) are generated projects that already pass the ACP test kit.
+- **Schemas:** the event schema is a published JSON Schema (`schemas/events.json`); profiles, rules and presets have none and are validated in Go. The harness templates (EXT-003, `internal/harness/templates`) are generated projects, each with a test that plays the client over the protocol.
 - **Not offered:** in-process plugins or UI plugins before a concrete need appears (OQ-016). Go's `plugin` package is not an option on macOS for this use.
 
 ## 12. Security boundaries
 
-- Secrets exist only in the Keychain and in the memory of the process that needs them; child processes receive only the variables their environment configures (SEC-008).
+- Secrets exist only in the system keyring (the app's are kept together in one item, `secrets.Vault`, so what this document calls a Keychain item is an entry of it) and in the memory of the process that needs them; child processes receive only the variables their environment configures (SEC-008).
 - The environment's `FS` and `Exec` enforce protected paths for every caller, including an external agent's `fs/*` and `terminal/*` requests, so a harness cannot bypass policy by using the protocol instead of a tool.
 - The permission broker is the single chokepoint for side effects (SEC-003); nothing auto-approves on timeout.
 - Project configuration, skills and hooks are inert until the project is trusted (SEC-006).
 - The transcript is the audit log; redaction by known secret value runs before persistence (SEC-004).
-- Update checks are opt-in and, with a token optimizer download the user clicks (HRN-019), the only outbound connection not configured by the user (SEC-009). *As built for v1 (OQ-015):* `internal/engine/updates.go`; Settings → Updates turns on a daily `GET https://api.github.com/repos/FinanceNik/Freeloop/releases/latest` (off by default, never in local-only mode, through `http.DefaultTransport`), with a fixed `User-Agent` and no version or other detail of the app in the request; the result, a failure's time included, is kept in `update-check.json` in the data folder, so the app asks at most once a day. A newer release shows in Settings and in the sidebar with a link to its page on github.com; the check downloads nothing. "Check now" asks at once. Failures are shown only in Settings (NFR-OFF-002). `AppVersion` is tested against `build/config.yml`.
+- Update checks are opt-in. With the project's release when the user clicks to update (SET-008), a token optimizer download the user clicks (HRN-019), voice input's speech model the user downloads (GUI-050), the MCP registry when the user browses it, and Web Push to a paired phone's push service (GUI-052), they are the only outbound connections not configured by the user (SEC-009). *As built for v1 (OQ-015):* `internal/engine/updates.go`; Settings → Updates turns on a daily `GET https://api.github.com/repos/FinanceNik/Freeloop/releases/latest` (off by default, never in local-only mode, through `http.DefaultTransport`), with a fixed `User-Agent` and no version or other detail of the app in the request; the result, a failure's time included, is kept in `update-check.json` in the data folder, so the app asks at most once a day. A newer release shows in Settings and in the sidebar with a link to its page on github.com; the check downloads nothing. "Check now" asks at once. Failures are shown only in Settings (NFR-OFF-002). `AppVersion` is tested against `build/config.yml`.
 - *As built for v1 (SEC-021, SET-008, OQ-056):* a release is the project's when `SHA256SUMS.sig` is an Ed25519 signature, by a key in `release.Keys`, over `freeloop-release-v1`, the version and `SHA256SUMS` (`internal/release`, which reads no file and opens no connection; `cmd/freeloop-sign` makes the key, signs and verifies on the build machine). Updating in place is `internal/engine/selfupdate.go`: `DownloadUpdate`, the user's click, asks GitHub for the latest release again, fetches the two small files and the one for this copy (`release.Asset`: `Freeloop.dmg`, the Windows portable zip, the AppImage) from addresses under `https://github.com/FinanceNik/Freeloop/releases/download/` only, verifies the signature for that version, and saves the file through `environment.SaveDownload` under the app's cache (`updates/<version>/`), kept only at the listed size and SHA-256. `InstallUpdate` hands it to the platform (`Options.UpdateKind`, `Options.ApplyUpdate`; `update.go` in each of `internal/platform/{darwin,linux,windows}`), which runs the system's programs through a runner the engine gives it, an `Exec` of the local environment, since nothing outside `internal/environment` starts a process (ENV-001). A Mac mounts the image read-only (`hdiutil`), checks the bundle (`codesign --verify --deep --strict`, the identifier and version from `Info.plist`, the Apple team against the running copy's), copies it beside the running bundle (`ditto`), checks the copy, and swaps the two by renames, the old one kept as `.Freeloop-previous.app` until the new copy starts. Windows unpacks `Freeloop.exe` from the zip beside the running exe, renames the running one to `.old` (Windows lets a running program be renamed, not overwritten) and the new one into place. Linux copies the AppImage beside the one `$APPIMAGE` names and renames it over. The service then starts the new copy with `environment.StartDetached` (a session of its own on Unix, no job on Windows, so it is not among what the app stops when it ends) and quits; the new copy, started with `--after-update`, waits up to 30 s for the old one to let go of the data folder's lock and removes what the swap left. `UpdateInfo` carries the step, the progress, why a copy cannot be replaced and what a restart would interrupt; `frontend/src/update.ts` turns it into what Settings shows.
 
 ## 13. Testing strategy
 
-Engine packages have unit tests. Providers are tested against recorded fixtures with a replaying HTTP server. The ACP adapter is tested against the protocol's example agent and compatibility kit, and nightly against the Claude Code and Gemini CLI presets where credentials exist. The built-in harness is tested with a scripted fake provider that emits planned tool calls. Environments use temporary directories, and the Docker environment uses a small image in CI. The GUI is tested through the engine API plus a handful of component tests; Wails end-to-end tests are limited to a smoke launch.
+Engine packages have unit tests, run with the race detector. Providers are tested against a local HTTP server that plays the endpoint's responses. The ACP client is tested against a reference agent of its own (`internal/harness/acp/acptest`), and `make verify-agents` runs the HRN-005 scenario with each built-in preset's real agent at its pinned version on a local stand-in model, with no key (HRN-007; CI runs it weekly and on tags). The built-in harness is tested with a scripted fake provider that emits planned tool calls. Environments use temporary directories; the Docker environment's tests skip where no Docker daemon runs. The frontend's logic is in plain TypeScript modules tested with `node --test`, with no component tests; `make check-app` drives the real interface on the real engine in a WebKit view (`scripts/appcheck.sh`), on a Mac.
 
 ## 14. Repository layout
 
 ```
 cmd/freeloop/              Wails app entry point, command line
+cmd/freeloop-sbom/         writes a build's bill of materials and license notices (SEC-012)
+cmd/freeloop-sign/         makes the release key, signs and verifies a release (SEC-021)
 internal/engine/           transport-agnostic API; session runtimes (runtime.go), event bus
 internal/session/          Session and Project records
 internal/harness/          Harness interface
 internal/harness/builtin/  the built-in loop and tools
 internal/harness/acp/      ACP client adapter (coder/acp-go-sdk; reference agent in acptest/)
+internal/harness/templates/  starter agents in Python and Go for a new harness (HRN-011, EXT-003)
 internal/provider/         Provider interface; anthropic, openaicompat, openairesponses, gemini, ollama, scripted
 internal/environment/      Environment interface; local, docker, ssh; per-system process, file and terminal code (*_unix.go, *_windows.go)
 internal/permission/       broker, modes, rules, matchers, protected paths
 internal/event/            versioned event types
-internal/skill/            discovery, validation, import, load
+internal/skill/            parsing, discovery, validation, load (import and install are in internal/engine and internal/config)
 internal/mcp/              MCP clients on the official SDK
 internal/store/            SQLite and JSONL
-internal/secrets/          Secrets interface
+internal/secrets/          Secrets interface (secrets.Store), the vault that keeps them in one keyring item
 internal/config/           YAML loading and validation
 internal/rpc/              headless JSON-RPC socket (EXT-004)
-internal/netguard/         local-only switch, engine-call guard
+internal/remote/           the phone server (GUI-052)
+internal/backlog/          a workflow's PRDs and issues (WFL-004)
+internal/release/          which files a release holds and whether its signature is the project's (SEC-021)
+internal/sbom/             software bill of materials (SEC-012)
+internal/netguard/         local-only switch, engine-call guard, a sandboxed session's proxy to the internet (ENV-010)
 internal/web/              HTML to text for web_fetch
 internal/archtest/         architecture boundary test
-internal/platform/darwin/  Keychain, Seatbelt, process table, openers, system details
-internal/platform/linux/   Secret Service, bubblewrap, /proc, xdg-open, system details
-internal/platform/windows/ Credential Manager, Notepad and File Explorer, system details
-frontend/                  React + TypeScript
+internal/platform/darwin/  Keychain, Seatbelt, process table, openers, menu, keeping awake, updating in place, system details
+internal/platform/linux/   Secret Service, bubblewrap, /proc, xdg-open, keeping awake, updating in place, system details
+internal/platform/windows/ Credential Manager, Notepad and File Explorer, keeping awake, updating in place, system details
+frontend/                  React + TypeScript; src/phone/ is the phone's web app, lint/ the ESLint rules
 schemas/                   events.json
+scripts/                   the app check, memory check, real-agent check, reproducible-build check, install
+build/                     Wails build tasks and packaging per system
+backlog/                   this project's own PRDs and issues
 docs/
 ```

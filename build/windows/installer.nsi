@@ -2,8 +2,8 @@
 ; `make windows` through build/windows/Taskfile.yml. Adapted from the Wails v3.0.0
 ; NSIS template, self-contained: per user (no UAC prompt, under
 ; %LOCALAPPDATA%\Programs), offers the WebView2 runtime when it is missing, and
-; registers an uninstaller under Apps. Unsigned for now, like the ad-hoc signed
-; Mac build (OQ-009).
+; registers an uninstaller under Apps. It carries no Authenticode signature
+; (OQ-057). An installed copy updates itself from the portable zip (SET-008).
 ;
 ; makensis runs with -NOCD and is given, from the Taskfile (absolute paths):
 ;   ARCH          amd64 or arm64
