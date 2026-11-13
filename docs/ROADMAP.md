@@ -418,7 +418,7 @@ Not before those: features that copy a vendor app's. Token optimizers get no mor
 
 Where it stands. The release plan above is built through phase 3, and its phase 4 tooling is written: a release job on tags, the version at `0.1.0-beta.1`, download steps in the README, and the MVP checklist in `docs/CHECKLIST-0.1.md`. The checklist has 33 rows automated, 41 partly covered (most of the rest needs a real account or a person), 8 for the user's runs and 1 gap (which Macs are supported; closed 2026-11-08, Apple Silicon only, which leaves that row partly covered until macOS 14 itself is run). Since the release plan, stopping what a crash leaves running (NFR-REL-005), recording what each model call carries (NFR-PRIV-003), checking every event against the schema (EXT-002), and tests for SEC-010, HRN-008, GUI-004, NFR-PERF-003 and NFR-PERF-005 are built. What stands between this and a release is no longer code. It is three things: a CI the repository can afford, which the release job depends on; the user's runs on real accounts; and people other than the author using it.
 
-The private repository ran out of GitHub Actions minutes on 2026-11-06: macOS minutes count ten times, and a run takes about eight. Twelve commits wait unpushed for that reason, and the release job could not run. (The commits were pushed on 2026-11-07, stage 1 below; no release has been made since: no tag exists.)
+The private repository ran out of GitHub Actions minutes on 2026-11-06: macOS minutes count ten times, and a run takes about eight. Twelve commits wait unpushed for that reason, and the release job could not run. (The commits were pushed on 2026-11-07, stage 1 below; no release has been made since: no tag exists. The repository went public on 2026-11-13, which makes its Actions minutes free.)
 
 Goals, each measurable:
 - **B-G1, an affordable CI that stays green.** Every push runs the Go and frontend tests; the macOS build and the app check run on tags, weekly and by hand; a red run is fixed before new work. *(As built, the weekly run checks only the real agents; the build and the app check run on tags and by hand.)*
@@ -429,7 +429,7 @@ Goals, each measurable:
 
 ### Stage 1: plumbing (Claude, about a day; needs nothing from the user)
 
-*Done 2026-11-07, but for one thing: CI in two jobs, with the Go packages building on Linux (one macOS-only test tagged); the twelve commits pushed; a slow transcript read logged; the release files built and checked on a Mac (`make release`: every checksum matches, the DMG holds the app at 0.1.0), and the app rebuilt. Not done: no job ran, since GitHub refused to start any ("recent account payments have failed or your spending limit needs to be increased"), Linux included. Until the allowance resets or the limit is raised, releases take the route in DEVELOPING.md, "When CI cannot run", and the Linux job's first run will still show which tests assume macOS.*
+*Done 2026-11-07, but for one thing: CI in two jobs, with the Go packages building on Linux (one macOS-only test tagged); the twelve commits pushed; a slow transcript read logged; the release files built and checked on a Mac (`make release`: every checksum matches, the DMG holds the app at 0.1.0), and the app rebuilt. Not done: no job ran, since GitHub refused to start any ("recent account payments have failed or your spending limit needs to be increased"), Linux included. Every run up to 2026-11-13 was refused the same way. The repository went public that day, which ends the charge; the Linux and Windows jobs' first run will show which tests assume macOS (issue 056).*
 
 1. **CI in two parts.** `.github/workflows/ci.yml`: a `test` job on `ubuntu-latest` runs `make verify-deps`, the Go tests of every package that builds off macOS, and the frontend tests and type check, on every push and pull request. The `build` job on macOS keeps the build, `make test`, lint and `make check-app`, and runs on tags, weekly and from the Actions page. First, check which Go packages build on Linux: the macOS-only code is in `internal/platform/darwin` (NFR-XPLAT-002), and anything else that does not build there is a finding. *Done when:* a push costs about a tenth of what it did, and both jobs are green.
 2. **Push the twelve commits**, then watch both jobs (`gh run watch`), and fix anything red before going on.
@@ -460,7 +460,7 @@ Claude, meanwhile: fix what these find, first; then stage 3.
 
 1. **Decide which Macs.** *Decided 2026-11-08: Apple Silicon only, macOS 14 or later (NFR-XPLAT-001). The build is `arm64` alone, `make package` checks it, and `Info.plist` says so, so an Intel Mac refuses it with the system's own message.*
 2. **Tag `v0.1.0-beta.1`**, read the draft release, publish it.
-3. **Add three to five testers** to the private repository, with the release notes and a short note on what to try and how to report.
+3. **Ask three to five testers**, now that the repository is public, with the release notes and a short note on what to try and how to report.
 4. **A weekly beta**: fixes go out as `0.1.0-beta.2` and on, each through the same tag and draft.
 
 ### Stage 5: 0.1.0 (after two weeks of beta)
@@ -469,7 +469,7 @@ Claude, meanwhile: fix what these find, first; then stage 3.
 
 Decisions before 0.1.0, each the user's:
 1. **Signing (OQ-009, reopened).** With an Apple Developer account (99 USD a year), releases are signed and notarized: no "Open Anyway", and the Keychain stops asking after each update. Without it, both stay, as the README says. *2026-11-12: the question is now OQ-057 and still open; the project's own signature on releases, which needs no account, is built (OQ-056, SEC-021).*
-2. **Going public.** The steps in DEVELOPING.md, "Before the repository goes public", with their own approval: rewriting commit identities, cleaning up what GitHub holds, a last scan, private vulnerability reporting. A public repository's Actions minutes are free, and the update check works only then.
+2. **Going public.** *Done 2026-11-13: the user made the repository public.* A scan of all of history that day found neither the release key nor any real key or token, only made-up ones in tests; `main` is its only branch. Four commits of 2026-11-13 carry an address other than the `noreply` one the rest were rewritten to, and private vulnerability reporting is off; DEVELOPING.md, "A public repository", says what each needs. Actions minutes are now free, and the update check and updating in place reach the releases without a sign-in.
 3. **Contributions (OQ-017):** the DCO and a code of conduct when they open after v1 scoping.
 
 ### Not before 0.1.0
@@ -478,7 +478,7 @@ The feature freeze stands: only fixes, the stages above and what the testers' bl
 
 ### Risks
 
-- **CI minutes run out again.** Stage 1 cuts the cost about tenfold; a public repository removes it.
+- **CI minutes run out again.** Stage 1 cut the cost about tenfold; since the repository went public (2026-11-13) its standard runners cost nothing.
 - **Real accounts behave unlike the stand-ins.** Stage 2 comes before testers for that reason.
 - **The stall seen on CI is real.** Stage 1's timing in the log will show it if a tester meets it. *2026-11-08: the app check's driver now holds off App Nap, the likeliest cause; not reproduced in four runs under load here. The accepted low risks in SECURITY.md are all fixed ("Closing the accepted risks").*
 - **An unsigned app puts testers off.** Signing is the first decision before 0.1.0. *Still open as OQ-057 (2026-11-12).*
@@ -652,7 +652,7 @@ A review of the permission path, the engine and the window on 2026-11-11 found h
 3. **The engine reads what it is asked for (041, 042).** *Built 2026-11-12.* A seq found without parsing what is before it, reads outside the append lock, and no periodic work that reads a whole transcript.
 4. **The window does work in proportion to what changed (043 to 048).** *Built 2026-11-12, but for 046 (a long session opening at its end), which is open.* Batches per frame, a fold that goes on from where it was, no transcript held for a session not on screen, a long session opening at its end if the numbers still ask for it, a boundary per pane, a lint rule for effects (OQ-055, agreed).
 5. **What runs is let go, and what is spent is counted (049 to 053; NFR-PERF-004, WFL-005, PRV-008, GUI-051).** Idle agents stopped after 30 minutes (OQ-053) (built 2026-11-12: `internal/engine/idle.go`, `Store.Release`, `sessions.idleStop`), an AFK step saved before it is acted on, usage for stopped calls and the app's own calls, a commit's cost from its own work. *All five issues built 2026-11-12.*
-6. **The documents say what is, and the repository goes public (054 to 056).** *Open.* VISION.md leads with the policy and the bill over every agent (OQ-054); Windows and Linux are run once or the README says they are not; then the steps in DEVELOPING.md and the first CI runs.
+6. **The documents say what is, and the repository goes public (054 to 056).** *054 done 2026-11-13; the repository went public the same day; 055 (Windows and Linux run once) is open, and 056 waits for CI's first green run.* VISION.md leads with the policy and the bill over every agent (OQ-054); Windows and Linux are run once or the README says they are not; then the steps in DEVELOPING.md and the first CI runs.
 
 *Not in:* splitting `Engine`, `App.tsx` and `SessionView.tsx`; one usage fold in place of four; the app check's fixed waits; a second security reading of what this one did not reach (Docker, bubblewrap, Windows, redaction, MCP sign-ins). After going public.
 

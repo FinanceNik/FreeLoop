@@ -7,7 +7,7 @@ prd: before-going-public
 ---
 
 ## What
-The steps in DEVELOPING.md, "Before the repository goes public", each with the user's yes: a last scan for secrets and personal data in the history, private vulnerability reporting turned on, the repository's description and topics, then the switch. A public repository's Actions minutes are free, so the Linux and Windows jobs run for the first time; what they show red is fixed before anything else.
+The steps in DEVELOPING.md, "A public repository" (written as "Before the repository goes public" before the switch), each with the user's yes: a last scan for secrets and personal data in the history, private vulnerability reporting turned on, the repository's description and topics, then the switch. A public repository's Actions minutes are free, so the Linux and Windows jobs run for the first time; what they show red is fixed before anything else.
 
 ## Acceptance
 - `make lint`, `make test` and `make check-app` pass on the commit that goes public.
@@ -18,3 +18,4 @@ The steps in DEVELOPING.md, "Before the repository goes public", each with the u
 
 ## Notes
 - After this: tag `v0.1.0-beta.1` and ask three to five testers (ROADMAP.md, stage 4), then the things under "Out of scope" in the PRD.
+- 2026-11-13: the user made the repository public. A scan of all of history found neither the release key nor any real key or token; `main` is the only branch. Not yet done: CI's first run after the switch, private vulnerability reporting (off), the description and topics, and four commits of the same day under another address than the `noreply` one.
