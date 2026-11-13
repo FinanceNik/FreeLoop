@@ -71,15 +71,23 @@ func openTranscript(path string) (*transcript, error) {
 		f.Close()
 		return nil, fmt.Errorf("store: %s: %w", path, err)
 	}
-	if err := f.Truncate(validLen); err != nil {
-		f.Close()
-		return nil, fmt.Errorf("store: truncate torn transcript tail: %w", err)
+	if fi, err := f.Stat(); err != nil || fi.Size() > validLen {
+		if err := truncate(path, validLen); err != nil {
+			f.Close()
+			return nil, fmt.Errorf("store: truncate torn transcript tail: %w", err)
+		}
 	}
 	if _, err := f.Seek(validLen, io.SeekStart); err != nil {
 		f.Close()
 		return nil, err
 	}
 	return &transcript{path: path, f: f, lastSeq: lastSeq, size: validLen, offsets: offsets}, nil
+}
+
+// truncate cuts a transcript to n bytes by its path: on Windows a file
+// opened for appending has no right to be truncated through its own handle.
+func truncate(path string, n int64) error {
+	return os.Truncate(path, n)
 }
 
 // scanTranscript returns the last seq, the length of the file up to and
@@ -192,7 +200,7 @@ func (t *transcript) write(ev event.Event) error {
 	if err != nil {
 		// A part of a line would swallow the next event when it is appended.
 		if n > 0 {
-			if terr := t.f.Truncate(t.size); terr != nil {
+			if terr := truncate(t.path, t.size); terr != nil {
 				err = errors.Join(err, terr)
 			}
 		}

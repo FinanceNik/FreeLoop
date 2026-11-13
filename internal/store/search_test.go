@@ -161,14 +161,14 @@ func TestSearchIsFast(t *testing.T) {
 	if err != nil || len(hits) != 1 || hits[0].SessionID != "s120" || hits[0].Seq != 78 {
 		t.Fatalf("hits = %+v, %v", hits, err)
 	}
-	if took > time.Second {
+	if took > time.Second && !raceOn {
 		t.Errorf("the search took %v among %d rows", took, sessions*rows)
 	}
 	t.Logf("a phrase among %d rows: %v", sessions*rows, took)
 	// A common word is still quick, ranked and capped.
 	start = time.Now()
 	hits, _ = s.Search(ctx, "timeout", 0, 0)
-	if took := time.Since(start); len(hits) != 50 || took > time.Second {
+	if took := time.Since(start); len(hits) != 50 || (took > time.Second && !raceOn) {
 		t.Errorf("a common word: %d hits in %v", len(hits), took)
 	}
 }

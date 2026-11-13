@@ -43,7 +43,10 @@ func Start(t *testing.T) Server {
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
-	cmd := exec.Command(sshd, "-D", "-e", "-p", fmt.Sprint(port), "-h", filepath.Join(dir, "host"),
+	// A config of its own: the system's may include files only root can read, as on
+	// GitHub's Linux runners. Everything it needs is on the command line.
+	os.WriteFile(filepath.Join(dir, "sshd_config"), nil, 0o600)
+	cmd := exec.Command(sshd, "-D", "-e", "-f", filepath.Join(dir, "sshd_config"), "-p", fmt.Sprint(port), "-h", filepath.Join(dir, "host"),
 		"-o", "AuthorizedKeysFile="+filepath.Join(dir, "auth"), "-o", "StrictModes=no", "-o", "PidFile="+filepath.Join(dir, "pid"),
 		"-o", "UsePAM=no", "-o", "ListenAddress=127.0.0.1", "-o", "AllowAgentForwarding=yes", "-o", "AllowTcpForwarding=yes")
 	var logs bytes.Buffer
@@ -59,6 +62,9 @@ func Start(t *testing.T) Server {
 			break
 		}
 		if i > 50 {
+			// Its output is read only once it has ended, so not while it writes.
+			cmd.Process.Kill()
+			cmd.Wait()
 			t.Skipf("sshd did not start: %s", logs.String())
 		}
 		time.Sleep(50 * time.Millisecond)
